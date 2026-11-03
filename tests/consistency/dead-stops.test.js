@@ -1,10 +1,11 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-const { section } = require('../helpers')
+const { section, phrase } = require('../helpers')
 
 // specs/20261029/07-every-dead-stop-becomes-a-question-with-a-default.md — the doctrine
 // halves of D1, D4, D8-D13: each former dead stop is one question with a recommended default.
+// specs/20261103/04-predictable-stops-become-host-policy.md D11: AC-20261103-04-16 — fix.md step 1 hands a dirty tree to /git:commit.
 
 const whole = (file) => section(file, /^/, /$(?!)/)
 
@@ -40,10 +41,15 @@ test('AC-20261029-07-9: fix.md step 4 states that only the user waives, keeps it
   assert.doesNotMatch(s, /or\s+state\s+why\s+not/, 'the self-disposal sentence lets the session waive its own findings')
 })
 
-test('AC-20261029-07-10: fix.md step 1 and merge.md Step 2 each turn the dirty-tree stop into one question with a recommended /git:commit option and a tagged stash, and fix.md caps at four questions', () => {
+test('AC-20261029-07-10 / AC-20261103-04-16: fix.md step 1 names /git:commit with no question and no fix-dirty-tree kind and caps at THREE questions, and merge.md Step 2 turns the dirty-tree stop into one question with a recommended /git:commit option and a tagged stash', () => {
   const fixStep = section('spec/commands/fix.md', /^1\. \*\*Root-cause/, /^2\. \*\*/)
+  const fixRules = section('spec/commands/fix.md', /^## Rules/, /^## (?!Rules)/)
+  assert.match(fixStep, /\/git:commit/, 'fix.md step 1 must name /git:commit as the dirty-tree remedy, or a dirty tree has no path forward: ' + fixStep)
+  assert.doesNotMatch(fixStep, /AskUserQuestion/, 'fix.md step 1 must not ask, or /git:commit\'s own two approvals are asked a third time: ' + fixStep)
+  assert.doesNotMatch(fixStep, /fix-dirty-tree/, 'fix.md step 1 must not write the retired kind, or the closed set refuses the write: ' + fixStep)
+  assert.match(fixRules, phrase('at most THREE'), 'fix.md Rules must cap the questions at THREE, or the cap contradicts the steps: ' + fixRules)
   const mergeStep = section('git/commands/merge.md', /^## Step 2/, /^## Step 3/)
-  for (const [name, s] of [['fix.md step 1', fixStep], ['merge.md Step 2', mergeStep]]) {
+  for (const [name, s] of [['merge.md Step 2', mergeStep]]) {
     assert.match(s, /AskUserQuestion/, name + ' must ask instead of stopping bare: ' + s)
     assert.match(s, /\/git:commit[^\n]*\(Recommended\)/, name + ' must recommend committing first on one line: ' + s)
     assert.match(s, /git\s+stash\s+push\s+-u\s+-m/, name + ' must offer the tagged stash: ' + s)

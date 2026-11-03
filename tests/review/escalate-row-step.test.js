@@ -126,6 +126,12 @@ test('AC-20260822-01-9 (also AC-20260901-09-2): WHEN the escalate verdict pass e
 
 test('AC-20260822-01-12 (also AC-20260901-09-2): WHEN the driver prints the ESCALATE step THE SYSTEM SHALL name the waive/reject close route, the abandon route, and the absolute ledger path the escalate row landed in', () => {
   const host = makeHost('esc-ac12')
+  // The step's route assertions read the question text, so the host keeps the ESCALATE question (specs/20261103/04 D14).
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.policy = { ...(cfg.policy || {}), stops: { reviewEscalate: 'ask' } }
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  fs.writeFileSync(host.spec, fs.readFileSync(host.spec, 'utf8').replace('| src/foo.js | edit | scripts |', '| src/foo.js | edit | scripts |\n| .claude/spec.config.json | edit | other |'))
   driveToCapEdge(host.root, host.spec)
   const thirdFix = run(host.root, host.spec, '--mark', 'fix-applied')
   assert.strictEqual(thirdFix.status, 2, 'setup: the capping fix-applied must be refused: ' + thirdFix.stdout + thirdFix.stderr)

@@ -120,6 +120,13 @@ const POLICY_ENUMS = Object.freeze({
   testExpiry: Object.freeze(['classify', 'off']),
   reviewService: Object.freeze(['terminal', 'hosted']),
 })
+const STOP_ENUMS = Object.freeze({
+  repairRound: Object.freeze(['repair', 'ask']),
+  buildEscalate: Object.freeze(['derived', 'ask']),
+  reviewEscalate: Object.freeze(['queue', 'ask']),
+  redFindings: Object.freeze(['remove-mention', 'ask']),
+  prototypeClose: Object.freeze(['ask', 'keep', 'delete']),
+})
 const POLICY_BOOLEANS = Object.freeze(['worktreePerSpec', 'directLaneToMain', 'ledgerCommitted'])
 const POLICY_SEATS = Object.freeze(['workers', 'reviewer', 'disposer', 'lanes'])
 const POLICY_MODELS = Object.freeze(['fable', 'opus', 'sonnet', 'haiku'])
@@ -139,6 +146,13 @@ const POLICY_DEFAULTS = Object.freeze({
     disposer: seat('opus', 'medium'),
     lanes: seat('opus', 'medium'),
   }),
+  stops: Object.freeze({
+    repairRound: 'repair',
+    buildEscalate: 'derived',
+    reviewEscalate: 'queue',
+    redFindings: 'remove-mention',
+    prototypeClose: 'ask',
+  }),
   riskTiers: Object.freeze([]),
 })
 
@@ -149,15 +163,17 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 // validatePolicy reports it, this does not second-guess it.
 function mergePolicy(raw) {
   const block = isObj(raw) ? raw : {}
-  const out = { models: {} }
+  const out = { models: {}, stops: {} }
   for (const k of Object.keys(POLICY_DEFAULTS)) {
-    if (k === 'models') continue
+    if (k === 'models' || k === 'stops') continue
     out[k] = k in block ? block[k] : (Array.isArray(POLICY_DEFAULTS[k]) ? [...POLICY_DEFAULTS[k]] : POLICY_DEFAULTS[k])
   }
   const m = isObj(block.models) ? block.models : {}
   for (const s of POLICY_SEATS) {
     out.models[s] = { ...POLICY_DEFAULTS.models[s], ...(isObj(m[s]) ? m[s] : {}) }
   }
+  const st = isObj(block.stops) ? block.stops : {}
+  for (const k of Object.keys(POLICY_DEFAULTS.stops)) out.stops[k] = k in st ? st[k] : POLICY_DEFAULTS.stops[k]
   return out
 }
 
@@ -187,6 +203,12 @@ function validatePolicy(block) {
       if (!POLICY_ENUMS[k].includes(v)) found.push(k + ': expected one of ' + POLICY_ENUMS[k].join('|'))
     } else if (k === 'riskTiers') {
       if (!Array.isArray(v) || !v.every((e) => typeof e === 'string' && e.trim() !== '')) found.push('riskTiers: expected an array of non-empty strings')
+    } else if (k === 'stops') {
+      if (!isObj(v)) { found.push('stops: expected an object'); continue }
+      for (const s of Object.keys(v)) {
+        if (!STOP_ENUMS[s]) { found.push('unknown key stops.' + s); continue }
+        if (!STOP_ENUMS[s].includes(v[s])) found.push('stops.' + s + ': expected one of ' + STOP_ENUMS[s].join('|'))
+      }
     } else if (k === 'models') {
       if (!isObj(v)) { found.push('models: expected an object'); continue }
       for (const s of Object.keys(v)) {
@@ -204,5 +226,5 @@ function validatePolicy(block) {
 
 module.exports = {
   readConfig, readConfigStrict, readPipelineRules, declaredForge, configPath, configExists, CONFIG_RELPATH,
-  POLICY_DEFAULTS, policy, mergePolicy, validatePolicy, agentCall,
+  POLICY_DEFAULTS, STOP_ENUMS, policy, mergePolicy, validatePolicy, agentCall,
 }

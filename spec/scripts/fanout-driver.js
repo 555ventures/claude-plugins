@@ -1,72 +1,39 @@
 #!/usr/bin/env node
 'use strict'
-// fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] [--state]
-// fanout-driver.js --root <dir> --mark <planned|standing|dispatched|returned|answered|dismissed|resumed|merged|gate-repaired|reported> [flags]
+// fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] [--ask <key>]… [--state]
+// fanout-driver.js --root <dir> --mark <planned|dispatched|returned|answered|dismissed|resumed|merged|gate-repaired|reported> [flags]
 //
-// Owner: specs/20261102/03-one-session-runs-the-lanes.md D3-D10, D4a — the driver behind
+// Owner: specs/20261103/04-predictable-stops-become-host-policy.md — the driver behind
 // /spec:fanout: one session dispatches a worktree-isolated sub-agent per lane, relays the questions
 // the lanes write, merges each finished lane one at a time with the host gate re-run on main, and
 // renders one report. State lives in <git-common-dir>/spec-fanout.json; every step is re-derived
 // from that file and the lanes' own disks, so /clear loses nothing. Prints exactly one step per run.
 //
-// Does NOT answer a lane's question itself (only the user's preflight sheet or a user answer
-// reaches a lane), run a lane's driver, dispatch an agent (it prints the Agent line; the session
+// Does NOT answer a lane's question itself (the host's policy.stops auto-picks are printed by the
+// lane's own driver; `--ask <key|all>` on the planning run relays them for one run), run a lane's driver, dispatch an agent (it prints the Agent line; the session
 // issues it), or derive lanes (spec-status --lanes --json does). A bare run applies RELAY's side
 // effects; a mark only records its fact and prints the next step.
 //
 // Exit codes: 0 step, mark or --state printed · 2 refused (run outside the main worktree, unknown
-// mark, mark outside its state, a lane that is not in the table or not merged, a gate-red main, a
-// bad standing label, a lane id missing) — stderr names the remedy.
+// mark, mark outside its state, a lane that is not in the table or not merged, a gate-red main, an
+// unknown --ask key, a lane id missing) — stderr names the remedy.
 
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { makeDie, writeJson, nowIso } = require('./lib/driver-core')
 const { writeOut, runHost } = require('./lib/driver-io')
-const { readConfig, agentCall } = require('./lib/host-config')
+const { readConfig, agentCall, policy } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 
 const SELF = __filename
 const DIR = __dirname
 const die = makeDie('fanout-driver')
-const MARKS = ['planned', 'standing', 'dispatched', 'returned', 'answered', 'dismissed', 'resumed', 'merged', 'gate-repaired', 'reported']
-const ASK_ME = 'ask me when it happens (Recommended)'
-const KINDS = ['repair-round', 'build-escalate', 'prototype-close']
+const MARKS = ['planned', 'dispatched', 'returned', 'answered', 'dismissed', 'resumed', 'merged', 'gate-repaired', 'reported']
+const ASK_KEYS = ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'all']
 const ACTIVE = ['dispatched', 'pending', 'merge-ready']
 const TERMINAL = ['merged', 'stopped', 'done']
 
-// The three predictable stops, offered with the labels and descriptions their drivers print.
-const STOPS = {
-  'repair-round': {
-    header: 'Repair round', flag: '--repair-round',
-    question: 'When a lane\'s review hits a failing check, should the lane get one automatic repair round, or stop and ask you each time?',
-    options: [
-      ['run one in-session repair round (Recommended)', 'The lane fixes the failing leg through the review fix seat and re-runs the legs; red again lands here with the round spent'],
-      ['queue /spec:fix and stop', 'The review ends; the repair becomes the queue\'s top item'],
-      ['abandon the review', 'The review sidecar is deleted and the run ends; the GATE_RED row stays on the ledger'],
-    ],
-  },
-  'build-escalate': {
-    header: 'Build cap', flag: '--build-escalate',
-    question: 'When a lane\'s build runs out of repair attempts with the checks still failing, should that be decided now for every lane, or asked when it happens?',
-    options: [
-      ['re-arm one more round', 'One more gate run is allowed; the failures were shrinking, and red again re-trips the cap'],
-      ['restart cold', 'The build sidecar is deleted and the next run resumes from the tree as it is, which costs the recorded progress'],
-      ['park and queue a /spec:fix', 'The build stays parked and the queue\'s top item becomes the repair, which ends this lane'],
-      ['amend the spec', 'The Decisions table is edited first, then the build re-arms; costs a spec change but fixes a wrong decision'],
-    ],
-  },
-  'prototype-close': {
-    header: 'Prototype', flag: '--prototype-close',
-    question: 'When a merged spec leaves an unmerged prototype behind, should it be deleted or kept — decided now for every lane, or asked when it happens?',
-    options: [
-      ['Delete it (Recommended)', 'The worktree, branch and database go; its contract, pictures and tests stay under the design folder'],
-      ['Keep it for now', 'The worktree and branch stay; close it later by hand with the printed command'],
-    ],
-  },
-}
-
-const unrec = (label) => String(label).replace(/ \(Recommended[^)]*\)$/, '')
 const stemOf = (p) => path.basename(p).replace(/\.[^.]*$/, '')
 const real = (p) => { try { return fs.realpathSync(p) } catch (e) { return path.resolve(p) } }
 const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch (e) { return null } }
@@ -74,20 +41,24 @@ const out = (lines) => writeOut(1, (Array.isArray(lines) ? lines.join('\n') : li
 
 // ---- argv ------------------------------------------------------------------------------------
 
-const VALUE_FLAGS = ['--root', '--spec', '--lanes', '--mark', '--lane', '--agent', '--stopped', '--id', '--label',
-  '--repair-round', '--build-escalate', '--prototype-close']
+const VALUE_FLAGS = ['--root', '--spec', '--lanes', '--mark', '--lane', '--agent', '--stopped', '--id', '--label', '--ask']
 const BOOL_FLAGS = ['--include-fixes', '--override-serial', '--state']
-const arg = { specs: [] }
+const arg = { specs: [], ask: [] }
 {
   const argv = process.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (VALUE_FLAGS.includes(a)) {
-      if (argv[i + 1] === undefined) die(`${a} needs a value — usage: fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] | --mark <m> [flags] | --state`)
+      if (argv[i + 1] === undefined) die(`${a} needs a value — usage: fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] [--ask <key>]… | --mark <m> [flags] | --state`)
       if (a === '--spec') arg.specs.push(argv[++i])
+      else if (a === '--ask') {
+        const k = argv[++i]
+        if (!ASK_KEYS.includes(k)) die(`--ask "${k}" is not a stop key — use one of ${ASK_KEYS.join(', ')}`)
+        arg.ask.push(k)
+      }
       else arg[a.slice(2)] = argv[++i]
     } else if (BOOL_FLAGS.includes(a)) arg[a.slice(2)] = true
-    else die(`unknown argument ${a} — usage: fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] | --mark <m> [flags] | --state`)
+    else die(`unknown argument ${a} — usage: fanout-driver.js [--root <dir>] [--spec <path>]… [--lanes N] [--include-fixes] [--override-serial] [--ask <key>]… | --mark <m> [flags] | --state`)
   }
 }
 const root = path.resolve(arg.root || process.cwd())
@@ -141,7 +112,6 @@ function dispatchable(st) {
 
 function deriveState(st) {
   if (!st || !st.admitted) return 'PLAN'
-  if (!st.standing) return 'PREFLIGHT'
   const pending = st.lanes.some((l) => l.state === 'pending')
   // A red main outranks DISPATCH, so no lane is ever dispatched onto it; a pending question still relays.
   if (st.lastGate && st.lastGate.result === 'red') return pending ? 'RELAY' : 'MERGE_RED'
@@ -178,7 +148,7 @@ function statusNextText() {
 
 function newLane(id, kind, fields) {
   return { id, kind, spec: null, brief: null, branch: null, state: 'planned', waitingOn: null, agent: null,
-    worktree: null, question: null, stoppedReason: null, gate: null, standingApplied: [], ...fields }
+    worktree: null, question: null, stoppedReason: null, gate: null, policyPicks: [], ...fields }
 }
 
 function plan() {
@@ -225,7 +195,7 @@ function plan() {
   }
   const st = { version: 1, startedAt: nowIso(), admitted: false,
     options: { lanes: cap, includeFixes: !!arg['include-fixes'], overrideSerial: !!arg['override-serial'], specs: arg.specs },
-    standing: null, notes, queued: [], lanes: table, lastGate: null }
+    ask: [...new Set(arg.ask)], notes, queued: [], lanes: table, lastGate: null }
   if (!table.length) { out([header('PLAN'), '## Step: plan the lanes', ...notes, 'no startable lanes — nothing to fan out; check `node "$(spec-paths spec-status)" --next`']); process.exit(0) }
   save(st)
   return st
@@ -239,29 +209,6 @@ function printPlan(st) {
   })
   out([header('PLAN'), '## Step: plan the lanes', ...rows, ...st.notes,
     `Then: ${cmd('--mark planned')}`, `(to change the set, delete ${STATE_FILE} and re-run)`])
-}
-
-// ---- PREFLIGHT -------------------------------------------------------------------------------
-
-function printPreflight() {
-  const block = { questions: KINDS.map((k) => ({
-    question: STOPS[k].question, header: STOPS[k].header, multiSelect: false,
-    options: [{ label: ASK_ME, description: 'That lane stops and the question is relayed to you to answer, so nothing is decided for you; costs a pause each time it happens.' },
-      ...STOPS[k].options.map(([label, description]) => ({ label, description }))],
-  })) }
-  out([header('PREFLIGHT'), '## Step: standing answers',
-    'Ask ONE AskUserQuestion with these three questions (answers become the standing sheet; a lane\'s other questions are always relayed):',
-    'AskUserQuestion ' + JSON.stringify(block, null, 2),
-    'stop kinds: Repair round = repair-round · Build cap = build-escalate · Prototype = prototype-close',
-    'Pass the chosen label for each, or the word ask for the first option.',
-    `Then: ${cmd('--mark standing --repair-round <label|ask> --build-escalate <label|ask> --prototype-close <label|ask>')}`])
-}
-
-function checkLabel(kind, value) {
-  const labels = STOPS[kind].options.map((o) => o[0])
-  if (value === 'ask' || value === ASK_ME) return 'ask'
-  if (labels.includes(value) || labels.some((l) => unrec(l) === unrec(value))) return value
-  return die(`${STOPS[kind].flag} "${value}" is not an option label — use ask or one of: ${labels.join(' | ')}`)
 }
 
 // ---- DISPATCH --------------------------------------------------------------------------------
@@ -304,8 +251,7 @@ function relay(st, apply) {
   const lines = []
   let changed = false
   for (const l of st.lanes.filter((x) => x.state === 'pending')) {
-    const wt = l.worktree
-    let doc = readJson(l.question)
+    const doc = readJson(l.question)
     if (!doc) { lines.push(`Lane ${l.id}: the pending file ${l.question} is gone — run ${cmd(`--mark returned --lane ${l.id}`)}`); continue }
     if (apply && !doc.dismissed) {
       const g = py('question-style-gate.js', ['--file', l.question])
@@ -315,17 +261,6 @@ function relay(st, apply) {
         lines.push(`Lane ${l.id}: stopped — ${l.stoppedReason}`)
         continue
       }
-      const standing = st.standing[doc.kind]
-      for (const q of doc.questions) {
-        if ((doc.answers || {})[q.id] || !standing || standing === 'ask') continue
-        const opt = q.options.find((o) => o.label === standing) || q.options.find((o) => unrec(o.label) === unrec(standing))
-        if (!opt) continue
-        const a = py('pending-question.js', ['answer', '--root', wt, '--id', q.id, '--label', opt.label, '--by', 'standing'])
-        if (a.status !== 0) die(`pending-question answer failed for ${l.id}: ${(a.stderr || '').trim()} — answer it by hand with --mark answered`)
-        l.standingApplied.push({ kind: doc.kind, label: opt.label, at: nowIso() }); changed = true
-        lines.push(`📌 Auto-picked ${opt.label} — standing answer from preflight (veto anytime)`)
-      }
-      doc = readJson(l.question)
     }
     const open = doc.questions.filter((q) => !(doc.answers || {})[q.id])
     if (doc.dismissed || !open.length) resume.push(l)
@@ -355,11 +290,11 @@ function relay(st, apply) {
 
 function printMerge(st) {
   const l = st.lanes.find((x) => x.state === 'merge-ready')
-  const proto = st.standing['prototype-close']
+  const proto = policy(root).stops.prototypeClose
   const lines = [header('MERGE'), `## Step: merge ${l.id}`, `git worktree unlock ${l.worktree}`]
   if (l.kind === 'fix') lines.push(`/git:merge ${l.branch}`)
   else lines.push(`run from ${mainRoot}: node "$(spec-paths review-driver)" ${l.worktree}/${l.spec} — follow its MERGE step (strategy derived; ` +
-    (proto && proto !== 'ask' ? `a prototype question is answered from the standing sheet: "${proto}"` : 'a prototype question is asked of the user') + ')')
+    (proto === 'keep' || proto === 'delete' ? `a prototype question is answered by host policy: "${proto}"` : 'a prototype question is asked of the user') + ')')
   lines.push(`then: ${cmd(`--mark merged --lane ${l.id}`)}`)
   out(lines)
 }
@@ -424,7 +359,7 @@ function printReport(st) {
   const clean = !stopped.length && !waiting.length
   const text = clean ? `fan-out complete — ${done.length} merged`
     : `fan-out finished with stops — ${done.length} merged, ${stopped.length} stopped${waiting.length ? `, ${waiting.length} not started` : ''}`
-  const warns = st.lanes.flatMap((l) => l.standingApplied.map((a) => `standing answer applied — ${a.kind}: ${a.label} (${l.id}, ${labelOf(l)})`))
+  const warns = st.lanes.flatMap((l) => (l.policyPicks || []).map((a) => `policy applied — stops.${a.key}: ${a.label} (${l.id}, ${l.kind === 'fix' ? labelOf(l) : stemOf(l.spec)})`))
   const next = statusNextText()
   const slots = { outcome: { anchor: clean ? '✅' : '⚠️', text }, bullets, warns, queued: st.queued,
     next: next.trim() ? { kind: 'status-verbatim', text: next } : { kind: 'none', reason: 'spec-status printed no next step' } }
@@ -444,7 +379,6 @@ function printWait(st) {
 function printStep(st, apply) {
   const state = deriveState(st)
   if (state === 'PLAN') return printPlan(st)
-  if (state === 'PREFLIGHT') return printPreflight()
   if (state === 'MERGE_RED') return printMergeRed(st)
   if (state === 'DISPATCH') return printDispatch(st)
   if (state === 'RELAY') {
@@ -525,23 +459,13 @@ function doMark(st, mark) {
   if (!MARKS.includes(mark)) die(`unknown mark "${mark}" — marks are ${MARKS.join(', ')}`)
   if (!st) die(`--mark ${mark} needs a plan — run ${cmd('').trim()} (no mark) first`)
   if (mark === 'planned') {
-    if (st.admitted) die(`the table is already admitted — run ${cmd('').trim()} (no mark) to see the current step`)
-    st.admitted = true
-    save(st)
+    if (!st.admitted) {
+      st.admitted = true
+      save(st)
+    }
     return printStep(st, false)
   }
   if (!st.admitted) die(`the table is not admitted yet — run ${cmd('--mark planned')} first`)
-  if (mark === 'standing') {
-    const next = {}
-    for (const k of KINDS) {
-      const v = arg[k]
-      if (v === undefined) die(`--mark standing needs ${STOPS[k].flag} <label|ask> — one answer per stop`)
-      next[k] = checkLabel(k, v)
-    }
-    st.standing = next
-    save(st)
-    return printStep(st, false)
-  }
   if (mark === 'gate-repaired') {
     if (!st.lastGate) die('no red gate to repair — run the driver bare to see the current step')
     const g = runGate(laneOf(st, st.lastGate.lane))
@@ -573,6 +497,16 @@ function doMark(st, mark) {
     needState(l, ['dispatched', 'pending'], mark)
     const r = inspectReturned(l)
     l.state = r.state; l.question = r.question || null; l.stoppedReason = r.reason || null
+    if (l.kind !== 'fix' && l.worktree) {
+      const base = path.join(l.worktree, l.spec).replace(/\.md$/, '')
+      const sides = [readJson(path.join(base + '.build', 'build-state.json')), readJson(path.join(base + '.review', 'review-state.json'))].filter(Boolean)
+      l.policyPicks = sides.flatMap((x) => Array.isArray(x.policyPicks) ? x.policyPicks : [])
+      const exit = sides.map((x) => x.laneExit).find((x) => x && typeof x.reason === 'string')
+      if (exit && l.state !== 'pending' && l.state !== 'done' && !arg.stopped) {
+        l.state = 'stopped'; l.stoppedReason = exit.reason
+        if (typeof exit.queued === 'string' && exit.queued) st.queued.push(exit.queued)
+      }
+    }
     if (TERMINAL.includes(l.state)) rolling(st)
   } else if (mark === 'answered') {
     needState(l, ['pending'], mark)

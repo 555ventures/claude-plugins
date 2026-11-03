@@ -1022,6 +1022,7 @@ function handleRepairApplied() {
     // never actually completed (exit 2 leaves state unchanged).
     runGate()
     marks.repairs.push({ continued, spawned })
+    delete marks.escalateChoice
     saveSidecar()
     const reArmed = marks.gateRuns[marks.gateRuns.length - 1]
     if (reArmed.exit !== 0) fs.writeFileSync(gateCapPath, '')
@@ -1044,6 +1045,7 @@ function handleEscalateChoice() {
   if (choice === 're-arm') {
     fs.rmSync(gateCapPath, { force: true })
     delete marks.escalateChoice
+    delete marks.laneExit
     saveSidecar()
     return null
   }
@@ -1053,8 +1055,31 @@ function handleEscalateChoice() {
     process.exit(0)
   }
   marks.escalateChoice = choice
+  if (choice === 'park') recordParkExit()
+  else delete marks.laneExit
   saveSidecar()
   return null
+}
+
+// A policy pick is recorded once per key: a bare re-invocation reprints the step but never
+// appends a second record. Saves the sidecar when a new pick lands.
+function pickOnce(key, labelByValue) {
+  const had = (marks.policyPicks || []).some((x) => x.key === key)
+  const r = pq.policyPick(repoRoot, key, labelByValue, marks)
+  if (!r) return null
+  if (had) marks.policyPicks.pop()
+  else saveSidecar()
+  return r
+}
+// The queue subject a parked build prints, and the lane exit recorded with it.
+function parkQueueSubject() {
+  const runs = marks.gateRuns || []
+  const lastLog = runs.length ? path.relative(repoRoot, runs[runs.length - 1].log) : '(none)'
+  return `${specRel}: build parked at the repair cap \u2014 ${lastLog}`
+}
+function recordParkExit() {
+  if (marks.laneExit) return
+  marks.laneExit = { reason: 'build parked at the repair cap', queued: parkQueueSubject(), at: new Date().toISOString() }
 }
 
 function gitStatusPaths(root) {
@@ -1320,7 +1345,12 @@ function redFindingsGuidance() {
       out.push(`\ud83d\udccc Auto-picked split the bullet \u2014 ${m[2]}: ${[...new Set(acs)].join(', ')} (veto anytime)\n` +
         `  split the SHALL CONTINUE TO clause into its own AC, then re-run`)
     } else if (m[1] === 'unsanctioned-green') {
-      if (tier === 'critical') askGreen = true
+      const rp = tier === 'critical' ? pickOnce('redFindings', { 'remove-mention': 'remove the AC-ID mention' }) : null
+      if (tier === 'critical' && !rp) askGreen = true
+      else if (rp) out.push(`${rp.line}\n` +
+        `  known cause (spec-pipeline \u00a7 Gotchas): the file mentions a carried AC-ID in a comment or test name, ` +
+        `which forces a red expectation onto a green file \u2014 remove the mention. If that does not match, the ` +
+        `test is vacuous: rewrite it red.`)
       else out.push(`\ud83d\udccc Auto-picked remove the AC-ID mention \u2014 ${m[2]} (veto anytime)\n` +
         `  known cause (spec-pipeline \u00a7 Gotchas): the file mentions a carried AC-ID in a comment or test name, ` +
         `which forces a red expectation onto a green file \u2014 remove the mention. If that does not match, the ` +
@@ -1482,6 +1512,23 @@ function escalateStepBody() {
       `  node ${__filename} ${specPath} --mark escalate-choice re-arm\n`
   }
   const rec = escalateRecommendation()
+  const ePick = pickOnce('buildEscalate', { derived: rec.pick === 're-arm' ? 're-arm one more round' : 'park and queue a /spec:fix' })
+  if (ePick) {
+    const pickLine = ePick.line.replace(/ \(veto anytime\)$/, ` (${rec.text}) (veto anytime)`)
+    const override = `To answer differently: node ${__filename} ${specPath} --mark escalate-choice <re-arm|cold|park|amend>\n`
+    if (rec.pick === 're-arm') {
+      fs.rmSync(gateCapPath, { force: true })
+      marks.escalateChoice = 're-arm'
+      saveSidecar()
+      return pickLine + '\n' + repairStepBody() + '\n' + override
+    }
+    marks.escalateChoice = 'park'
+    recordParkExit()
+    saveSidecar()
+    return pickLine + '\n' +
+      `## ESCALATE \u2014 parked at the repair cap\n` +
+      `The build stays parked. Queue the repair (run this line):\n  ${queueLine}\n` + override
+  }
   if (pq.isDelegated(repoRoot)) {
     const choice = (c) => `node ${__filename} ${specPath} --mark escalate-choice ${c}`
     return `## ESCALATE \u2014 repair iteration cap (3) reached\n` +

@@ -2,9 +2,9 @@
 'use strict'
 // Usage: pending-question.js write --root <dir> --file <doc.json>
 //        pending-question.js show|dismiss|consume|mark|is-delegated --root <dir>
-//        pending-question.js answer --root <dir> --id <qid> --label <label> --by user|standing
+//        pending-question.js answer --root <dir> --id <qid> --label <label> --by user
 // Also a module: isDelegated, markDelegated, pendingPath, writePending, readPending,
-// consumePending, validate.
+// consumePending, validate, stopPolicy, policyPick.
 //
 // Owner: specs/20261102/02-a-delegated-driver-stops-on-disk.md D1 — the one writer and reader
 // of <root>/.claude/pending-question.json, the file a driver running delegated (a lane worker
@@ -18,6 +18,10 @@
 // or the lane's branch listed in <git-common-dir>/spec-fanout.json. `is-delegated` is the query
 // form for prose commands (exit 0 = a lane, 1 = not), so no command re-derives the rule.
 //
+// `stopPolicy(root)` / `policyPick(root, key, labelByValue, marks)` are the
+// one reader of the host's policy.stops overlaid by the fan-out table's `ask` list, and the one
+// builder of the printed auto-pick line; a policy pick never writes a pending file.
+//
 // Does NOT decide who may answer (core § Delegated Stops: only the parent writes answers), does
 // NOT relay a question, and never stores state beyond that one file and the marker.
 //
@@ -29,9 +33,10 @@ const crypto = require('crypto')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { check } = require('./question-style-gate')
+const { policy } = require('./lib/host-config')
 
-const KINDS = ['repair-round', 'dispositions', 'review-escalate', 'red-findings', 'build-escalate', 'fix-dirty-tree', 'fix-decisions', 'fix-dispositions']
-const BY = ['user', 'standing']
+const KINDS = ['repair-round', 'dispositions', 'review-escalate', 'red-findings', 'build-escalate', 'fix-decisions', 'fix-dispositions']
+const BY = ['user']
 
 const MARKER = 'spec-delegated'
 
@@ -68,6 +73,35 @@ function isDelegated(root) {
   }
   const branch = currentBranch(root)
   return !!(branch && table && Array.isArray(table.lanes) && table.lanes.some((l) => l && l.branch === branch))
+}
+
+function readFanoutTable(root) {
+  const common = gitCommonDir(root)
+  if (!common) return null
+  try {
+    return JSON.parse(fs.readFileSync(path.join(common, 'spec-fanout.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// The host's policy.stops with the fan-out table's `ask` list overlaid ('all' = every key).
+function stopPolicy(root) {
+  const stops = { ...policy(root).stops }
+  const table = readFanoutTable(root)
+  const ask = table && Array.isArray(table.ask) ? table.ask : []
+  for (const k of Object.keys(stops)) if (ask.includes('all') || ask.includes(k)) stops[k] = 'ask'
+  return stops
+}
+
+// null when the stop is asked (or has no label for its value); else the vetoable pick, recorded
+// onto marks.policyPicks.
+function policyPick(root, key, labelByValue, marks) {
+  const value = stopPolicy(root)[key]
+  if (value === 'ask' || !labelByValue || !Object.prototype.hasOwnProperty.call(labelByValue, value)) return null
+  const label = labelByValue[value]
+  if (marks) (marks.policyPicks = Array.isArray(marks.policyPicks) ? marks.policyPicks : []).push({ key, value, label, at: new Date().toISOString() })
+  return { value, label, line: `📌 Auto-picked ${label} — host policy stops.${key}: ${value} (veto anytime)` }
 }
 
 function markDelegated(root) {
@@ -191,6 +225,11 @@ function bareRun(root, marks, keepKinds = [], keyFor = () => null) {
     lines.push(o.resume === 'stop' ? `stop${o.then ? ' — then: ' + o.then : ''}` : String(o.resume))
   }
   if (keepKinds.includes(doc.kind)) return { text: lines.join('\n'), changed: false }
+  for (const q of qs) {
+    const a = answers[q.id]
+    const o = q.options.find((x) => x.label === a.label) || {}
+    if (o.resume === 'stop' && !marks.laneExit) marks.laneExit = { reason: a.label, at: new Date().toISOString() }
+  }
   consumePending(root)
   marks.answered = [...(Array.isArray(marks.answered) ? marks.answered : []),
     { kind: doc.kind, answers, at: new Date().toISOString(), ...(keyFor(doc.kind) ? { stopKey: keyFor(doc.kind) } : {}) }]
@@ -198,7 +237,7 @@ function bareRun(root, marks, keepKinds = [], keyFor = () => null) {
 }
 
 function usage(msg) {
-  process.stderr.write(`pending-question: ${msg}\nusage: pending-question.js write|show|answer|dismiss|consume|mark|is-delegated --root <dir> [--file <doc.json>] [--id <qid> --label <label> --by user|standing]\n`)
+  process.stderr.write(`pending-question: ${msg}\nusage: pending-question.js write|show|answer|dismiss|consume|mark|is-delegated --root <dir> [--file <doc.json>] [--id <qid> --label <label> --by user]\n`)
   process.exit(2)
 }
 
@@ -274,6 +313,6 @@ function main() {
   process.exit(0)
 }
 
-module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, markDelegated }
+module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, BY, markDelegated, stopPolicy, policyPick }
 
 if (require.main === module) main()

@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: critical           # spec/templates/grounding-contract.md gains the policy.stops block (§ Risk Tiers: hash-stamped into every host)
 area: pipeline
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 973d0c5ec371344bfbea884acf54562c73fe1c25
 ---
 
 # Predictable stops become host policy

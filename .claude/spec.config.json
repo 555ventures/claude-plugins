@@ -1,6 +1,6 @@
 {
   "generatedBy": "spec@7.268.0",
-  "contractHash": "4a008a392b20",
+  "contractHash": "e3fb765dadad",
   "trunk": "main",
   "gateCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js {testDirs}",
   "testCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js --test-reporter=spec --test-reporter-destination=stdout",

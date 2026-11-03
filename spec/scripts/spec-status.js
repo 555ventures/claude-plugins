@@ -661,14 +661,14 @@ function deriveNext() {
   // Escape entries never take part (top or runner-up) — they always sort first (rank -3) when
   // present, but they carry no worktree-build parallel claim of their own (pinned above) and
   // must never receive one derived against them either.
-  const top = entries[0] && entries[0].action === '/spec:fix'
-    ? entries.find(e => e.action !== '/spec:fix' && !e.blockers.length)
+  const top = entries[0] && (entries[0].action === '/spec:fix' || entries[0].queue)
+    ? entries.find(e => e.action !== '/spec:fix' && !e.queue && !e.blockers.length)
     : entries[0]
   // A queue prompt entry (top.brief === null) makes no worktree-build parallelism claim —
   // same reasoning as the escape exclusion just above.
   if (top && !top.blockers.length && top.brief) {
     for (const e of entries.slice(1)) {
-      if (e.blockers.length || !e.brief || !top.brief || e.action === '/spec:fix') continue
+      if (e === top || e.blockers.length || !e.brief || !top.brief || e.action === '/spec:fix') continue
       const reason = briefSerialReason(e.brief, top.brief)
       if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
@@ -803,7 +803,7 @@ if (json) {
 // pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, every call site,
 // so the lanes drawn in Next and the runner-ups sunk under --all can never disagree.
 function laneAdmission(entries) {
-  const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:fix')
+  const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:fix' && !e.queue)
   const blocked = entries.filter(e => e.blockers.length)
   const lanes = unblocked.length ? [unblocked[0]] : []
   const laneClash = new Map()
@@ -924,6 +924,8 @@ const waitClause = n => `${n} more open`
   const { blocked, lanes, laneClash, later } = laneAdmission(entries)
   const escapes = entries.filter(e => e.action === '/spec:fix')
   escapes.forEach(e => out.push(cmd(e)))
+  const prompts = entries.filter(e => e.queue && !e.blockers.length)
+  prompts.forEach(e => out.push(cmd(e)))
   let laneRendered = false
   if (lanes.length > 1) {
     laneRendered = true
@@ -958,7 +960,7 @@ const waitClause = n => `${n} more open`
   // When branch (c) below fires, the top pick it prints is also the head of `blocked` —
   // remembered here so --all's ⛔ section can filter it back out instead of re-printing it.
   let topPrintedAsBlocked = false
-  if (!escapes.length && !laneRendered) {
+  if (!escapes.length && !prompts.length && !laneRendered) {
     if (!entries.length) {
       out.push(`   ✨ ${nothingNextLine()}`)
     } else {

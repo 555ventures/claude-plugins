@@ -47,10 +47,11 @@
 //
 // Exit codes: 0 ok · 2 usage, unresolvable/ambiguous/already-done <ref>, duplicate brief/spec
 //   on add (names `spec-queue move <ref> <n>`), a missing --after-spec/--after-brief target,
-//   a removed verb/flag (names its replacement), a near-duplicate prompt on add (names the
-//   matching id and `--distinct`), `move`/`done` on an archived id, or a corrupt queue file
-//   (remove <git-common-dir>/spec-queue.json, re-run `next`) or archive file (remove or
-//   repair <git-common-dir>/spec-queue-done.json) · 3 not a git repository (run inside it).
+//   a removed verb/flag (names its replacement), an unknown --flag on any subcommand, a
+//   near-duplicate prompt on add (names the matching id and `--distinct`), `move`/`done` on an
+//   archived id, or a corrupt queue file (remove <git-common-dir>/spec-queue.json, re-run
+//   `next`) or archive file (remove or repair <git-common-dir>/spec-queue-done.json)
+//   · 3 not a git repository (run inside it).
 
 const fs = require('fs')
 const path = require('path')
@@ -100,6 +101,17 @@ if (!SUBS.includes(sub)) {
   }
   usage()
   process.exit(2)
+}
+
+// Only `add` takes flags (it validates its own). Every other subcommand takes none, so a trailing
+// --flag is refused (exit 2) before any read or write — a dropped `--root X` would act on the
+// cwd repo's queue while the caller believes it aimed at X. spec-queue never honours --root.
+if (sub !== 'add') {
+  const flag = rest.find(a => /^--/.test(a))
+  if (flag) {
+    console.error(`spec-queue: ${sub}: unknown flag ${flag} — ${sub} takes no flags; spec-queue takes no --root (run from the repo root)`)
+    process.exit(2)
+  }
 }
 
 // The repository root, NOT the shell's CWD: every brief/spec state below is derived by

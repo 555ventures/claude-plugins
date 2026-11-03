@@ -84,6 +84,11 @@ were your range.
   spec never turned into an AC — is **hard**.
 - A regression pin (`SHALL CONTINUE TO` AC) whose covering test the diff deletes is hard even
   when the AC lives in an earlier spec.
+- A Decisions row tagged `[auto: out-of-plan-triage]` is a scope widening the build took
+  without asking — re-run `node "$(spec-paths out-of-plan-triage)" --spec <spec> --file <that file>`;
+  exit 1 is **hard** (the file is a § Risk Tiers surface or `orchestratorOnly` path, so the
+  triage was bypassed), and the named file's diff must be an in-place update of the pin — a
+  weakened assertion stays hard under the host's § Review Checks.
 
 ## The cold walk
 

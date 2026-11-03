@@ -80,10 +80,12 @@ ONE `AskUserQuestion` (≤4 questions per call), never one call per worker. The 
 gate failure below is auto-picked. Write the ruling **into the spec's
 Decisions table**, then re-dispatch that worker. A ruling that adds or changes an observable promise updates its
 terminal-observable AC in the same spec edit. A gate failure implicating a file outside the
-File Plan widens scope — a File Plan row plus a Decisions entry naming the gate line, then the
-owning worker — printing `📌 Auto-picked add to scope — <file, gate line> (veto anytime)`; ask
-(add to scope / file separately / pause) only when the spec is `tier: critical` or what the
-file does falls under a pipeline rules § Risk Tiers trigger.
+File Plan is triaged by the file's risk, never the spec's tier — run
+`node "$(spec-paths out-of-plan-triage)" --spec <spec> --file <path>`. Exit 0 widens scope:
+paste the File Plan row and the `[auto: out-of-plan-triage]` Decisions row it prints, naming the
+gate line, then dispatch the owning worker (the script prints the
+`📌 Auto-picked add to scope — <file> (veto anytime)` line). Exit 1 means the file is a host
+§ Risk Tiers surface or an `orchestratorOnly` path — ask (add to scope / file separately / pause).
 
 ## Report
 

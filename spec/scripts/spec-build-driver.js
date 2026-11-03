@@ -1481,6 +1481,7 @@ function repairStepBody() {
     (orchPaths.length
       ? `orchestrator-owned — fix these yourself, never route them to a worker: ${orchPaths.join(', ')}\n`
       : '') +
+    `a failing file outside the File Plan: node "$(spec-paths out-of-plan-triage)" --spec ${specPath} --file <path> — exit 0 prints the two rows to paste, exit 1 asks (add to scope / file separately / pause)\n` +
     `Route each failing file to the worker that owns its layer (SendMessage; spawn fresh only if ` +
     `that worker is gone). Then:\n` +
     `Then: node ${__filename} ${specPath} --mark repair-applied --continued <n> --spawned <n>`

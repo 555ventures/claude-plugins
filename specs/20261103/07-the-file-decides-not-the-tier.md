@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: critical           # adds a key to spec/bin/spec-paths (rules § Risk Tiers: "a wrong key breaks commands silently")
 area: build-stage
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 4e19cf5b20dabd3019d013a40435546a0426ac27
 ---
 
 # The file decides, not the tier

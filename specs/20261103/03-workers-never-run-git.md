@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: critical
 area: build-stage
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 8d873a5427234959e34ff1ee93082a2455d1dfe2
 ---
 
 # Workers never run git — the ban becomes a hook
@@ -36,6 +37,7 @@ in a test, and § Worker Git Ban points at the script as its enforcer.
 | D7 | `.claude/rules/spec-pipeline.md` § Risk Tiers hook-surfaces list gains `spec/scripts/block-worker-git.sh` `[no-ac: this repo's own grounding prose, no testable surface]` | A broken hook blocks every Bash call in every host; the list is what makes a future edit to it critical tier. |
 | D8 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` `[no-ac: plugin-bump.js --check in the gate is the oracle]` | Host Planning rules: the description is the changelog surface; no version literal in a spec. |
 | D9 | Two regression pins: the cross-worktree write hook still blocks a write into another working tree (AC-20261103-03-10), and `isDelegated` still reads only the `spec-delegated` marker and the fan-out table (AC-20261103-03-11) | hooks.json is shared by every hook, and the new marker sits beside the lane marker in the same private git dir — both neighbours must demonstrably not move. |
+| D10 | `tests/consistency/entrypoints.test.js`'s exhaustive hooks.json script-path pin (the `parseHookScriptPaths extracts exactly the five live hooks.json script paths` case, spec 20260901/02 AC 8) gains `spec/scripts/block-worker-git.sh` in its expected set and its "five" count wording becomes "six"; assertions otherwise unchanged, no AC retag (user ruling at build REPAIR round 1, gate-1.log `not ok 132`: add to this build) `[no-ac: exhaustive live-file pin updated in place; its own case is the oracle]` | pipeline rules § Gotchas: a spec adding a hooks.json member invalidates that exhaustive pin by construction; the pin's own comment says each addition updates the set in place. |
 
 ## File Plan
 
@@ -52,6 +54,7 @@ in a test, and § Worker Git Ban points at the script as its enforcer.
 | tests/consistency/red-fixture-coverage.test.js | MODIFY | tests | `HOOK_HANDLERS['block-worker-git.sh']` — fixture mirror of AC-20261103-03-1 / AC-20261103-03-3 (D6) |
 | spec/entrypoints.json | MODIFY | other | row `spec/scripts/block-worker-git.sh` → `entryPoints: ["spec/hooks/hooks.json"]`, same shape as the cross-worktree hook's row (D6) |
 | tests/worktree-hook.test.js | MODIFY | tests | AC-20261103-03-10 — append the ID to the title of the `AC-20260820-02-2:` case; assertions unchanged (D9) |
+| tests/consistency/entrypoints.test.js | MODIFY | tests | exhaustive hooks.json script-path pin gains `spec/scripts/block-worker-git.sh`; five → six (D10) |
 | tests/delegated/pending-question.test.js | MODIFY | tests | AC-20261103-03-11 — append the ID to the title of the `isDelegated` case and plant `spec-wave-open` beside the probe's tree as the "whatever else" input; assertions unchanged (D9) |
 
 ## Contracts

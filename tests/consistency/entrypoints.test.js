@@ -737,20 +737,21 @@ test('AC-20260912-03-7: a spec/doctrine/stages/stage-x.md invoking spec-paths wi
 // (specs/20260823/08 added session-queue.sh — the recorded out-of-File-Plan collision class;
 // removed with the SessionStart queue hook, so the set went back to four; specs/
 // 20260901/02-run-provenance.md D1/D7 (AC-20260901-02-8) adds a third UserPromptSubmit
-// arm, spec-session-stamp.sh, so the set is five again).
-test('AC-20260901-02-8 (was AC-20260820-04-5 / D10 / hole2): parseHookScriptPaths extracts exactly the five live hooks.json script paths (repo-relative, /scripts/-rooted today), proving the parse-based oracle actually fires against the real file', () => {
+// arm, spec-session-stamp.sh, so the set is five again; specs/20261103/03-workers-never-run-git.md adds block-worker-git.sh, so the set is six).
+test('AC-20260901-02-8 (was AC-20260820-04-5 / D10 / hole2): parseHookScriptPaths extracts exactly the six live hooks.json script paths (repo-relative, /scripts/-rooted today), proving the parse-based oracle actually fires against the real file', () => {
   const result = parseHookScriptPaths(ROOT)
   assert.strictEqual(result.ok, true,
     'the live spec/hooks/hooks.json must parse as valid JSON — a parse failure here would fail ' +
     'the whole hooks direction closed: ' + (result.error || ''))
   assert.deepStrictEqual([...result.paths].sort(), [
     'spec/scripts/block-cross-worktree-writes.sh',
+    'spec/scripts/block-worker-git.sh',
     'spec/scripts/genesis-state-gate.sh',
     'spec/scripts/question-style-gate.js',
     'spec/scripts/spec-session-stamp.sh',
     'spec/scripts/spec-state-gate.sh'
   ],
-    'the parse-based extraction must yield exactly these five repo-relative paths from the live ' +
+    'the parse-based extraction must yield exactly these six repo-relative paths from the live ' +
     'file — spec-session-stamp.sh (D1) is the new third UserPromptSubmit arm; this is the executed ' +
     'proof that the oracle change (not a widened regex) actually resolves the measured D10 defect ' +
     '(the old raw-bytes regex returned zero matches here), and that the hole2 path-based extraction ' +

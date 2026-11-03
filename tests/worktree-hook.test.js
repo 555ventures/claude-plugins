@@ -102,7 +102,7 @@ test('AC-20260826-01-5: a write whose TARGET is a same-repo linked worktree whos
     'remedy text: ' + JSON.stringify(res.stderr))
 })
 
-test('AC-20260820-02-2: a write anchored INSIDE the marker-carrying scratch tree that targets the main checkout stays blocked, since the allow keys on the target only', () => {
+test('AC-20260820-02-2: (AC-20261103-03-10) a write anchored INSIDE the marker-carrying scratch tree that targets the main checkout stays blocked, since the allow keys on the target only', () => {
   const { root, rt } = markedFixture()
   const res = run({ cwd: rt, tool_input: { file_path: path.join(root, 'README.md') } })
   assert.strictEqual(res.status, 2,

@@ -205,8 +205,11 @@ invocation consumes go to the session scratchpad, never under `specs/`.
 
 ## Worker Git Ban
 
-Implementation workers never run git — no checkout/stash/restore/reset/clean/add/commit. The
-orchestrator owns all git and checkpoint-commits after each green phase.
+Implementation workers never run git. Reads (`status`/`diff`/`log` and the other read-only verbs)
+pass; every writing verb — `checkout`/`switch`/`stash`/`restore`/`reset`/`clean`/`add`/`commit` and
+the rest — is refused while a worker-dispatching build step is open. Enforced by `block-worker-git.sh`
+— its header comment is the contract. The orchestrator owns all git and
+checkpoint-commits after each green phase.
 
 ## Read-Only Surfaces
 

@@ -46,6 +46,16 @@
             "statusMessage": "Checking worktree isolation"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/block-worker-git.sh",
+            "statusMessage": "Checking worker git ban"
+          }
+        ]
       }
     ]
   }

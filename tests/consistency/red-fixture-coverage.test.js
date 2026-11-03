@@ -622,6 +622,25 @@ function hookCrossWorktree() {
     'the blocked case must print the BLOCKED: diagnostic on stderr: ' + crossTree.stderr)
 }
 
+// block-worker-git.sh: specs/20261103/03-workers-never-run-git.md D6 — a planted spec-wave-open
+// marker plus a writing git verb must block; the read-only control must pass.
+function hookWorkerGit() {
+  const root = fs.realpathSync(tmpdir('rfc-hook-wgit'))
+  gitRepo(root)
+  const gd = execFileSync('git', ['-C', root, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  fs.writeFileSync(path.join(path.isAbsolute(gd) ? gd : path.join(root, gd), 'spec-wave-open'),
+    JSON.stringify({ spec: 'specs/x/01-y.md', state: 'WAVE:scripts' }))
+  const run = (command) => runBash('scripts/block-worker-git.sh', [], { input: JSON.stringify({ cwd: root, tool_name: 'Bash', tool_input: { command } }) })
+
+  const control = run('git status')
+  assert.strictEqual(control.status, 0,
+    'evidence the check engaged: a read-only git verb under a planted marker must pass — if this control also blocked, a stub that always exits 2 would pass the planted case below too: ' + control.stderr)
+  const planted = run('git commit -m RED_FIXTURE')
+  assert.strictEqual(planted.status, 2,
+    'a writing git verb while the spec-wave-open marker is planted must be blocked: ' + planted.stderr)
+  assert.match(planted.stderr, /BLOCKED:/, 'the blocked case must print the BLOCKED: diagnostic on stderr: ' + planted.stderr)
+}
+
 // spec-session-stamp.sh: specs/20260901/02-run-provenance.md D1/D12 (brief 18) —
 // this hook is deliberately NOT a gate. It never prints and never blocks; its only exit code is
 // 0 (D1). "Can actually block on a planted violation" is unprovable for a hook with no block
@@ -678,6 +697,7 @@ const HOOK_HANDLERS = {
   'question-style-gate.js': hookQuestionStyle,
   'block-cross-worktree-writes.sh': hookCrossWorktree,
   'spec-session-stamp.sh': hookSessionStamp,
+  'block-worker-git.sh': hookWorkerGit,
 }
 
 // The shared title below names the ENGAGEMENT each handler proves, not "can block" — three of

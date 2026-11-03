@@ -482,3 +482,71 @@ test('AC-20261102-03-16: a lane whose branch is already merged but whose locked 
   assert.strictEqual(h.git('branch', '--list', 'spec/03-x').trim(), '', 'the merged lane branch must be deleted')
   assert.deepStrictEqual([h.lane('L1').gate, h.lane('L1').state], ['green', 'merged'], 'after the cleanup the gate runs and the lane lands as merged')
 })
+
+// Two fix lanes and no run lanes, as a real `--include-fixes` run over a non-startable --spec plans
+// them: F1 = queued item q107 (branch fix/q107), F2 = the CI escape. F1 is dispatched, committed in
+// its own worktree, returned merge-ready and merged into main; F2 is left planned.
+function fixMergedHost() {
+  const h = fanoutHost({ fixes: true })
+  h.plan(['--spec', specRel('nope'), '--include-fixes'])
+  h.standing()
+  h.dispatch('F1', 'fix-one')
+  h.git('worktree', 'add', '-q', '-b', 'fix/q107', h.wt('q107'))
+  h.commitInLane('q107', 'fix.txt', 'fix\n')
+  h.must(['--mark', 'returned', '--lane', 'F1'])
+  assert.strictEqual(h.lane('F1').state, 'merge-ready', 'the setup needs F1 merge-ready')
+  h.git('merge', '-q', '--no-ff', '-m', 'merge fix/q107', 'fix/q107')
+  return h
+}
+
+test('fanout: a red gate after merging a fix lane prints MERGE_RED on that same mark, never a dispatch block for the next planned fix lane', () => {
+  const h = fixMergedHost()
+  h.gateRed(true)
+  const r = h.run(['--mark', 'merged', '--lane', 'F1'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.ok(r.stdout.includes('## MERGE_RED — main gate red after F1'), 'a red main must stop the queue at once: ' + r.stdout)
+  assert.ok(!r.stdout.includes('## Step: dispatch'), 'F2 must never be dispatched onto a red main: ' + r.stdout)
+  assert.match(h.must([]).stdout, /state: MERGE_RED/, 'the bare run agrees')
+})
+
+test('fanout: --mark gate-repaired saves its outcome onto the state as it is after the gate, so a lane that returned pending meanwhile stays pending', () => {
+  const h = fixMergedHost()
+  h.dispatch('F2', 'fix-two')
+  h.gateRed(true)
+  h.run(['--mark', 'merged', '--lane', 'F1'])
+  h.gateRed(false)
+  const question = path.join(h.root, 'q.json')
+  // The gate itself stands in for a concurrent `--mark returned --lane F2` landing mid-gate.
+  fs.writeFileSync(path.join(h.root, 'gate.sh'), '#!/usr/bin/env bash\nnode -e \'' +
+    'const fs=require("fs");const f=process.argv[1];const st=JSON.parse(fs.readFileSync(f,"utf8"));' +
+    'const l=st.lanes.find((x)=>x.id==="F2");l.state="pending";l.question=process.argv[2];fs.writeFileSync(f,JSON.stringify(st))' +
+    '\' ' + JSON.stringify(h.stateFile) + ' ' + JSON.stringify(question) + '\nexit 0\n')
+  h.must(['--mark', 'gate-repaired'])
+  assert.deepStrictEqual([h.lane('F2').state, h.lane('F2').question], ['pending', question], 'the concurrent return must survive the gate run: ' + JSON.stringify(h.lane('F2')))
+  assert.strictEqual(h.state().lastGate, null, 'the green gate is still recorded')
+  assert.strictEqual(h.lane('F1').gate, 'green', 'the repaired lane records the green gate')
+})
+
+test('fanout: --mark merged on a fix lane with a queueId ticks its queue item, so spec-queue list no longer shows it', () => {
+  const h = fixMergedHost()
+  h.must(['--mark', 'merged', '--lane', 'F1'])
+  const list = runNode('scripts/spec-queue.js', ['list'], { cwd: h.root })
+  assert.strictEqual(list.status, 0, list.stderr)
+  assert.ok(!list.stdout.includes('q107'), 'the merged fix must leave the pending queue: ' + list.stdout)
+  const archive = JSON.parse(bytes(path.join(h.common, 'spec-queue-done.json')))
+  const item = archive.items.find((i) => i.id === 'q107')
+  assert.ok(item && item.ticked, 'the item is archived with a ticked stamp: ' + JSON.stringify(archive))
+})
+
+test('fanout: after a red gate is repaired green, the report carries no queued "main gate red" line for it', () => {
+  const h = fixMergedHost()
+  h.gateRed(true)
+  h.run(['--mark', 'merged', '--lane', 'F1'])
+  h.gateRed(false)
+  h.must(['--mark', 'gate-repaired'])
+  h.dispatch('F2', 'fix-two')
+  h.must(['--mark', 'returned', '--lane', 'F2', '--stopped', 'not needed'])
+  assert.ok(h.must([]).stdout.includes('## Step: report'), 'every lane terminal means REPORT')
+  const slots = JSON.parse(bytes(h.reportFile))
+  assert.ok(!slots.queued.some((q) => q.startsWith('main gate red')), 'a repaired gate leaves no queued repair: ' + JSON.stringify(slots.queued))
+})

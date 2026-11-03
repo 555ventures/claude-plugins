@@ -142,9 +142,11 @@ function dispatchable(st) {
 function deriveState(st) {
   if (!st || !st.admitted) return 'PLAN'
   if (!st.standing) return 'PREFLIGHT'
+  const pending = st.lanes.some((l) => l.state === 'pending')
+  // A red main outranks DISPATCH, so no lane is ever dispatched onto it; a pending question still relays.
+  if (st.lastGate && st.lastGate.result === 'red') return pending ? 'RELAY' : 'MERGE_RED'
   if (dispatchable(st).length) return 'DISPATCH'
-  if (st.lanes.some((l) => l.state === 'pending')) return 'RELAY'
-  if (st.lastGate && st.lastGate.result === 'red') return 'MERGE_RED'
+  if (pending) return 'RELAY'
   if (st.lanes.some((l) => l.state === 'merge-ready')) return 'MERGE'
   if (st.lanes.some((l) => l.state === 'dispatched' || l.state === 'planned')) return 'WAIT'
   return 'REPORT'
@@ -504,6 +506,12 @@ function doMerged(st, l) {
   l.state = 'merged'
   l.gate = g.result
   if (pre.length) writeOut(1, pre.join('').trimEnd() + '\n')
+  // The queued item is ticked whatever the gate colour: its work is on main either way, and a red
+  // gate is queued as its own repair below.
+  if (l.kind === 'fix' && l.queueId) {
+    const q = spawnSync(process.execPath, [path.join(DIR, 'spec-queue.js'), 'done', l.queueId], { cwd: root, encoding: 'utf8' })
+    if (q.status !== 0) writeOut(1, `⚠️ spec-queue done ${l.queueId} failed: ${((q.stderr || '') + (q.stdout || '')).trim()} — tick it by hand: node "$(spec-paths spec-queue)" done ${l.queueId}\n`)
+  }
   if (g.result === 'red') {
     st.lastGate = { lane: l.id, result: 'red', log: g.log }
     st.queued.push(`main gate red after merging ${l.id}: ${g.log}`)
@@ -536,14 +544,19 @@ function doMark(st, mark) {
   }
   if (mark === 'gate-repaired') {
     if (!st.lastGate) die('no red gate to repair — run the driver bare to see the current step')
-    const l = laneOf(st, st.lastGate.lane)
-    const g = runGate(l)
-    if (g.result === 'red') { st.lastGate.log = g.log; save(st); return printMergeRed(st) }
+    const g = runGate(laneOf(st, st.lastGate.lane))
+    // The gate runs for minutes; marks for other lanes may land meanwhile, so only its outcome is
+    // applied, onto the state as it is now.
+    const fresh = load()
+    if (!fresh || !fresh.lastGate) die('the fan-out state changed while the gate ran — run the driver bare to see the current step')
+    const l = laneOf(fresh, fresh.lastGate.lane)
+    if (g.result === 'red') { fresh.lastGate.log = g.log; save(fresh); return printMergeRed(fresh) }
     l.gate = g.result
-    st.lastGate = null
-    rolling(st)
-    save(st)
-    return printStep(st, false)
+    fresh.lastGate = null
+    fresh.queued = fresh.queued.filter((q) => !q.startsWith(`main gate red after merging ${l.id}: `))
+    rolling(fresh)
+    save(fresh)
+    return printStep(fresh, false)
   }
   if (mark === 'reported') {
     if (deriveState(st) !== 'REPORT') die(`the run is not at REPORT yet — run ${cmd('').trim()} (no mark) to see the current step`)

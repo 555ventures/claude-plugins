@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: standard
 area: pipeline
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 61135737158cb84fb1f4b16eef781a403beb254d
 ---
 
 # The user reaches build

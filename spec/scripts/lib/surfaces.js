@@ -11,7 +11,12 @@
 // well-numbered beat as `malformed`. `beatHash(beats)` is the one hash of a journey's story — the
 // driver (its `--waive` flag and the confirmations it reads) and the service's confirm control
 // all compute it the same way, over the beats' canonical `beat -> screen[@state]` lines.
-// Owner: specs/20260908/02-driver-dedupe-onto-lib.md.
+// The first body line of a journey block is the job story (`When <situation>, I want <motivation>,
+// so I can <outcome>.`), kept under the `persona` key — the walkthrough service's wire field.
+// `JOB_STORY_RE` is the one authority for that shape (the driver's seed-done check and
+// decision-lint's `## Users` check share it); `OFF_PATH_STATES` is the closed set of `@state`
+// tokens that mark a journey's first-run / empty beat.
+// Owner: specs/20260908/02-driver-dedupe-onto-lib.md; specs/20261103/01-the-user-reaches-build.md D1/D2/D4.
 //
 // What this deliberately does NOT do: read any file itself for `parseSurfaceLines` or
 // `parseSeedJourneys` — `parseSeedJourneys` takes the seed's already-read text (`null` on a cold
@@ -49,6 +54,9 @@ function parseSurfaceLines(block) {
 // `screen`/`state` match `^[\w][\w-]*$`; `@state` is optional.
 const BEAT_RE = /^(\d+)\.\s+"(.+)"\s*->\s*([\w][\w-]*)(?:@([\w][\w-]*))?\s*$/
 
+const JOB_STORY_RE = /^When .+, I want .+, so I can .+$/ // one trimmed line
+const OFF_PATH_STATES = ['first-run', 'empty'] // closed set of off-path @state tokens
+
 // sha256 over the canonical `beat -> screen[@state]` lines, joined by "\n", first 12 hex —
 // the one hash of a journey's story, shared by every mark and the client page's confirm control.
 function beatHash(beats) {
@@ -59,7 +67,7 @@ function beatHash(beats) {
 }
 
 // design/mocks/seed.md's `### <journey-kebab>` blocks: the first non-blank body line is the
-// persona; every following non-blank line is either a well-numbered beat (`beats`) or reported in
+// job story (returned under the `persona` key, the service's wire field); every following non-blank line is either a well-numbered beat (`beats`) or reported in
 // `malformed` — the raw line text for a line that doesn't match the beat grammar at all, or the
 // exact `numbering: expected <k>, got <n>` string for a beat line whose number breaks contiguous
 // counting from 1. `labels` (screen targets, deduplicated in beat order) and `edges` (every
@@ -127,4 +135,4 @@ function parseSurfacesPlacement(roadmapDir) {
   return byLabel
 }
 
-module.exports = { parseSurfaceLines, parseSeedJourneys, parseSurfacesPlacement, beatHash }
+module.exports = { parseSurfaceLines, parseSeedJourneys, parseSurfacesPlacement, beatHash, JOB_STORY_RE, OFF_PATH_STATES }

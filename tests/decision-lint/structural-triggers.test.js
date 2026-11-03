@@ -22,6 +22,7 @@ function spec(dir, opts = {}) {
   const file = path.join(dir, rel)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const text = '---\ntier: ' + (opts.tier || 'standard') + '\nbreaking: ' + (opts.breaking === undefined ? 'false' : opts.breaking) + '\n---\n\n# T\n\n' +
+    '## Users\n\n- The clinic owner: When I open the invitation for the first time, I want to see my roster, so I can confirm it. First run / empty: an empty roster with one invite control.\n\n' +
     '## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n' +
     '| D1 | Rename the export route. ' + (opts.tag || '') + ' | because |\n\n' +
     '## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +

@@ -40,7 +40,7 @@ everything and prints the link — print `🎨 ready for review — <link>` and 
 `round pull` prints what waits: edit the screen file or the seed's beats for each item, answer
 with `node "$(spec-paths walkthrough)" reply --note <id> --text-file <file>`, push again. When
 the pull shows the journey confirmed on the current story, `--mark journey-approved --journey
-<j>`; an absent client is `--waive --reason <r>`. Terminal mode: show every printed pending journey's persona and
+<j>`; an absent client is `--waive --reason <r>`. Terminal mode: show every printed pending journey's job story and
 sentences exactly, end the turn on `approve all, or name the ones to change`, and on the user's literal `approve` run each printed `--mark
 journey-approved --journey <j>` line. After the last journey, `round pull` then `--mark approved`
 (§ Mocks: Confirmation).

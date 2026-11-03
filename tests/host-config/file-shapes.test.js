@@ -134,7 +134,9 @@ function lintRow(root, row) {
   const cfgPath = path.join(root, '.claude/spec.config.json')
   const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {}
   config(root, { ...cfg, pipelineRules: 'rules.md' })
-  fs.writeFileSync(spec, '---\ntier: standard\nbreaking: false\n---\n\n# T\n\n## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n' +
+  fs.writeFileSync(spec, '---\ntier: standard\nbreaking: false\n---\n\n# T\n\n' +
+    '## Users\n\n- The clinic owner: When I open the invitation for the first time, I want to see my roster, so I can confirm it. First run / empty: an empty roster with one invite control.\n\n' +
+    '## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n' +
     '| D1 | Rename the export route. | because |\n\n## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
     row + '\n\n## Acceptance Criteria\n\n- **AC-1**: x\n')
   const r = runNode('scripts/decision-lint.js', ['--spec', spec, '--root', root, '--json'])

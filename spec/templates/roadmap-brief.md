@@ -7,6 +7,9 @@ Lane: { behaviour | structural } · Expected specs: { 1–4 }
 First light: { brief 01 only — the one real record through the production path, and where a
 person observes it }
 
+Journeys: { — | copy the seed's stories below; with no seed, write them from this brief's Result }
+- { journey-kebab }: When { situation }, I want { motivation }, so I can { outcome }.
+
 <!-- One brief = one /spec:plan session = 1–4 sibling specs. A brief is stable intent
      grounded in ADRs — it names WHAT and WHY and where the ground truth lives; the specs it
      hydrates into own HOW. Anything execution-shaped (file plans, function signatures, test

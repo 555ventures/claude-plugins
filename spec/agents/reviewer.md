@@ -29,7 +29,7 @@ Read, in order: the host's `.claude/rules/` one-pagers (the pipeline rules file'
 **§ Review Checks** carries this repo's severity calibrations — apply as written; its
 **§ Gotchas** is distilled from real failures), `CLAUDE.md`, `docs/canonical/{area}.md` for
 the touched areas, `AGENTS.md` files where present, the host's `design.rules` file (the
-intent-to-pattern and naming tables) where present, and the spec itself (File Plan, Contracts,
+intent-to-pattern and naming tables) where present, and the spec itself (Users, File Plan, Contracts,
 UI, Decisions, Acceptance Criteria). A finding may cite a `design.rules` table row as
 supporting evidence, but a table row never scores a finding alone — it still needs the
 evidence standard below.
@@ -84,6 +84,14 @@ were your range.
   spec never turned into an AC — is **hard**.
 - A regression pin (`SHALL CONTINUE TO` AC) whose covering test the diff deletes is hard even
   when the AC lives in an earlier spec.
+
+## The cold walk
+
+For every journey bullet in the spec's `## Users`, walk the diff's surface as that user with no
+prior state — first run, empty — and report where it stalls (a dead end, a screen that assumes
+data that does not exist yet, a control with no sentence on success) as a finding under
+§ Severity calibration, with the evidence standard unchanged. One walk per journey, nothing per
+screen.
 
 ## The evidence standard: executed, not argued
 

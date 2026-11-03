@@ -198,29 +198,6 @@ directly and `/spec:init` writes no `design` block. `web-app`, `mobile-app`, `re
 `desktop-app` owe an `APPROVED` `design/mocks/status.json` (`/spec:mocks`) before BRIEF opens
 (§ Genesis: Brief State).
 
-## Genesis: Fresh UX Research (method fixed, content researched)
-
-Every project gets a **freshly researched** UX/psychology brief — never a frozen principle list
-baked into a template or a command.
-
-The output is `docs/design/research-brief.md` (template: `ux-research-brief.md` via
-`spec-paths templates`), and every admitted principle must survive the method:
-
-- **Falsifiable interface rules, not vibes.** Each principle translates to a checkable rule with
-  numeric ALWAYS/NEVER bounds where possible, tagged with the screens/archetype conditions it
-  applies to.
-- **Evidence-tiered.** Each rule carries `evidence: strong | conditional | weak` grounded in the
-  research pass — conditional rules state their boundary conditions inline; weak ones are
-  hypotheses, admitted only with a `predicts:` line.
-- **`predicts:` observable (the telemetry hook).** Every behavioral rule names the observable it
-  predicts ("fewer abandons at step 2", "higher first-run completion").
-- **Ethics floor (binding, not researched away):** no fake scarcity, no fabricated social proof,
-  symmetric choices (declining as easy as accepting), no confirm-shaming. Litmus: a technique
-  that only works when the user doesn't notice it is a dark pattern — out, regardless of its
-  evidence tier or conversion data.
-- **Anti-slop negations.** The brief lists what the candidates must NOT do for this audience (the
-  stock patterns fresh generation defaults to).
-
 ## Genesis: Executed Assumptions (dependency-adjudicated claims never lock by argument)
 
 **Rule: before an ADR locks, every dependency-adjudicated convention it binds is executed once

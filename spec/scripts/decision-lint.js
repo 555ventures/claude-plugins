@@ -31,6 +31,11 @@
 // or `not null` with no `default` on the same line. The verb list is a floor, never a proof of
 // additivity; it is stated here and nowhere else.
 //
+// Users arm (applicable from USERS_LINT_APPLIES_FROM): `missing-users-section`
+// (id `Users`) when `## Users` is absent or no comment-stripped, brace-free line in it matches
+// lib/surfaces.js JOB_STORY_RE (after the bullet marker and an optional `<who>:` prefix). `counts`
+// is unchanged.
+//
 // Deliberately does NOT: write a manifest or ledger row, render a report, verify an `[asked:]`
 // attestation beyond non-emptiness, read spec-queue.json itself (it spawns spec-queue.js), read
 // the host's § Risk Tiers for the Data Model check, infer additivity from prose, or accept any
@@ -53,6 +58,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { extractSection, DECISION_LINT_APPLIES_FROM, STRUCTURAL_LINT_APPLIES_FROM } = require('./lib/spec-sections')
+const { JOB_STORY_RE } = require('./lib/surfaces')
 const { fmValue } = require('./lib/frontmatter')
 const { parseFilePlanRows } = require('./lib/file-plan')
 const { readConfig, readConfigStrict, readPipelineRules, configExists, CONFIG_RELPATH } = require('./lib/host-config')
@@ -63,6 +69,8 @@ let shapes
 const RESTRICT_RE = /\b(cannot|can't|may not|must not|never)\s+(be\s+)?(edit|delet|undo|undone|restor|reassign|reactivat|renam|remov|fix|correct)\w*|\b(immutable|write-once|frozen to)\b|\bonly (an? |the )?[A-Z][a-z]+s? (can|may)\b|\b(restricted|limited) to (an? |the )?[A-Z][a-z]+s?\b|\brequires? a reason\b|\bwith(out)? (a )?reason only\b/i
 const DEFER_RE = /\b(in|to|for) a (later|follow-up|future|separate) spec\b|\bnot (offered|now|in this spec)\b|\bdeferred (to|until)\b|\b(later|follow-up|future) spec\b|\bcheap(ly)? later\b|\babsent now\b/i
 const QUEUE_ID_RE = /\bq\d+\b/g
+
+const USERS_LINT_APPLIES_FROM = '20261103'
 
 const USAGE = 'decision-lint.js --spec <path> --root <dir> [--json]'
 
@@ -210,6 +218,16 @@ if (!dateMatch || dateMatch[1] >= STRUCTURAL_LINT_APPLIES_FROM) {
     if (fmValue(specText, 'tier') !== 'critical' && !(declared && unaffected && offending === null)) push('data-model-requires-critical', 'Data Model', '## Data Model is non-empty — a persisted-data change is tier: critical (core § Tiers); set tier: critical, or declare `changes: additive-only` with `existing rows: unaffected` when it only adds a table or a nullable/defaulted column')
     if (!/^existing rows:\s*\S/m.test(dmBody)) push('missing-existing-rows-line', 'Data Model', '## Data Model has no `existing rows:` line — add `existing rows: unaffected` or `existing rows: <what changes>` on its own line')
   }
+}
+
+if (!dateMatch || dateMatch[1] >= USERS_LINT_APPLIES_FROM) {
+  const users = extractSection(specText, 'Users')
+  const hasStory = users !== null && users.replace(/<!--[\s\S]*?-->/g, '').split('\n').some((raw) => {
+    const line = raw.trim().replace(/^[-*]\s+/, '')
+    if (/[{}]/.test(line)) return false
+    return JOB_STORY_RE.test(line) || JOB_STORY_RE.test(line.replace(/^[^:]+:\s+/, ''))
+  })
+  if (!hasStory) push('missing-users-section', 'Users', '## Users is missing or carries no job story — add one `- <who>: When <situation>, I want <motivation>, so I can <outcome>. First run / empty: <…>` bullet per journey (copy the roadmap brief\'s Journeys: lines)')
 }
 
 const counts = { restrictions, deferrals, breaking, dependencyRows: notices.length, dataModel, additiveDataModel }

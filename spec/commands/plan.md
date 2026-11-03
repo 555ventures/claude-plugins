@@ -89,9 +89,10 @@ Write the spec per the template. `status: draft`. While drafting:
    backticks in the File Plan Summary (or the literal `no dependency change`); `data-model-requires-critical` and
    `missing-existing-rows-line` by setting `tier: critical` and adding an `existing rows:` line to `## Data Model`;
    zero findings to lock. Any `📌 adds or changes dependencies — <path> (veto anytime)` notice line is advisory and
-   rides step 2b on critical tier. A Decision that retires or narrows prose elsewhere runs
-   `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` and enumerates every
-   literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
+   rides step 2b on critical tier. A Decision that retires or narrows prose elsewhere, or that extends a list an
+   existing test pins (a `spec-paths` key or section list, a policy seat, a closed enum, a frozen table) runs
+   `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` with the list's own
+   name among the literals and enumerates every literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
    write the roadmap brief now; if it must run before the current work,
    `node "$(spec-paths spec-queue)" add NN --top`; any follow-up that must wait for this spec →
    `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide --after-spec {spec path}`.

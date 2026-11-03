@@ -1,9 +1,9 @@
 ---
 name: doctrine-regex-linewrap
-description: Don't hand-roll \s+ regexes for doctrine prose — slice with section() and spell literals with phrase() from tests/helpers.js (whitespace runs become \s+), and only for references, retired phrases, or verbatim protocol tokens
+description: Don't hand-roll \s+ regexes for doctrine prose — slice with section() and spell literals with phrase() from tests/helpers.js (whitespace runs become \s+), and only for references or verbatim protocol tokens (retired wording goes through [oracle: literals], never a test)
 metadata:
   type: feedback
-  reviewed: 2026-11-02
+  reviewed: 2026-11-03
 ---
 
 Doctrine `.md` files in this repo hard-wrap prose at ~85-90 chars. A regex pin like
@@ -35,8 +35,9 @@ source for the phrase.
 
 **Corrected 2026-11-01 (specs/20261101/04, core.md § Doctrine Authoring):** do not hand-write
 `\s+` regexes, and do not pin the wording of a rule at all. Prose is pinned only for references
-(paths, spec-paths keys, flags, headings, step labels, caps), retired phrases (`doesNotMatch`),
-and protocol tokens printed verbatim. For those, slice by heading with
+(paths, spec-paths keys, flags, headings, step labels, caps) and protocol tokens printed
+verbatim; since specs/20261103/05, retired wording is an `[oracle: literals]` AC checked once at
+review, never a `doesNotMatch` test. For those, slice by heading with
 `section(rel, startRe, endRe)` and spell the literal with `phrase(literal, flags)` (both in
 `tests/helpers.js`); `phrase()` does the whitespace-run to `\s+` conversion, so line-wrap
 false negatives are handled in one place. The hand-rolled cases above predate this and were

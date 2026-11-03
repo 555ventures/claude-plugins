@@ -83,3 +83,30 @@ test('AC-20261103-05-6: WHEN a case requires a relative lib that is in the invar
   assert.deepStrictEqual(out.retired.map(r => r.file), ['tests/prose.test.js'],
     'naming gate.js without executing it must not keep a prose case alive: ' + JSON.stringify(out.retired))
 })
+
+test('AC-20261103-05-6: WHEN a case reaches an invariant lib through a fixture in a different directory than the test, whose own require climbs to scripts/lib, THE SYSTEM keeps it as invariant, as it does for a fixture beside the test', () => {
+  const root = makeHost('reach-6-deep', { gateRequires: "require('./lib/util')\n" })
+  put(root, 'scripts/lib/util.js', 'module.exports = { id: (x) => x }\n')
+  put(root, 'tests/helpers/fx.js', 'module.exports = { h: require("../../scripts/lib/util") }\n')
+  put(root, 'tests/unit.test.js', PREAMBLE + "const { h } = require('./helpers/fx')\n\n" +
+    "test('AC-20260101-01-1: util returns its input via a nested fixture', () => {\n  assert.strictEqual(h.id(3), 3, 'identity')\n})\n")
+  put(root, 'tests/fx2.js', 'module.exports = { g: require("../scripts/lib/util") }\n')
+  put(root, 'tests/beside.test.js', PREAMBLE + "const { g } = require('./fx2')\n\n" +
+    "test('AC-20260101-01-2: util returns its input via a sibling fixture', () => {\n  assert.strictEqual(g.id(4), 4, 'identity')\n})\n")
+  const out = expire(root)
+  assert.strictEqual(out.kept.invariant, 2,
+    'resolving a fixture\'s require against the test file\'s directory instead of the fixture\'s own retires unit tests of pipeline libs that the gate requires: ' + JSON.stringify(out))
+  assert.strictEqual(out.retired.length, 0, 'nothing here may retire: ' + JSON.stringify(out.retired))
+})
+
+test('AC-20261103-05-5: WHEN the require of a child-process helper sits inside the case\'s own call text and the case calls it on scripts/gate.js THE SYSTEM keeps the case as invariant', () => {
+  const root = makeHost('reach-5-calltext')
+  put(root, 'tests/helpers.js', "const { spawnSync } = require('node:child_process')\n" +
+    'const runIt = (p) => spawnSync(process.execPath, [p])\nmodule.exports = { runIt }\n')
+  put(root, 'tests/inline.test.js', PREAMBLE + "\ntest('AC-20260101-01-1: the inline-required helper runs the gate', () => {\n" +
+    "  const { runIt } = require('./helpers')\n  assert.strictEqual(runIt('scripts/gate.js').status, 0, 'exits 0')\n})\n")
+  const out = expire(root)
+  assert.strictEqual(out.kept.invariant, 1,
+    'a require inside the call text that is not followed retires an exec test whose spawn lives in the helper: ' + JSON.stringify(out))
+  assert.strictEqual(out.retired.length, 0, 'nothing here may retire: ' + JSON.stringify(out.retired))
+})

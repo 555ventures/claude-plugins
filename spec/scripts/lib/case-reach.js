@@ -12,9 +12,10 @@
 //
 // What this deliberately does NOT do: parse JavaScript (a top-level declaration is a column-0
 // line plus its indented or closer-led continuation lines — a documented approximation), follow
-// a non-relative require, follow a require that sits in the call text itself (the caller's
-// invariants check reads those), or read any file it was not pointed at through a relative
-// require. An unreadable module contributes nothing.
+// a non-relative require, or read any file it was not pointed at through a relative require.
+// A relative require in the call text itself is followed like one in a reached declaration.
+// An unreadable module contributes nothing. `caseRequires` returns every relative require
+// target the reach opened, each resolved against the directory of the file it was written in.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -104,7 +105,7 @@ function pullDecls(seedText, decls, seen) {
 
 // For each relative require in `declText`, appends the module's declarations for the identifiers
 // `declText` names plus its "__exports__", then recurses into what was appended.
-function followRequires(declText, absFile, depth, visited) {
+function followRequires(declText, absFile, depth, visited, targets) {
   if (depth <= 0) return ''
   let out = ''
   const specs = []
@@ -113,7 +114,9 @@ function followRequires(declText, absFile, depth, visited) {
   while ((m = REL_REQUIRE.exec(declText))) specs.push(m[2])
   for (const spec of specs) {
     const modAbs = resolveModule(absFile, spec)
-    if (!modAbs || visited.has(modAbs + '|' + depth)) continue
+    if (!modAbs) continue
+    targets.add(modAbs)
+    if (visited.has(modAbs + '|' + depth)) continue
     visited.add(modAbs + '|' + depth)
     const modSrc = readSafe(modAbs)
     if (modSrc === null) continue
@@ -125,17 +128,28 @@ function followRequires(declText, absFile, depth, visited) {
     let add = ''
     for (const n of seed) add += '\n' + modDecls.get(n)
     add += pullDecls(add, modDecls, seen)
-    out += add + followRequires(add, modAbs, depth - 1, visited)
+    out += add + followRequires(add, modAbs, depth - 1, visited, targets)
   }
   return out
 }
 
 // caseReach(callText, absFile, { depth = 3 } = {}) -> string
-function caseReach(callText, absFile, { depth = 3 } = {}) {
+function reachDetail(callText, absFile, depth) {
+  const targets = new Set()
   const src = readSafe(absFile)
-  if (src === null) return callText
+  if (src === null) return { text: callText, targets }
   const pulled = pullDecls(callText, topLevelDecls(src), new Set())
-  return callText + pulled + followRequires(pulled, absFile, depth, new Set())
+  const text = callText + pulled + followRequires(callText + pulled, absFile, depth, new Set(), targets)
+  return { text, targets }
 }
 
-module.exports = { topLevelDecls, caseReach }
+function caseReach(callText, absFile, { depth = 3 } = {}) {
+  return reachDetail(callText, absFile, depth).text
+}
+
+// caseRequires(callText, absFile, { depth = 3 } = {}) -> string[] of absolute module paths
+function caseRequires(callText, absFile, { depth = 3 } = {}) {
+  return [...reachDetail(callText, absFile, depth).targets]
+}
+
+module.exports = { topLevelDecls, caseReach, caseRequires }

@@ -91,7 +91,7 @@ const fs = require('fs')
 const path = require('path')
 const { listTestFiles, scanCalls, scanCases, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
-const { caseReach } = require('./lib/case-reach')
+const { caseReach, caseRequires } = require('./lib/case-reach')
 const {
   extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck, parseDisposition,
 } = require('./lib/spec-sections')
@@ -277,20 +277,11 @@ const invariantNamePatterns = Array.from(
   (base) => new RegExp('(?<![\\w.-])' + escapeRe(base) + '(?!\\w)'),
 )
 const CHILD_PROCESS_CALL = /\b(?:spawnSync|execFileSync|execSync|spawn|execFile|exec|fork)\s*\(/
-const REL_REQUIRE = /require\(\s*(['"])(\.[^'"]*)\1\s*\)/g
 
-// True when a relative require in `reach` resolves to a file in the invariants set.
-function requiresInvariant(reach, file) {
-  const dir = path.posix.dirname(file)
-  let m
-  REL_REQUIRE.lastIndex = 0
-  while ((m = REL_REQUIRE.exec(reach))) {
-    const joined = path.posix.normalize(path.posix.join(dir, m[2]))
-    for (const c of [joined, joined + '.js', joined + '.cjs', joined + '.mjs', joined + '/index.js']) {
-      if (invariantScripts.has(c)) return true
-    }
-  }
-  return false
+// True when a relative require the reach opened (each resolved against the directory of the file
+// that wrote it) lands on a file in the invariants set.
+function requiresInvariant(abs) {
+  return abs.some((t) => invariantScripts.has(relPosix(t)))
 }
 
 function keepsByReach(call, fileText, file) {
@@ -298,7 +289,7 @@ function keepsByReach(call, fileText, file) {
   if (call.source === 'host') return invariantNamePatterns.some((re) => re.test(fileText))
   const reach = caseReach(call.callText, path.join(root, file))
   if (CHILD_PROCESS_CALL.test(reach) && invariantNamePatterns.some((re) => re.test(reach))) return true
-  return requiresInvariant(reach, file)
+  return requiresInvariant(caseRequires(call.callText, path.join(root, file)))
 }
 
 function collectEscapeClasses() {

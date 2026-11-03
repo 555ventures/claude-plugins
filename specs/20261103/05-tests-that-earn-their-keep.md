@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: standard
 area: test-expiry
 breaking: false
@@ -169,6 +169,13 @@ exemplar and is untouched. The `executes` hits on `expire-tests.js` and `lib/inv
 classification on synthetic hosts; a synthetic case kept today by a file-level mention and now
 retired is a fixture repair in the same wave, never a weakened clause — the build's whole-suite
 check adjudicates.
+
+Build/review deviations (folded 2026-11-03, all one-offs):
+- Fixture repairs (D9): `tests/expiry/test-expiry.test.js`'s kept-invariant case (spec 20260911/03 ACs 3 and 4) now execs `scripts/gate.sh` and its whole-name real-hit case execs `scripts/log.js`; `tests/expiry/invariants.test.js`'s live-repo never-listed subject (spec 20260911/03 AC 2) moved from `memory-sweep.js`, now a root through the `spec/bin/spec-paths` launcher, to `spec/evals/host.sh`. No assertion weakened.
+- A2's if-false arm fired at review: a case requiring its helper inside the test body (`citations-check.test.js`'s spec-paths case) was retired, so `lib/case-reach.js` now follows relative requires in the call text, and `caseRequires` resolves each require against the module that wrote it rather than the test file's directory (reviewer findings s0/s1, fixed, regression cases in `tests/expiry/case-reach.test.js`).
+
+### Advisory debt (review rv_1ef7c7b19fe2)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-aed1ad7bd43194483/tests/ceiling/sync-write-callers.test.js:33 — Also retired in the same live dry run: the five `tests/ceiling/sync-write-callers.test.js` AC-20261101-09-1 cases, which spawn pipeline scripts via `runNode('scripts/' + name + '.js', ...)` over a `FIVE` list of bare names — the script basename is interpolated, so no textual reach rule can see it. Not reachable by the D4 rule as locked; flagged for the maintainer before the q26 sweep.
 
 ## Canonical Delta
 

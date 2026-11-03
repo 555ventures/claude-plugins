@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir, runNode, USERS_BULLET } = require('../helpers')
 
 // specs/20261103/01-the-user-reaches-build.md AC-20261103-01-4, -5: decision-lint refuses a lock
 // whose spec carries no job-story `## Users` bullet, from specs/20261103/ on.
@@ -35,7 +35,7 @@ function lint(dir, file, extra = []) {
   return { r, j }
 }
 
-const STORY = '- The clinic owner: When I open the invitation for the first time, I want to see my roster, so I can confirm it. First run / empty: an empty roster with one invite control.'
+const STORY = USERS_BULLET
 const TEMPLATE = '- { who }: When { situation }, I want { motivation }, so I can { outcome }.'
 
 test('AC-20261103-01-4: a spec with no ## Users section, or only the template bullet, exits 1 with exactly one missing-users-section finding on id Users, dated and undated alike', () => {
@@ -63,6 +63,18 @@ test('AC-20261103-01-5: a job-story bullet in ## Users exits 0 with findings=0, 
   const ok = lint(dir, spec(dir, 'specs/20261103/09-x.md', STORY))
   assert.strictEqual(ok.r.status, 0, 'a real job-story bullet must satisfy the lint: ' + ok.r.stdout + ok.r.stderr)
   assert.match(ok.r.stdout, /findings=0/, 'a satisfied spec must report zero findings: ' + ok.r.stdout)
+
+  const words = STORY.split(' ')
+  const third = Math.ceil(words.length / 3)
+  for (const parts of [2, 3]) {
+    const size = parts === 2 ? Math.ceil(words.length / 2) : third
+    const lines = []
+    for (let i = 0; i < words.length; i += size) lines.push(words.slice(i, i + size).join(' '))
+    const wrapped = lint(dir, spec(dir, 'specs/20261103/0' + parts + '-wrapped.md', lines.join('\n  ')), ['--json'])
+    assert.ok(wrapped.j, 'wrapped bullet: --json must print JSON: ' + wrapped.r.stdout + wrapped.r.stderr)
+    assert.strictEqual(wrapped.r.status, 0, 'a job-story bullet hard-wrapped over ' + lines.length + ' lines is how specs here are written; refusing it makes the lock unpassable: ' + wrapped.r.stdout)
+    assert.ok(!wrapped.j.findings.some((f) => f.class === 'missing-users-section'), 'a wrapped bullet must raise no missing-users-section finding: ' + JSON.stringify(wrapped.j.findings))
+  }
 
   const control = lint(dir, spec(dir, 'specs/20261103/06-x.md', null))
   assert.strictEqual(control.r.status, 1, 'the control (same date, no section) must be refused, else the earlier-date exit 0 below proves nothing: ' + control.r.stdout)

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir, runNode, USERS_BULLET } = require('../helpers')
 
 // specs/20261102/04-additive-data-model-stays-standard.md AC-20261102-04-1, -3, -4, -7:
 // decision-lint lets a declared additive-only Data Model stay standard and refuses a contradicted claim.
@@ -20,7 +20,7 @@ function spec(dir, dataModel, tier, rel) {
   const file = path.join(dir, rel)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, '---\ntier: ' + tier + '\nbreaking: false\n---\n\n# T\n\n' +
-    '## Users\n\n- The clinic owner: When I open the invitation for the first time, I want to see my roster, so I can confirm it. First run / empty: an empty roster with one invite control.\n\n' +
+    '## Users\n\n' + USERS_BULLET + '\n\n' +
     '## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n| D1 | Add a column. | because |\n\n' +
     '## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n| src/app.js | MODIFY | scripts | thing |\n\n' +
     '## Data Model\n\n' + dataModel + '\n\n## Acceptance Criteria\n\n- **AC-1**: x\n')

@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode } = require('../helpers')
+const { tmpdir, runNode, USERS_BULLET } = require('../helpers')
 
 // specs/20261029/05-structural-triggers-at-plan-time.md AC-20261029-05-1..5: decision-lint
 // reads breaking:, manifest File Plan rows and a non-empty Data Model at lock.
@@ -22,7 +22,7 @@ function spec(dir, opts = {}) {
   const file = path.join(dir, rel)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const text = '---\ntier: ' + (opts.tier || 'standard') + '\nbreaking: ' + (opts.breaking === undefined ? 'false' : opts.breaking) + '\n---\n\n# T\n\n' +
-    '## Users\n\n- The clinic owner: When I open the invitation for the first time, I want to see my roster, so I can confirm it. First run / empty: an empty roster with one invite control.\n\n' +
+    '## Users\n\n' + USERS_BULLET + '\n\n' +
     '## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n' +
     '| D1 | Rename the export route. ' + (opts.tag || '') + ' | because |\n\n' +
     '## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +

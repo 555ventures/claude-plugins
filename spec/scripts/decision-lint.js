@@ -222,8 +222,17 @@ if (!dateMatch || dateMatch[1] >= STRUCTURAL_LINT_APPLIES_FROM) {
 
 if (!dateMatch || dateMatch[1] >= USERS_LINT_APPLIES_FROM) {
   const users = extractSection(specText, 'Users')
-  const hasStory = users !== null && users.replace(/<!--[\s\S]*?-->/g, '').split('\n').some((raw) => {
-    const line = raw.trim().replace(/^[-*]\s+/, '')
+  // A bullet is its marker line plus the non-blank, non-bullet lines that follow, joined by a space.
+  const bullets = []
+  let open = false
+  for (const raw of (users === null ? '' : users.replace(/<!--[\s\S]*?-->/g, '')).split('\n')) {
+    const t = raw.trim()
+    if (!t) { open = false; continue }
+    if (/^[-*]\s+/.test(t)) { bullets.push(t.replace(/^[-*]\s+/, '')); open = true }
+    else if (open) bullets[bullets.length - 1] += ' ' + t
+    else bullets.push(t)
+  }
+  const hasStory = bullets.some((line) => {
     if (/[{}]/.test(line)) return false
     return JOB_STORY_RE.test(line) || JOB_STORY_RE.test(line.replace(/^[^:]+:\s+/, ''))
   })

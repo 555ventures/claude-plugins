@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: standard
 area: pipeline
 breaking: false
@@ -248,6 +248,17 @@ AC-7's scope, kept. `Fresh UX Research` in `docs/roadmap/10a` is roadmap history
 `executes` hits on `mocks-driver.js` are callers of marks other than `seed-done` (A2); on
 `decision-lint.js` they are D11's three fixtures plus the key-resolution pin; on `surfaces.js`
 (`tests/spec-status.test.js`) the exports are additive and parsing is unchanged.
+
+Build deviations (folded at close, 2026-11-03): (1) D2 says the two seed-done refusals exit 1
+"via `die`", but driver-core's `die` exits 2; AC-1/2/3 pin exit 1, so `mocks-driver.js` writes the
+same `mocks-driver: ` stderr line and exits 1 directly, its header Exit codes updated. (2)
+`diff_base` was corrected from 61135737 to d6fe8397: mid-build the lane fast-forwarded onto main's
+renumber of the colliding sibling spec (01 → 03, `workers-never-run-git`) to clear
+`spec-number-check`, so that commit is the true pre-image.
+
+### Advisory debt (review rv_57089d7d6d2c)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a77fcbf4d4edd633b/spec/scripts/decision-lint.js:73 — USERS_LINT_APPLIES_FROM = '20261103' is the date of two already-hardened sibling specs that carry no `## Users` section (specs/20261103/02-ceremony-nothing-reads.md, specs/20261103/03-workers-never-run-git.md); both now fail decision-lint. decision-lint is only invoked at plan lock (spec/commands/plan.md), so they are stranded only if re-opened — the seventh-trigger gotcha class (a new refusal strands existing artifacts the File Plan never names).
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a77fcbf4d4edd633b/spec/scripts/decision-lint.js:35 — The decision-lint.js header comment (line 35-36) and D4's text still describe the Users arm as matching a `line` ("no comment-stripped, brace-free line in it matches JOB_STORY_RE"), but after the fix the unit matched is a bullet — its marker line plus the following non-blank, non-bullet lines joined by a space (lines 225-233). The header is the script's documented contract and now understates what the arm accepts.
 
 ## Canonical Delta
 

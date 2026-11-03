@@ -15,6 +15,13 @@ is always a full snapshot. The stage finishes when every story is confirmed and 
 for an answer — an answered note does not block — and the last round is then closed. A look
 prints the service's project page and ends the turn.
 
+A seed journey opens with a job story (`When <situation>, I want <motivation>, so I can
+<outcome>.`) and carries one off-path beat (`@first-run` or `@empty`); `--mark seed-done` refuses
+a journey without either. The wireframe binds structure, not looks: an approved screen fixes the
+set of screens, the controls between them and the order of content; layout, visuals, label
+wording and sample data are the design stage's and the build's. The former mock-wins-everything
+phrasing is retired. (specs/20261103/01)
+
 ## Genesis and the wireframe (specs/20261002/01)
 
 Genesis always picks the stack and scaffolds the real app; the wireframe never pre-empts either.

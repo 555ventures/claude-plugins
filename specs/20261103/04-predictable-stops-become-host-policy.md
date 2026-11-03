@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical           # spec/templates/grounding-contract.md gains the policy.stops block (§ Risk Tiers: hash-stamped into every host)
 area: pipeline
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 973d0c5ec371344bfbea884acf54562c73fe1c25
 ---
 
 # Predictable stops become host policy
@@ -337,6 +338,30 @@ waived as unrelated words.
 Fragile: every existing test host inherits the new defaults, so pins on the ask text flip to the 📌 line
 unless re-hosted under `ask` (D14). The fan-out fixture's `h.standing` is called by most fan-out tests; its
 removal is a fixture rewrite, not a behaviour change.
+
+### Build deviations (folded at close, review rv_eb0ebc010d60 — one-offs)
+
+- D6 replaced the review ESCALATE options, so the re-hosted spec 20261029/07 AC 6 pin lost its two assertions
+  on the retired option texts (the new four-option order is pinned by AC-20261103-04-8), and spec 20261102/02
+  AC 8 was rewritten in place to D6's labels and order; a `by: 'standing'` seed became `by: 'user'` (D3), and
+  the `--by robot` refusal assertion now matches `user` instead of `standing`.
+- Re-hosted review hosts add their `policy.stops` edit to the synthetic spec's File Plan, or the reconcile leg
+  reports the config off-plan.
+- `fanout-driver.js`: `--mark planned` on an already-admitted table re-prints the current step instead of
+  refusing (a fan-out test plans twice); the REPORT policy trail names a lane by its spec stem.
+- Both drivers record a policy pick once per key; the build driver clears `escalateChoice` when a re-armed
+  round trips the cap again and clears a stale `laneExit` on re-arm/amend.
+- The printed veto after a derived `buildEscalate` re-arm pick is admitted at REPAIR while `escalateChoice` is
+  `re-arm` and the cap has tripped (review fix round, reviewer finding s0), pinned in
+  `tests/build/escalate-choice.test.js`.
+- Test-layer repairs: the fan-out fixture keeps a file-local `REPAIR` label; the RELAY header pin expects
+  `L1 · q1` (lane id plus question id, the existing convention); the reused contract-stamp pin's AC-ID mention
+  was removed at RED_FINDINGS (user answer); the contract spells enums with their key path
+  (`stops.prototypeClose`), and the contract-keys pin spells the same.
+
+### Advisory debt (review rv_eb0ebc010d60)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a388a3f1b19777880/spec/scripts/spec-review-driver.js:2788 — The review ESCALATE queue pick records marks.laneExit into review-state.json and in the same step instructs `delete <sidecarDir>`; a lane worker that follows the printed step deletes the only file the fan-out's `--mark returned` reads laneExit from, so the lane still lands `returned without a recognised stop` for exactly the exit D10 set out to record. Spec-level (D6 prescribes the delete, D9/D10 the read) rather than an implementation deviation.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a388a3f1b19777880/spec/scripts/fanout-driver.js:310 — `--ask <key>` is accepted on every invocation but only read by plan(); on a resume or a `--mark` run it is silently ignored with exit 0.
 
 ## Canonical Delta
 

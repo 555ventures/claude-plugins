@@ -252,14 +252,23 @@ JSON is the default block:
     "reviewer": {"model": "fable",  "effort": "low"},
     "disposer": {"model": "opus",   "effort": "medium"}
   },
-  "riskTiers": []
+  "riskTiers": [],
+  "stops": {
+    "repairRound": "repair",
+    "buildEscalate": "derived",
+    "reviewEscalate": "queue",
+    "redFindings": "remove-mention",
+    "prototypeClose": "ask"
+  }
 }
 ```
 
 Enums: `mergeStrategy` `derived | merge-commit | ff-only | squash | rebase-ff`; `testExpiry`
 `classify | off`; `reviewService` `terminal | hosted`; `models.<seat>.model`
 `fable | opus | sonnet | haiku`; `models.<seat>.effort` `low | medium | high | xhigh | max`;
-`riskTiers` an array of non-empty strings.
+`riskTiers` an array of non-empty strings; `stops.repairRound` `repair | ask`; `stops.buildEscalate`
+`derived | ask`; `stops.reviewEscalate` `queue | ask`; `stops.redFindings` `remove-mention | ask`;
+`stops.prototypeClose` `ask | keep | delete`.
 
 Semantics: `worktreePerSpec` false → `/spec:run` runs in place without `--in-place`;
 `directLaneToMain` false → a Direct-lane change lands through a branch and `/git:merge`, never a
@@ -271,7 +280,20 @@ the named strategy is auto-picked; `testExpiry` `off` → review close runs no c
 `models.<seat>` → the model and effort every driver prints on that seat's dispatch line;
 `riskTiers` → the high-risk areas the owner chose, also written as bullets into the rules file's
 § Risk Tiers (the section planning reads; the key is provenance, checked by `/spec:doctor`
-check 24).
+check 24); `stops.repairRound` `repair` → a review STOPPED with the repair round unspent runs one
+in-session repair round without asking, printing `📌 Auto-picked run one in-session repair round —
+host policy stops.repairRound: repair (veto anytime)`; `stops.buildEscalate` `derived` → a build
+ESCALATE takes the failure-trend recommendation (re-arm or park, never cold or amend), printing
+`📌 Auto-picked <re-arm one more round|park and queue a /spec:fix> — host policy
+stops.buildEscalate: derived (veto anytime)`; `stops.reviewEscalate` `queue` → a review ESCALATE
+abandons the run and queues `/spec:fix`, printing `📌 Auto-picked abandon and queue /spec:fix — host
+policy stops.reviewEscalate: queue (veto anytime)`; `stops.redFindings` `remove-mention` → a
+critical-tier unsanctioned green removes the AC-ID mention, printing `📌 Auto-picked remove the AC-ID
+mention — host policy stops.redFindings: remove-mention (veto anytime)`; `stops.prototypeClose`
+`keep` or `delete` → the MERGE step closes an unmerged prototype that way, printing `📌 Auto-picked
+<Keep it for now|Delete it> — host policy stops.prototypeClose: <value> (veto anytime)`, while `ask`
+(the default) asks, deleting unmerged work being the one unrecoverable pick. Any `stops` key set to
+`ask` brings its question back; `/spec:fanout --ask <key>` brings it back for one fan-out.
 
 **Absent or partial block = the defaults above, key by key** — a host that predates the block
 changes nothing. Validated by `validatePolicy` in `host-config.js`; read through `policy(root)`.

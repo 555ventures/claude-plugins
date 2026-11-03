@@ -59,9 +59,9 @@ test('run.md keeps the already-in-a-spec-worktree skip line, and the run and fix
   }
 })
 
-test('fix.md names the three delegated question kinds it writes', () => {
+test('fix.md names the two delegated question kinds it writes', () => {
   const fix = whole('spec/commands/fix.md')
-  for (const kind of ['fix-dirty-tree', 'fix-decisions', 'fix-dispositions']) {
+  for (const kind of ['fix-decisions', 'fix-dispositions']) {
     assert.ok(fix.includes(kind), 'fix.md must name kind ' + kind + ', or a parent cannot match its standing answers to that ask')
   }
 })

@@ -4,10 +4,12 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { SPEC, tmpdir, runNode, laneMarkerPath } = require('../helpers')
+const { SPEC, tmpdir, runNode, laneMarkerPath, gitRepo } = require('../helpers')
 
 // specs/20261102/02-a-delegated-driver-stops-on-disk.md D1/D9 — pending-question.js is the one
 // writer and reader of .claude/pending-question.json, and the helpers strip the child marker.
+// specs/20261103/04-predictable-stops-become-host-policy.md D3/D10: AC-20261103-04-3 (user-only answers, the
+// closed kinds, stopPolicy and policyPick), AC-20261103-04-14 (bareRun records laneExit on a stop answer).
 
 const SCRIPT = 'scripts/pending-question.js'
 const pending = (root) => path.join(root, '.claude', 'pending-question.json')
@@ -91,7 +93,7 @@ test('AC-20261102-02-3: answer records label, by and an ISO time; an unknown id,
   assert.ok(!Number.isNaN(Date.parse(a.at)), 'the answer needs a parseable time: ' + a.at)
   const robot = ans('q1', 'queue /spec:fix and stop', 'robot')
   assert.strictEqual(robot.status, 2, 'a by outside the enum must be refused or any writer can masquerade: ' + robot.stdout + robot.stderr)
-  assert.match(robot.stdout + robot.stderr, /standing/, 'the refusal must name the enum: ' + robot.stdout + robot.stderr)
+  assert.match(robot.stdout + robot.stderr, /\buser\b/, 'the refusal must name the enum: ' + robot.stdout + robot.stderr)
   const unknownId = ans('q9', 'queue /spec:fix and stop', 'user')
   assert.strictEqual(unknownId.status, 2, 'an unknown id must be refused: ' + unknownId.stdout + unknownId.stderr)
   assert.ok((unknownId.stdout + unknownId.stderr).includes('unknown question id q9'), 'the refusal must name the id: ' + unknownId.stderr)
@@ -164,4 +166,66 @@ test('isDelegated (AC-20261103-03-11) is false with the child env var set and no
   assert.strictEqual(nq.status + ':' + nq.stdout.trim(), '1:false', 'the query form must exit 1 for the parent, so a shell test reads it as not-a-lane')
   const outside = runNode(SCRIPT, ['mark', '--root', fs.realpathSync(tmpdir('pq-nogit'))])
   assert.strictEqual(outside.status, 2, 'mark outside a git repo must refuse with the remedy: ' + outside.stdout)
+})
+
+const pq = () => require(path.join(SPEC, SCRIPT))
+
+function policyHost(name, stops, fanout) {
+  const root = fs.realpathSync(tmpdir(name))
+  gitRepo(root)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude', 'spec.config.json'), JSON.stringify({ policy: { stops } }))
+  if (fanout) fs.writeFileSync(path.join(root, '.git', 'spec-fanout.json'), JSON.stringify(fanout))
+  return root
+}
+
+const REPAIR = { repair: 'run one in-session repair round' }
+
+test('AC-20261103-04-3: answer --by standing exits 2 naming user, and write refuses kind fix-dirty-tree as outside the closed set', () => {
+  const h = host('pq-user-only')
+  assert.strictEqual(write(h).status, 0, 'setup: the valid document must be written')
+  const r = runNode(SCRIPT, ['answer', '--root', h.root, '--id', 'q1', '--label', 'queue /spec:fix and stop', '--by', 'standing'])
+  assert.strictEqual(r.status, 2, 'a standing answer must be refused or a retired writer can still masquerade as the user: ' + r.stdout + r.stderr)
+  assert.match(r.stdout + r.stderr, /\buser\b/, 'the refusal must name user as the only accepted value: ' + r.stdout + r.stderr)
+  const dirty = host('pq-dirty-kind', { ...doc(), kind: 'fix-dirty-tree' })
+  const w = write(dirty)
+  assert.strictEqual(w.status, 2, 'the retired kind must be refused or fix.md can still write a question it no longer asks: ' + w.stdout + w.stderr)
+  assert.ok((w.stdout + w.stderr).includes('kind "fix-dirty-tree" is not in the closed set'), 'the finding must name the kind: ' + w.stdout + w.stderr)
+})
+
+test('AC-20261103-04-3: stopPolicy overlays the fan-out table ask list so policyPick returns null, and without it policyPick returns the 📌 line and records the pick', () => {
+  const m = pq()
+  assert.strictEqual(typeof m.stopPolicy, 'function', 'pending-question.js must export stopPolicy, or no driver has one reader of the per-run override')
+  assert.strictEqual(typeof m.policyPick, 'function', 'pending-question.js must export policyPick, or every driver re-derives the auto-pick line')
+  const asked = policyHost('pq-stops-ask', { repairRound: 'repair' }, { version: 1, lanes: [], ask: ['repairRound'] })
+  assert.strictEqual(m.stopPolicy(asked).repairRound, 'ask', 'a key in the table ask list must read as ask, or --ask relays nothing')
+  const marks = {}
+  assert.strictEqual(m.policyPick(asked, 'repairRound', REPAIR, marks), null, 'an ask stop must return null so the driver asks')
+  assert.ok(!('policyPicks' in marks), 'a null pick must record nothing, or the report lists a pick that was never made')
+  const all = policyHost('pq-stops-all', {}, { version: 1, lanes: [], ask: ['all'] })
+  assert.deepStrictEqual(Object.values(m.stopPolicy(all)), ['ask', 'ask', 'ask', 'ask', 'ask'], 'the word all must turn every key to ask')
+  const plain = policyHost('pq-stops-plain', { repairRound: 'repair' }, { version: 1, lanes: [] })
+  const pm = {}
+  const pick = m.policyPick(plain, 'repairRound', REPAIR, pm)
+  assert.deepStrictEqual(pick, { value: 'repair', label: 'run one in-session repair round',
+    line: '📌 Auto-picked run one in-session repair round — host policy stops.repairRound: repair (veto anytime)' },
+    'the pick must carry the byte-exact veto line, or the user cannot recognise or veto it: ' + JSON.stringify(pick))
+  const rec = pm.policyPicks && pm.policyPicks[0]
+  assert.ok(rec, 'the pick must be appended to marks.policyPicks, or the fan-out report has no trail')
+  assert.deepStrictEqual({ key: rec.key, value: rec.value, label: rec.label }, { key: 'repairRound', value: 'repair', label: 'run one in-session repair round' }, 'the record names key, value and label')
+  assert.ok(!Number.isNaN(Date.parse(rec.at)), 'the record needs an ISO time: ' + rec.at)
+  assert.strictEqual(m.policyPick(plain, 'repairRound', {}, {}), null, 'a value with no label must return null so the driver asks')
+})
+
+test('AC-20261103-04-14: bareRun sets marks.laneExit.reason to the chosen label when an answered file resumes with stop', () => {
+  const h = host('pq-laneexit')
+  assert.strictEqual(write(h).status, 0, 'setup: the valid document must be written')
+  const label = 'queue /spec:fix and stop'
+  assert.strictEqual(runNode(SCRIPT, ['answer', '--root', h.root, '--id', 'q1', '--label', label, '--by', 'user']).status, 0, 'setup: the answer must be recorded')
+  const marks = {}
+  const r = pq().bareRun(h.root, marks)
+  assert.ok(r && r.changed, 'an answered file must be consumed and the sidecar marked changed')
+  assert.ok(marks.laneExit && marks.laneExit.reason === label,
+    'a stop answer must be recorded as the lane exit, or the parent returns the lane without a recognised stop: ' + JSON.stringify(marks.laneExit))
+  assert.ok(!Number.isNaN(Date.parse(marks.laneExit.at)), 'the lane exit needs an ISO time')
 })

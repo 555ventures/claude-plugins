@@ -62,7 +62,7 @@ const branchList = (root, pattern) =>
 // status.json with marks.testsDerived, a real `proto/<stem>` worktree, and a `prototype` config
 // block whose dbDestroy drops a marker file OUTSIDE the tree (the fixture's stand-in for a
 // database drop). `otherCiter` adds a second spec citing the stem at the given status.
-function driveToMerge(label, { prototype, otherCiter = null, protoCommits = 0 }) {
+function driveToMerge(label, { prototype, otherCiter = null, protoCommits = 0, stops = null }) {
   const root = fs.realpathSync(tmpdir('pc'))
   const marker = path.join(fs.realpathSync(tmpdir('pc-db')), 'db-dropped')
   const g = gitRepo(root)
@@ -73,6 +73,7 @@ function driveToMerge(label, { prototype, otherCiter = null, protoCommits = 0 })
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'none' },
+    ...(stops ? { policy: { stops } } : {}),
     prototype: {
       url: 'http://127.0.0.1:{port}',
       overlay: 'src/proto-overlay.js',
@@ -205,6 +206,9 @@ test('AC-20261007-03-7: WHEN the merged spec has no prototype: THE SYSTEM leaves
     'a merge that cites no stem must print no prototype close line: ' + merged.stdout)
 })
 
+// specs/20261103/04-predictable-stops-become-host-policy.md D8 — AC-20261103-04-11, -22: the
+// prototypeClose policy answers the question for keep/delete; the default ask is unchanged.
+
 // specs/20261029/04-the-four-questions-that-did-not-exist.md D4: AC-20261029-04-7 / -8 / -9 —
 // the MERGE step counts the prototype's unmerged commits and asks before deleting them.
 
@@ -226,7 +230,7 @@ test('AC-20261029-04-7: WHEN the proto branch carries 0 unmerged commits THE SYS
   assert.ok(statusMarks(h.root).closed, 'status.json must carry marks.closed after the close')
 })
 
-test('AC-20261029-04-7: WHEN the proto branch carries 2 unmerged commits THE SYSTEM SHALL print the count and refuse --mark merge-strategy without --prototype, leaving everything unchanged', () => {
+test('AC-20261029-04-7: WHEN the proto branch carries 2 unmerged commits THE SYSTEM SHALL print the count and refuse --mark merge-strategy without --prototype, leaving everything unchanged (also AC-20261103-04-22: default host, no policy.stops)', () => {
   const h = driveToMerge('n2', { prototype: true, protoCommits: 2 })
   const step = run(h.root, h.spec)
   assert.match(step.stdout, new RegExp('prototype ' + STEM + ': 2 unmerged commits on ' + PROTO_BRANCH),
@@ -269,4 +273,15 @@ test('AC-20261029-04-9: WHEN stage-review.md is read THE SYSTEM SHALL state the 
   const bullet = text.slice(i).split(/\n- \*\*|\n## /)[0].replace(/\s+/g, ' ')
   assert.ok(bullet.includes('--prototype delete|keep'), 'the MERGE bullet must name the operand that answers the question')
   assert.match(bullet, /AskUserQuestion[\s\S]*Delete it \(Recommended\)/, 'the bullet must carry the question with "Delete it (Recommended)" first')
+})
+
+test('AC-20261103-04-11: WHEN the MERGE step runs with 2 unmerged proto commits on a host with stops.prototypeClose keep THE SYSTEM SHALL print the count, the Auto-picked keep line and a mark line ending --prototype keep, and no AskUserQuestion', () => {
+  const h = driveToMerge('pickkeep', { prototype: true, protoCommits: 2, stops: { prototypeClose: 'keep' } })
+  const step = run(h.root, h.spec).stdout
+  assert.match(step, new RegExp('prototype ' + STEM + ': 2 unmerged commits on ' + PROTO_BRANCH),
+    'the step must still state the commits at risk beside the pick: ' + step)
+  assert.ok(step.includes('📌 Auto-picked Keep it for now — host policy stops.prototypeClose: keep (veto anytime)'),
+    'without the printed pick the owner cannot see or veto the keep the policy chose: ' + step)
+  assert.match(step, /--prototype keep[ \t]*$/m, 'the mark line must arrive pre-filled with the policy value: ' + step)
+  assert.doesNotMatch(step, /AskUserQuestion/, 'a host that answered the prototype stop must not be asked it: ' + step)
 })

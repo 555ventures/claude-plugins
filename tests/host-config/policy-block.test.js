@@ -8,6 +8,7 @@ const { read, tmpdir, runNode, gitRepo } = require('../helpers')
 // specs/20261029/08-the-policy-round-at-init.md D1/D2/D5: AC-20261029-08-1 (policy() defaults merge and
 // validatePolicy findings), AC-20261029-08-2 (POLICY_DEFAULTS.models equals core.md § Model Placement),
 // AC-20261029-08-7 (init-gen.js policy-check drift findings and exit codes).
+// specs/20261103/04-predictable-stops-become-host-policy.md D1: AC-20261103-04-1 (the policy.stops block).
 
 const lib = () => require('../../spec/scripts/lib/host-config')
 
@@ -60,6 +61,31 @@ test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement
   assert.deepStrictEqual(POLICY_DEFAULTS.models.workers, row('Implementation workers'), 'workers default drifted from the doctrine table')
   assert.deepStrictEqual(POLICY_DEFAULTS.models.reviewer, row('Reviewer'), 'reviewer default drifted from the doctrine table')
   assert.deepStrictEqual(POLICY_DEFAULTS.models.disposer, row('Disposer'), 'disposer default drifted from the doctrine table')
+})
+
+const STOP_DEFAULTS = { repairRound: 'repair', buildEscalate: 'derived', reviewEscalate: 'queue', redFindings: 'remove-mention', prototypeClose: 'ask' }
+
+test('AC-20261103-04-1: policy(root) returns the five stops defaults for a config without a block and merges a partial stops block key by key', () => {
+  const { policy } = lib()
+  const bare = tmpdir('policy-stops-bare')
+  writeConfig(bare, {})
+  assert.deepStrictEqual(policy(bare).stops, STOP_DEFAULTS,
+    'an absent block must yield the safe stop defaults, or a host that never answered keeps asking every predictable stop')
+  const part = tmpdir('policy-stops-part')
+  writeConfig(part, { policy: { stops: { prototypeClose: 'keep' } } })
+  assert.deepStrictEqual(policy(part).stops, { ...STOP_DEFAULTS, prototypeClose: 'keep' },
+    'a set stop must win while the other four keep their defaults, or a partial block drops the rest')
+})
+
+test('AC-20261103-04-1: validatePolicy reports a bad stops enum and an unknown stops key exactly, and a non-object stops as one finding', () => {
+  const { validatePolicy } = lib()
+  assert.deepStrictEqual(validatePolicy({ stops: { repairRound: 'always', bogus: 1 } }),
+    ['stops.repairRound: expected one of repair|ask', 'unknown key stops.bogus'],
+    'the findings must name the stop key and its enum, or the owner cannot tell which stop to fix')
+  assert.deepStrictEqual(validatePolicy({ stops: 'repair' }), ['stops: expected an object'],
+    'a scalar stops block must be refused as a whole, or generate writes an unreadable block')
+  assert.deepStrictEqual(validatePolicy({ stops: STOP_DEFAULTS }), [],
+    'the default block must validate, or every freshly initialised host is refused')
 })
 
 // specs/20261102/03-one-session-runs-the-lanes.md D2: the lanes seat and agentCall's fourth argument.

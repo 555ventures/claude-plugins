@@ -170,8 +170,10 @@ command; outside the working tree, so no review leg sees it) or its branch is li
 table; a prose command asks `pending-question.js is-delegated --root .` (exit 0 = a lane), never the
 environment. The sub-agent has no `AskUserQuestion` tool. It writes `.claude/pending-question.json` at
 its repo root through `pending-question.js`, prints `PENDING_QUESTION`, and stops. Only the parent
-session writes an answer — `by: user` from a live `AskUserQuestion` it asked, `by: standing` from an
-answer the user gave that session up front; the worker never does. A dismissal is a STOP exactly as
+session writes an answer — `by: user` from a live `AskUserQuestion` it asked; the worker never
+does. A stop whose answer the host's `policy.stops` names is never written — the lane's own driver
+prints `📌 Auto-picked <label> — host policy stops.<key>: <value> (veto anytime)` and continues; the
+fan-out's `--ask <key>` relays that stop for one run. A dismissal is a STOP exactly as
 § Decisions. A delegated review ends at `MERGE_READY` and the parent merges from the main root.
 
 ## Question Style (every `AskUserQuestion`, every stage)

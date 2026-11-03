@@ -3,7 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { ROOT, read } = require('../helpers')
+const { ROOT, read, phrase } = require('../helpers')
 
 // specs/20261029/09-the-commands-read-the-policy-block.md (AC-20261029-09-1, -2, -4, -6): the
 // doctrine readers of the host's policy block name their key and print their literal.
@@ -62,4 +62,31 @@ test('AC-20261029-09-6: plan.md Lock step 5 reads policy.ledgerCommitted and doc
   const check = doctor.slice(at).split(/^21\. /m)[0].replace(/\s+/g, ' ')
   assert.ok(check.includes('policy.testExpiry') && check.includes('⚠️ test expiry: disabled by policy'),
     'doctor check 20 does not print the disabled-by-policy line, so an off host still runs both dry runs every doctor')
+})
+
+// specs/20261103/04-predictable-stops-become-host-policy.md D12 (AC-20261103-04-17): every policy.stops key has a prose reader naming it.
+test('AC-20261103-04-17: core, fanout, stage-build, stage-review and init each name the policy.stops keys they read, and the retired standing and PREFLIGHT wording is gone', () => {
+  const sliceOf = (rel, re, level) => section(body(rel), re, level)
+  const has = (text, lit) => phrase(lit).test(text)
+  const core = sliceOf('spec/doctrine/core.md', /^## Delegated Stops/, 2)
+  assert.ok(has(core, 'by: user') && !has(core, 'by: standing'),
+    'core § Delegated Stops must keep by: user only, or a worker is told a standing writer still exists')
+  assert.ok(has(core, 'policy.stops'), 'core § Delegated Stops must name policy.stops, or a lane has no rule for a stop the host answered')
+  const fanout = body('spec/commands/fanout.md')
+  assert.ok(has(sliceOf('spec/commands/fanout.md', /^## Input/, 2), '--ask'), 'fanout § Input must name --ask, or the per-run override is undiscoverable')
+  assert.ok(has(sliceOf('spec/commands/fanout.md', /^## Rules/, 2), 'policy.stops'), 'fanout § Rules must name policy.stops in its never-line, or the session answers the stops itself')
+  assert.ok(!has(fanout, 'PREFLIGHT'), 'fanout.md must not name the retired PREFLIGHT sheet, or the session waits for a sheet the driver no longer prints')
+  const build = sliceOf('spec/doctrine/stages/stage-build.md', /^## Build stage/, 2)
+  for (const k of ['policy.stops.redFindings', 'policy.stops.buildEscalate']) {
+    assert.ok(has(build, k), 'stage-build § Build stage must name ' + k + ', or the stage prose never mentions the policy that answers the stop')
+  }
+  const protocol = sliceOf('spec/doctrine/stages/stage-review.md', /^## Protocol/, 2)
+  for (const k of ['policy.stops.repairRound', 'policy.stops.reviewEscalate', 'abandon and queue /spec:fix (Recommended)']) {
+    assert.ok(has(protocol, k), 'stage-review § Protocol must name ' + k + ', or the review prose disagrees with the driver')
+  }
+  assert.ok(has(sliceOf('spec/doctrine/stages/stage-review.md', /^## Rules/, 2), 'policy.stops.prototypeClose'),
+    'stage-review § Rules must name policy.stops.prototypeClose in the MERGE bullet, or the prototype stop has no prose reader')
+  const init = sliceOf('spec/commands/init.md', /^### Policy round 2/, 3)
+  assert.ok(has(init, 'policy.stops') && has(init, 'never asked'),
+    'init Policy round 2 must say policy.stops is written with defaults and never asked, or init is read as asking a ninth question')
 })

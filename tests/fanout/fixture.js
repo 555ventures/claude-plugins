@@ -4,7 +4,7 @@ const path = require('node:path')
 const assert = require('node:assert')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20261102/03-one-session-runs-the-lanes.md File Plan: the synthetic host shared by the
+// specs/20261102/03-one-session-runs-the-lanes.md and specs/20261103/04-predictable-stops-become-host-policy.md File Plan: the synthetic host shared by the
 // fan-out driver tests — a roadmap, hardened specs, optional parked and dependent specs, a queued
 // fix and a red-CI row, plus helpers that stand a lane's worktree up the way the harness does
 // (a linked worktree on spec/<stem>) and write the fake pending question and review sidecar a
@@ -16,8 +16,9 @@ const STATUS = 'scripts/spec-status.js'
 const DIR = 'specs/20261102'
 const specRel = (stem) => DIR + '/' + stem + '.md'
 
-const LANE_AGENT = 'Agent {subagent_type: "general-purpose", model: opus, effort: medium, isolation: "worktree", run_in_background: true}'
 const REPAIR = 'run one in-session repair round (Recommended)'
+
+const LANE_AGENT = 'Agent {subagent_type: "general-purpose", model: opus, effort: medium, isolation: "worktree", run_in_background: true}'
 
 const SPECS = {
   '03-x': { brief: '32', status: 'hardened' },
@@ -128,13 +129,10 @@ function fanoutHost(opts = {}) {
     return r
   }
   h.plan = (args = []) => { h.must(args, 'plan'); return h.must(['--mark', 'planned'], '--mark planned') }
-  h.standing = (repair = 'ask', build = 'ask', proto = 'ask') =>
-    h.must(['--mark', 'standing', '--repair-round', repair, '--build-escalate', build, '--prototype-close', proto], '--mark standing')
   h.dispatch = (id, agent) => h.must(['--mark', 'dispatched', '--lane', id, '--agent', agent], '--mark dispatched ' + id)
-  // plan + standing + dispatch of the default two lanes: L1 = 03-x (agent lane-one), L2 = 04-z (agent lane-two).
-  h.dispatchedPair = (repair = 'ask') => {
-    h.plan()
-    h.standing(repair)
+  // plan + dispatch of the default two lanes: L1 = 03-x (agent lane-one), L2 = 04-z (agent lane-two).
+  h.dispatchedPair = (planArgs = []) => {
+    h.plan(planArgs)
     h.dispatch('L1', 'lane-one')
     h.dispatch('L2', 'lane-two')
   }
@@ -216,6 +214,6 @@ function askBlocks(text) {
 }
 
 module.exports = {
-  fanoutHost, askBlocks, specRel, DIR, LANE_AGENT, REPAIR,
+  fanoutHost, askBlocks, specRel, DIR, LANE_AGENT,
   repairRoundDoc, dispositionsDoc, redFindingsDoc,
 }

@@ -33,9 +33,9 @@ auto-picks splitting the bullet (`📌 Auto-picked split the bullet — <path>: 
 anytime)`). `unsanctioned-green` on `tier: standard` auto-picks removing the AC-ID mention (the
 § Gotchas known cause) — when the known cause does not match, the test is vacuous and is
 rewritten red; on `tier: critical` the step asks (remove the AC-ID mention (Recommended) /
-rewrite the test red / pause the build). `skipped-resume` stays a printed, recorded notice, never
+rewrite the test red / pause the build) (`policy.stops.redFindings` answers it unless `ask` — stage prints the 📌 line). `skipped-resume` stays a printed, recorded notice, never
 a user diagnosis. The repair-cap `ESCALATE` step prints `recommended: <re-arm|park>` from the
-gate logs' failure-count trend and ONE `AskUserQuestion` (re-arm / restart cold / park and queue
+gate logs' failure-count trend (`policy.stops.buildEscalate` answers it unless `ask` — stage prints the 📌 line) and ONE `AskUserQuestion` (re-arm / restart cold / park and queue
 a `/spec:fix` / amend the spec); in a child session the driver writes the question instead — core § Delegated Stops; record the answer with `--mark escalate-choice
 <re-arm|cold|park|amend>`.
 

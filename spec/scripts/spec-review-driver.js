@@ -2575,6 +2575,23 @@ function handleRepairRound() {
   return r.stopped ? 'STOPPED' : null
 }
 
+// A policy pick recorded once per key: a bare re-invocation reprints the step but never appends a
+// second record. Saves the sidecar when a new pick lands.
+function pickOnce(key, labelByValue) {
+  const had = (marks.policyPicks || []).some((x) => x.key === key)
+  const r = pq.policyPick(repoRoot, key, labelByValue, marks)
+  if (!r) return null
+  if (had) marks.policyPicks.pop()
+  else saveSidecar()
+  return r
+}
+// The lane-ending exit is recorded once, never guessed.
+function setLaneExit(reason, queued) {
+  if (marks.laneExit) return
+  marks.laneExit = { reason, ...(queued ? { queued } : {}), at: new Date().toISOString() }
+  saveSidecar()
+}
+
 const repairStopKey = () => pq.stopKey('repair-round', marks.stoppedIteration || liveIteration(), marks.repairRounds || 0)
 const escalateStopKey = () => pq.stopKey('review-escalate', liveIteration())
 
@@ -2765,6 +2782,17 @@ function escalatePoolBlock() {
     (survivors.length && legs.length ? '\n' : '') +
     legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)}`).join('\n') +
     (open ? '\n' : '')
+  const replanAdd = `node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan`
+  const qPick = pickOnce('reviewEscalate', { queue: 'abandon and queue /spec:fix' })
+  if (qPick) {
+    setLaneExit(`review escalated at the fix cap — ${open} open findings`, `${specRel}: review escalated at the fix cap — ${open} open findings`)
+    return listing + qPick.line + '\n' +
+      `delete ${sidecarDir}\n` +
+      `${queueAdd}\n` +
+      `To answer differently:\n` +
+      `  waive or reject through the disposer — node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
+      `  re-plan — ${replanAdd}\n`
+  }
   if (pq.isDelegated(repoRoot)) return listing + pq.stopLine(repoRoot, 'review', {
     kind: 'review-escalate', state: 'ESCALATE', spec: specRel,
     stopKey: escalateStopKey(),
@@ -2772,21 +2800,23 @@ function escalatePoolBlock() {
       id: 'q1', header: 'Review cap',
       question: 'The review hit its fix cap with ' + open + ' findings still open. How should the lane exit?',
       options: [
-        { label: 'waive or reject everything through the disposer (Recommended)', description: 'A disposer return waives or rejects every open finding with evidence and the review closes normally; nothing more is fixed in this run',
+        { label: 'abandon and queue /spec:fix (Recommended)', description: 'The review sidecar is deleted and the repair becomes the queue\'s top item; the escalate row stays on the ledger so the cap is not reset',
+          resume: 'stop', then: `delete ${sidecarDir}; ${queueAdd}` },
+        { label: 'waive or reject everything through the disposer', description: 'A disposer return waives or rejects every open finding with evidence and the review closes normally; nothing more is fixed in this run',
           resume: `node ${__filename} ${specPath} --mark dispositions --file <return.json>` },
-        { label: 'abandon', description: 'The review sidecar is deleted and the run restarts cold; the escalate row stays on the ledger so the cap is not reset',
+        { label: 'abandon without queuing', description: 'The review sidecar is deleted and the run restarts cold; the escalate row stays on the ledger so the cap is not reset',
           resume: 'stop', then: `delete ${sidecarDir}` },
         { label: 're-plan', description: 'The review ends and the spec returns to planning through the queue, so the findings are addressed by a new plan',
-          resume: 'stop', then: `node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan` },
+          resume: 'stop', then: replanAdd },
       ],
     }],
   }, marks) + '\n'
   return listing +
     `Ask ONE AskUserQuestion \u2014 options:\n` +
     `  abandon and queue /spec:fix (Recommended) \u2014 delete ${sidecarDir}, then ${queueAdd}\n` +
-    `  waive all and close \u2014 a disposer return with every entry waive, then --mark dispositions --file <return.json>\n` +
-    `  reject with evidence \u2014 every entry reject with the executed contrary evidence quoted, same mark\n` +
-    `  re-plan \u2014 abandon as above, then node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan\n`
+    `  waive or reject everything through the disposer — a disposer return with every entry waive or reject, then --mark dispositions --file <return.json>\n` +
+    `  abandon without queuing — delete ${sidecarDir}\n` +
+    `  re-plan — abandon as above, then ${replanAdd}\n`
 }
 
 const STEPS = {
@@ -2801,11 +2831,21 @@ const STEPS = {
       ? `\nThe durable stopped-ledger location could not be made ignored at the main root — add ` +
         `this line to its .gitignore to enable durable hard-stop evidence: ${STOPPED_LEDGER}\n`
       : ''
+    const rrPick = (marks.repairRounds || 0) < REPAIR_ROUND_CAP
+      ? pickOnce('repairRound', { repair: 'run one in-session repair round' }) : null
+    if ((marks.repairRounds || 0) >= REPAIR_ROUND_CAP) {
+      setLaneExit('review stopped, repair round spent', `${specRel}: review stopped, repair round spent`)
+    }
+    const repairBody = `fix the failing leg(s) above through the review fix seat ` +
+      `(the host's agentMap; ${policy(repoRoot).models.workers.model} at effort: ${policy(repoRoot).models.workers.effort}), commit, then the mark re-runs legs at this iteration; green continues to REVIEWER, ` +
+      `red lands here again with the round spent\n` +
+      `Then: node ${__filename} ${specPath} --mark repair-round\n`
     return `## STOPPED — a blocking leg is red; the run hard-stopped before any further step\n` +
       red.map((r) => `❌ ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') +
       `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
       `A GATE_RED ledger line has been appended to ${marks.stoppedLedgerPath}.\n` + remedy +
-      (pq.isDelegated(repoRoot) && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
+      (rrPick ? rrPick.line + '\n' + repairBody
+        : pq.isDelegated(repoRoot) && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
         ? pq.stopLine(repoRoot, 'review', {
           kind: 'repair-round', state: 'STOPPED', spec: specRel,
           stopKey: repairStopKey(),
@@ -3032,7 +3072,10 @@ const STEPS = {
       { encoding: 'utf8' }, 'merge-back.sh inspect')
     const risk = prototypeAtRisk(target)
     let protoText = ''
-    if (risk) {
+    const pPick = risk && risk.n > 0 ? pickOnce('prototypeClose', { delete: 'Delete it', keep: 'Keep it for now' }) : null
+    if (pPick) {
+      protoText = `prototype ${risk.stem}: ${risk.n} unmerged commits on proto/${risk.stem}\n${pPick.line}\n\n`
+    } else if (risk) {
       protoText = `prototype ${risk.stem}: ${risk.n} unmerged commits on proto/${risk.stem}` +
         (risk.n === 0 ? ' — the close proceeds with the merge (notify only)\n\n'
           : `\n\nAsk ONE AskUserQuestion before the mark — question "The prototype has ${risk.n} commits that were never merged. Delete the prototype now?"; ` +
@@ -3057,7 +3100,7 @@ const STEPS = {
       waivedWarn +
       deriveText +
       `  node ${__filename} ${specPath} --mark merge-strategy ${named === 'derived' ? '<merge-commit|ff-only|squash|rebase-ff>' : named}` +
-      (risk && risk.n > 0 ? ' --prototype <delete|keep>' : '') + `\n` +
+      (risk && risk.n > 0 ? ' --prototype ' + (pPick ? pPick.value : '<delete|keep>') : '') + `\n` +
       `Relocate first if needed: ExitWorktree(action="keep") if this session entered the worktree, ` +
       `else \`cd ${mainRoot}\` in the main session — the mark is refused while the driver's ` +
       `inherited CWD sits inside the build worktree.`

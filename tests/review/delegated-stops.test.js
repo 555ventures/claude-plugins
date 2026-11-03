@@ -11,6 +11,8 @@ const drv = require('./review-driver.fixtures')
 // specs/20261102/02-a-delegated-driver-stops-on-disk.md D3/D5 — the review driver, run inside a
 // child session, writes each judgment stop to .claude/pending-question.json instead of printing
 // an AskUserQuestion instruction, resumes from the answered file, and parks at MERGE_READY.
+// specs/20261103/04-predictable-stops-become-host-policy.md D4/D6/D14 — AC-20261103-04-5, -9, -19:
+// a default host auto-picks both stops and writes no file; stops set to ask keep the pending file.
 
 const DRIVER = esc.DRIVER
 const DRIVER_ABS = path.join(SPEC, DRIVER)
@@ -33,9 +35,24 @@ const twoHardReturn = () => ({
 })
 const REPAIR = 'run one in-session repair round (Recommended)'
 
+// Hosts the stop under policy.stops. The config edit is a changed file, so the File Plan names it
+// to keep the reconcile leg green; it stays uncommitted. Absent stops = the host defaults.
+function withStops(host, stops) {
+  if (!stops) return
+  const cfgPath = path.join(host.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
+  cfg.policy = { ...(cfg.policy || {}), stops }
+  fs.writeFileSync(cfgPath, JSON.stringify(cfg))
+  fs.writeFileSync(host.spec, fs.readFileSync(host.spec, 'utf8').replace('| src/foo.js | edit | scripts |', '| src/foo.js | edit | scripts |\n| .claude/spec.config.json | edit | other |'))
+}
+const ASK_REPAIR = { repairRound: 'ask' }
+const ASK_ESCALATE = { reviewEscalate: 'ask' }
+const PICK_REPAIR = '📌 Auto-picked run one in-session repair round — host policy stops.repairRound: repair (veto anytime)'
+
 // A host whose committed suite fails: the first bare run lands STOPPED with the round unspent.
-function redGateHost(name) {
+function redGateHost(name, stops) {
   const host = esc.makeHost(name)
+  withStops(host, stops)
   fs.writeFileSync(path.join(host.root, 'src/foo.js'), 'module.exports = () => 0\n')
   git(host.root, 'add', '-A'); git(host.root, 'commit', '-q', '-m', 'break foo')
   const r = runPlain(host.root, host.spec)
@@ -63,8 +80,8 @@ function seedRepairPending(host, extra = {}) {
   return doc
 }
 
-test('AC-20261102-02-6: a delegated STOPPED with the repair round unspent writes a repair-round file with the three options and prints PENDING_QUESTION in place of the ask', () => {
-  const host = redGateHost('dlg-stopped')
+test('AC-20261102-02-6: a delegated STOPPED with the repair round unspent writes a repair-round file with the three options and prints PENDING_QUESTION in place of the ask (also AC-20261103-04-19: under stops.repairRound ask)', () => {
+  const host = redGateHost('dlg-stopped', ASK_REPAIR)
   const r = runD(host.root, host.spec)
   assert.strictEqual(r.status, 0, 'the delegated stop must exit 0 so the lane ends cleanly: ' + r.stdout + r.stderr)
   assert.ok(fs.existsSync(pendingOf(host.root)), 'the question must land on disk or the parent has nothing to relay: ' + r.stdout)
@@ -85,7 +102,7 @@ test('AC-20261102-02-6: a delegated STOPPED with the repair round unspent writes
 })
 
 test('AC-20261102-02-17: an in-session STOPPED with the round unspent still prints the ask with its three options and writes no pending file', () => {
-  const host = redGateHost('dlg-stopped-plain')
+  const host = redGateHost('dlg-stopped-plain', ASK_REPAIR)
   const step = runPlain(host.root, host.spec).stdout
   assert.match(step, /Ask ONE AskUserQuestion/, 'a session that never delegates must keep today\'s ask: ' + step)
   for (const opt of ['run one in-session repair round (Recommended)', 'queue /spec:fix and stop', 'abandon the review']) {
@@ -140,8 +157,9 @@ test('AC-20261102-02-7: a delegated dispositions mark whose waive reason quotes 
 })
 
 // Drives a host to the fix cap with two hard survivors in the final pool; leaves the run at ESCALATE.
-function escalateHost(name) {
+function escalateHost(name, stops) {
   const host = esc.makeHost(name)
+  withStops(host, stops)
   esc.run(host.root, host.spec)
   const both = [{ ref: 's0', recommended: 'fix', reason: 'fix it' }, { ref: 's1', recommended: 'fix', reason: 'fix it' }]
   for (let cycle = 1; cycle <= 3; cycle++) {
@@ -156,26 +174,48 @@ function escalateHost(name) {
   return host
 }
 
-test('AC-20261102-02-8: a delegated ESCALATE writes a review-escalate file whose options resume through the dispositions mark, a delete of the sidecar, and a queue add', () => {
-  const host = escalateHost('dlg-esc')
+test('AC-20261102-02-8: a delegated ESCALATE under stops.reviewEscalate ask writes a review-escalate file whose options resume through a stop with a queue add, the dispositions mark, and a delete of the sidecar (also AC-20261103-04-9)', () => {
+  const host = escalateHost('dlg-esc', ASK_ESCALATE)
   const plainStep = runPlain(host.root, host.spec).stdout
   const r = runD(host.root, host.spec)
   assert.strictEqual(r.status, 0, 'the delegated stop exits 0: ' + r.stdout + r.stderr)
   const doc = readPending(host.root)
   assert.strictEqual(doc.kind, 'review-escalate', 'the kind must be review-escalate')
-  const [waive, abandon, replan] = doc.questions[0].options
-  assert.strictEqual(waive.label, 'waive or reject everything through the disposer (Recommended)', 'the recommended exit leads')
-  assert.ok(waive.resume.includes('--mark dispositions'), 'the first option resumes through the dispositions mark: ' + waive.resume)
-  assert.strictEqual(abandon.label, 'abandon', 'abandon must be offered')
+  const opts = doc.questions[0].options
+  assert.deepStrictEqual(opts.map((o) => o.label),
+    ['abandon and queue /spec:fix (Recommended)', 'waive or reject everything through the disposer', 'abandon without queuing', 're-plan'],
+    'the delegated list must be the in-session list, queue first, or the two arms recommend contradicting exits: ' + JSON.stringify(opts))
+  const [queue, waive, abandon, replan] = opts
+  assert.strictEqual(queue.resume, 'stop', 'abandon-and-queue ends the lane')
+  assert.ok(queue.then.includes('--lane fix --top'), 'the queue option must name the top-of-fix-lane add: ' + queue.then)
+  assert.ok(waive.resume.includes('--mark dispositions'), 'the disposer option resumes through the dispositions mark: ' + waive.resume)
   assert.strictEqual(abandon.resume, 'stop', 'abandon ends the lane')
   assert.ok(abandon.then.includes(path.basename(host.sidecar)), 'abandon must name the sidecar to delete: ' + abandon.then)
-  assert.strictEqual(replan.label, 're-plan', 're-plan must be offered')
   assert.strictEqual(replan.resume, 'stop', 're-plan ends the lane')
   assert.ok(replan.then.startsWith('node "$(spec-paths spec-queue)" add'), 're-plan queues the spec: ' + replan.then)
   for (const opt of [abandon, replan]) {
     assert.ok(plainStep.includes(opt.then),
       'the then line of "' + opt.label + '" must be byte-equal to the in-session text it mirrors, or the two forms drift: ' + opt.then)
   }
+})
+
+test('AC-20261103-04-9: a delegated ESCALATE on a default host writes no pending file, prints no PENDING_QUESTION and prints the Auto-picked queue line', () => {
+  const host = escalateHost('dlg-esc-pick')
+  const r = runD(host.root, host.spec)
+  assert.strictEqual(r.status, 0, 'the delegated pick exits 0: ' + r.stdout + r.stderr)
+  assert.ok(r.stdout.includes('📌 Auto-picked abandon and queue /spec:fix — host policy stops.reviewEscalate: queue (veto anytime)'),
+    'the lane must print the pick the policy made: ' + r.stdout)
+  assert.ok(!fs.existsSync(pendingOf(host.root)), 'a policy pick writes no file, or the parent relays a question the policy already answered')
+  assert.doesNotMatch(r.stdout, /PENDING_QUESTION/, 'the stop line must not print for a policy pick: ' + r.stdout)
+})
+
+test('AC-20261103-04-5: a delegated STOPPED with the round unspent on a default host prints the Auto-picked repair line, writes no pending file and prints no PENDING_QUESTION', () => {
+  const host = redGateHost('dlg-stopped-pick')
+  const r = runD(host.root, host.spec)
+  assert.strictEqual(r.status, 0, 'the delegated pick exits 0: ' + r.stdout + r.stderr)
+  assert.ok(r.stdout.includes(PICK_REPAIR), 'the lane must print the pick the policy made: ' + r.stdout)
+  assert.ok(!fs.existsSync(pendingOf(host.root)), 'a policy pick writes no file, or the parent relays a question the policy already answered')
+  assert.doesNotMatch(r.stdout, /PENDING_QUESTION/, 'the stop line must not print for a policy pick: ' + r.stdout)
 })
 
 // A closed review parked at MERGE with a real spec branch at the main root.
@@ -222,7 +262,7 @@ test('AC-20261102-02-10: a delegated review whose spec branch does not exist sti
 })
 
 test('AC-20261102-02-13: bare re-runs while the pending file is unanswered print the waiting line identically and leave the file and sidecar byte-identical', () => {
-  const host = redGateHost('dlg-wait')
+  const host = redGateHost('dlg-wait', ASK_REPAIR)
   seedRepairPending(host)
   const fileBefore = fs.readFileSync(pendingOf(host.root), 'utf8')
   const stateBefore = fs.readFileSync(stateFile(host), 'utf8')
@@ -237,14 +277,14 @@ test('AC-20261102-02-13: bare re-runs while the pending file is unanswered print
 })
 
 test('AC-20261102-02-14: a bare run on a fully answered file prints the resume step, consumes the file, appends marks.answered, and the next run prints the normal STOPPED step', () => {
-  const host = redGateHost('dlg-answered')
+  const host = redGateHost('dlg-answered', ASK_REPAIR)
   const doc = seedRepairPending(host)
-  doc.answers = { q1: { label: REPAIR, by: 'standing', at: '2026-11-02T10:05:00Z' } }
+  doc.answers = { q1: { label: REPAIR, by: 'user', at: '2026-11-02T10:05:00Z' } }
   fs.writeFileSync(pendingOf(host.root), JSON.stringify(doc))
   const r = runD(host.root, host.spec)
   assert.strictEqual(r.status, 0, 'the resume print exits 0: ' + r.stdout + r.stderr)
   assert.ok(r.stdout.includes('## Step: resume — repair-round'), 'the resume heading must name the kind: ' + r.stdout)
-  assert.ok(r.stdout.includes('q1: ' + REPAIR + ' (by standing)'), 'each answer must be listed with who gave it: ' + r.stdout)
+  assert.ok(r.stdout.includes('q1: ' + REPAIR + ' (by user)'), 'each answer must be listed with who gave it: ' + r.stdout)
   assert.ok(r.stdout.includes(`node ${DRIVER_ABS} ${host.spec} --mark repair-round`), 'the chosen option\'s resume line must print: ' + r.stdout)
   assert.ok(!fs.existsSync(pendingOf(host.root)), 'the file is consumed in the same invocation (terminal means gone)')
   const answered = readMarks(host).answered
@@ -258,7 +298,7 @@ test('AC-20261102-02-14: a bare run on a fully answered file prints the resume s
 })
 
 test('AC-20261102-02-15: a bare run on a dismissed file consumes it, records dismissedStop, prints the STOPPED line forever, and the repair-round mark is refused naming the remedy', () => {
-  const host = redGateHost('dlg-dismissed')
+  const host = redGateHost('dlg-dismissed', ASK_REPAIR)
   seedRepairPending(host, { dismissed: { at: '2026-11-02T10:06:00Z' } })
   const LINE = '## STOPPED — the question was dismissed; the run ends (core § Decisions)'
   const r = runD(host.root, host.spec)

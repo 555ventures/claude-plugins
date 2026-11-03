@@ -25,13 +25,10 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
 ## Steps
 
 1. **Root-cause statement, before the first edit.** First `git status --porcelain`: any output
-   means another fix or stray edits are in flight — ask ONE `AskUserQuestion` naming the files
-   (one fix per checkout, so the gate, the reviewer and the fix row judge one root cause):
-   "commit the unrelated changes first via `/git:commit` (Recommended)" / "stash them with a
-   tagged entry (`git stash push -u -m "fix: <symptom>"`)" / "abort" — each description states
-   its consequence; abort STOPs. Delegated (core § Delegated Stops): write the question document
-   to a scratch file and run `node "$(spec-paths pending-question)" write --root . --file <doc.json>`
-   with kind `fix-dirty-tree`, then stop; on resume read `show`, apply, `consume`. Then
+   means another fix or stray edits are in flight (one fix per checkout, so the gate, the reviewer and
+   the fix row judge one root cause) — in-session, run `/git:commit` first (its two approvals are the
+   stop), then continue; delegated (core § Delegated Stops), print the files and stop with the reason
+   `dirty tree in a fix lane` (the parent records it with `--mark returned --stopped`). Then
    this session reads the failing path end to end (parallel Explore agents locate it where the
    surface is wide; they return paths, never file contents). Print ONE paragraph: the defect, why
    it can recur, and the structural change that makes recurrence impossible. A symptom-only patch
@@ -49,8 +46,9 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    every display or policy choice made (what is hidden, reformatted, reordered, defaulted). ONE
    `AskUserQuestion`, items grouped into at most four questions, each answerable cold (core
    § Question Style); a vetoed item reverts to the pre-fix behaviour and is not re-asked. Empty
-   list → skip without output. Dismissed → STOP, edits left in the tree, nothing committed. Delegated: write the document
-   as above with kind `fix-decisions`, then stop; on resume read `show`, apply, `consume`.
+   list → skip without output. Dismissed → STOP, edits left in the tree, nothing committed. Delegated: write the question document
+   to a scratch file and run `node "$(spec-paths pending-question)" write --root . --file <doc.json>`
+   with kind `fix-decisions`, then stop; on resume read `show`, apply, `consume`.
 4. **Fresh review.** Dispatch ONE `Agent {subagent_type: 'spec:reviewer'}` — read-only, blind to
    this conversation — with `model` and `effort` from the config's `policy.models.reviewer` (a field it
    omits takes the reviewer row of core § Model Placement). Hand it: the
@@ -59,7 +57,7 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    plus the dirty working tree, untracked files included; the root; the config's `pipelineRules`
    path. A `fix` disposition is applied without a question; `waive`/`reject` go to the user in
    ONE `AskUserQuestion` (≤4 per call, the reviewer's claim quoted, the recommended fate first) —
-   only the user waives (delegated: write the document as above with kind `fix-dispositions`, then
+   only the user waives (delegated: write the document the same way with kind `fix-dispositions`, then
    stop; on resume read `show`, apply, `consume`); a `hard` finding never ships undisposed. A `REVIEWER_FAILED` return is re-dispatched once, then reported as unreviewed.
 5. **Gate and commit.** Run the host's `gateCommand`; red → fix, never commit around it. Commit
    through `/git:commit` in this same session, root-cause statement as the body, stating that the
@@ -73,5 +71,6 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
 ## Rules
 
 - Names no tool (gate and test commands come from the host config only); never edits outside the
-  host repo — a blocking defect elsewhere is reported, not fixed; at most FOUR `AskUserQuestion`
-  calls: the step-1 dirty tree, the step-3 decisions stop, the step-4 waive/reject and the Input fallback.
+  host repo — a blocking defect elsewhere is reported, not fixed; at most THREE `AskUserQuestion`
+  calls: the step-3 decisions stop, the step-4 waive/reject and the Input fallback; the delegated
+  question kinds are `fix-decisions` and `fix-dispositions`.

@@ -18,6 +18,7 @@ const { read, runBash, ROOT } = require('../helpers')
 // already reused that same pin and must keep its citation here or ac-drift-clean.test.js orphans it.
 // specs/20261029/08-the-policy-round-at-init.md D1 (AC-20261029-08-11): the contract's new § Policy edit
 // is restamped in the same change; the same pin is reused, retagged in its title.
+// specs/20261103/04-predictable-stops-become-host-policy.md D2: the stops block restamps it again; same pin, retagged.
 
 const CONTRACT_REL = 'spec/templates/grounding-contract.md'
 const DOCTOR_REL = 'spec/commands/doctor.md'

@@ -101,16 +101,20 @@ function fanoutHost(opts = {}) {
     },
     // What a finished review leaves on main: the branch merged with a merge commit, the worktree and
     // the branch removed. markDone also flips the spec to done on the branch first.
-    mergeLane(stem, { markDone = false } = {}) {
+    // cleanup: false leaves both, as when the review driver died after the merge landed.
+    mergeLane(stem, { markDone = false, cleanup = true } = {}) {
       if (markDone) {
         writeSpecAt(wt(stem), stem, SPECS[stem].brief, 'done')
         execGit(wt(stem), 'add', '-A')
         execGit(wt(stem), 'commit', '-q', '-m', 'close ' + stem)
       }
       git('merge', '-q', '--no-ff', '-m', 'merge spec/' + stem, 'spec/' + stem)
+      if (!cleanup) return
       git('worktree', 'remove', '--force', wt(stem))
       git('branch', '-q', '-d', 'spec/' + stem)
     },
+    // The harness keeps a lock on a worker's worktree after its return.
+    lockLane: (stem) => git('worktree', 'lock', '--reason', 'claude agent agent-' + stem, wt(stem)),
     gateRed(on) {
       const p = path.join(root, '.gate-red')
       if (on) fs.writeFileSync(p, 'red\n')

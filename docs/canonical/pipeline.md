@@ -174,6 +174,9 @@ at the lane's repo root and prints `PENDING_QUESTION`; the parent session relays
 answer (`by: user` or `by: standing`); a bare re-run resumes from the answered file, stops on a
 dismissal, and waits otherwise. A delegated review ends at `MERGE_READY`; the parent merges from the
 main root. (specs/20261102/02)
+`/spec:fanout` runs the lanes from one session: `fanout-driver.js` over `<git-common-dir>/spec-fanout.json`,
+worktree-isolated sub-agents on the `lanes` seat, standing answers for `repair-round`/`build-escalate`/`prototype-close`,
+serialized merge through the review driver's MERGE step with the gate re-run on main after each. (specs/20261102/03)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

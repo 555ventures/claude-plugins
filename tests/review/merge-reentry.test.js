@@ -368,3 +368,41 @@ test('promotion replaces a restamped build row in place by runId — one build r
   const shared = rows.filter((r) => r.runId === 'rv_shared').map((r) => r.verdict)
   assert.deepStrictEqual(shared, ['GATE_RED', 'CLEAN'], 'review rows sharing a runId (hard-stop then close) must both survive, in read order: ' + JSON.stringify(shared))
 })
+
+// /spec:fix q147: finishMerge moved the review sidecar out of the worktree before merge-back.sh
+// cleanup ran, so a cleanup that failed (a locked worktree) left the merge landed with no sidecar
+// beside the spec the mark names — the same mark could never be re-run. The sidecar now stays where
+// the mark finds it until cleanup exits 0, and a lock the agent harness placed is lifted and retried.
+test('a worktree locked by the agent harness (reason "claude agent ...") is unlocked and removed, and the merge-strategy mark reaches DONE', () => {
+  const { root, wt, spec } = driveToMerge('agentlock', 'AC-20260823-99-5')
+  execFileSync('git', ['-C', root, 'worktree', 'lock', '--reason', 'claude agent agent-x (pid 1 start 2)', wt])
+
+  const merged = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(merged.status, 0,
+    'an agent-harness lock on a worktree whose merge already landed must not wedge the close — the lane is finished: ' +
+    merged.stdout + merged.stderr)
+  assert.match(merged.stdout, /DONE/, 'the mark must reach DONE after lifting the agent lock: ' + merged.stdout)
+  assert.ok(!fs.existsSync(wt), 'the worktree must be removed once the agent lock is lifted')
+})
+
+test('a cleanup that fails on a lock it must not lift leaves the review sidecar beside the worktree spec, so the same merge-strategy mark re-runs to DONE once the lock is gone', () => {
+  const { root, wt, spec } = driveToMerge('handlock', 'AC-20260823-99-6')
+  execFileSync('git', ['-C', root, 'worktree', 'lock', '--reason', 'held by hand', wt])
+
+  const failed = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(failed.status, 2,
+    'a lock placed by a person must never be lifted by the driver — cleanup has to refuse: ' + failed.stdout + failed.stderr)
+  assert.match(failed.stdout + failed.stderr, /locked/, 'the refusal must name the lock so the session knows what to clear: ' + failed.stdout + failed.stderr)
+  assert.ok(fs.existsSync(spec.replace(/\.md$/, '.review/review-state.json')),
+    'the sidecar must still sit beside the worktree spec after a failed cleanup — without it the re-run dies with "no review state to apply" and the landed merge can never be concluded by the driver')
+  assert.ok(!fs.existsSync(path.join(root, 'specs/20260823/99-handlock.review')),
+    'a failed cleanup must not leave a relocated sidecar in the main checkout — it dirties main and splits the run state in two')
+
+  execFileSync('git', ['-C', root, 'worktree', 'unlock', wt])
+  const retried = run(root, spec, '--mark', 'merge-strategy', 'ff-only')
+  assert.strictEqual(retried.status, 0, 'the same mark, re-run once the lock is gone, must conclude the merge: ' + retried.stdout + retried.stderr)
+  assert.match(retried.stdout, /DONE/, 'the re-run must reach DONE: ' + retried.stdout)
+  assert.ok(!fs.existsSync(wt), 'the re-run must remove the worktree')
+  assert.strictEqual(execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '',
+    'main must be clean after the re-run reaches DONE — a leftover sidecar or promoted file blocks the next spec\'s merge')
+})

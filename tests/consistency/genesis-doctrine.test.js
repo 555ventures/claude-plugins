@@ -310,7 +310,7 @@ test("AC-20260825-02-1: genesis.md (doctrine), genesis.md (command), and genesis
 // AC-20260825-02-2
 // ---------------------------------------------------------------------------
 
-test('AC-20260902-11-1 (updates AC-20260825-02-2 in place), AC-20260902-11-9: spec/templates/genesis-brief.md exists with the eight D1 headings in order (six original plus Journeys/Non-UI Coverage), a ten-line all-dark Coverage block, and a six-line all-dark Non-UI Coverage block', () => {
+test('AC-20260902-11-1 (updates AC-20260825-02-2 in place), AC-20260902-11-9: spec/templates/genesis-brief.md exists with the seven headings in order (six original plus Non-UI Coverage), a ten-line all-dark Coverage block, and a six-line all-dark Non-UI Coverage block', () => {
   const templatePath = path.join(SPEC, 'templates/genesis-brief.md')
   assert.ok(fs.existsSync(templatePath),
     'D3: spec/templates/genesis-brief.md must exist — its absence means the brief-as-interface ' +
@@ -321,12 +321,11 @@ test('AC-20260902-11-1 (updates AC-20260825-02-2 in place), AC-20260902-11-9: sp
   const headings = [...src.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim())
   const expectedHeadings = [
     "What I think you're building", 'Coverage', 'Non-goals',
-    'Open Dimensions', 'Research Angles', 'Picks', 'Journeys', 'Non-UI Coverage'
+    'Open Dimensions', 'Research Angles', 'Picks', 'Non-UI Coverage'
   ]
   assert.deepStrictEqual(headings, expectedHeadings,
-    'D1: genesis-brief.md must contain exactly these eight `## ` headings in this order — the ' +
-    'template narrows AC-20260825-02-2\'s old six-heading pin to eight (D1 appends `## Journeys` ' +
-    'and `## Non-UI Coverage` after `## Picks`) — a missing, renamed, reordered, or extra heading ' +
+    'D1: genesis-brief.md must contain exactly these seven `## ` headings in this order — the ' +
+    'six original plus `## Non-UI Coverage` after `## Picks` — a missing, renamed, reordered, or extra heading ' +
     'means the brief-as-interface contract every genesis command reads and re-renders is not what ' +
     'D1 locked: got ' + JSON.stringify(headings))
 

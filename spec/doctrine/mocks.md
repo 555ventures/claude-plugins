@@ -1,60 +1,8 @@
 ---
-description: Mocks-stage supplement to the spec pipeline's shared invariants — the provenance ledger grammar and gate, read by the mocks driver and question-style-gate.js, not a workflow entry point
+description: Mocks-stage supplement to the spec pipeline's shared invariants — the mocks state machine, seed grammar, confirmation and product-stage exemption, read by the mocks driver and question-style-gate.js, not a workflow entry point
 ---
 
 # Spec Pipeline: Mocks-Stage Supplement
-
-## Provenance Ledger
-
-The ledger is one markdown file, `design/mocks/ledger.md`, two tables in fixed columns,
-parsed and written by `spec/scripts/lib/mocks-ledger.js` (`parseLedger`, `gateVerdict`,
-`countsLine`, `appendAssumption`, `appendCatch`, `setStatus`) — that library is the **one
-writer**: a session (or a script outside it) hand-typing a row is the class that put malformed
-rows into the escape ledger, and every row it writes leaves every other byte in the file
-identical.
-
-**Assumptions** table — `id · step · kind · claim · tag · status · rejected · dependents ·
-note`:
-
-- `id` — unique across the table; `step` — the step name (grammar enforced by `lib/mocks-ledger.js`).
-- `kind` — one fixed word: `product`, `process`, or `exclusion`.
-- `claim` — free text; the assumption itself.
-- `tag` — one fixed word: `said-by-user`, `ratified-doc`, `inferred`, or `invented`.
-- `status` — one fixed word `open | confirmed | overridden | decided`, with an optional
-  trailing ISO date (`confirmed YYYY-MM-DD`); `decided` is process-only — a `decided`
-  `product` row does not parse.
-- `rejected`, `dependents`, `note` — free text; `-` means empty.
-
-An `exclusion` row is written by `--mark approved` from each deferred note (`note` =
-`deferred: <id>`); a hand-typed row passes through `ledger add`. Its `tag` is always `said-by-user`; its `note` grammar is fixed —
-`deferred: <id>` | `non-goal: <brief line>` | `answer: <noteId>` | `withdrawn: <noteId>` — naming
-the deferred note or journey, discovery non-goal, invented-row answer, or withdrawn client note
-it derives from. It never blocks the
-gate and counts separately in the counts line's ` · <E> exclusions` tail.
-
-**Misunderstandings** table — `id · what · step · cost · note`: `id` is `^M\d+$`, unique;
-`note` names an originating note id or `-`.
-
-Free text lives only in `claim`, `rejected`, and `note`; every other cell is one fixed word.
-Rows are written via `ledger add`, never by hand.
-
-**Gate rule.** A ledger is **blocked** when any `product` row carries tag `invented` with
-status other than `overridden`, or tag `inferred` with status `open`. `ratified-doc` rows and
-every `process` row never block — a fact the user ratified as prose stays counted separately
-and is re-tested on the screen that renders it, never re-asked as a question. A ledger that
-fails to parse never opens a gate (parse errors are reported, not silently passed).
-
-**One confirmation round.** Whenever at least one `product` row would block the gate, every step print is preceded by a `confirm these N assumptions` block listing each such row (`<id> <tag> <status> — <claim>`), one `AskUserQuestion` ("all correct" / "correct these: …") and the `ledger set` line per row that confirms it. Confirmed rows drop out of the block on the next run; the mark-time gate refusal stays as the backstop.
-
-**Counts line.** Every mark prints one fixed line:
-
-```
-📒 ledger: {S} said-by-user · {R} ratified-doc · {I} inferred ({Io} open) · {V} invented ({Vo} open) · {P} process · {C} catches · {E} exclusions
-```
-
-counting product rows per tag, every process row in one bucket, misunderstanding rows as
-catches, and exclusion rows last. The shape is fixed so a reader learns it once — change it
-only under the spec that owns it.
 
 ## Mocks: State Machine
 
@@ -85,13 +33,7 @@ printed refusal, never pre-check it in prose. `--mark seed-done`, `journey-drawn
 **Reopening never deletes.** `--reopen journey:<j>` clears that journey's `approved`,
 `marks.approved` and `pushed.digest` (the next push opens a fresh round) and appends a
 `reopens` row. Any first word that is not a command is an
-unknown command, never a silent bare run. A status file not at `schemaVersion: 3` is moved
-aside by the driver (`status.legacy.json`) and a fresh one starts at SEED — never a printed
-`rm` for the session to run; one already `APPROVED` stays readable and is never moved.
-
-**Edges.** A journey deleted from the seed drops out of every check and round; its status entry
-stays as a record. A screen file no journey names is still sent. Adding the config block
-mid-flow keeps every terminal approval; removing it leaves `design/rounds/` on disk, unread.
+unknown command, never a silent bare run.
 
 ## Mocks: Seed
 
@@ -111,7 +53,7 @@ service's confirm (§ Mocks: Confirmation).
 SEED reads the idea from `.claude/genesis/brief.md`'s `## What I think you're building` when that file has it (the step prints `idea (from genesis brief): …`) and asks the user for it only when it does not.
 
 `--mark seed-done` accepts when the seed declares at least one journey, every journey has a
-beat and no malformed line, and the ledger gate is open (§ Provenance Ledger); it refuses, naming
+beat and no malformed line; it refuses, naming
 the journey and the remedy, a journey whose first line is not a job story or that has no
 `first-run`/`empty` beat. It reads no
 record file, no app and no config, and never asks the user a question: sample values are
@@ -120,7 +62,7 @@ invented from the seed's own sentences, awkward cases included, and typed into e
 ## Mocks: Checkpoint contract
 
 Printed by `mocks-driver.js` at every state; never restated here. An accepted `--mark` prints,
-as its last two non-blank lines, the ledger's counts line (§ Provenance Ledger) and:
+as its last non-blank line:
 
 ```
 ✅ checkpoint — mocks state saved (<prev> → <next>); safe to /clear and re-run /spec:mocks
@@ -137,7 +79,7 @@ named exactly as the seed's beats name it; `lib/mocks-round.js` is the one reade
 every name starting with `.`. `--mark journey-drawn --journey <j>` (service mode) refuses a
 beat whose file is absent, then checks the whole would-be round offline — the client's own
 catalog check plus `bad-screen-file`, `bad-journey` and `no-control` — and refuses on any
-finding; a typo costs no request. It sends nothing and runs no ledger gate.
+finding; a typo costs no request. It sends nothing.
 
 **The five drawing rules** (skill `mock-authoring`):
 
@@ -179,20 +121,17 @@ reopens the journey with nobody retyping anything; `--reopen journey:<j>` does i
 ARTIFACT: `design/rounds/<n>/approvals.json` (pulled) and `design/mocks/status.json`
 (recorded); nothing dated or contractual lies beyond them.
 
-**`--mark journey-approved --journey <j>`.** Terminal mode: the ledger gate, then record
+**`--mark journey-approved --journey <j>`.** Terminal mode: record
 `by: "terminal"`. Service mode, in order: the journey is drawn; something was pushed; the latest
 round shows the seed's current hash; an approval exists for it and one carries the current
-hash; the ledger gate; then record `by` as the approval's. `--waive --reason <r>` (service mode
-only) skips the pushed and approval checks, runs the ledger gate and records `by: "waived"`
+hash; then record `by` as the approval's. `--waive --reason <r>` (service mode
+only) skips the pushed and approval checks and records `by: "waived"`
 with the reason. An open note never blocks this mark.
 
 **`--mark approved`.** Refuses the first journey not approved on the current hash; in service
 mode with a round, pulls notes and refuses the first waiting item (an `answered` note does
-not block — a client who disagrees reopens it by replying); runs the ledger gate; appends one
-`exclusion` ledger row per deferred note or journey thread (claim: its first entry, tag
-`said-by-user`, note `deferred: <id>`, never twice); closes the round with `walkthrough.js
-mark --status closed` — a failed close refuses before `marks.approved` is set; the exclusion
-rows already written stay and are not duplicated on retry — then records
+not block — a client who disagrees reopens it by replying); closes the round with `walkthrough.js
+mark --status closed` — a failed close refuses before `marks.approved` is set — then records
 `marks.approved`. The stage finishes when every story is confirmed and nothing waits for an
 answer.
 

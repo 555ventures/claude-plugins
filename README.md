@@ -58,7 +58,7 @@ build resumes instead of restarting.
 Chain: `/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
 
 `/spec:mocks` is optional but recommended for any product with a UI: a driver-stepped design
-session derives its state from disk, gates every advance on a provenance ledger, and ends with
+session derives its state from disk and ends with
 an approved set of screens genesis can ground its stack pick in. Genesis researches live (web
 agents), has one proposer — the planning session itself — write the decision record from that
 research, and brings every hard-to-reverse fork back to you as a question — nothing is

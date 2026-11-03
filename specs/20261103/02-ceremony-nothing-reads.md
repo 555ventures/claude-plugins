@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: standard           # spec-status.js is touched render-only (one line deleted, --json shapes untouched) — the same shape specs/20261025/02 and specs/20261024/06 shipped at standard; no § Risk Tiers trigger fires
 area: cross-cutting
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 61135737158cb84fb1f4b16eef781a403beb254d
 ---
 
 # Ceremony nothing reads
@@ -37,8 +38,9 @@ approving a journey by story hash is the only provenance the mocks stage keeps.
 | D6 | `spec/templates/genesis-brief.md` loses `## Journeys` (seven `## ` headings remain, in order); `genesis-driver.js` loses `briefJourneysCheck`, `briefNonUiCheck`, `NON_UI_COVERAGE_KEYS` and both `brief-written` refusals, the BRIEF step's `derived from: … — write ## What I think you're building, ## Journeys, and ## Non-UI Coverage` line (the step prints `seed journeys: N · notes open: N`, § Genesis: Brief State's Derivation sources, unchanged), and DESIGN_BRIEF's `brief.md (## Journeys)` read item; `spec/doctrine/genesis.md` § Genesis: Brief State loses the **Brief generation is derived, never guessed** paragraph. `## Non-UI Coverage` is KEPT in the template: the DISCOVERY step reads and writes it (§ Genesis: Discovery Interview, `discoveryRoundLines`), so the "gate-only" claim proved false; only its `brief-written` gate goes (AC-20261103-02-6, AC-20261103-02-10) | `## Journeys` duplicated the seed, and DESIGN_BRIEF reads the seed directly. A section discovery fills is not ceremony; a gate that re-checks it after discovery is. |
 | D7 | The scaffold tournament is opt-in: the FINALISTS step prints `📌 Auto-picked skip — the race costs one mini-build per finalist and ## Picks already names the stack (veto anytime)` in place of the `default:` line, lists `--mark finalists-skipped` before `--mark finalists-written`, and asks no `AskUserQuestion`; `spec/doctrine/genesis.md` § Genesis: Tournament of Scaffolds' FINALISTS paragraph says so in one sentence (a veto is composing finalists and `--mark finalists-written`). The states, marks and `tournament.skipped` record are unchanged; no config key (AC-20261103-02-8) | The race was auto-defaulted to skip already whenever every dimension was auto-picked; core § Question Style derives what the session can derive. |
 | D8 | One ADR, `docs/adr/0038-approval-by-hash-is-the-only-provenance.md` (next free number at build time), supersedes ADR-0006's clause `The provenance ledger, not the session's judgment, gates each advance` and its rejected option C; ADR-0006 itself is not edited. `[no-ac: a decision record; /spec:doctor's ADR audit is the oracle]` | ADR-0006 decided the ledger gate and rejected the no-gate option; a spec that takes option C must say so in the record, superseding rather than amending (adr.md § Applies to). |
-| D9 | Every done-spec AC whose only citing test this spec deletes gets `[retired: specs/20261103/02-ceremony-nothing-reads.md]` at the end of its bullet: specs/20261002/01 AC 19, specs/20260902/11 AC 6, specs/20260914/03 AC 7, specs/20260902/06 AC 9. `[no-ac: ac-drift-clean.test.js in the gate is the oracle]` | Pipeline rules § Gotchas twelfth trigger. |
+| D9 | Every done-spec AC whose only citing test this spec deletes gets `[retired: specs/20261103/02-ceremony-nothing-reads.md]` at the end of its bullet: specs/20261002/01 AC 19, specs/20260902/11 AC 6, specs/20260914/03 AC 7, specs/20260902/06 AC 9. Scope addition: specs/20261029/06 AC 5 (its only test was rewritten under AC-20261103-02-8) is tagged too. `[no-ac: ac-drift-clean.test.js in the gate is the oracle]` | Pipeline rules § Gotchas twelfth trigger. |
 | D10 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` (minor); the paragraph names the ledger deletion, the auto-skipped tournament and the dropped brief fields. `[no-ac: version mechanics — plugin-bump.js --check in the gate is the oracle]` | Pipeline rules § Planning version-bump discipline. |
+| D11 | Build-time scope addition: `specs/20261103/01-workers-never-run-git.md` is renumbered to `specs/20261103/03-workers-never-run-git.md` byte-identical to main's own renumber (commit d6fe8397), clearing the gate line `spec-number-check: specs/20261103 number 01` (tests/doctor/spec-number-check.test.js) inherited from this branch's base. `[no-ac: spec-number-check.test.js in the gate is the oracle]` | The collision predates this spec and main already resolved it; taking main's bytes makes the merge clean. |
 
 ## File Plan
 
@@ -79,6 +81,9 @@ approving a journey by story hash is the only provenance the mocks stage keeps.
 | specs/20260902/11-brief-from-approved-set.md | MODIFY | other | D9 retired tag on AC 6 |
 | specs/20260914/03-the-html-atlas-is-retired.md | MODIFY | other | D9 retired tag on AC 7 |
 | specs/20260902/06-mocks-provenance-ledger.md | MODIFY | other | D9 retired tag on AC 9 |
+| specs/20261029/06-the-genesis-question-diet.md | MODIFY | other | D9 retired tag on AC 5 (scope addition) |
+| specs/20261103/01-workers-never-run-git.md | DELETE | other | D11 renumbered to 03 (scope addition) |
+| specs/20261103/03-workers-never-run-git.md | CREATE | other | D11 main's renumbered copy, byte-identical (scope addition) |
 
 ## Contracts
 
@@ -223,6 +228,22 @@ pass` hits outside the File Plan are the English word (`scope-reconcile`, `cover
 `release-legs`), not the ledger kind; `tests/prototype/prototype-driver.test.js` and its
 fixture per A8; `tests/genesis/{design-direction-round,tournament}.test.js` exercise
 `finalists-skipped`, which D7 keeps.
+
+### Advisory debt (review rv_96ed4697fa21)
+- a0 spec/scripts/lib/surfaces.js:9 — Stale header comment in spec/scripts/lib/surfaces.js still names `briefJourneysCheck` as a live reader of `labels`, but D6 deleted that function from genesis-driver.js in this range.
+- a1 tests/spec-status.test.js:1069 — The comment block above the rewritten AC-20261103-02-5 case in tests/spec-status.test.js (lines 1069-1076) still describes the compass line as rendered via lib/mocks-ledger.js and says every case below is red until D6 lands.
+- a2 spec/scripts/mocks-driver.js:393 — Indentation glitch in mocks-driver.js: `recordApproval(journeyArg, hash, 'terminal')` is indented two levels deeper than its siblings after `requireGateOpen()` was deleted above it.
+- a3 spec/scripts/mocks-driver.js:100 — Spec-internal contradiction on D4 resolved in the AC's favour: D4/Behavior say a non-v3 status derives SEED like any status with no seedDone mark, while AC-20261103-02-4's fixture carries marks.seedDone and expects SEED; normalise therefore discards every field of a non-v3 file.
+- a4 specs/20261103/02-ceremony-nothing-reads.md:83 — D9 and the File Plan name specs/20260902/06 AC 9 for a retired tag, but the file is untouched: its citing case in tests/spec-paths.test.js was narrowed rather than deleted, so D9's own condition is not met. Recorded in the deviations sidecar.
+
+### Build deviations (folded at review close, 2026-11-03)
+
+- tests/spec-paths.test.js: the AC-20260902-06-9 case was narrowed (the `## Provenance Ledger` heading assertion dropped), not deleted — specs/20260914/03's AC 5 reuses that case. So D9's retired tag on specs/20260902/06 AC 9 was not applied: its citing case survives and its condition ("only citing test deleted") does not hold. The File Plan row stays, unexecuted.
+- specs/20261029/06 AC 5 got the D9 retired tag as a scope addition: its only test was rewritten under AC-20261103-02-8. The set of AC-IDs cited under tests/ at the base minus those cited after the build was exactly the four tagged.
+- tests/genesis/tournament.fixtures.js: the test wave could not drop the ledger write or the Journeys/Non-UI helper against the pre-image (the old BRIEF gate refused without them); the orchestrator removed both after the scripts wave landed, genesis suite green.
+- tests/genesis/genesis-driver.test.js AC-7 and tests/mocks/no-ledger.test.js AC-3 write a ledger.md inline, because each AC is about a leftover file on disk.
+- mocks-driver.js `normalise`: D4/Behavior say a retired-flow status derives SEED "like any status with no seedDone mark", but AC-4's fixture carries `marks.seedDone` in a schemaVersion 2 file and expects SEED. The build followed the criterion: any status whose schemaVersion is not 3 is read as a fresh status in memory (no marks, journeys or pushed state); nothing is written or moved until the next accepted mark.
+- D11 scope addition: the gate reddened on `spec-number-check: specs/20261103 number 01`, a collision inherited from the branch base and already fixed on main by d6fe8397; the build took main's renumbered file byte-identical.
 
 ## Canonical Delta
 

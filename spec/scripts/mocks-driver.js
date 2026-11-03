@@ -3,7 +3,6 @@
 // mocks-driver.js --root <dir> --mark seed-done|journey-drawn|journey-approved|approved [--journey <j>] [--waive --reason <r>]
 // mocks-driver.js --root <dir> round push | round pull
 // mocks-driver.js --root <dir> --reopen journey:<j>
-// mocks-driver.js --root <dir> ledger (add|set|catch|check|counts) [flags]
 //
 // Owner: specs/20261002/01-the-wireframe-command-runs-over-the-service.md.
 //
@@ -25,21 +24,19 @@
 //     token (the child reads it from the environment variable the config names);
 //   - re-derive the story hash (lib/surfaces.js beatHash is the one), or trust a mark over the
 //     artifact it closed (a seed edit reopens its journey by itself);
-//   - delete a file on `--reopen`, relocate the session CWD, or touch a status file of any other
-//     schemaVersion beyond printing an approved one;
-//   - write a ledger row except through lib/mocks-ledger.js (`ledger add|set|catch`, and the
-//     exclusion rows `--mark approved` appends for deferred notes).
-// Every accepted mark prints the two-line tail (ledger counts, checkpoint) the checkpoint contract
-// in spec/doctrine/mocks.md binds.
+//   - delete a file on `--reopen`, relocate the session CWD, or move aside or refuse a status file of
+//     another schemaVersion (it is read as-is);
+//   - keep any provenance record besides the story hash a journey approval stores, or read a
+//     design/mocks/ledger.md left on disk.
+// Every accepted mark ends with the checkpoint line the contract in spec/doctrine/mocks.md binds.
 //
 // Exit codes:
 //   0  a bare run printed the current step, `--state` printed the state, an accepted mark or
-//      reopen recorded its result, a push or pull finished, or a ledger subcommand succeeded;
-//   1  `ledger check` found a blocked gate (rows printed), or `--mark seed-done` refused a seed
-//      journey with no job story first line or no `@first-run`/`@empty` beat;
-//   2  every refusal: a retired or unknown command, a failed mark precondition, a round with
-//      findings, a failed child call to the service, an unsupported status file, or a grammar
-//      error in the ledger.
+//      reopen recorded its result, or a push or pull finished;
+//   1  `--mark seed-done` refused a seed journey with no job story first line or no
+//      `@first-run`/`@empty` beat;
+//   2  every refusal: an unknown command, a failed mark precondition, a round with findings,
+//      or a failed child call to the service.
 
 'use strict'
 const fs = require('fs')
@@ -48,7 +45,6 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const core = require('./lib/driver-core')
 const { writeOut, nowIso, flagArg } = core
-const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
 const { parseSeedJourneys, beatHash, JOB_STORY_RE, OFF_PATH_STATES } = require('./lib/surfaces')
 const { readConfig, policy } = require('./lib/host-config')
 const round = require('./lib/mocks-round')
@@ -60,7 +56,6 @@ const { root, rest } = core.takeRoot(process.argv.slice(2), die)
 
 const mocksDir = path.join(root, 'design/mocks')
 const statusPath = path.join(mocksDir, 'status.json')
-const ledgerPath = path.join(mocksDir, 'ledger.md')
 const seedPath = path.join(mocksDir, 'seed.md')
 const screensRel = 'design/mocks/screens'
 const templatesRoot = path.join(__dirname, '..', 'templates')
@@ -73,14 +68,14 @@ const SKILL_LINE = 'Skill: mock-authoring — load it before the first edit'
 // ---------------------------------------------------------------------------
 function checkRetired() {
   const first = rest[0]
-  if (first !== undefined && !['--state', '--mark', '--reopen', 'ledger', 'round'].includes(first)) {
+  if (first !== undefined && !['--state', '--mark', '--reopen', 'round'].includes(first)) {
     die('unknown command "' + first + '" — remedy: run with no argument to print the current step')
   }
 }
 checkRetired()
 
 // ---------------------------------------------------------------------------
-// status.json (schemaVersion 3). A cold root creates the status file, the ledger and the seed.
+// status.json (schemaVersion 3). A cold root creates the status file and the seed.
 // ---------------------------------------------------------------------------
 function freshStatus() {
   return {
@@ -92,7 +87,6 @@ function freshStatus() {
 function readStatusFile() {
   if (!fs.existsSync(statusPath)) {
     fs.mkdirSync(mocksDir, { recursive: true })
-    if (!fs.existsSync(ledgerPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-ledger.md'), ledgerPath)
     if (!fs.existsSync(seedPath)) fs.copyFileSync(path.join(templatesRoot, 'mocks-seed.md'), seedPath)
     const f = freshStatus()
     core.writeJson(statusPath, f)
@@ -101,26 +95,11 @@ function readStatusFile() {
   return core.readJsonOrNull(statusPath, die, (e) => 'design/mocks/status.json is not valid JSON (' + e.message + ') — remedy: restore it from git history, or delete it (a fresh root is a valid starting point) and re-run')
 }
 
-let rawStatus = readStatusFile()
-const legacy = !(isObj(rawStatus) && rawStatus.schemaVersion === 3)
+const rawStatus = readStatusFile()
 
-// A status file of the retired mock-app flow that is not APPROVED is set aside by the driver
-// itself (status.legacy.json, never clobbered) and a fresh schemaVersion-3 file takes its place:
-// a printed `rm` remedy is a deletion the next run can be refused as a continuation of, and
-// nothing reads a part-way legacy file. The approved one stays readable and is never moved.
-function retireLegacyStatus() {
-  const v = isObj(rawStatus) && rawStatus.schemaVersion !== undefined ? rawStatus.schemaVersion : '(none)'
-  let aside = path.join(mocksDir, 'status.legacy.json')
-  for (let n = 2; fs.existsSync(aside); n++) aside = path.join(mocksDir, 'status.legacy.' + n + '.json')
-  fs.renameSync(statusPath, aside)
-  const fresh = freshStatus()
-  core.writeJson(statusPath, fresh)
-  writeOut(2, 'mocks-driver: design/mocks/status.json carried schemaVersion ' + v + ' (the retired mock-app flow) — moved to ' +
-    path.relative(root, aside) + '; a fresh status starts at SEED, seed.md and ledger.md are kept\n')
-  return fresh
-}
-
-function normalise(raw) {
+function normalise(raw0) {
+  // A file of another schemaVersion (the retired flow) carries no marks this driver honours: it derives SEED.
+  const raw = isObj(raw0) && raw0.schemaVersion === 3 ? raw0 : {}
   const marks = isObj(raw.marks) ? raw.marks : {}
   return {
     schemaVersion: 3, state: raw.state,
@@ -132,7 +111,7 @@ function normalise(raw) {
   }
 }
 
-let status = legacy ? null : normalise(rawStatus)
+let status = normalise(rawStatus)
 
 function saveStatus() {
   status.schemaVersion = 3
@@ -191,32 +170,6 @@ function seedProblem(seedJourneys) {
 }
 
 // ---------------------------------------------------------------------------
-// Ledger I/O — lib/mocks-ledger.js is the one writer.
-// ---------------------------------------------------------------------------
-function ledgerTextOrDie() {
-  try { return fs.readFileSync(ledgerPath, 'utf8') } catch {
-    die('design/mocks/ledger.md does not exist — remedy: run the driver once with --root ' + root + ' to create it')
-    return null // unreachable
-  }
-}
-
-// seed-done, journey-approved and approved run this before recording.
-function requireGateOpen() {
-  const parsed = parseLedger(ledgerTextOrDie())
-  if (parsed.errors.length) {
-    die('design/mocks/ledger.md has grammar error(s): ' + parsed.errors.map((e) => e.message).join('; ') + ' — remedy: fix the ledger and re-run')
-  }
-  const verdict = gateVerdict(parsed)
-  if (!verdict.open) {
-    const remedies = verdict.blocking.map((b) =>
-      b.id + ' ' + b.tag + ' ' + b.status +
-      ' — remedy: `ledger set --id ' + b.id + ' --status confirmed --tag said-by-user` (or `--status overridden`)'
-    ).join('; ')
-    die('provenance ledger is blocked: ' + remedies)
-  }
-}
-
-// ---------------------------------------------------------------------------
 // State derivation — the only place SEED/SCREENS/APPROVED is decided.
 // ---------------------------------------------------------------------------
 function deriveState() {
@@ -231,10 +184,8 @@ function deriveState() {
   return 'APPROVED'
 }
 
-// The checkpoint contract: the ledger's counts line, then the checkpoint line, last.
+// The checkpoint contract: the checkpoint line, last.
 function printAcceptedTail(prevState, nextState) {
-  const parsed = parseLedger(ledgerTextOrDie())
-  writeOut(1, countsLine(parsed) + '\n')
   core.checkpoint('mocks', prevState, nextState, '/spec:mocks')
 }
 
@@ -329,7 +280,6 @@ function cmdSeedDone() {
   if (problem) die(problem)
   const offPath = offPathProblem(seed)
   if (offPath) { writeOut(2, 'mocks-driver: ' + offPath + '\n'); process.exit(1) }
-  requireGateOpen()
   status.marks.seedDone = nowIso()
   saveStatus()
   writeOut(1, '✅ seed-done recorded\n')
@@ -341,7 +291,7 @@ function undeclared(journeyArg, seed) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark journey-drawn --journey <j> — service mode only; sends nothing, runs no ledger gate.
+// --mark journey-drawn --journey <j> — service mode only; sends nothing.
 // ---------------------------------------------------------------------------
 function cmdJourneyDrawn(journeyArg) {
   requireService()
@@ -457,8 +407,7 @@ function cmdJourneyApproved(journeyArg, waive, reasonArg) {
 
   if (!serviceMode()) {
     if (waive) die('--waive is for a project that uses the service — remedy: --mark journey-approved --journey <j>')
-    requireGateOpen()
-    recordApproval(journeyArg, hash, 'terminal')
+      recordApproval(journeyArg, hash, 'terminal')
     saveStatus()
     writeOut(1, '✅ journey-approved recorded for ' + journeyArg + ' (confirmed in the terminal)\n')
     printAcceptedTail(prevState, deriveState())
@@ -490,7 +439,6 @@ function cmdJourneyApproved(journeyArg, waive, reasonArg) {
     }
     by = match.by
   }
-  requireGateOpen()
   recordApproval(journeyArg, hash, by, waive ? reason : null)
   saveStatus()
   const who = waive ? 'waived: ' + reason : 'confirmed by the ' + (by === 'owner' ? 'owner' : 'client')
@@ -499,34 +447,9 @@ function cmdJourneyApproved(journeyArg, waive, reasonArg) {
 }
 
 // ---------------------------------------------------------------------------
-// --mark approved. Ledger exclusion rows for deferred items; the round is closed before the
-// end is recorded, so a failed close never leaves a finished stage over an open round.
+// --mark approved. The round is closed before the end is recorded, so a failed close never
+// leaves a finished stage over an open round.
 // ---------------------------------------------------------------------------
-function nextExclusionId(parsed) {
-  let max = 0
-  for (const row of parsed.assumptions) {
-    const m = /^X(\d+)$/.exec(row.id)
-    if (m) max = Math.max(max, parseInt(m[1], 10))
-  }
-  return 'X' + (max + 1)
-}
-
-function firstText(thread, fallback) {
-  return (Array.isArray(thread) && thread[0] && typeof thread[0].text === 'string') ? thread[0].text : fallback
-}
-
-function deferredTargets(notes) {
-  const out = []
-  if (!isObj(notes)) return out
-  for (const n of Array.isArray(notes.notes) ? notes.notes : []) {
-    if (n && n.status === 'deferred') out.push({ id: n.id, claim: firstText(n.thread, n.text || '') })
-  }
-  for (const t of Array.isArray(notes.journeys) ? notes.journeys : []) {
-    if (t && t.status === 'deferred') out.push({ id: t.id, claim: firstText(t.thread, '') })
-  }
-  return out
-}
-
 function cmdApproved() {
   const prevState = deriveState()
   const seed = currentSeedJourneys()
@@ -539,35 +462,14 @@ function cmdApproved() {
     }
   }
   const n = serviceMode() ? round.latestRound(root) : 0
-  let notes = null
   if (n) {
     walkOrDie(['pull-notes', '--round', String(n)])
-    notes = round.readNotes(root, n)
+    const notes = round.readNotes(root, n)
     const first = round.waitingItems(notes)[0]
     if (first) {
       die(first.id + ' [' + first.where + '] is waiting for an answer — remedy: answer it (walkthrough reply --note ' + first.id + ' --text-file <file>), then re-run --mark approved')
     }
   }
-  requireGateOpen()
-
-  let ledgerText = ledgerTextOrDie()
-  const original = ledgerText
-  const today = nowIso().slice(0, 10)
-  for (const target of deferredTargets(notes)) {
-    const noteTag = 'deferred: ' + target.id
-    const parsed = parseLedger(ledgerText)
-    if (parsed.assumptions.some((row) => row.note === noteTag)) continue
-    try {
-      ledgerText = appendAssumption(ledgerText, {
-        id: nextExclusionId(parsed), step: 'APPROVED', kind: 'exclusion', claim: target.claim,
-        tag: 'said-by-user', status: 'confirmed ' + today, note: noteTag,
-      })
-    } catch (e) {
-      die('cannot write the exclusion row for ' + target.id + ': ' + e.message + ' — remedy: fix the note\'s text, or record the row by hand with `ledger add`')
-    }
-  }
-  if (ledgerText !== original) fs.writeFileSync(ledgerPath, ledgerText)
-
   if (n) walkOrDie(['mark', '--round', String(n), '--status', 'closed'])
   status.marks.approved = nowIso()
   saveStatus()
@@ -594,78 +496,9 @@ function cmdReopen(target) {
 }
 
 // ---------------------------------------------------------------------------
-// ledger subcommand (verbatim: flags, rows, counts line and exit codes).
-// ---------------------------------------------------------------------------
-function cmdLedger(sub, args) {
-  const larg = (name) => flagArg(args, name)
-  if (sub === 'add') {
-    let out
-    try {
-      out = appendAssumption(ledgerTextOrDie(), {
-        id: larg('--id'), step: larg('--step'), kind: larg('--kind'), claim: larg('--claim'),
-        tag: larg('--tag'), status: larg('--status'), rejected: larg('--rejected'),
-        dependents: larg('--dependents'), note: larg('--note'),
-      })
-    } catch (e) { die('ledger add: ' + e.message + ' — remedy: fix the `ledger add` flags (--id/--step/--kind/--claim/--tag/--status) and re-run') }
-    fs.writeFileSync(ledgerPath, out)
-    process.exit(0)
-  }
-  if (sub === 'set') {
-    let out
-    try { out = setStatus(ledgerTextOrDie(), larg('--id'), larg('--status'), larg('--tag')) } catch (e) { die('ledger set: ' + e.message + ' — remedy: fix the `ledger set` flags (--id/--status/--tag) and re-run') }
-    fs.writeFileSync(ledgerPath, out)
-    process.exit(0)
-  }
-  if (sub === 'catch') {
-    let out
-    try {
-      out = appendCatch(ledgerTextOrDie(), { id: larg('--id'), what: larg('--what'), step: larg('--step'), cost: larg('--cost'), note: larg('--note') })
-    } catch (e) { die('ledger catch: ' + e.message + ' — remedy: fix the `ledger catch` flags (--id/--what/--step/--cost) and re-run') }
-    fs.writeFileSync(ledgerPath, out)
-    process.exit(0)
-  }
-  if (sub === 'check') {
-    const parsed = parseLedger(ledgerTextOrDie())
-    writeOut(1, countsLine(parsed) + '\n')
-    if (parsed.errors.length) {
-      for (const e of parsed.errors) writeOut(2, 'grammar error: ' + e.message + '\n')
-      process.exit(2)
-    }
-    const verdict = gateVerdict(parsed)
-    if (verdict.open) { writeOut(1, 'gate: open\n'); process.exit(0) }
-    writeOut(1, 'gate: blocked\n')
-    for (const b of verdict.blocking) writeOut(1, b.id + ' ' + b.tag + ' ' + b.status + '\n')
-    process.exit(1)
-  }
-  if (sub === 'counts') {
-    const parsed = parseLedger(ledgerTextOrDie())
-    writeOut(1, countsLine(parsed) + '\n')
-    process.exit(0)
-  }
-  die('ledger: unknown subcommand "' + sub + '" — remedy: use one of: add, set, catch, check, counts')
-}
-
-// ---------------------------------------------------------------------------
 // Bare-invocation step printer — one step block per run.
 // ---------------------------------------------------------------------------
 function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
-
-// The product rows that would block the gate, listed once ahead of any step print.
-function confirmBlockLines() {
-  let text
-  try { text = fs.readFileSync(ledgerPath, 'utf8') } catch { return [] }
-  const parsed = parseLedger(text)
-  if (parsed.errors.length) return []
-  const blocking = gateVerdict(parsed).blocking
-  if (!blocking.length) return []
-  const claimOf = (id) => (parsed.assumptions.find((r) => r.id === id) || {}).claim
-  return [
-    'confirm these ' + blocking.length + ' assumptions — one AskUserQuestion: "all correct" / "correct these: …"',
-    ...blocking.map((b) => '  ' + b.id + ' ' + b.tag + ' ' + b.status + ' — ' + claimOf(b.id)),
-    ...blocking.map((b) => '  on confirm: ' + driverCmd('ledger set --id ' + b.id + ' --status confirmed --tag said-by-user')),
-    ''
-  ]
-}
 
 // The genesis brief's first building paragraph, when the brief carries that section.
 function genesisIdeaLine() {
@@ -678,7 +511,7 @@ function genesisIdeaLine() {
 }
 
 function printStepBlock(state, title, readOnlyList, doctrineSection, thenLines, withSkill, extraLines) {
-  const lines = confirmBlockLines()
+  const lines = []
   lines.push('[mocks-driver] state: ' + state + '  root: ' + root)
   lines.push('(re-run this driver after completing the step; it verifies artifacts and prints the next one)')
   lines.push('')
@@ -757,21 +590,6 @@ function printApprovedStep() {
 // ---------------------------------------------------------------------------
 // Dispatch.
 // ---------------------------------------------------------------------------
-if (rest[0] === 'ledger') cmdLedger(rest[1], rest.slice(2))
-
-// A status file of any other schemaVersion — an approved one stays readable, nothing else does.
-if (legacy) {
-  const approvedOld = isObj(rawStatus) && rawStatus.state === 'APPROVED'
-  if (approvedOld && rest.length === 1 && rest[0] === '--state') { writeOut(1, 'APPROVED\n'); process.exit(0) }
-  if (approvedOld && rest.length === 0) {
-    writeOut(1, '[mocks-driver] state: APPROVED  root: ' + root + '\napproved under the retired mock-app flow — nothing further to do (to redraw as wireframes: move design/mocks/status.json aside, e.g. to status.legacy.json)\n')
-    process.exit(0)
-  }
-  if (approvedOld) die('design/mocks/status.json is APPROVED under the retired mock-app flow — remedy: move it aside (status.legacy.json) to redraw as wireframes; it is never moved for you because genesis still reads it')
-  rawStatus = retireLegacyStatus()
-  status = normalise(rawStatus)
-}
-
 if (rest.includes('--state')) {
   writeOut(1, deriveState() + '\n')
   process.exit(0)

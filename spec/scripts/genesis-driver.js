@@ -125,7 +125,7 @@
 // `/spec:mocks` for a visual archetype. BRIEF sits between DISCOVERY and MENUS: for
 // DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml/conversational-bot/cli-devtool) it is a
 // pass-through; a visual archetype records design: "ratified" once `design/mocks/status.json`
-// is APPROVED with an open provenance ledger (lib/mocks-ledger.js) and the brief's journey checks pass. The pick record lives
+// is APPROVED. The pick record lives
 // in the mocks status (`status.brief`); a status past MENUS that never ratified a brief derives
 // DISCOVERY or BRIEF from its live artifacts like a fresh run.
 //
@@ -136,13 +136,10 @@
 //     moment discovery-done records `status.archetype`.
 //
 // Applicability — a fresh visual
-// run only (`status.brief.mocks` set; non-visual runs are untouched): `brief-written`
-// additionally requires brief.md's `## Journeys` to cover every design/mocks/seed.md journey and
-// label, and `## Non-UI Coverage`'s six closed keys to carry none dark or missing; the
-// BRIEF step text prints the derivation sources (confirmed product ledger row ids, the seed's
-// journey count, unresolved notes) so the session writes the brief from the approved set, never
-// from the discovery interview alone; the MENUS step text prints the seed's
-// primary-surface/platforms-horizon rows above an open `framework` dimension;
+// run only (`status.brief.mocks` set; non-visual runs are untouched): `brief-written` requires
+// design/mocks/status.json at APPROVED and nothing else (no ledger, no `## Journeys`, no gate on
+// `## Non-UI Coverage`); the BRIEF step prints the seed's journey count and open notes; the
+// FINALISTS step prints an auto-picked skip;
 // `roadmap-written` additionally requires every seed-declared label to land in exactly one
 // brief's ```surfaces block; `skeleton-landed` additionally requires design/shell/app.html
 // to pass `check`, every top-level design/mocks/*.html to declare `data-shell`,
@@ -230,7 +227,6 @@
 const fs = require('fs')
 const path = require('path')
 const { CONFIG_RELPATH, readConfig } = require('./lib/host-config')
-const mocksLedgerLib = require('./lib/mocks-ledger')
 // The BRIEF step text's
 // "seed journeys" count is the seed's own journey count and "notes open" is lib/mocks-round.js's
 // openNoteCount — nothing in this file reads a file under a mock app.
@@ -394,110 +390,13 @@ function picks() { const t = briefText(); return t === null ? {} : parsePicks(t)
 function hasMenuFile(key) { return fs.existsSync(path.join(genesisDir, 'interview-research', key + '.json')) }
 
 // ---------------------------------------------------------------------------
-// The design/mocks/seed.md and
-// design/mocks/ledger.md readers shared by BRIEF's journey/coverage derivation, MENUS'
-// framework pricing print, and ROADMAP's journey-placement check.
+// The design/mocks/seed.md reader shared by BRIEF's seed-journey count and ROADMAP's
+// journey-placement check.
 // ---------------------------------------------------------------------------
 function seedPath() { return path.join(root, 'design/mocks/seed.md') }
 function seedText() { try { return fs.readFileSync(seedPath(), 'utf8') } catch (e) { return null } }
 
 function seedJourneysMap() { return surfacesLib.parseSeedJourneys(seedText()) }
-
-// design/mocks/seed.md's `## Facts` section: `- <key>: <value>` lines (read
-// `primary-surface`/`platforms-horizon`, whose value is a product ledger row id).
-function seedFacts() {
-  const t = seedText()
-  const sec = t === null ? null : section(t, 'Facts')
-  const facts = {}
-  if (sec === null) return facts
-  for (const raw of sec.split('\n')) {
-    const line = raw.trim()
-    if (!line) continue
-    const m = line.match(/^- ([a-z0-9-]+):\s*(.+)$/)
-    if (m) facts[m[1]] = m[2].trim()
-  }
-  return facts
-}
-
-// Every FENCED exclusion row — `confirmed`
-// (agreed by the client) or `open` (never answered, "not contested") — widened from the
-// confirmed-only set, since an unanswered row is fenced too now (an item the
-// client did not dispute goes to the parking lot, never silently unfenced). `overridden` rows (a
-// client's "needed" answer, or a retired source) are never required. Read/parse failure (no
-// design/mocks/ledger.md at all, a non-visual host per AC-10) degrades to [], the same posture as
-// confirmedProductRows below, never a throw.
-function fencedExclusionRows() {
-  let text
-  try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return [] }
-  const ledger = mocksLedgerLib.parseLedger(text)
-  if (ledger.errors.length) return []
-  return ledger.assumptions.filter((r) => r.kind === 'exclusion' && (r.status === 'confirmed' || r.status === 'open'))
-}
-
-// The overview's own heading is `## Parking lot (deferred ideas — not scope, not backlog)`
-// — matched by prefix `## Parking lot`, never section()'s exact-name regex (which would refuse
-// the parenthetical). Returns the body between that heading and the next `## `, or null.
-function parkingLotSection(text) {
-  const re = /^## Parking lot.*$/m
-  const m = re.exec(text)
-  if (!m) return null
-  const rest = text.slice(m.index + m[0].length)
-  const next = rest.search(/^## /m)
-  return next === -1 ? rest : rest.slice(0, next)
-}
-
-// Every confirmed said-by-user/ratified-doc product row — the derivation sources the BRIEF
-// step text must list by id, never the discovery interview alone. Read/parse failure degrades
-// to [] (the step text falls back to "none"), never a throw.
-function confirmedProductRows() {
-  let text
-  try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return [] }
-  const ledger = mocksLedgerLib.parseLedger(text)
-  if (ledger.errors.length) return []
-  return ledger.assumptions
-    .filter((r) => r.kind === 'product' && r.status === 'confirmed' &&
-      (r.tag === 'said-by-user' || r.tag === 'ratified-doc'))
-    .map((r) => ({ id: r.id, claim: r.claim, tag: r.tag }))
-}
-
-// Look up one product ledger row by id (the seed's primary-surface/platforms-horizon facts
-// name a row id, not a claim — the MENUS step reads the claim text off the ledger itself).
-function productRowById(id) {
-  let text
-  try { text = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { return null }
-  const ledger = mocksLedgerLib.parseLedger(text)
-  if (ledger.errors.length) return null
-  return ledger.assumptions.find((r) => r.id === id) || null
-}
-
-// Does brief.md's own ## Journeys section cover every seed journey and every one of its
-// labels? Walked in seed-file order so the refusal names the FIRST offender (Contracts: "the
-// first missing journey").
-function briefJourneysCheck(text, seedJourneys) {
-  const sec = section(text, 'Journeys') || ''
-  for (const [name, j] of seedJourneys) {
-    const re = new RegExp('^### ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm')
-    const m = re.exec(sec)
-    if (!m) return { ok: false, reason: 'missing-journey', journey: name }
-    const rest = sec.slice(m.index + m[0].length)
-    const next = rest.search(/^### /m)
-    const block = next === -1 ? rest : rest.slice(0, next)
-    for (const label of j.labels) {
-      const lre = new RegExp('\\b' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b')
-      if (!lre.test(block)) return { ok: false, reason: 'missing-label', label, journey: name }
-    }
-  }
-  return { ok: true }
-}
-
-// ## Non-UI Coverage's six closed keys, none dark or missing:
-// parameterized reuse of ## Coverage's own grammar.
-const NON_UI_COVERAGE_KEYS = ['jobs', 'notifications', 'retention', 'integrations', 'admin', 'pricing']
-function briefNonUiCheck(text) {
-  const { keys } = parseKeyedSection(text, 'Non-UI Coverage')
-  const missing = NON_UI_COVERAGE_KEYS.filter((k) => !(k in keys) || keys[k] === 'dark')
-  return { missing }
-}
 
 // Every declared label placed in exactly one brief's ```surfaces block.
 // surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (the retired HTML
@@ -1408,12 +1307,10 @@ function handleMenusDone() {
 // BRIEF: sits between DISCOVERY and
 // MENUS. `--mark brief-written` is the ONLY mark this state accepts. For DESIGN_SKIPPED_ARCHETYPES
 // (backend-api/data-ml/conversational-bot/cli-devtool) it is a pass-through: nothing beyond
-// DISCOVERY is owed. A VISUAL archetype requires an APPROVED `design/mocks/status.json` with an
-// open provenance ledger (`lib/mocks-ledger.js`) plus the brief's journey checks,
+// DISCOVERY is owed. A VISUAL archetype requires an APPROVED `design/mocks/status.json`,
 // then records design: "ratified".
 // ---------------------------------------------------------------------------
 function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') }
-function mocksLedgerPath() { return path.join(root, 'design/mocks/ledger.md') }
 function readMocksStatus() {
   try { return JSON.parse(fs.readFileSync(mocksStatusPath(), 'utf8')) } catch (e) { return null }
 }
@@ -1424,10 +1321,8 @@ function readMocksStatus() {
 function seedJourneyCount() { return seedJourneysMap().size }
 function notesOpenCount() { return mocksRoundLib.openNoteCount(root) }
 
-// design/mocks/status.json must exist, be APPROVED, and its own provenance ledger must have
-// no open blocking row (gateVerdict) — the same closure /spec:mocks itself enforces at
-// its own APPROVED mark, re-checked here so BRIEF never trusts a state that regressed after
-// approval.
+// design/mocks/status.json must exist and be APPROVED — re-checked here so BRIEF never trusts a
+// state that regressed after approval.
 function briefPreconditionCheck() {
   const p = mocksStatusPath()
   if (!fs.existsSync(p)) return { ok: false, reason: 'no-status' }
@@ -1438,10 +1333,6 @@ function briefPreconditionCheck() {
     return { ok: false, reason: 'bad-json', detail: e.message }
   }
   if (parsed.state !== 'APPROVED') return { ok: false, reason: 'not-approved', detail: parsed.state }
-  let ledgerText = ''
-  try { ledgerText = fs.readFileSync(mocksLedgerPath(), 'utf8') } catch (e) { /* treated as empty */ }
-  const verdict = mocksLedgerLib.gateVerdict(mocksLedgerLib.parseLedger(ledgerText))
-  if (!verdict.open) return { ok: false, reason: 'blocked', detail: verdict.blocking }
   return { ok: true, status: parsed }
 }
 
@@ -1462,36 +1353,8 @@ function handleBriefWritten() {
       if (check.reason === 'not-approved') {
         die('design/mocks/status.json is not APPROVED yet (state: ' + check.detail + ') — run /spec:mocks first, then re-mark brief-written')
       }
-      if (check.reason === 'blocked') {
-        die('design/mocks/ledger.md still has open blocking row(s): ' +
-          check.detail.map((b) => b.id).join(', ') + ' — run /spec:mocks first, then re-mark brief-written')
-      }
     }
     mocksStatus = check.status
-
-    // The brief is generated from the
-    // approved set, not from memory — ## Journeys must cover every seed journey and label, and
-    // ## Non-UI Coverage must carry none dark or missing. Applies only to a fresh visual run
-    // (Behavior: Applicability) — the `isVisualArchetype` guard above already scopes
-    // this whole block to that condition.
-    const text = briefText() || ''
-    const jCheck = briefJourneysCheck(text, seedJourneysMap())
-    if (!jCheck.ok) {
-      if (jCheck.reason === 'missing-journey') {
-        die('## Journeys is missing journey ' + jCheck.journey + ' — add a `### ' + jCheck.journey +
-          '` block (persona line, one `label -> label` line per beat edge, one states: line per screen), ' +
-          'then re-mark brief-written')
-      }
-      if (jCheck.reason === 'missing-label') {
-        die('label ' + jCheck.label + ' (journey ' + jCheck.journey + ') is missing from ## Journeys' +
-          ' — add it to the `### ' + jCheck.journey + '` block, then re-mark brief-written')
-      }
-    }
-    const nCheck = briefNonUiCheck(text)
-    if (nCheck.missing.length) {
-      die('## Non-UI Coverage key(s) dark or missing: ' + nCheck.missing.join(', ') +
-        ' — answer them, in the user\'s words, then re-mark brief-written')
-    }
   }
 
   // DESIGN_SKIPPED_ARCHETYPES
@@ -2367,26 +2230,6 @@ function handleRoadmapWritten() {
       }
     }
   }
-  // Every FENCED exclusion row's claim (agreed
-  // `confirmed`, or not-contested `open`) must appear verbatim as a bullet under the overview's
-  // own Parking lot heading — applies to every host regardless of archetype/status.brief.mocks
-  // (AC-10: zero rows is a no-op that still runs the pre-existing checks above). An `open` row's
-  // refusal names it "not contested", distinguishing it from an agreed (confirmed) one; an
-  // `overridden` row (client-needed, or a retired source) is never in this set at all.
-  {
-    const exclusions = fencedExclusionRows()
-    if (exclusions.length) {
-      const overviewText = fs.readFileSync(path.join(root, 'docs/roadmap/00-overview.md'), 'utf8')
-      const parking = parkingLotSection(overviewText) || ''
-      const bullets = parking.split('\n').map((l) => l.trim())
-      for (const row of exclusions) {
-        if (!bullets.includes('- ' + row.claim)) {
-          const tag = row.status === 'open' ? ', not contested' : ''
-          die('exclusion "' + row.claim + '" (' + row.id + tag + ') is not in the parking lot — add it under ## Parking lot, then re-mark')
-        }
-      }
-    }
-  }
   status.marks.roadmapWritten = true
   // There is no DESIGN state left to route
   // into here for any archetype; ROADMAP hands straight to HANDOFF.
@@ -2683,21 +2526,6 @@ const STEPS = {
       }
       if (rec.registryExit === 3) lines.push('⚠️ unverified: ' + k + ' (registry unreachable — options kept, currency unconfirmed)')
     }
-    // For a fresh visual run
-    // (status.brief.mocks set — never a legacy or non-visual run, Behavior: Applicability) with
-    // `framework` still open, print the seed's primary-surface/platforms-horizon rows above the
-    // framework dimension and the literal pricing instruction — the framework pick must be priced
-    // against a second platform the seed already knows is coming, not decided blind to it.
-    if (status.brief && status.brief.mocks && openKeys.includes('framework')) {
-      const facts = seedFacts()
-      const psRow = facts['primary-surface'] ? productRowById(facts['primary-surface']) : null
-      const phRow = facts['platforms-horizon'] ? productRowById(facts['platforms-horizon']) : null
-      if (psRow) lines.push('seed: primary-surface (' + psRow.id + ') — ' + psRow.claim)
-      if (phRow) lines.push('seed: platforms-horizon (' + phRow.id + ') — ' + phRow.claim)
-      if (psRow || phRow) {
-        lines.push('price every framework option against these two rows (research contextPaths include design/mocks/seed.md)')
-      }
-    }
     if (noPick.length) {
       const asked = []
       for (const k of noPick) {
@@ -2737,7 +2565,7 @@ const STEPS = {
     if (visual && !(mocksStatus && mocksStatus.state === 'APPROVED')) {
       return [
         '## Step: brief — approve the mocks set first',
-        'Read only: design/mocks/seed.md, design/mocks/ledger.md, design/mocks/status.json',
+        'Read only: design/mocks/seed.md, design/mocks/status.json',
         doctrineLine,
         mocksStatus ? ('mocks: ' + mocksStatus.state + ' — not yet approved') : 'no design/mocks/status.json yet',
         'next: run /spec:mocks in this repo until it reports APPROVED, then --mark brief-written',
@@ -2746,7 +2574,7 @@ const STEPS = {
 
     const journeys = (visual && mocksStatus && mocksStatus.journeys) ? Object.keys(mocksStatus.journeys).length : 0
     const readFiles = visual
-      ? ['design/mocks/seed.md', 'design/mocks/ledger.md', 'design/mocks/status.json', genesisRel('brief.md')]
+      ? ['design/mocks/seed.md', 'design/mocks/status.json', genesisRel('brief.md')]
       : [genesisRel('brief.md')]
     const lines = [
       '## Step: brief — ratify the approved set into the design canon',
@@ -2754,25 +2582,8 @@ const STEPS = {
       doctrineLine,
     ]
     if (visual) {
-      lines.push('mocks: APPROVED · journeys: ' + journeys + ' · open product rows: 0')
-      // The derivation sources for `## What I think you're building` and the two new
-      // sections — every confirmed product ledger row by id, and the seed's own journey count —
-      // read from the seed and the ledger, never from the discovery interview alone.
-      const productRows = confirmedProductRows()
-      // "seed journeys" derives from the seed and "notes open" from the latest round.
-      const seedCount = seedJourneyCount()
-      const notesOpen = notesOpenCount()
-      // The same fenced-exclusion set the
-      // parking-lot check (below, ROADMAP_WRITTEN) requires verbatim — read-only here, this step
-      // only surfaces the split agreed/not-contested count in place of the old confirmed-only one.
-      const fenced = fencedExclusionRows()
-      const exclusionsAgreed = fenced.filter((r) => r.status === 'confirmed').length
-      const exclusionsNotContested = fenced.filter((r) => r.status === 'open').length
-      lines.push('derived from: product ledger row(s) ' +
-        (productRows.length ? productRows.map((r) => r.id).join(', ') : 'none') +
-        ' · seed journeys: ' + seedCount + ' · notes open: ' + notesOpen +
-        ' · exclusions: ' + exclusionsAgreed + ' agreed · ' + exclusionsNotContested + ' not contested' +
-        ' — write ## What I think you\'re building, ## Journeys, and ## Non-UI Coverage from these, never from the interview alone')
+      lines.push('mocks: APPROVED · journeys: ' + journeys)
+      lines.push('seed journeys: ' + seedJourneyCount() + ' · notes open: ' + notesOpenCount())
     }
     lines.push('  node ' + __filename + ' --root ' + root + ' --mark brief-written')
     return lines.join('\n')
@@ -2799,19 +2610,16 @@ const STEPS = {
   FINALISTS: () => {
     const archetype = status.archetype
     const tasks = expectedTasksFor(archetype)
-    const askedDim = ['framework', 'language-runtime'].find((d) => { const c = classifyMenu(d); return c && c.kind === 'ask' })
     return [
       '## Step: name the finalists to race (or skip the race)',
       'Read only: ' + genesisRel('brief.md') + ' (## Open Dimensions, ## Picks), ' + genesisRel('interview-research/*.json'),
       'Doctrine: spec/doctrine/genesis.md § Genesis: Tournament of Scaffolds',
       'probe tasks (' + archetype + '): ' + tasks.join(', ') + ' · retry cap: 2 per task',
       'cost: roughly one mini-build per finalist (scaffold + gate + boot + probe slice)',
-      askedDim
-        ? 'default: race (Recommended) — ' + askedDim + ' was asked'
-        : 'default: skip (Recommended) — every tournament dimension was auto-picked',
+      '📌 Auto-picked skip — the race costs one mini-build per finalist and ## Picks already names the stack (veto anytime)',
       lastMeasuredLine(),
-      'Then:\n  node ' + __filename + ' --root ' + root + ' --mark finalists-written --file <finalists.json>' +
-        '\n  node ' + __filename + ' --root ' + root + ' --mark finalists-skipped',
+      'Then:\n  node ' + __filename + ' --root ' + root + ' --mark finalists-skipped' +
+        '\n  node ' + __filename + ' --root ' + root + ' --mark finalists-written --file <finalists.json>',
     ].join('\n')
   },
 
@@ -2922,7 +2730,7 @@ const STEPS = {
       '## Step: write the design brief',
       'Read only: design/mocks/seed.md, ' +
         (fs.existsSync(path.join(root, 'design/mocks/screens')) ? 'design/mocks/screens/ (the confirmed wireframes), ' : '') +
-        genesisRel('brief.md') + ' (## Journeys), docs/design/catalog.md, ' +
+        'docs/design/catalog.md, ' +
         genesisRel('design-paths.json') + ', ' + rulesFile,
       'Doctrine: spec/doctrine/genesis.md § Genesis: Design Stage',
       ...directionRoundLines(status.archetype),

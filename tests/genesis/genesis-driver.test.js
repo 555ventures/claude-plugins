@@ -388,3 +388,22 @@ test('a gate log that fits inside both the byte window and the line bound render
   assert.doesNotMatch(landed.stdout, /truncated, full log at/, 'a marker on a complete excerpt would train the reader to ignore it — the marker must appear only when content was actually dropped, which a short single-line log never triggers')
 })
 
+
+// specs/20261103/02-ceremony-nothing-reads.md D1 — the ROADMAP step runs no parking-lot check.
+test('AC-20261103-02-7: --mark roadmap-written is accepted when a design/mocks/ledger.md exclusion row\'s claim is missing from the overview\'s Parking lot, because no script reads the ledger', () => {
+  const dir = tmpdir('genesis-no-parking-lot')
+  bare(dir)
+  advanceToRoadmap(dir)
+  writeRoadmap(dir, [{ name: '01-first.md', dependsOn: '—' }])
+  writeFile(path.join(dir, 'docs/roadmap/00-overview.md'), '# Overview\n\nSee Sequence.\n\n## Parking lot\n\n- something else\n')
+  writeFile(path.join(dir, 'design/mocks/ledger.md'), [
+    '# Provenance ledger — test', '', '## Assumptions', '',
+    '| id | step | kind | claim | tag | status | rejected | dependents | note |',
+    '| - | - | - | - | - | - | - | - | - |',
+    '| X1 | APPROVED | exclusion | export to csv | said-by-user | confirmed 2026-10-01 | - | - | deferred: n-1 |',
+    '', '## Misunderstandings', '', '| id | what | step | cost | note |', '| - | - | - | - | - |', '',
+  ].join('\n'))
+  const r = mark(dir, 'roadmap-written')
+  assert.strictEqual(r.status, 0, 'a ledger exclusion row absent from the Parking lot must not refuse roadmap-written — a surviving parking-lot check keeps the retired ledger gating the roadmap: ' + r.stderr)
+  assert.doesNotMatch(r.stderr, /parking lot/, 'no stderr line may name the parking lot — the check belongs to the deleted ledger machinery: ' + r.stderr)
+})

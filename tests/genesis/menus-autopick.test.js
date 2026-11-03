@@ -6,7 +6,7 @@ const { tmpdir } = require('../helpers')
 const { bare, mark, writeJSON, writeBrief } = require('./tournament.fixtures')
 
 // specs/20261029/06-the-genesis-question-diet.md — AC-20261029-06-3 (D3 auto-pick line),
-// AC-20261029-06-4 (D3 ask reasons), AC-20261029-06-5 (D4 race-or-skip default).
+// AC-20261029-06-4 (D3 ask reasons); AC-20261103-02-8 (FINALISTS auto-picked skip).
 
 function option(label, rank, extra = {}) {
   return Object.assign({
@@ -59,20 +59,24 @@ test('AC-20261029-06-4: the MENUS step lists a rank tie, a minority leader and a
   assert.doesNotMatch(r.stdout, /📌 Auto-picked (hosting|auth|persistence)/, 'a tie, a minority leader or an unranked menu must never be auto-picked: ' + r.stdout)
 })
 
-test('AC-20261029-06-5: the FINALISTS step prints a race default when framework was asked and a skip default when every dimension was auto-picked', () => {
-  const asked = tmpdir('menus-autopick-ac5-ask')
-  toMenus(asked, 'backend-api', ['framework'])
-  writeMenu(asked, 'framework', [option('Express', 1), option('Fastify', 1)])
-  writeBrief(asked, { dims: { framework: 'open' }, picks: ['- archetype: backend-api', '- framework: Express'] })
-  const a = mark(asked, 'menus-done')
-  assert.match(a.stdout, /state: FINALISTS/, 'test setup requires a tournament archetype to reach FINALISTS: ' + a.stdout + a.stderr)
-  assert.match(a.stdout, /^cost: roughly one mini-build per finalist[^\n]*\ndefault: race \(Recommended\) — framework was asked$/m, 'an asked framework must make racing the printed default right after the cost line, or nobody is named as decider: ' + a.stdout)
-
-  const auto = tmpdir('menus-autopick-ac5-auto')
-  toMenus(auto, 'backend-api', ['framework'])
-  writeMenu(auto, 'framework', [option('Express', 1), option('Fastify', 2)])
-  writeBrief(auto, { dims: { framework: 'open' }, picks: ['- archetype: backend-api', '- framework: Express'] })
-  const b = mark(auto, 'menus-done')
-  assert.match(b.stdout, /state: FINALISTS/, 'test setup requires a tournament archetype to reach FINALISTS: ' + b.stdout + b.stderr)
-  assert.match(b.stdout, /^default: skip \(Recommended\) — every tournament dimension was auto-picked$/m, 'an all-auto run must default to skipping the paid race, or tokens are spent racing nothing: ' + b.stdout)
+test('AC-20261103-02-8: the FINALISTS step prints the Auto-picked skip line and lists finalists-skipped before finalists-written, whether framework was asked or auto-picked', () => {
+  const SKIP = '📌 Auto-picked skip — the race costs one mini-build per finalist and ## Picks already names the stack (veto anytime)'
+  const cases = [
+    ['asked', [option('Express', 1), option('Fastify', 1)]],
+    ['auto', [option('Express', 1), option('Fastify', 2)]],
+  ]
+  for (const [name, options] of cases) {
+    const dir = tmpdir('menus-autopick-ac8-' + name)
+    toMenus(dir, 'backend-api', ['framework'])
+    writeMenu(dir, 'framework', options)
+    writeBrief(dir, { dims: { framework: 'open' }, picks: ['- archetype: backend-api', '- framework: Express'] })
+    const r = mark(dir, 'menus-done')
+    assert.match(r.stdout, /state: FINALISTS/, 'test setup requires a tournament archetype to reach FINALISTS: ' + r.stdout + r.stderr)
+    const lines = r.stdout.split('\n')
+    assert.ok(lines.includes(SKIP), 'framework ' + name + ': the Auto-picked skip line must be printed on its own line, or the owner is still asked a race-or-skip question: ' + r.stdout)
+    assert.ok(!lines.some((l) => l.startsWith('default:')), 'framework ' + name + ': no line may start with default: - a surviving race/skip default means the question is still asked: ' + r.stdout)
+    const skipped = lines.findIndex((l) => l.includes('--mark finalists-skipped'))
+    const written = lines.findIndex((l) => l.includes('--mark finalists-written'))
+    assert.ok(skipped !== -1 && written !== -1 && skipped < written, 'framework ' + name + ': the finalists-skipped line must precede the finalists-written line, or the veto path is offered as the default: ' + r.stdout)
+  }
 })

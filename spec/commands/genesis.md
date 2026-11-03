@@ -78,6 +78,3 @@ Next: /spec:enforce
   `--mark menu-written --file <f>` is the whole step.
 - Hard-to-reverse forks always go to the user; every derived pick prints `📌 Auto-picked … (veto anytime)`; remaining questions batch ≤4 per `AskUserQuestion`, recommended first.
 - Every `Agent`/workflow `model:` is explicit (shared § Model Placement).
-- **BRIEF derives, never guesses.** On a fresh mocks-set run, write `## Journeys` and
-  `## Non-UI Coverage` from `design/mocks/seed.md` and the confirmed ledger rows the step
-  prints (spec/doctrine/genesis.md § Genesis: Brief State).

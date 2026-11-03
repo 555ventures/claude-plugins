@@ -60,8 +60,7 @@ headcount, ownership, ops staffing are never asked: Claude is always the impleme
 
 **Precondition (archetypes that owe a mocks set only, § Genesis: Archetype Registry).** `web-app`,
 `mobile-app`, `realtime-trading`, and `desktop-app` must show `design/mocks/status.json` at
-`state: "APPROVED"` and `gateVerdict(design/mocks/ledger.md)` at `open`, before
-`--mark brief-written` is even attempted.
+`state: "APPROVED"` before `--mark brief-written` is even attempted.
 
 **Derivation sources.** The BRIEF step counts the journeys in `design/mocks/seed.md` and the waiting
 items of the latest round's `notes.json` through `lib/mocks-round.js`'s `openNoteCount` — `0` with
@@ -70,13 +69,6 @@ no round — printed as `seed journeys: N · notes open: N`.
 **On success:** `marks.briefWritten`, `status.brief = {mocks: "design/mocks/status.json" |
 null, ratifiedAt: "<ISO>"}`, and `status.design = "ratified"` (or
 `"skipped"` for the four design-skipped archetypes).
-
-**Brief generation is derived, never guessed.** On a fresh run that owes a mocks set,
-`.claude/genesis/brief.md` gains two sections after `## Picks`: `## Journeys` and
-`## Non-UI Coverage` (`- <key>: covered|n/a — <one line>` for the six closed keys
-`jobs notifications retention integrations admin pricing`). `--mark brief-written` refuses when any
-seed journey or label is missing from `## Journeys`, or any Non-UI Coverage key is missing or still
-`dark`.
 
 ## Genesis: Tournament of Scaffolds
 
@@ -90,7 +82,7 @@ derives `MENUS → DECIDE` unchanged and writes no `.claude/genesis/tournament/`
 tournament, and `SCAFFOLD` exactly like any other host.
 
 **FINALISTS.** The session composes 2–3 finalist stack combinations from the menus; at least one
-must equal the brief's current `## Picks` on every key it names (the incumbent). Race or skip is one `AskUserQuestion` whose recommended option is the step's printed `default:` line — race when `framework` or `language-runtime` was asked at MENUS, skip when every tournament dimension was auto-picked.
+must equal the brief's current `## Picks` on every key it names (the incumbent). The race is opt-in: the step prints an auto-picked skip (`--mark finalists-skipped`) and asks nothing; a veto is composing finalists and `--mark finalists-written`.
 Printed by `genesis-driver.js` at RACE and PROBE; never restated here.
 
 **PICK.** **Executed evidence informs the user's pick; it never makes it** — two finalists
@@ -143,14 +135,7 @@ Genesis: Day-Zero Skeleton), **background/async work**, and **success-metric ins
 discovery measurement pick — the analytics seam, or "not measured in v1"). These are boring-default
 rows the session fills from the research; `AskUserQuestion` only on a genuine fork. A DECIDED row in
 a category `/spec:enforce` can mechanize is stated **checker-enforceable** — no taste clauses; the
-rejected taste variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason. The rows above
-are samples of one **generating question** — *"what will two context-free executors, weeks apart,
-decide differently unless a row decides it now: every value class crossing a surface boundary, every
-name a second writer will mint, every operational behavior a spec will assume but never state?"*
-After filling the dictated rows, run one **derive pass** against that question and propose rows the
-floor missed. Then the **coverage check**: a second same-session read of the finished table against
-the generating question, whose only outputs are added rows or nothing. Both passes are **advisory**;
-derivation can add rows but its silence never certifies completeness.
+rejected taste variant goes in Dissents. Each row is DECIDED or DEFERRED-with-reason.
 
 ## Genesis: Hard-to-Reverse Dimensions (always escalate via AskUserQuestion)
 
@@ -373,11 +358,6 @@ the record's `screens`. `--mark roadmap-written` requires every declared label t
 **exactly one brief**'s `## Surfaces` block — a label placed in zero briefs is unplaced scope, a
 label placed in two is duplicated scope, and both refuse by name.
 
-**Agreed and not-contested exclusions land in the Parking lot.** `--mark roadmap-written` also
-requires every `confirmed` or `open` `exclusion` ledger row's claim (spec/doctrine/mocks.md §
-Provenance Ledger) to appear verbatim under the overview's `## Parking lot` heading, refusing by
-claim otherwise. `overridden` rows are never required.
-
 ## Genesis: On-disk Handoff (the genesis artifacts)
 
 The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/adr/` (durable):
@@ -395,7 +375,7 @@ The genesis artifacts live in `.claude/genesis/` (machine/transient) and `docs/a
 - **`.claude/genesis/conventions.json`** — `DECIDE`'s ops-conventions ledger (template via
   `spec-paths templates`, § Genesis: Conventions Probe Suite).
 - **`design/mocks/`** (durable, authored by `/spec:mocks`) — the approved-set workspace BRIEF reads
-  directly: `seed.md`, `status.json`, `ledger.md`, `screens/`, and the pulled `design/rounds/`
+  directly: `seed.md`, `status.json`, `screens/`, and the pulled `design/rounds/`
   notes.
 - **`.claude/genesis/design-paths.json`** — `DESIGN_BRIEF`'s session-authored path map (template
   `spec/templates/design-paths.json`, § Genesis: Design Stage): `kit`, `tokens`, `rules`,

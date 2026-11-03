@@ -1103,11 +1103,9 @@ const THIRTEEN_CATCH_ROWS = [
   '| M14 | the dispatcher misread as an agency, not a solo operator | THEME | medium | corrected the copy across every screen |',
 ]
 
-// specs/20260914/03-the-html-atlas-is-retired.md AC-20260914-03-7 (D10, reuse, tag only): D10
-// pins lib/mocks-ledger.js and lib/surfaces.js as survivors of the HTML-atlas deletion batch
-// specifically so this 🧭 misunderstandings line — which reads design/mocks/ledger.md through
-// lib/mocks-ledger.js — keeps printing unchanged. No assertion below is edited for this spec.
-test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/ledger.md carries 13 catches (latest M14 at THEME) THE SYSTEM prints the 🧭 misunderstandings line between 🗺️ Roadmap and the anomalies section, and omits it with no ledger, an unparsable ledger, or zero catches', () => {
+// specs/20261103/02-ceremony-nothing-reads.md D1: the 🧭 misunderstandings line is deleted with
+// the provenance ledger; a ledger left on disk is never read.
+test('AC-20261103-02-5: WHEN spec-status.js runs on a root whose design/mocks/ledger.md carries 13 catches THE SYSTEM prints no line containing 🧭 and --json keeps exactly the keys anomalies, briefs, specs, superseded', () => {
   const withLedger = host({
     briefs: BRIEFS,
     specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
@@ -1116,55 +1114,12 @@ test('AC-20260902-11-6: WHEN spec-status.js runs on a root whose design/mocks/le
   writeLedgerFile(withLedger, THIRTEEN_CATCH_ROWS)
   const r = runNode(SCRIPT, ['--root', withLedger])
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /^   🧭 misunderstandings: 13 caught before build \(latest M14 at THEME\)$/m,
-    'AC-20260902-11-6/D6: a ledger with 13 catches (latest M14 at THEME) must print the exact ' +
-    'pipeline-record line the Contracts block pins — its absence means the table never became a ' +
-    'status-line-visible fact: ' + r.stdout)
-  // AC-20260903-05-1 (D1) deletes the ⚠️ Anomalies section from the default render entirely, so
-  // the block that follows 🧭 misunderstandings today is 🎯 Next — rewritten in place per the
-  // spec's Rationale § Regression pins; the Roadmap < 🧭 < next-block ordering invariant is
-  // unchanged, only the anchor for "whatever follows" moves.
-  const lines = r.stdout.split('\n')
-  const idxRoadmap = lines.findIndex((l) => l.includes('🗺️ Roadmap'))
-  const idxMisunderstandings = lines.findIndex((l) => l.includes('🧭 misunderstandings'))
-  const idxNextBlock = lines.findIndex((l) => l.includes('🎯 Next'))
-  assert.ok(idxRoadmap !== -1 && idxMisunderstandings !== -1 && idxNextBlock !== -1,
-    'test fixture bug: 🗺️ Roadmap, 🧭 misunderstandings, and 🎯 Next must all be present: ' + r.stdout)
-  assert.ok(idxRoadmap < idxMisunderstandings,
-    'D6: the 🧭 line must render directly under the 🗺️ Roadmap block, not above it: ' + r.stdout)
-  assert.ok(idxMisunderstandings < idxNextBlock,
-    'D6/AC-20260903-05-1: the 🧭 line must render before whatever follows the Roadmap block — now 🎯 Next, since the anomalies section it used to precede is deleted: ' + r.stdout)
+  assert.doesNotMatch(r.stdout, /🧭/,
+    'a ledger left on disk must print no 🧭 line — the dashboard still reading the retired ledger means the deletion left a reader behind: ' + r.stdout)
 
-  const noLedger = host({
-    briefs: BRIEFS,
-    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
-  })
-  const rNoLedger = runNode(SCRIPT, ['--root', noLedger])
-  assert.strictEqual(rNoLedger.status, 0, rNoLedger.stderr)
-  assert.doesNotMatch(rNoLedger.stdout, /🧭/,
-    'D6: a root with no design/mocks/ledger.md at all must print no 🧭 line — the line is a viewer, never a verdict, so its absence must be silent: ' + rNoLedger.stdout)
-
-  const badLedger = host({
-    briefs: BRIEFS,
-    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
-  })
-  fs.mkdirSync(path.join(badLedger, 'design/mocks'), { recursive: true })
-  fs.writeFileSync(path.join(badLedger, 'design/mocks/ledger.md'), 'not a ledger at all, no tables here\n')
-  const rBad = runNode(SCRIPT, ['--root', badLedger])
-  assert.strictEqual(rBad.status, 0, 'D6: an unparsable ledger must never crash or fail the whole dashboard — the read/parse failure is swallowed silently: ' + rBad.stderr)
-  assert.doesNotMatch(rBad.stdout, /🧭/,
-    'D6: an unparsable design/mocks/ledger.md must print no 🧭 line, exactly like a missing one — a parse failure surfacing partial or wrong data would be worse than silence: ' + rBad.stdout)
-
-  const zeroCatches = host({
-    briefs: BRIEFS,
-    specs: { '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01' },
-  })
-  fs.mkdirSync(path.join(zeroCatches, 'design/mocks'), { recursive: true })
-  writeLedgerFile(zeroCatches, [])
-  const rZero = runNode(SCRIPT, ['--root', zeroCatches])
-  assert.strictEqual(rZero.status, 0, rZero.stderr)
-  assert.doesNotMatch(rZero.stdout, /🧭/,
-    'D6: a valid ledger with zero catch rows must print no 🧭 line — "0 caught before build" is not the pipeline-record fact this line exists to surface: ' + rZero.stdout)
+  const jsonOut = JSON.parse(runNode(SCRIPT, ['--root', withLedger, '--json']).stdout)
+  assert.deepStrictEqual(Object.keys(jsonOut).sort(), ['anomalies', 'briefs', 'specs', 'superseded'],
+    '--json\'s top-level keys must stay exactly the four frozen ones — a changed key set means the render deletion widened or narrowed a frozen shape: ' + JSON.stringify(Object.keys(jsonOut)))
 })
 
 // AC-20260903-05-9 (retag): this is the --json/--next --json top-level key-set pin the spec's

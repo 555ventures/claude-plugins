@@ -426,7 +426,11 @@ function phrase(literal, flags = '') {
   return new RegExp(source, flags)
 }
 
+// One job-story `## Users` bullet: the shape decision-lint's lock arm accepts.
+const USERS_BULLET = '- The clinic owner: When I open the invitation for the first time, I want to see my roster, so I can confirm it. First run / empty: an empty roster with one invite control.'
+
 module.exports = {
+  USERS_BULLET,
   sliceSection, section, phrase,
   assistantUsageLine,
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,

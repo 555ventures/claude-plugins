@@ -25,6 +25,14 @@ depends_on: []
 
 { 2–4 sentences: what changes, why, and what "done" means. No implementation detail. }
 
+## Users
+
+<!-- One bullet per journey, copied from the roadmap brief's `Journeys:` lines or written from the
+     feature description; never a named invented person. decision-lint refuses the lock
+     (`missing-users-section`) when no line here carries a brace-free job story. -->
+
+- { who }: When { situation }, I want { motivation }, so I can { outcome }. First run / empty: { what they meet before any data exists }
+
 ## Decisions (locked — workers apply verbatim, never override)
 
 <!-- Carrier contract (specs/20260817/07-promise-sweep-leg.md D8; enforced by promise-sweep.js

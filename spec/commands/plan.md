@@ -23,7 +23,9 @@ One session: explore → draft → lock. Produces a hardened spec at
   has no spec at `implementing`/`done`: print `📌 Auto-picked proceed — <dep NN> at <status>; planning is reversible
   (veto anytime)` and continue; claims resting on the unbuilt dependency cite its spec's Contracts as Assumptions, never
   spiked. Every spec this session produces gets `brief: NN` (that stamp derives roadmap status); an ad-hoc spec gets
-  `brief: n/a`. The brief's Out of scope is binding; a `surfaces` block is structure only.
+  `brief: n/a`. The brief's Out of scope is binding; a `surfaces` block is structure only. Copy the brief's `Journeys:` lines into
+  the spec's `## Users` (one bullet per journey, adding its first-run/empty expectation); with `Journeys: —`, write them from the Result.
+- **Feature description:** write `## Users` from it — one job-story bullet per journey.
 - **Behaviour contract:** read `contract.json`, every picture under `captures/` (view them), the test file and `pins.json`; amend
   the brief its `brief` names (the driver already stamped its `Prototype: <stem>` line; rewrite the design prose under it), a
   draft spec, or mint specs (`brief: n/a` without a roadmap). `contract.json`'s `reconcile.docs` lists every ADR and roadmap file
@@ -84,7 +86,7 @@ Write the spec per the template. `status: draft`. While drafting:
    by citing the delivering AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock. Then run
    `node "$(spec-paths decision-lint)" --spec {spec path} --root .`, resolving every finding by tagging the row —
    `[guards: <§ Risk Tiers text>]` or `[asked: <what the user chose>]` for a restriction, a `q<id>` from
-   `spec-queue add` for a deferral; `breaking-unasked` (a `breaking: true` spec) by tagging the introducing Decision
+   `spec-queue add` for a deferral; `missing-users-section` by filling `## Users` with one job-story bullet per journey; `breaking-unasked` (a `breaking: true` spec) by tagging the introducing Decision
    `[breaking: <what breaks for whom>]` or `[asked: …]`; `missing-dependency-names` by naming the packages in
    backticks in the File Plan Summary (or the literal `no dependency change`); `data-model-requires-critical` and
    `missing-existing-rows-line` by setting `tier: critical` and adding an `existing rows:` line to `## Data Model` (a purely

@@ -73,7 +73,7 @@ neither; colours and the shared layout belong to the design stage (ADR-0030).
 **Two modes.** A host whose config carries a `walkthrough` key holding a non-null, non-array
 object is in **service mode**; any other host is in **terminal mode**. Terminal mode draws and
 sends nothing: `--mark journey-drawn`, `round push` and `round pull` refuse naming `no
-walkthrough block`, the SCREENS step prints each journey's persona and sentences, and the
+walkthrough block`, the SCREENS step prints each journey's job story and sentences, and the
 user's literal `approve` is recorded with `--mark journey-approved` as `by: "terminal"`. The terminal SCREENS step lists every pending journey in one block under `approve all, or name the ones to change`, with one `--mark journey-approved --journey <j>` line per journey; a named change edits the seed, which reopens that journey by hash. It
 never creates `design/rounds/` or `design/mocks/screens/`. An approval made in one mode stays
 valid in the other — the story hash is the only test.
@@ -96,10 +96,10 @@ mid-flow keeps every terminal approval; removing it leaves `design/rounds/` on d
 ## Mocks: Seed
 
 `design/mocks/seed.md` (template `spec/templates/mocks-seed.md`) names the product in three
-sentences and holds one `### <journey-kebab>` block per journey — a persona line followed by
+sentences and holds one `### <journey-kebab>` block per journey — a job story line (`When …, I want …, so I can …`) followed by
 numbered **beats**, one per line: `N. "client sentence" -> screen[@state]`. Quotes are
 mandatory, `N` runs contiguously from 1, `screen` and `state` match `^[\w][\w-]*$`, and
-`@state` is optional; alternates ("if X then Y") are separate journey blocks, and the same
+`@state` is optional (one beat per journey lands on the off-path state `first-run` or `empty`); alternates ("if X then Y") are separate journey blocks, and the same
 sentence or screen may appear in any number of journeys. `lib/surfaces.js`'s
 `parseSeedJourneys` returns `beats` in seed order plus `malformed` (every non-blank body line
 that is not a beat, and one `numbering: expected <k>, got <n>` entry per gap) and, derived
@@ -111,7 +111,9 @@ service's confirm (§ Mocks: Confirmation).
 SEED reads the idea from `.claude/genesis/brief.md`'s `## What I think you're building` when that file has it (the step prints `idea (from genesis brief): …`) and asks the user for it only when it does not.
 
 `--mark seed-done` accepts when the seed declares at least one journey, every journey has a
-beat and no malformed line, and the ledger gate is open (§ Provenance Ledger). It reads no
+beat and no malformed line, and the ledger gate is open (§ Provenance Ledger); it refuses, naming
+the journey and the remedy, a journey whose first line is not a job story or that has no
+`first-run`/`empty` beat. It reads no
 record file, no app and no config, and never asks the user a question: sample values are
 invented from the seed's own sentences, awkward cases included, and typed into each screen.
 

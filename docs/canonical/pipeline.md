@@ -213,3 +213,10 @@ done spec accepts: the citation of the decision that retired the behaviour. An u
 `[retired:]` is itself a finding. Test classification is `lib/file-shapes.js`'s `isTestClassified` over
 the host's `fileShapes.testGlobs` or its defaults, the same set the at-risk leg walks; fixture
 directories never count as citations.
+
+A spec carries a `## Users` block — one job-story bullet per journey with its first-run/empty
+expectation, copied from the roadmap brief's `Journeys:` lines or written from the feature
+description; `decision-lint` refuses the lock without it (`missing-users-section`). Build workers
+read it; the reviewer reads it and walks each journey cold, reporting stalls as findings under the
+normal severity rules. The genesis UX research brief and its template are deleted.
+(specs/20261103/01)

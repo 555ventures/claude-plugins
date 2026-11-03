@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { tmpdir, runNode, ROOT, SPEC } = require('../helpers')
+const { tmpdir, runNode, ROOT, SPEC, USERS_BULLET } = require('../helpers')
 
 // specs/20261101/02-the-host-declares-its-file-shapes.md: AC-20261101-02-1 .. AC-20261101-02-10 pin
 // lib/file-shapes.js (the one home of the test/code/manifest classification) and every consumer
@@ -134,7 +134,9 @@ function lintRow(root, row) {
   const cfgPath = path.join(root, '.claude/spec.config.json')
   const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {}
   config(root, { ...cfg, pipelineRules: 'rules.md' })
-  fs.writeFileSync(spec, '---\ntier: standard\nbreaking: false\n---\n\n# T\n\n## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n' +
+  fs.writeFileSync(spec, '---\ntier: standard\nbreaking: false\n---\n\n# T\n\n' +
+    '## Users\n\n' + USERS_BULLET + '\n\n' +
+    '## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n' +
     '| D1 | Rename the export route. | because |\n\n## File Plan\n\n| Path | Action | Layer | Summary |\n|---|---|---|---|\n' +
     row + '\n\n## Acceptance Criteria\n\n- **AC-1**: x\n')
   const r = runNode('scripts/decision-lint.js', ['--spec', spec, '--root', root, '--json'])

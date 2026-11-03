@@ -56,7 +56,7 @@ No harden merge, no capture diff. The build ledger row carries `replay: { tests,
 
 Every worker prompt carries only the spec path, the pipeline-rules path, and the worker's file
 list — the driver prints these in each step body; orchestrators pass paths, never raw file
-contents (core § Model Placement). Workers Read Decisions, Contracts, UI, and their own File
+contents (core § Model Placement). Workers Read Users, Decisions, Contracts, UI, and their own File
 Plan rows themselves. Every worker applies this contract:
 
 - Apply the Decisions table verbatim — nobody overrides it; only this session adds entries,

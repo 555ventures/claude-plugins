@@ -38,10 +38,13 @@ stay until the last spec citing the stem is done.
 
 ## Design Authoring Contracts
 
-**Grounded vs taste (mock supremacy).** Each ruling is tagged `grounded` (external anchor —
+**The wireframe binds structure, not looks.** An approved screen fixes the set of screens, the
+controls that move between them, and the order of content on each; it never fixes layout,
+visuals, label wording or sample data — those are the design stage's and the build's to decide
+within the kit. Grounded vs taste: each ruling is tagged `grounded` (external anchor —
 contrast/a11y, legal/brand, destructive-action safety) or `taste` (aesthetic), authored into the
 rule itself, not judged per conflict; an untagged legacy ruling defaults to `taste` unless it
-names an anchor. With an approved screen as canon, `taste` yields silently; `grounded` binds the
+names an anchor. With an approved screen binding structure, `taste` yields silently; `grounded` binds the
 value, not the intent — snap to what the constraint permits, honor the screen's intent
 otherwise; a screen's omission is never evidence against it. With no approved screen, doctrine
 is canon; a contradicting note is a fork — local exception or doctrine change, never a silent

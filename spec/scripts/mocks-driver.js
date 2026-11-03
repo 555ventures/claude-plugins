@@ -35,7 +35,8 @@
 // Exit codes:
 //   0  a bare run printed the current step, `--state` printed the state, an accepted mark or
 //      reopen recorded its result, a push or pull finished, or a ledger subcommand succeeded;
-//   1  `ledger check` found a blocked gate (rows printed);
+//   1  `ledger check` found a blocked gate (rows printed), or `--mark seed-done` refused a seed
+//      journey with no job story first line or no `@first-run`/`@empty` beat;
 //   2  every refusal: a retired or unknown command, a failed mark precondition, a round with
 //      findings, a failed child call to the service, an unsupported status file, or a grammar
 //      error in the ledger.
@@ -48,7 +49,7 @@ const { spawnSync } = require('child_process')
 const core = require('./lib/driver-core')
 const { writeOut, nowIso, flagArg } = core
 const { parseLedger, gateVerdict, countsLine, appendAssumption, appendCatch, setStatus } = require('./lib/mocks-ledger')
-const { parseSeedJourneys, beatHash } = require('./lib/surfaces')
+const { parseSeedJourneys, beatHash, JOB_STORY_RE, OFF_PATH_STATES } = require('./lib/surfaces')
 const { readConfig, policy } = require('./lib/host-config')
 const round = require('./lib/mocks-round')
 
@@ -305,6 +306,19 @@ function assembledOrDie(seed, ids, remedy) {
 // ---------------------------------------------------------------------------
 // --mark seed-done.
 // ---------------------------------------------------------------------------
+// The two job-story refusals, in seed order; exit 1 (findings), unlike `die`'s exit 2 (precondition).
+function offPathProblem(seedJourneys) {
+  for (const [name, j] of seedJourneys) {
+    if (!JOB_STORY_RE.test(j.persona)) {
+      return 'design/mocks/seed.md journey "' + name + '" has no job story — its first line must read `When <situation>, I want <motivation>, so I can <outcome>.` — remedy: write the job story as the block\'s first line, then re-run `--mark seed-done` (spec/doctrine/mocks.md § Mocks: Seed)'
+    }
+    if (!j.beats.some((b) => OFF_PATH_STATES.includes(b.state))) {
+      return 'design/mocks/seed.md journey "' + name + '" has no off-path beat — one beat must land on `<screen>@first-run` or `<screen>@empty` — remedy: add the first-run or empty-state beat, then re-run `--mark seed-done` (spec/doctrine/mocks.md § Mocks: Seed)'
+    }
+  }
+  return null
+}
+
 function cmdSeedDone() {
   const prevState = deriveState()
   const seed = currentSeedJourneys()
@@ -313,6 +327,8 @@ function cmdSeedDone() {
   }
   const problem = seedProblem(seed)
   if (problem) die(problem)
+  const offPath = offPathProblem(seed)
+  if (offPath) { writeOut(2, 'mocks-driver: ' + offPath + '\n'); process.exit(1) }
   requireGateOpen()
   status.marks.seedDone = nowIso()
   saveStatus()
@@ -680,7 +696,7 @@ function printSeedStep() {
   printStepBlock('SEED', 'write the seed — the client\'s own stories, one journey block each',
     ['design/mocks/seed.md'],
     'Mocks: Seed',
-    ['write design/mocks/seed.md: the product, then one "### <journey>" block per journey (a persona line, then numbered "sentence" -> screen[@state] beats)',
+    ['write design/mocks/seed.md: the product, then one "### <journey>" block per journey (a job story line, then numbered "sentence" -> screen[@state] beats — one beat @first-run or @empty)',
       driverCmd('--mark seed-done')],
     false,
     [genesisIdeaLine()])

@@ -1198,6 +1198,9 @@ function admitMark() {
   }
 }
 
+const redStopKey = () => pq.stopKey('red-findings', marks.lastRedCheckOutput || '')
+const escalateStopKey = () => pq.stopKey('build-escalate', (marks.gateRuns || []).length)
+
 function handleMark() {
   switch (MARK) {
     case 'tests-authored': return handleTestsAuthored()
@@ -1244,7 +1247,8 @@ function deriveState() {
 
 // ---- run -------------------------------------------------------------------------------------------
 if (!MARK && !STATE_ONLY) {
-  const bare = pq.bareRun(repoRoot, marks)
+  const bare = pq.bareRun(repoRoot, marks, [], (kind) =>
+    kind === 'red-findings' ? redStopKey() : kind === 'build-escalate' ? escalateStopKey() : null)
   if (bare) {
     if (bare.changed) saveSidecar()
     writeOut(1, bare.text + '\n')
@@ -1302,6 +1306,7 @@ function redFindingsGuidance() {
     const editThenRerun = `edit then node ${__filename} ${specPath}`
     out.push(pq.stopLine(repoRoot, 'build', {
       kind: 'red-findings', state: 'RED_FINDINGS', spec: specRel,
+      stopKey: redStopKey(),
       questions: [{
         id: 'q1', header: 'Red check',
         question: 'The red check found a test that is green before any code was written, on a critical-tier spec. How should the build proceed?',
@@ -1314,7 +1319,7 @@ function redFindingsGuidance() {
             resume: 'stop' },
         ],
       }],
-    }))
+    }, marks))
   } else if (askGreen) {
     out.push(`Ask ONE AskUserQuestion \u2014 an unsanctioned-green on a critical-tier spec:\n` +
       `  remove the AC-ID mention (Recommended) \u2014 the known cause; the test keeps its assertions\n` +
@@ -1458,6 +1463,7 @@ function escalateStepBody() {
       `${rec.text}\n` +
       pq.stopLine(repoRoot, 'build', {
         kind: 'build-escalate', state: 'ESCALATE', spec: specRel,
+        stopKey: escalateStopKey(),
         questions: [{
           id: 'q1', header: 'Repair cap',
           question: 'The build hit its repair cap with the gate still red. How should the lane continue?',
@@ -1472,7 +1478,7 @@ function escalateStepBody() {
               resume: choice('amend') },
           ],
         }],
-      }) + '\n'
+      }, marks) + '\n'
   }
   return `## ESCALATE \u2014 repair iteration cap (3) reached\n` +
     `${rec.text}\n` +

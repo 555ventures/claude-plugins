@@ -38,6 +38,7 @@ function redGateHost(name) {
   const r = runPlain(host.root, host.spec)
   assert.strictEqual(esc.stateOf(host.root, host.spec), 'STOPPED',
     'setup precondition: a failing committed suite must hard-stop LEGS into STOPPED: ' + r.stdout + r.stderr)
+  host.firstStep = r.stdout
   return host
 }
 
@@ -74,6 +75,10 @@ test('AC-20261102-02-6: a delegated STOPPED with the repair round unspent writes
   assert.ok(r.stdout.includes('## PENDING_QUESTION — repair-round written to ' + pendingOf(host.root)),
     'the stop line is the contract the parent session greps for: ' + r.stdout)
   assert.doesNotMatch(r.stdout, /AskUserQuestion/, 'the sub-agent has no such tool; naming it sends the worker improvising: ' + r.stdout)
+  for (const opt of [opts[1], opts[2]]) {
+    assert.ok(host.firstStep.includes(opt.then),
+      'the then line of "' + opt.label + '" must be byte-equal to the in-session text it mirrors, or the two forms drift: ' + opt.then)
+  }
 })
 
 test('AC-20261102-02-17: an in-session STOPPED with the round unspent still prints the ask with its three options and writes no pending file', () => {
@@ -117,6 +122,20 @@ test('AC-20261102-02-7: a delegated dispositions mark with an unanswered waive w
   assert.strictEqual(esc.stateOf(host.root, host.spec), 'FIX', 'the remaining fix entry must land the run where today\'s mark reaches')
 })
 
+test('AC-20261102-02-7: a delegated dispositions mark whose waive reason quotes two backticked identifiers still writes the pending file and prints PENDING_QUESTION', () => {
+  const host = esc.makeHost('dlg-disp-ticks')
+  esc.run(host.root, host.spec)
+  esc.run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', esc.returnFileWith('dlg-disp-ticks-r', twoHardReturn()))
+  const ret = esc.returnFileWith('dlg-disp-ticks-d', { verdict: 'DISPOSED', tokens: 1, dispositions: [
+    { ref: 's0', recommended: 'waive', reason: 'the `===` check in `src/foo.js` is sanctioned by D2' },
+    { ref: 's1', recommended: 'fix', reason: 'fix it' },
+  ] })
+  const r = runD(host.root, host.spec, '--mark', 'dispositions', '--file', ret)
+  assert.strictEqual(r.status, 0, 'a disposer reason with code identifiers must not make the question gate refuse the relay: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /PENDING_QUESTION/, 'the stop line must print: ' + r.stdout)
+  assert.ok(fs.existsSync(pendingOf(host.root)), 'the question must be written even when the reason is full of identifiers')
+})
+
 // Drives a host to the fix cap with two hard survivors in the final pool; leaves the run at ESCALATE.
 function escalateHost(name) {
   const host = esc.makeHost(name)
@@ -136,6 +155,7 @@ function escalateHost(name) {
 
 test('AC-20261102-02-8: a delegated ESCALATE writes a review-escalate file whose options resume through the dispositions mark, a delete of the sidecar, and a queue add', () => {
   const host = escalateHost('dlg-esc')
+  const plainStep = runPlain(host.root, host.spec).stdout
   const r = runD(host.root, host.spec)
   assert.strictEqual(r.status, 0, 'the delegated stop exits 0: ' + r.stdout + r.stderr)
   const doc = readPending(host.root)
@@ -149,6 +169,10 @@ test('AC-20261102-02-8: a delegated ESCALATE writes a review-escalate file whose
   assert.strictEqual(replan.label, 're-plan', 're-plan must be offered')
   assert.strictEqual(replan.resume, 'stop', 're-plan ends the lane')
   assert.ok(replan.then.startsWith('node "$(spec-paths spec-queue)" add'), 're-plan queues the spec: ' + replan.then)
+  for (const opt of [abandon, replan]) {
+    assert.ok(plainStep.includes(opt.then),
+      'the then line of "' + opt.label + '" must be byte-equal to the in-session text it mirrors, or the two forms drift: ' + opt.then)
+  }
 })
 
 // A closed review parked at MERGE with a real spec branch at the main root.
@@ -224,9 +248,10 @@ test('AC-20261102-02-14: a bare run on a fully answered file prints the resume s
   assert.ok(Array.isArray(answered) && answered.length === 1, 'marks.answered must record the answer once: ' + JSON.stringify(answered))
   assert.strictEqual(answered[0].kind, 'repair-round', 'the record names the kind')
   assert.deepStrictEqual(answered[0].answers, doc.answers, 'the record keeps the answers verbatim')
-  const next = runPlain(host.root, host.spec).stdout
+  const next = runD(host.root, host.spec).stdout
   assert.match(next, /## STOPPED — a blocking leg is red/, 'the following run returns to the state\'s normal step: ' + next)
-  assert.doesNotMatch(next, /PENDING_QUESTION/, 'a consumed answer must not resurface: ' + next)
+  assert.doesNotMatch(next, /PENDING_QUESTION/, 'an answered stop must not be re-asked by a delegated re-run, or the lane loops on the same question: ' + next)
+  assert.ok(!fs.existsSync(pendingOf(host.root)), 'an answered stop must not write a fresh pending file')
 })
 
 test('AC-20261102-02-15: a bare run on a dismissed file consumes it, records dismissedStop, prints the STOPPED line forever, and the repair-round mark is refused naming the remedy', () => {

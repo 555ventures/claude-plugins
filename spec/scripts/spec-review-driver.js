@@ -1625,7 +1625,7 @@ function handleDispositions() {
                 const other = d.recommended === 'waive' ? 'reject' : 'waive'
                 return {
                   id: d.ref, header: 'Disposition',
-                  question: 'The disposer recommends to ' + d.recommended + ' finding ' + d.ref + ': ' + String(d.reason).slice(0, 200) + ' What should the review do with it?',
+                  question: 'The disposer recommends to ' + d.recommended + ' finding ' + d.ref + ': ' + String(d.reason).replace(/`/g, '').slice(0, 200) + ' What should the review do with it?',
                   options: [
                     { label: 'accept ' + d.recommended + ' (Recommended)', description: 'The finding is ' + d.recommended + 'd as the disposer recommended, on the evidence it quoted; it stays on the record and the review moves on',
                       resume: markLine },
@@ -2554,6 +2554,9 @@ function handleRepairRound() {
   return r.stopped ? 'STOPPED' : null
 }
 
+const repairStopKey = () => pq.stopKey('repair-round', marks.stoppedIteration || liveIteration(), marks.repairRounds || 0)
+const escalateStopKey = () => pq.stopKey('review-escalate', liveIteration())
+
 function handleMark() {
   if (marks.dismissedStop) {
     die('--mark ' + MARK + ' refused \u2014 marks.dismissedStop records a dismissed question (' + marks.dismissedStop.kind +
@@ -2651,7 +2654,8 @@ function deriveState() {
 
 // ---- run ----------------------------------------------------------------------------------------
 if (!MARK && !STATE_ONLY) {
-  const bare = pq.bareRun(repoRoot, marks, ['dispositions'])
+  const bare = pq.bareRun(repoRoot, marks, ['dispositions'], (kind) =>
+    kind === 'repair-round' ? repairStopKey() : kind === 'review-escalate' ? escalateStopKey() : null)
   if (bare) {
     if (bare.changed) saveSidecar()
     writeOut(1, bare.text + '\n')
@@ -2742,6 +2746,7 @@ function escalatePoolBlock() {
     (open ? '\n' : '')
   if (pq.isDelegated()) return listing + pq.stopLine(repoRoot, 'review', {
     kind: 'review-escalate', state: 'ESCALATE', spec: specRel,
+    stopKey: escalateStopKey(),
     questions: [{
       id: 'q1', header: 'Review cap',
       question: 'The review hit its fix cap with ' + open + ' findings still open. How should the lane exit?',
@@ -2754,7 +2759,7 @@ function escalatePoolBlock() {
           resume: 'stop', then: `node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan` },
       ],
     }],
-  }) + '\n'
+  }, marks) + '\n'
   return listing +
     `Ask ONE AskUserQuestion \u2014 options:\n` +
     `  abandon and queue /spec:fix (Recommended) \u2014 delete ${sidecarDir}, then ${queueAdd}\n` +
@@ -2782,6 +2787,7 @@ const STEPS = {
       (pq.isDelegated() && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
         ? pq.stopLine(repoRoot, 'review', {
           kind: 'repair-round', state: 'STOPPED', spec: specRel,
+          stopKey: repairStopKey(),
           questions: [{
             id: 'q1', header: 'Review stop',
             question: 'A blocking review leg went red. What should the lane do?',
@@ -2794,7 +2800,7 @@ const STEPS = {
                 resume: 'stop', then: `delete ${sidecarDir}; the GATE_RED row stays on the ledger` },
             ],
           }],
-        }) + '\n'
+        }, marks) + '\n'
       : (marks.repairRounds || 0) >= REPAIR_ROUND_CAP
         ? `repair round spent (${REPAIR_ROUND_CAP} of ${REPAIR_ROUND_CAP}) \u2014 two exits:\n` +
           `  queue /spec:fix \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top\n` +

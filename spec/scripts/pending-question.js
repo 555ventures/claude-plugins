@@ -16,6 +16,7 @@
 // already pending
 
 const fs = require('fs')
+const crypto = require('crypto')
 const path = require('path')
 const { check } = require('./question-style-gate')
 
@@ -83,22 +84,43 @@ const DISMISSED_LINE = '## STOPPED — the question was dismissed; the run ends 
 
 // Driver-side: complete `doc` (schemaVersion, stage, writtenAt), validate, write, and return the
 // stop line. A question already pending is never overwritten — the waiting line comes back.
-function stopLine(root, stage, doc) {
+// `doc.stopKey` (optional) names the stop this question belongs to; when `marks.answered` already
+// holds an answer for the same kind and key, nothing is written and the answered text comes back
+// instead, so a cold re-run never re-asks a question the parent already answered.
+function stopLine(root, stage, doc, marks) {
   if (readPending(root)) return waitingLine(root)
   const full = { schemaVersion: 1, stage, writtenAt: new Date().toISOString(), ...doc }
+  const prior = marks && full.stopKey && (Array.isArray(marks.answered) ? marks.answered : [])
+    .filter((a) => a.kind === full.kind && a.stopKey === full.stopKey).pop()
+  if (prior) return answeredText(full, prior.answers)
   const findings = validate(full)
   if (findings.length) {
-    process.stderr.write(`pending-question: the ${full.kind} question this driver wrote is malformed — ${findings.join('; ')}\n`)
+    process.stderr.write(`pending-question: the ${full.kind} question this driver wrote is malformed — ${findings.join('; ')}; ` +
+      `write the question by hand with: node ${__filename} write --root ${root} --file <doc.json>\n`)
     process.exit(2)
   }
   const p = writePending(root, full)
   return `## PENDING_QUESTION — ${full.kind} written to ${p}; the lane stops here and the parent session relays it`
 }
 
+const stopKey = (...parts) => crypto.createHash('sha1').update(parts.map(String).join('|')).digest('hex').slice(0, 12)
+
+function answeredText(doc, answers) {
+  const lines = [`## Step: resume — ${doc.kind} (already answered; not asked again)`]
+  for (const q of doc.questions) {
+    const a = (answers || {})[q.id]
+    if (!a) continue
+    lines.push(`${q.id}: ${a.label} (by ${a.by})`)
+    const o = q.options.find((x) => x.label === a.label) || {}
+    lines.push(o.resume === 'stop' ? `stop${o.then ? ' — then: ' + o.then : ''}` : String(o.resume))
+  }
+  return lines.join('\n')
+}
+
 // Driver-side bare-run contract: evaluated before any state. Returns null (nothing pending),
 // or { text, changed } where `changed` says the caller must save `marks`. `keepKinds` names kinds
 // whose answered file is consumed by the resuming mark itself, not at print time.
-function bareRun(root, marks, keepKinds = []) {
+function bareRun(root, marks, keepKinds = [], keyFor = () => null) {
   const doc = readPending(root)
   if (!doc) {
     if (marks.dismissedStop) return { text: DISMISSED_LINE, changed: false }
@@ -121,7 +143,8 @@ function bareRun(root, marks, keepKinds = []) {
   }
   if (keepKinds.includes(doc.kind)) return { text: lines.join('\n'), changed: false }
   consumePending(root)
-  marks.answered = [...(Array.isArray(marks.answered) ? marks.answered : []), { kind: doc.kind, answers, at: new Date().toISOString() }]
+  marks.answered = [...(Array.isArray(marks.answered) ? marks.answered : []),
+    { kind: doc.kind, answers, at: new Date().toISOString(), ...(keyFor(doc.kind) ? { stopKey: keyFor(doc.kind) } : {}) }]
   return { text: lines.join('\n'), changed: true }
 }
 
@@ -191,6 +214,6 @@ function main() {
   process.exit(0)
 }
 
-module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, bareRun, waitingLine, KINDS }
+module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS }
 
 if (require.main === module) main()

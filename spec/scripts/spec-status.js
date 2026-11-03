@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all] — derive pipeline
+// spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all | --lanes] — derive pipeline
 // status, never store it.
 //
 // Owner: specs/20260903/05-status-diet.md
@@ -73,8 +73,16 @@
 // `queue-unparseable` anomaly. This script never writes the queue file — spec-queue.js is
 // its sole writer.
 //
+// `--lanes --json` is a third machine mode:
+// `{lanes, serialized, fixes}` — laneAdmission's admitted /spec:run entries with their
+// `spec/<stem>` branch and the linked worktree holding it (or null), the entries held back with
+// their reason, and the /spec:fix escapes and queued fixes with their queue id. It reads the same
+// derivation the dashboard draws, never a second one, and refuses (exit 2) outside the main
+// worktree. It does NOT change `--next --json` or `--json`, and writes nothing.
+//
 // Exit codes: 0 derived (anomalies are report lines, not failures); with --brief NN,
-// 1 = that brief has an unmet dependency (no spec at implementing/done); 2 = usage.
+// 1 = that brief has an unmet dependency (no spec at implementing/done); 2 = usage, or --lanes
+// run outside the main worktree.
 
 const fs = require('fs')
 const path = require('path')
@@ -131,6 +139,7 @@ let json = false
 let briefFilter = null
 let nextMode = false
 let allMode = false
+let lanesMode = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') root = argv[++i]
@@ -138,11 +147,16 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === '--brief') briefFilter = normBrief(argv[++i])
   else if (argv[i] === '--next') nextMode = true
   else if (argv[i] === '--all') allMode = true
+  else if (argv[i] === '--lanes') lanesMode = true
   else if (argv[i] === '--pretty') { /* no-op: pretty is the default human render */ }
   else {
-    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all]')
+    console.error('usage: spec-status.js [--root <dir>] [--json] [--brief NN | --next | --all | --lanes --json]')
     process.exit(2)
   }
+}
+if (lanesMode && (!json || nextMode || briefFilter || allMode)) {
+  console.error('spec-status: --lanes is its own mode — run spec-status.js --lanes --json')
+  process.exit(2)
 }
 if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
@@ -699,6 +713,48 @@ if (nextMode) {
       out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`))
   }
   writeOut(out.join('\n'))
+  process.exit(0)
+}
+
+// ---- --lanes --json: the fan-out's machine surface --------------------------------------------
+
+if (lanesMode) {
+  const gitOut = (args) => {
+    const r = spawnSync('git', args, { encoding: 'utf8' })
+    return r.error || r.status !== 0 ? null : r.stdout
+  }
+  const realOr = p => { try { return fs.realpathSync(p) } catch (e) { return path.resolve(p) } }
+  // Porcelain blocks: `worktree <path>` then `branch refs/heads/<name>` — the first block is the main worktree.
+  const wtBlocks = (gitOut(['-C', root, 'worktree', 'list', '--porcelain']) || '').split(/\n\n+/)
+    .map(b => ({
+      dir: ((b.match(/^worktree (.+)$/m) || [])[1]) || null,
+      branch: ((b.match(/^branch refs\/heads\/(.+)$/m) || [])[1]) || null,
+    }))
+    .filter(b => b.dir)
+  const top = (gitOut(['rev-parse', '--show-toplevel']) || '').trim()
+  // Refuse when cwd sits in a LINKED worktree of the repo --root names; a cwd outside that repo is
+  // not a worker's tree and passes (the --root pair is how callers aim the mode at a host).
+  if (wtBlocks.length && top && wtBlocks.slice(1).some(b => realOr(b.dir) === realOr(top))) {
+    console.error(`spec-status: --lanes runs from the main worktree — cd ${wtBlocks[0].dir}`)
+    process.exit(2)
+  }
+  const worktreeOf = branch => (wtBlocks.slice(1).find(b => b.branch === branch) || {}).dir || null
+  const all = deriveNext()
+  const { lanes, laneClash, later } = laneAdmission(all)
+  const branchFor = p => 'spec/' + path.basename(p).replace(/\.[^.]*$/, '')
+  const runLanes = lanes.filter(e => e.action === '/spec:run').map(e => {
+    const branch = branchFor(e.path)
+    return { action: e.action, path: e.path, brief: e.brief, status: e.status, note: e.note, branch, worktree: worktreeOf(branch) }
+  })
+  const serialized = later.filter(e => e.action === '/spec:run' || laneClash.has(e)).map(e => ({
+    path: e.path, brief: e.brief,
+    reason: laneClash.get(e) || e.parallelReason || 'queued behind the top pick',
+  }))
+  const fixes = all.filter(e => e.action === '/spec:fix' || (e.queue && String(e.action).startsWith('/spec:fix '))).map(e =>
+    e.queue
+      ? { action: `/spec:fix ${e.__queueId}`, path: null, note: e.note, queue_id: e.__queueId }
+      : { action: e.action, path: e.path, note: e.note, queue_id: null })
+  writeOut(JSON.stringify({ lanes: runLanes, serialized, fixes }, null, 2))
   process.exit(0)
 }
 

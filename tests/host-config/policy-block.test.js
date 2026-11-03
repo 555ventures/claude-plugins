@@ -62,6 +62,33 @@ test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement
   assert.deepStrictEqual(POLICY_DEFAULTS.models.disposer, row('Disposer'), 'disposer default drifted from the doctrine table')
 })
 
+// specs/20261102/03-one-session-runs-the-lanes.md D2: the lanes seat and agentCall's fourth argument.
+test('AC-20261102-03-4: agentCall renders the lanes seat with isolation and background after effort, honours a host override, and validatePolicy names a bad lanes model', () => {
+  const { agentCall, validatePolicy } = lib()
+  const bare = tmpdir('policy-lanes-bare')
+  writeConfig(bare, {})
+  assert.strictEqual(agentCall(bare, 'lanes', 'general-purpose', { isolation: 'worktree', background: true }),
+    'Agent {subagent_type: "general-purpose", model: opus, effort: medium, isolation: "worktree", run_in_background: true}',
+    'a lane dispatch line must carry the lanes seat default plus the isolation and background flags, or a lane worker lands in the main tree or blocks the session')
+  const over = tmpdir('policy-lanes-over')
+  writeConfig(over, { policy: { models: { lanes: { model: 'sonnet' } } } })
+  assert.match(agentCall(over, 'lanes', 'general-purpose', { isolation: 'worktree', background: true }), /model: sonnet, effort: medium/,
+    'a host override of the lanes seat must win while the unset effort keeps the default, or the seat is not host-overridable')
+  const f = validatePolicy({ models: { lanes: { model: 'gpt' } } })
+  assert.strictEqual(f.length, 1, 'a bad lanes model must yield exactly one finding: ' + JSON.stringify(f))
+  assert.ok(f[0].includes('lanes'), 'the finding must name the lanes seat, or the owner cannot tell which key to fix: ' + f[0])
+})
+
+test('AC-20261102-03-20: agentCall without a fourth argument prints no isolation or run_in_background text', () => {
+  const { agentCall } = lib()
+  const bare = tmpdir('policy-lanes-compat')
+  writeConfig(bare, {})
+  assert.strictEqual(agentCall(bare, 'reviewer', 'spec:reviewer'), 'Agent {subagent_type: "spec:reviewer", model: fable, effort: low}',
+    'a three-argument call must render exactly as before, or every existing dispatch line changes')
+  assert.doesNotMatch(agentCall(bare, 'reviewer', 'spec:reviewer'), /isolation|run_in_background/,
+    'a seat dispatched without the fourth argument must never carry the lane flags')
+})
+
 const RULES = '.claude/rules/spec-pipeline.md'
 
 function policyHost(policy, { trackLedger, riskBody, rulesKey = RULES, rulesText }) {

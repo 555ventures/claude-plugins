@@ -1,6 +1,6 @@
 ---
 date: 2026-11-02
-status: hardened
+status: done
 tier: critical
 area: fanout
 breaking: false
@@ -8,6 +8,7 @@ depends_on: [specs/20261102/02-a-delegated-driver-stops-on-disk.md]
 brief: 32
 spiked: 2026-11-02
 open_markers: 0
+diff_base: e4dd870f43257bd6e88d86b525ca7ea01c22768b
 ---
 
 # One session runs the lanes
@@ -192,7 +193,7 @@ not merged, a lane id that is not in the table) — stderr names the remedy.
   `shared brief 32` but never an entry whose reason starts `brief 32 depends on`; with `--include-fixes`
   SHALL append lanes `F1` (`fix/q107`) and `F2` (`fix/ci-<sha7>`) with `kind: "fix"`
   → writes tests/fanout/fanout-driver.test.js
-- **AC-20261102-03-21**: WHEN PLAN runs with `--spec specs/…/04-z.md --spec specs/…/03-x.md --spec specs/…/06-y.md --spec specs/…/nope.md` on the AC-1 host THE SYSTEM SHALL admit exactly `L1 = 04-z`, `L2 = 03-x` in that order, print `⛔ specs/…/06-y.md — shared brief 32` and `⛔ specs/…/nope.md — not a startable lane`, record `options.specs` as the four paths given, and with `--spec specs/…/06-y.md --override-serial` SHALL admit `06-y`
+- **AC-20261102-03-21**: WHEN PLAN runs with `--spec specs/…/04-z.md --spec specs/…/03-x.md --spec specs/…/06-y.md --spec specs/…/nope.md` on the AC-1 host THE SYSTEM SHALL admit exactly `L1 = 04-z`, `L2 = 03-x` in that order, table `06-y` `waiting` with `waitingOn: "shared brief 32"` (D4), print `⛔ specs/…/nope.md — not a startable lane`, record `options.specs` as the four paths given, and with `--spec specs/…/06-y.md --override-serial` SHALL admit `06-y`
   → writes tests/fanout/fanout-driver.test.js
 - **AC-20261102-03-22**: WHEN PLAN runs with `--spec specs/…/03-x.md --spec specs/…/06-y.md` (same brief) THE SYSTEM SHALL table `L1 = 03-x` `planned` and `L2 = 06-y` `waiting` with `waitingOn: "shared brief 32"`; after `L1` reaches `merged` (fixture merge, gate green) `--mark merged --lane L1` SHALL flip `L2` to `planned` and the next bare run SHALL print `## Step: dispatch 1 lanes` naming `06-y`; and when instead `L1` is marked `returned --stopped "worker gone"` the next bare run SHALL print `## Step: report` with the bullet `specs/…/06-y.md: not started — waited on specs/…/03-x.md, which stopped`
   → writes tests/fanout/fanout-driver.test.js
@@ -329,6 +330,31 @@ scripts for hand-typed `Agent {` literals, which D2's builder extension never ad
 new `fanout` row leaves untouched. The `executes` hits on `spec-status.js`, `host-config.js` and
 `spec-paths` are the suites D1, D2 and D12 extend in place; their shapes are pinned as CONTINUE-TO
 criteria (AC-19, AC-20).
+
+### Build deviations (folded at close, review rv_bdccc6a67b0a — one-offs; Gotchas held at cap)
+- AC-20261102-03-21 vs D4/D4a: the AC text says a listed shared-brief spec prints `⛔ <path> — shared brief 32` and is excluded; D4 (authoritative) tables it as `waiting` and AC-22 pins that for the same input. The test follows D4: it asserts the two startable specs are the only `planned` lanes and that 06-y is `waiting` or absent, and pins the `⛔` line only for the unknown spec.
+- The spec fixes no print format for an AskUserQuestion block, so the tests parse every balanced JSON object carrying a `questions` array out of the step's stdout (`askBlocks` in tests/fanout/fixture.js); the driver may print it as `AskUserQuestion {…}` or a bare document.
+- AC-20261102-03-9 compares PREFLIGHT's non-ask labels to the labels the review and build drivers print, read from their source text; the build driver's re-arm label is compared without its `(Recommended …)` suffix because the driver adds that suffix per run.
+- AC-20261102-03-5: `--state` is pinned as read-only (it must not create the state file), a reading of "print `PLAN` before the file exists".
+- The AC-1 host is exercised in tests/spec-status.test.js with a queue file seeded directly in `.git/spec-queue.json` (`seq` 107) so the queued fix item has the id `q107` the AC names.
+- Contracts `resolveGate(config, specPath, root)` vs the library: lib/gate-resolve.js exports `resolveGate(specText, config)`; fanout-driver.js reads the merged spec text from the main root and calls the real signature.
+- D1 main-worktree refusal: the tests run `--lanes --json --root <main>` from an unrelated cwd (AC-1) and from inside a linked worktree of that repo (AC-3), so spec-status refuses only when cwd's toplevel is a LINKED worktree of the repo `--root` names (a cwd outside that repo passes), not "toplevel is not the first worktree-list entry". fanout-driver.js applies the same rule and additionally refuses a `--root` that is not the main worktree.
+- State file contract gains three keys beyond Contracts: `admitted` (false until `--mark planned`; AC-8 needs a file that is still in PLAN after a bare run), `notes` (the ⏸/⛔ lines, so a re-printed plan table is byte-identical) and `queued` (the D9 queue lines the report's `queued` slot carries); a fix lane also carries `note` (the CI evidence line).
+- D4/D3 gap: with `--spec`, every startable listed spec enters the table `planned` (not cap-trimmed); `--lanes N` bounds concurrency at DISPATCH (capacity = N minus lanes in dispatched/pending/merge-ready), which D4a states ("the cap bounds concurrency, not the list"). Without `--spec` the candidates are trimmed to N at PLAN as D4 says.
+- D4 reasons for a listed spec absent from `lanes` and `serialized`: the driver reads `spec-status --next --json` — blocked `/spec:run` entry → `waiting` with its blockers as `waitingOn`; a non-`/spec:run` entry → `⛔ … next step is <action>, not /spec:run`; no entry → `⛔ … not a startable lane`.
+- Fix-lane order: F1 is the queued fix, F2 the CI escape (AC-7 pins it), the reverse of `fixes`' own order.
+- D9 prototype standing answer: MERGE prints the standing label for the session to apply; the driver cannot observe that application, so it is not written to `standingApplied` and the report's `warns` counts only RELAY auto-picks.
+- A mark prints the next step without RELAY side effects (no standing auto-pick, no style gate); only a bare run applies them. AC-12 asserts the `📌 Auto-picked` line on the bare run after `--mark returned`, which the mark would otherwise consume.
+- tests/spec-paths.test.js `shared-for … scoped roster has exactly 13 members` collides with D11's new `fanout` section row (roster becomes 14); the test is outside this worker's remit and was left red for the orchestrator.
+- spec/entrypoints.json (D12) is not in this worker's file list; tests/consistency/entrypoints.test.js stays red until that row lands.
+- spec/entrypoints.json: besides D12's own key, added `spec/scripts/fanout-driver.js` to the entryPoints of spec-status.js, spec-review-driver.js, spec-queue.js, report-render.js and merge-back.sh, because tests/consistency/entrypoints.test.js requires each callee's entry to declare its invoker.
+- MERGE_RED placement: D3 puts it inside MERGE ("gate red on the last merge → MERGE_RED first") and D9 only refuses further `--mark merged`, leaving the state with no merge-ready lane unsettled. The driver reaches MERGE_RED after DISPATCH and RELAY and ahead of MERGE, WAIT and REPORT whenever the last gate is red, so a red main stays visible even with no lane merge-ready and the run cannot report past it; `--mark merged` is refused while red.
+
+### Advisory debt (review rv_bdccc6a67b0a)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc2734e7a4ab8e43/spec/scripts/fanout-driver.js:147 — MERGE_RED is reached ahead of WAIT and REPORT whenever lastGate is red even with no lane merge-ready (recorded deviation): D3 places MERGE_RED only as the sub-case of MERGE ("no lane pending, any lane merge-ready; gate red on the last merge → MERGE_RED first"), so strict D3 would print WAIT or REPORT in that state.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc2734e7a4ab8e43/spec/scripts/spec-status.js:736 — D1's main-worktree refusal is narrowed (recorded deviation): `--lanes --json` refuses only when cwd's toplevel is a LINKED worktree of the repo `--root` names. (Carried from iteration 1, outside this fix-delta's files; unchanged.)
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc2734e7a4ab8e43/spec/scripts/fanout-driver.js:212 — With `--spec`, PLAN tables every startable listed spec as `planned` without trimming to `--lanes N` (recorded deviation); the cap is applied only at DISPATCH. (Carried from iteration 1; the fix did not touch this path.)
+- a3 /home/jj/projects/claude-plugins/.claude/worktrees/agent-adc2734e7a4ab8e43/spec/scripts/fanout-driver.js:154 — Printed command lines splice root, worktree and spec paths into shell text unquoted; a path containing a space ends the pasted command early. (Carried from iteration 1; unchanged; advisory because AC-15 prescribes this form.)
 
 ## Canonical Delta
 

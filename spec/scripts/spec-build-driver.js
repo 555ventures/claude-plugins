@@ -1302,7 +1302,7 @@ function redFindingsGuidance() {
         `test is vacuous: rewrite it red.`)
     }
   }
-  if (askGreen && pq.isDelegated()) {
+  if (askGreen && pq.isDelegated(repoRoot)) {
     const editThenRerun = `edit then node ${__filename} ${specPath}`
     out.push(pq.stopLine(repoRoot, 'build', {
       kind: 'red-findings', state: 'RED_FINDINGS', spec: specRel,
@@ -1457,7 +1457,7 @@ function escalateStepBody() {
       `  node ${__filename} ${specPath} --mark escalate-choice re-arm\n`
   }
   const rec = escalateRecommendation()
-  if (pq.isDelegated()) {
+  if (pq.isDelegated(repoRoot)) {
     const choice = (c) => `node ${__filename} ${specPath} --mark escalate-choice ${c}`
     return `## ESCALATE \u2014 repair iteration cap (3) reached\n` +
       `${rec.text}\n` +

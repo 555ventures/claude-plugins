@@ -3,7 +3,8 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { SPEC, tmpdir, runNode } = require('../helpers')
+const { execFileSync } = require('node:child_process')
+const { SPEC, tmpdir, runNode, laneMarkerPath } = require('../helpers')
 
 // specs/20261102/02-a-delegated-driver-stops-on-disk.md D1/D9 — pending-question.js is the one
 // writer and reader of .claude/pending-question.json, and the helpers strip the child marker.
@@ -126,4 +127,39 @@ test('AC-20261102-02-16: runNode starts the child without the child-session mark
     if (prev === undefined) delete process.env.CLAUDE_CODE_CHILD_SESSION
     else process.env.CLAUDE_CODE_CHILD_SESSION = prev
   }
+})
+
+// Regression (fix, this commit's body is the root cause): the parent session and its sub-agents
+// share one environment, so CLAUDE_CODE_CHILD_SESSION marked the orchestrator as a worker and the
+// merge step from the main root printed MERGE_READY. Delegation is read from the lane's git dir
+// marker or the fan-out table — never from the environment.
+test('isDelegated is false with the child env var set and no lane signal, true with the git-dir marker, true when the fan-out table lists the branch', () => {
+  const root = fs.realpathSync(tmpdir('pq-delegated'))
+  const git = (...a) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' }).trim()
+  git('init', '-q', '-b', 'main')
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'seed')
+  const probe = path.join(root, 'probe.js')
+  fs.writeFileSync(probe, `console.log(String(require(${JSON.stringify(path.join(SPEC, SCRIPT))}).isDelegated(process.argv[2])))\n`)
+  const ask = () => runNode(path.relative(SPEC, probe), [root], { env: { CLAUDE_CODE_CHILD_SESSION: '1' } }).stdout.trim()
+  assert.strictEqual(ask(), 'false',
+    'the parent carries the child env var too — reading it marks the orchestrator as a worker and its merge step prints MERGE_READY')
+  const marked = runNode(SCRIPT, ['mark', '--root', root])
+  assert.strictEqual(marked.status, 0, 'mark must succeed inside a git repo: ' + marked.stderr)
+  const mp = marked.stdout.trim()
+  assert.strictEqual(mp, laneMarkerPath(root),
+    'the marker must live in the private git dir, outside the working tree, or a review leg sees it as an out-of-plan file')
+  assert.strictEqual(ask(), 'true', 'the marker is the manual-fork signal; without it a lane prints in-session asks it cannot make')
+  const q = runNode(SCRIPT, ['is-delegated', '--root', root])
+  assert.strictEqual(q.status + ':' + q.stdout.trim(), '0:true', 'the query form must say a marked lane is a lane, or prose commands re-derive the rule by hand')
+  fs.unlinkSync(mp)
+  assert.strictEqual(ask(), 'false', 'removing the marker must restore the in-session form')
+  git('switch', '-q', '-c', 'spec/lane-x')
+  fs.writeFileSync(path.join(root, '.git', 'spec-fanout.json'), JSON.stringify({ version: 1, lanes: [{ id: 'L1', branch: 'spec/lane-x' }] }))
+  assert.strictEqual(ask(), 'true', 'a fan-out lane must be delegated even when the worker forgot to mark — the table is the forget-proof signal')
+  git('switch', '-q', 'main')
+  assert.strictEqual(ask(), 'false', 'the parent on main is never a lane, whatever the table holds')
+  const nq = runNode(SCRIPT, ['is-delegated', '--root', root])
+  assert.strictEqual(nq.status + ':' + nq.stdout.trim(), '1:false', 'the query form must exit 1 for the parent, so a shell test reads it as not-a-lane')
+  const outside = runNode(SCRIPT, ['mark', '--root', fs.realpathSync(tmpdir('pq-nogit'))])
+  assert.strictEqual(outside.status, 2, 'mark outside a git repo must refuse with the remedy: ' + outside.stdout)
 })

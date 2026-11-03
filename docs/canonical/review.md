@@ -54,7 +54,7 @@
   At MERGE the driver prints the prototype's unmerged-commit count when the closing spec is its
   last citer; zero proceeds, more than zero is a question answered through `--prototype
   delete|keep` on the strategy mark.
-  Delegated (`CLAUDE_CODE_CHILD_SESSION` set): `MERGE_READY`, no inspect, no mark line
+  Delegated (the lane marker or the fan-out table, `pending-question.js isDelegated`): `MERGE_READY`, no inspect, no mark line
   (specs/20261102/02-a-delegated-driver-stops-on-disk.md).
   **Manifest row v2** is `{"leg","exit","observed"}` where `observed` is always a
   non-null JSON object drawn from the Contracts closed set; any row whose `observed` is a

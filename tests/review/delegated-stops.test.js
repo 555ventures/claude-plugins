@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { SPEC, runNode } = require('../helpers')
+const { SPEC, runNode, laneMarkerPath } = require('../helpers')
 const esc = require('./escalate-row.fixtures')
 const drv = require('./review-driver.fixtures')
 
@@ -14,9 +14,12 @@ const drv = require('./review-driver.fixtures')
 
 const DRIVER = esc.DRIVER
 const DRIVER_ABS = path.join(SPEC, DRIVER)
-const CHILD = { CLAUDE_CODE_CHILD_SESSION: '1' }
-const runD = (root, spec, ...args) => runNode(DRIVER, [spec, ...args], { cwd: root, env: CHILD })
-const runPlain = (root, spec, ...args) => runNode(DRIVER, [spec, ...args], { cwd: root })
+// A lane is a plugin-owned fact: the marker in the lane's private git dir (pending-question.js
+// mark), never an environment variable — the parent and its sub-agents share one environment.
+const delegate = (root) => fs.writeFileSync(laneMarkerPath(root), '')
+const undelegate = (root) => { try { fs.unlinkSync(laneMarkerPath(root)) } catch { /* absent is the goal */ } }
+const runD = (root, spec, ...args) => { delegate(root); return runNode(DRIVER, [spec, ...args], { cwd: root }) }
+const runPlain = (root, spec, ...args) => { undelegate(root); return runNode(DRIVER, [spec, ...args], { cwd: root }) }
 const pendingOf = (root) => path.join(root, '.claude', 'pending-question.json')
 const readPending = (root) => JSON.parse(fs.readFileSync(pendingOf(root), 'utf8'))
 const stateFile = (host) => path.join(host.sidecar, 'review-state.json')

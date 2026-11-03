@@ -1,31 +1,80 @@
 #!/usr/bin/env node
 'use strict'
 // Usage: pending-question.js write --root <dir> --file <doc.json>
-//        pending-question.js show|dismiss|consume --root <dir>
+//        pending-question.js show|dismiss|consume|mark|is-delegated --root <dir>
 //        pending-question.js answer --root <dir> --id <qid> --label <label> --by user|standing
-// Also a module: isDelegated, pendingPath, writePending, readPending, consumePending, validate.
+// Also a module: isDelegated, markDelegated, pendingPath, writePending, readPending,
+// consumePending, validate.
 //
 // Owner: specs/20261102/02-a-delegated-driver-stops-on-disk.md D1 — the one writer and reader
-// of <root>/.claude/pending-question.json, the file a driver running in a child session (no
-// AskUserQuestion tool) hands up to the parent session instead of asking.
+// of <root>/.claude/pending-question.json, the file a driver running delegated (a lane worker
+// with no AskUserQuestion tool) hands up to the parent session instead of asking.
+//
+// Delegation is a plugin-owned fact, never a harness environment variable: the parent session
+// and its sub-agents share one environment byte for byte (owner of that rule: the isDelegated
+// regression in tests/delegated/pending-question.test.js), so `isDelegated(root)` reads two
+// signals that only a lane can carry — the `spec-delegated` marker in the lane's private git dir
+// (`mark`, the fan-out's first worker command; outside the working tree so no review leg sees it)
+// or the lane's branch listed in <git-common-dir>/spec-fanout.json. `is-delegated` is the query
+// form for prose commands (exit 0 = a lane, 1 = not), so no command re-derives the rule.
 //
 // Does NOT decide who may answer (core § Delegated Stops: only the parent writes answers), does
-// NOT relay a question, and never stores state beyond that one file.
+// NOT relay a question, and never stores state beyond that one file and the marker.
 //
-// Exit codes: 0 done · 1 nothing pending (show) · 2 usage, validation, unknown id/label,
-// already pending
+// Exit codes: 0 done (is-delegated: a lane) · 1 nothing pending (show) / not a lane (is-delegated) · 2 usage, validation, unknown id/label,
+// already pending, not a git repo (mark)
 
 const fs = require('fs')
 const crypto = require('crypto')
 const path = require('path')
+const { spawnSync } = require('child_process')
 const { check } = require('./question-style-gate')
 
 const KINDS = ['repair-round', 'dispositions', 'review-escalate', 'red-findings', 'build-escalate', 'fix-dirty-tree', 'fix-decisions', 'fix-dispositions']
 const BY = ['user', 'standing']
 
-function isDelegated() {
-  const v = process.env.CLAUDE_CODE_CHILD_SESSION
-  return typeof v === 'string' && v !== ''
+const MARKER = 'spec-delegated'
+
+function gitQuery(root, flag) {
+  const r = spawnSync('git', ['-C', root, 'rev-parse', flag], { encoding: 'utf8' })
+  if (r.status !== 0) return null
+  const v = r.stdout.trim()
+  return flag === '--abbrev-ref' ? v : path.resolve(root, v)
+}
+const gitDir = (root) => gitQuery(root, '--git-dir')
+const gitCommonDir = (root) => gitQuery(root, '--git-common-dir')
+const currentBranch = (root) => {
+  const r = spawnSync('git', ['-C', root, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' })
+  return r.status === 0 ? r.stdout.trim() : null
+}
+const markerPath = (root) => {
+  const gd = gitDir(root)
+  return gd ? path.join(gd, MARKER) : null
+}
+
+// true only for a lane: the private git dir carries the marker, or the fan-out table lists the
+// current branch. The parent on main has neither; an environment variable is never consulted.
+function isDelegated(root) {
+  if (typeof root !== 'string' || !root) return false
+  const mp = markerPath(root)
+  if (mp && fs.existsSync(mp)) return true
+  const common = gitCommonDir(root)
+  if (!common) return false
+  let table = null
+  try {
+    table = JSON.parse(fs.readFileSync(path.join(common, 'spec-fanout.json'), 'utf8'))
+  } catch {
+    return false
+  }
+  const branch = currentBranch(root)
+  return !!(branch && table && Array.isArray(table.lanes) && table.lanes.some((l) => l && l.branch === branch))
+}
+
+function markDelegated(root) {
+  const mp = markerPath(root)
+  if (!mp) return null
+  fs.writeFileSync(mp, '')
+  return mp
 }
 
 const pendingPath = (root) => path.join(root, '.claude', 'pending-question.json')
@@ -149,7 +198,7 @@ function bareRun(root, marks, keepKinds = [], keyFor = () => null) {
 }
 
 function usage(msg) {
-  process.stderr.write(`pending-question: ${msg}\nusage: pending-question.js write|show|answer|dismiss|consume --root <dir> [--file <doc.json>] [--id <qid> --label <label> --by user|standing]\n`)
+  process.stderr.write(`pending-question: ${msg}\nusage: pending-question.js write|show|answer|dismiss|consume|mark|is-delegated --root <dir> [--file <doc.json>] [--id <qid> --label <label> --by user|standing]\n`)
   process.exit(2)
 }
 
@@ -161,7 +210,7 @@ function main() {
     if (!argv[i].startsWith('--') || argv[i + 1] === undefined) usage(`${argv[i]} needs a value`)
     opt[argv[i].slice(2)] = argv[i + 1]
   }
-  if (!['write', 'show', 'answer', 'dismiss', 'consume'].includes(cmd)) usage(`unknown subcommand ${cmd || '(none)'}`)
+  if (!['write', 'show', 'answer', 'dismiss', 'consume', 'mark', 'is-delegated'].includes(cmd)) usage(`unknown subcommand ${cmd || '(none)'}`)
   if (!opt.root) usage('--root needs a directory')
   const root = path.resolve(opt.root)
   const p = pendingPath(root)
@@ -183,6 +232,17 @@ function main() {
       process.exit(2)
     }
     console.log(writePending(root, doc))
+    process.exit(0)
+  }
+  if (cmd === 'is-delegated') {
+    const d = isDelegated(opt.root)
+    process.stdout.write((d ? 'true' : 'false') + '\n')
+    process.exit(d ? 0 : 1)
+  }
+  if (cmd === 'mark') {
+    const mp = markDelegated(opt.root)
+    if (!mp) usage(`${opt.root} is not inside a git repository — run mark from the lane's worktree`)
+    process.stdout.write(mp + '\n')
     process.exit(0)
   }
   if (cmd === 'consume') {
@@ -214,6 +274,6 @@ function main() {
   process.exit(0)
 }
 
-module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS }
+module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, markDelegated }
 
 if (require.main === module) main()

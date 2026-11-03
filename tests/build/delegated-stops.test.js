@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
-const { SPEC, runNode } = require('../helpers')
+const { SPEC, runNode, laneMarkerPath } = require('../helpers')
 const { makeHost, makeNoTestsHost, run, stateOf, testFileContent } = require('./build-driver.fixtures')
 
 // specs/20261102/02-a-delegated-driver-stops-on-disk.md D4 — the build driver, run inside a child
@@ -13,7 +13,8 @@ const { makeHost, makeNoTestsHost, run, stateOf, testFileContent } = require('./
 
 const DRIVER = 'scripts/spec-build-driver.js'
 const DRIVER_ABS = path.join(SPEC, DRIVER)
-const runD = (root, spec, ...args) => runNode(DRIVER, [spec, ...args], { cwd: root, env: { CLAUDE_CODE_CHILD_SESSION: '1' } })
+// A lane is a plugin-owned fact: the marker in the lane's private git dir, never an environment variable.
+const runD = (root, spec, ...args) => { fs.writeFileSync(laneMarkerPath(root), ''); return runNode(DRIVER, [spec, ...args], { cwd: root }) }
 const pendingOf = (root) => path.join(root, '.claude', 'pending-question.json')
 const git = (root, ...a) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' })
 

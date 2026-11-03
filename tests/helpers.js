@@ -94,6 +94,13 @@ function childEnv(opts) {
   return { ...process.env, CLAUDE_CODE_CHILD_SESSION: undefined, ...(opts.env || {}) }
 }
 
+// The lane marker a delegated driver reads (pending-question.js isDelegated): the private git dir
+// of `root` joined with `spec-delegated` — outside the working tree, so no review leg sees it.
+function laneMarkerPath(root) {
+  const gd = require('node:child_process').execFileSync('git', ['-C', root, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).trim()
+  return path.join(path.isAbsolute(gd) ? gd : path.join(root, gd), 'spec-delegated')
+}
+
 function runNode(script, argv, opts = {}) {
   return spawnSync(process.execPath, [path.join(SPEC, script), ...argv],
     { encoding: 'utf8', ...opts, env: childEnv(opts) })
@@ -423,5 +430,5 @@ module.exports = {
   sliceSection, section, phrase,
   assistantUsageLine,
   ROOT, SPEC, read, extractFn, evalFns, checkWorkflowSyntax, tmpdir, runNode, runBash, gitRepo,
-  freePort, parseFlatDom, sweepRetiredLiteral, writePolicy,
+  freePort, parseFlatDom, sweepRetiredLiteral, writePolicy, laneMarkerPath,
 }

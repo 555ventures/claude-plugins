@@ -1610,7 +1610,7 @@ function handleDispositions() {
           'leg-finding pools for this iteration')
       }
     }
-    if (pq.isDelegated()) {
+    if (pq.isDelegated(repoRoot)) {
       const open = ret.dispositions.filter((d) => (d.recommended === 'waive' || d.recommended === 'reject') && d.final === undefined)
       if (open.length) {
         const doc = pq.readPending(repoRoot)
@@ -2744,7 +2744,7 @@ function escalatePoolBlock() {
     (survivors.length && legs.length ? '\n' : '') +
     legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)}`).join('\n') +
     (open ? '\n' : '')
-  if (pq.isDelegated()) return listing + pq.stopLine(repoRoot, 'review', {
+  if (pq.isDelegated(repoRoot)) return listing + pq.stopLine(repoRoot, 'review', {
     kind: 'review-escalate', state: 'ESCALATE', spec: specRel,
     stopKey: escalateStopKey(),
     questions: [{
@@ -2784,7 +2784,7 @@ const STEPS = {
       red.map((r) => `❌ ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') +
       `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
       `A GATE_RED ledger line has been appended to ${marks.stoppedLedgerPath}.\n` + remedy +
-      (pq.isDelegated() && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
+      (pq.isDelegated(repoRoot) && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
         ? pq.stopLine(repoRoot, 'review', {
           kind: 'repair-round', state: 'STOPPED', spec: specRel,
           stopKey: repairStopKey(),
@@ -2888,7 +2888,7 @@ const STEPS = {
       `  reviewer return: ${marks.reviewerReturnFile}\n` +
       `  manifest: ${manifestPath}\n` +
       `  outputs: ${outDir}\n` +
-      (pq.isDelegated()
+      (pq.isDelegated(repoRoot)
         ? `${RIDE_ALONG}\nwrite the return file as the disposer produced it, then:\n`
         : `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
           `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). ` +
@@ -3001,7 +3001,7 @@ const STEPS = {
       // rides the DONE note instead — the correction is printed on every close path.
       printDoneNow(restampLine + 'review ran on the originating branch — MERGE skipped, nothing to merge.')
     }
-    if (pq.isDelegated()) {
+    if (pq.isDelegated(repoRoot)) {
       return `## MERGE_READY \u2014 ${specRel} is closed on ${source}; the parent session runs the merge from ${mainRoot}`
     }
     const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],

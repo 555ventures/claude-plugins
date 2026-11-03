@@ -163,8 +163,12 @@ never override. An unlocked fork is a `blocked` return, not a guess. A dismissed
 
 ## Delegated Stops
 
-A driver or command running in a child session (the harness sets `CLAUDE_CODE_CHILD_SESSION`; the
-sub-agent has no `AskUserQuestion` tool) never asks. It writes `.claude/pending-question.json` at
+A driver or command running as a lane never asks. A lane is a plugin-owned fact, never a harness
+environment variable (a parent session and its sub-agents share one environment): the lane's private
+git dir carries the `spec-delegated` marker (`pending-question.js mark`, the fan-out's first worker
+command; outside the working tree, so no review leg sees it) or its branch is listed in the fan-out
+table; a prose command asks `pending-question.js is-delegated --root .` (exit 0 = a lane), never the
+environment. The sub-agent has no `AskUserQuestion` tool. It writes `.claude/pending-question.json` at
 its repo root through `pending-question.js`, prints `PENDING_QUESTION`, and stops. Only the parent
 session writes an answer — `by: user` from a live `AskUserQuestion` it asked, `by: standing` from an
 answer the user gave that session up front; the worker never does. A dismissal is a STOP exactly as

@@ -269,7 +269,8 @@ function workerPrompt(l) {
     ? `/spec:fix ${l.queueId || '@' + l.spec}` : `/spec:run ${l.spec}`
   const lines = [
     `Lane ${l.id} — run ${l.kind === 'fix' ? first : l.spec} to its next stop. You are in your own worktree; first run`,
-    `\`git switch ${l.branch} 2>/dev/null || git switch -c ${l.branch}\`, then \`${first}\`.`,
+    `\`git switch ${l.branch} 2>/dev/null || git switch -c ${l.branch}\`, then`,
+    `\`node "$(spec-paths pending-question)" mark --root .\` (marks this worktree as a lane), then \`${first}\`.`,
     ...(l.kind === 'fix' && !l.queueId ? [`CI note: ${l.note}`] : []),
     'Stop and report as soon as the driver prints one of: PENDING_QUESTION, MERGE_READY, STOPPED, DONE —',
     'your final line is that driver line verbatim. Never write an answer into .claude/pending-question.json',

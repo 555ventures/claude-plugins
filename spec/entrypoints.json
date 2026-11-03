@@ -151,7 +151,8 @@
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",
       "spec/scripts/spec-build-driver.js",
-      "spec/commands/fix.md"
+      "spec/commands/fix.md",
+      "spec/scripts/fanout-driver.js"
     ]
   },
   "spec/scripts/port-check.js": {

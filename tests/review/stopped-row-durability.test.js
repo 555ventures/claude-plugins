@@ -481,17 +481,18 @@ test('fix 2026-11-02: WHEN the merge-time drain moves this run\'s stopped and es
   fs.writeFileSync(stoppedPath,
     JSON.stringify({ ts: '2026-11-02T00:00:00Z', stage: 'review', spec: host.specRel, verdict: 'GATE_RED', runId: marks.runId, tier: 'standard' }) + '\n' +
     JSON.stringify({ ts: '2026-11-02T00:01:00Z', stage: 'review', spec: host.specRel, verdict: 'HARD_FINDINGS', escalated: true, runId: 'rv_fixmerge0002', tier: 'standard' }) + '\n')
-  // An untracked file makes `git worktree remove` refuse, so the merge dies after relocateSidecar().
+  // An untracked file makes `git worktree remove` refuse, so the merge dies at cleanup — and the
+  // sidecar is written back beside the worktree spec, where the retry finds it (/spec:fix q147).
   fs.writeFileSync(path.join(host.wt, 'stray-untracked.txt'), 'x\n')
 
   const merged = run(host.root, host.spec, '--mark', 'merge-strategy', 'ff-only')
   assert.ok(!merged.stderr.includes(LOSS_PHRASE), 'the merge invocation itself must not report the present row as lost: ' + merged.stderr)
-  const rootState = path.join(host.root, host.specRel.replace(/\.md$/, '.review'), 'review-state.json')
-  assert.ok(fs.existsSync(rootState), 'setup precondition: the merge must die after relocating the sidecar to the main root: ' + merged.status + merged.stdout + merged.stderr)
-  const after = JSON.parse(fs.readFileSync(rootState, 'utf8'))
+  assert.notStrictEqual(merged.status, 0, 'setup precondition: the merge must die at cleanup, or this test never reaches the retry it pins: ' + merged.stdout + merged.stderr)
+  assert.ok(fs.existsSync(wtState), 'setup precondition: a failed cleanup must leave the sidecar beside the worktree spec, or the retry has no state to read: ' + merged.status + merged.stdout + merged.stderr)
+  const after = JSON.parse(fs.readFileSync(wtState, 'utf8'))
   const tracked = path.join(host.root, '.claude/spec-runs.jsonl')
   assert.strictEqual(after.stoppedLedgerPath, tracked, 'the stopped mark must follow its drained row into the tracked ledger: ' + JSON.stringify(after))
   assert.strictEqual(after.escalateLedgerPath, tracked, 'the escalate mark must follow its drained row into the tracked ledger: ' + JSON.stringify(after))
-  const retry = run(host.root, path.join(host.root, host.specRel), '--state')
+  const retry = run(host.root, host.spec, '--state')
   assert.ok(!retry.stderr.includes(LOSS_PHRASE), 'a retry after the deliberate drain must never read as a lost row: ' + retry.stderr)
 })

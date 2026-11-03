@@ -2407,7 +2407,7 @@ function promoteEvidenceAndClean(wt, mainRootDir) {
 }
 
 // `git worktree remove` refuses on ANY untracked file, so the worktree-local sidecar has
-// to be gone before cleanup runs — but printDoneNow() runs AFTER cleanup, from the main root, and
+// to be gone before cleanup runs (finishMerge vacates it) — but printDoneNow() runs AFTER cleanup, from the main root, and
 // needs this run's state to print the right spec path and delete the sidecar there (specs/
 // the REPLAY step this comment used to name is
 // retired; DONE is now the only reader). Move review-state.json into the main root's own
@@ -2471,17 +2471,38 @@ function appendSupersessionRows(mainRootDir) {
   }
 }
 
+// The sidecar is re-homed only once cleanup exits 0 (/spec:fix q147). Before that the worktree copy
+// is vacated so `git worktree remove` sees no untracked file, and the state stays in memory; a
+// failed cleanup writes it back where the same mark finds it on a re-run — beside the worktree spec
+// while the worktree survives, else in the main root (the worktree spec is gone with it).
 function finishMerge(mainRootDir, source, wt) {
+  appendSupersessionRows(mainRootDir)
+  let vacated = false
+  let staged = null
   if (wt) {
-    appendSupersessionRows(mainRootDir)
     promoteEvidenceAndClean(wt, mainRootDir)
     commitPromotedEvidence(mainRootDir, wt)
-    relocateSidecar(wt, mainRootDir)
-  } else appendSupersessionRows(mainRootDir)
+    const rel = path.relative(wt, sidecarDir)
+    vacated = !(rel.startsWith('..') || path.isAbsolute(rel))
+    if (vacated) {
+      // staged in the main root first, so a driver killed mid-cleanup still leaves the state on disk
+      staged = path.join(mainRootDir, rel)
+      saveSidecarLib(staged, 'review-state.json', marks)
+      fs.rmSync(sidecarDir, { recursive: true, force: true })
+    }
+  }
   const cleanupArgs = ['cleanup', '--root', mainRootDir, '--source', source]
   if (wt) cleanupArgs.push('--worktree', wt)
   const c = runChild('bash', [mergeBackBin, ...cleanupArgs], { encoding: 'utf8' }, 'merge-back.sh cleanup')
-  if (c.status !== 0) die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim())
+  if (c.status !== 0) {
+    let rerunSpec = specPath
+    if (vacated && fs.existsSync(wt)) { fs.rmSync(staged, { recursive: true, force: true }); saveSidecar() }
+    else if (vacated) { relocateSidecar(wt, mainRootDir); rerunSpec = replaySpecPath }
+    die('merge-back.sh cleanup failed: ' + (c.stdout + c.stderr).trim() + '\nThe merge landed; fix the cause above, ' +
+      'then re-run: node ' + __filename + ' ' + rerunSpec + ' --mark merge-strategy <the same strategy> — the landed ' +
+      'merge is detected and cleanup resumes.')
+  }
+  if (vacated) relocateSidecar(wt, mainRootDir)
   runChild('bash', [mergeBackBin, 'verify', '--root', mainRootDir], { encoding: 'utf8' }, 'merge-back.sh verify')
   let doneNote = 'merged ' + source + ' into the target branch; worktree and branch cleaned up.'
   // a `prototype: <stem>` spec closes the prototype when it was the last citer. The close is

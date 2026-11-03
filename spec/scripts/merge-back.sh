@@ -54,6 +54,8 @@
 #   inspect  --root R --target T --source S
 #   merge    --root R --target T --source S --strategy {merge-commit|ff-only|squash|rebase-ff} [--worktree W]
 #   cleanup  --root R --source S [--worktree W]
+#                             -> removes W (lifting only a lock whose reason starts "claude agent")
+#                                and deletes S once its content is on the target.
 #   verify   --root R
 #
 # Exit codes:
@@ -317,6 +319,17 @@ case "$SUB" in
           exit 4 ;;
       esac
       if [ -d "$WORKTREE" ]; then
+        # A lock whose reason starts "claude agent" is the agent harness's own lane lock — the
+        # lane is finished once its merge landed, so it is lifted. Any other lock is a person's
+        # and stays: `worktree remove` then refuses, naming the reason.
+        LOCK_REASON="$(git -C "$ROOT" worktree list --porcelain | awk -v wt="$WT_RP" -v given="$WORKTREE" '
+          /^worktree / { cur = substr($0, 10) }
+          /^locked/ && (cur == wt || cur == given) { sub(/^locked ?/, ""); print; exit }')"
+        case "$LOCK_REASON" in
+          "claude agent"*)
+            git -C "$ROOT" worktree unlock "$WORKTREE" || die "git worktree unlock failed for '$WORKTREE'"
+            note "unlocked worktree $WORKTREE (agent lock: $LOCK_REASON)" ;;
+        esac
         git -C "$ROOT" worktree remove "$WORKTREE" || die "git worktree remove failed for '$WORKTREE' (dirty? use git -C '$ROOT' worktree remove --force after checking)"
         note "removed worktree $WORKTREE"
       else

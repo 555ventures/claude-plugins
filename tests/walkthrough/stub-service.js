@@ -10,8 +10,12 @@
 //   { status?: 200, headers?: {}, body?: <json>, raw?: "<text>", hang?: true }
 // The token "$contentHash" inside a JSON body is replaced by the contentHash of the request body
 // (for "the earlier push arrived" answers). A key with no script answers 404 stub-unscripted.
-// Every request appends one JSON line to log.jsonl: method, url (with query), headers, bodyLength,
-// bodySha256, json (parsed body or null). The port is printed as "PORT <n>" on stdout once bound.
+// Every request from the client under test appends one JSON line to log.jsonl: method, url (with
+// query), headers, bodyLength, bodySha256, json (parsed body or null). The client is Node's fetch,
+// whose user-agent is "node"; a request from any other agent (a local port prober — observed:
+// Go-http-client probing every fresh 127.0.0.1 listener) is answered but never logged, so a
+// "sends nothing" assertion reads only what the client sent. The port is printed as "PORT <n>" on
+// stdout once bound.
 //
 // Exit codes: 0 never (runs until killed); 2 bad usage.
 
@@ -39,7 +43,7 @@ const server = http.createServer((req, res) => {
     if (body.length && body[0] === 0x7b) {
       try { json = JSON.parse(body.toString('utf8')) } catch { json = null }
     }
-    fs.appendFileSync(logFile, JSON.stringify({
+    if (/^node\b/.test(req.headers['user-agent'] || '')) fs.appendFileSync(logFile, JSON.stringify({
       method: req.method,
       url: req.url,
       headers: req.headers,

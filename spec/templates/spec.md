@@ -94,7 +94,7 @@ depends_on: []
 
 ## Acceptance Criteria
 
-<!-- Every AC maps to a test. AC-IDs are NAMESPACED with the spec id — AC-{YYYYMMDD-NN}-1
+<!-- Every AC maps to a test or to a declared oracle; prose is never a test's subject. AC-IDs are NAMESPACED with the spec id — AC-{YYYYMMDD-NN}-1
      where YYYYMMDD is the date dir and NN the spec number — so the review grep matrix never
      collides across two specs touching one test file. Reference the AC-ID per the host's
      convention (test name, comment, or docstring — pipeline rules § Test Rules). Hosts with
@@ -108,12 +108,17 @@ depends_on: []
      example, and `ac-matrix --lint` refuses the lock with `missing-literal` when one lacks it. An AC whose honest
      oracle is a non-test gate leg (e.g. the typecheck/gate leg itself) declares
      `[oracle: <manifest leg>]` — a leg name from the evidence manifest's closed set (`gate`,
-     `smoke`, `drift`, `ci`, `tests`, …), sibling syntax to `[env:]`, never free-form command
+     `smoke`, `drift`, `ci`, `tests`, `literals`, …), sibling syntax to `[env:]`, never free-form command
      text (no manifest row means no mechanical redness check, which would make the tag a
      coverage-laundering route). A declared oracle covers the AC by declaration in review's
      matrix; a
      red or absent oracle leg is a hard finding, identical in standing to an uncovered AC. One
-     oracle per AC; an AC never carries both a test mapping and an `[oracle:]` tag. An AC whose
+     oracle per AC; a criterion that retires wording declares `[oracle: literals]` with the
+     retired phrases in backticks and carries no `→` disposition (ac-matrix evaluates it itself
+     against the File Plan's non-tests files); new or changed wording is not a criterion — its
+     Decision carries `[no-ac: wording — read by review]`; a reference or protocol token the
+     doctrine must keep is pinned only by an untagged standing guard (`.claude/rules/spec-pipeline.md`
+     § Review Checks' `plugin-bump-gate` precedent), never by an AC-tagged test; an AC never carries both a test mapping and an `[oracle:]` tag. An AC whose
      test is legitimately green pre-implementation declares `[pre-green: <reason>]` — closed
      enum `fallback-rejection` | `absence-invariant` | `predicate-in-test`, sibling syntax to
      `[env:]`/`[oracle:]`: tag a rejection criterion a pre-existing generic fallback already
@@ -162,8 +167,8 @@ depends_on: []
   (e.g. `{ literal input }` → `{ literal output }`) → writes { test file }
 - **AC-{YYYYMMDD-NN}-2** `[env: { VAR }]` (only when the test is environment-gated): …
   → rewrites { test file } :: { title prefix }
-- **AC-{YYYYMMDD-NN}-3** `[oracle: { manifest leg, e.g. gate }]` (only when no test is the
-  right oracle — the named leg is): … → reuses { test file } :: { title prefix }
+- **AC-{YYYYMMDD-NN}-3** `[oracle: { manifest leg, e.g. gate, or literals }]` (only when no test is the
+  right oracle — the named leg is; `literals` lists the retired phrases in backticks, no `→`): … → reuses { test file } :: { title prefix }
 
 ## Assumptions (escalation triggers)
 

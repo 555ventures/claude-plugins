@@ -247,8 +247,8 @@ spec's Canonical Delta on `done`.
 
 One binding home per rule. When editing any plugin doctrine/command file, prose that restates
 canon living elsewhere shrinks to a pointer at its canonical home — never grows another full
-copy. Behavior is pinned by behavioral tests that execute it. Prose itself is pinned for three
+copy. Behavior is pinned by behavioral tests that execute it. Prose itself is pinned for two
 things only: references it must keep (script paths, `spec-paths` keys, flags, headings, step
-labels, caps), phrases it must no longer contain, and protocol tokens an executor must print
-or offer verbatim. A pin on the wording of a rule is not a test — wording is read by review,
+labels, caps) and protocol tokens an executor must print or offer verbatim. Retiring wording
+is checked once at review through `[oracle: literals]` and never becomes a test. A pin on the wording of a rule is not a test — wording is read by review,
 and a rule that matters enough to guard mechanically gets a script (§ Incident Policy).

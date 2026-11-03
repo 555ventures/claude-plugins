@@ -89,8 +89,10 @@ test('AC-20260911-50-1: silent-fallback escape stays covered', () => { assert.ok
   writeTest(root, 'tests/kept-invariant.test.js', `'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
-// exercises gate.sh, the pipeline's own gate script
-test('AC-20260911-50-2: the pipeline gate script keeps working', () => { assert.ok(true) })
+const { spawnSync } = require('node:child_process')
+test('AC-20260911-50-2: the pipeline gate script keeps working', () => {
+  assert.strictEqual(spawnSync('bash', ['scripts/gate.sh']).status, 0)
+})
 `)
   writeTest(root, 'tests/kept-pin.test.js', `'use strict'
 const { test } = require('node:test')
@@ -1070,8 +1072,9 @@ const probe = (r) => r.health.json()
 test('retired despite the look-alike names (AC-20260920-01-1)', () => {})
 `)
   writeTest(root, 'tests/real-hit.test.js', `import { test } from 'vitest'
+import { spawnSync } from 'node:child_process'
 const script = 'scripts/log.js'
-test('kept: this file names a script the gate runs (AC-20260920-01-2)', () => {})
+test('kept: this file execs a script the gate runs (AC-20260920-01-2)', () => { spawnSync('node', [script]) })
 `)
   const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
   assert.strictEqual(r.status, 0, r.stdout + r.stderr)

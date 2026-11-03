@@ -5,7 +5,7 @@
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (specs/20261101/04-the-suite-pins-references-not-wording.md)
 - Applies to: core.md § Doctrine Authoring; the test-rule surfaces that restated its ban
-- Amended by: —
+- Amended by: specs/20261103/05-tests-that-earn-their-keep.md
 
 ## Context
 
@@ -31,6 +31,9 @@ a test. Pins are sliced by heading with `section` and spelled with `phrase` from
 `tests/helpers.js` so a reflow never reds them. The 51 wording pins found at plan time are
 deleted, not kept as golden snapshots; existing keeper pins stay in place. Every other surface
 that stated the ban shrinks to a pointer at core § Doctrine Authoring.
+
+Amendment (specs/20261103/05-tests-that-earn-their-keep.md): the kinds narrow to two — references and
+protocol tokens. A retired phrase is checked once at review through `[oracle: literals]` and leaves no test.
 
 ## Consequences
 

@@ -26,6 +26,11 @@
 // tracked extensions) resolved to every universe file sharing that basename. `scripts` is the
 // transitive closure reachable from `roots` by repeatedly following edges — never a hand list.
 //
+// Launchers: every file under a `bin/`
+// directory at depth <= 2 (`bin/*`, `*/bin/*`) is a launcher; every universe file whose basename a
+// launcher's comment-stripped text names becomes a root, and `launchers` lists them (rel paths) so
+// expire-tests.js can add each launcher's own basename to its keep-clause names.
+//
 // What this deliberately does NOT do: understand a shell/JS tokenizer precisely (comment
 // stripping here is a documented approximation — `#.*` per bash line, `//...`/`/* ... */` for the
 // rest — good enough to keep a stray comment from opening a false edge, but
@@ -128,6 +133,7 @@ function stripComments(src, ext) {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 }
 
+const LAUNCHER_RE = /^(?:[^/]+\/)?bin\/[^/]+$/
 const REQUIRE_RE = /require\(\s*(['"])(\.[^'"]+)\1\s*\)/g
 const IMPORT_RE = /import\s+[^;'"]*?from\s+(['"])(\.[^'"]+)\1/g
 
@@ -199,6 +205,24 @@ function deriveInvariants(root, config) {
   for (const s of hookCommandStrings(absRoot, allFiles)) for (const b of basenamesIn(s, rootRe)) rootBasenames.add(b)
   for (const b of PIPELINE_ENTRYPOINTS) rootBasenames.add(b)
 
+  // Launchers: any file under `bin/` or `*/bin/` (depth <= 2), outside skip dirs and test
+  // globs. Every universe basename a launcher's text names becomes a root.
+  const launchers = allFiles
+    .map((f) => relPosix(absRoot, f))
+    .filter((rel) => LAUNCHER_RE.test(rel) && !isTestClassified(rel, shapes))
+    .sort()
+  for (const rel of launchers) {
+    let src
+    try {
+      src = fs.readFileSync(path.join(absRoot, rel), 'utf8')
+    } catch {
+      continue
+    }
+    const ext = path.extname(rel)
+    const stripped = stripComments(src, ext === '.js' || ext === '.cjs' || ext === '.mjs' ? ext : '.sh')
+    for (const b of basenamesIn(stripped, rootRe)) rootBasenames.add(b)
+  }
+
   const roots = new Set()
   for (const base of rootBasenames) {
     const matches = universeByBasename.get(base)
@@ -225,6 +249,7 @@ function deriveInvariants(root, config) {
     roots: [...roots].sort(),
     scripts: [...scripts].sort(),
     edges: edgeMap,
+    launchers,
   }
 }
 

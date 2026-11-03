@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: standard
 area: test-expiry
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 4e19cf5b20dabd3019d013a40435546a0426ac27
 ---
 
 # Tests that earn their keep
@@ -42,6 +43,7 @@ one deliberate sweep deletes the prose one-offs and nothing that executes a pipe
 | D6 | The spec's own doctrine changes carry no `[oracle: literals]` criterion and no prose test: the review of this spec runs the installed plugin's `ac-matrix.js`, which reads `literals` as a manifest leg and would raise `oracle-red-or-absent`. The first consumer is the next spec after this version ships. [no-ac: wording — read by review] | Dogfooding the new oracle on the spec that introduces it reds its own review. |
 | D7 | `spec/.claude-plugin/plugin.json` is bumped with `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`. (AC-20261103-05-8) | Doctrine and script changes ship as one version; the gate's `--check` is the oracle. |
 | D8 | The one deliberate sweep `node "$(spec-paths test-expiry)" --root . --all-done --apply` runs once after this spec is `done`, on an installed plugin that carries it — queued as q26. This spec's File Plan holds no test deletion row. [no-ac: an operational follow-up the maintainer runs; no code of this spec changes] | Expiry deletes only through that command (grounding contract § Test expiry); the corrected classifier is what makes the run safe. |
+| D9 | Build-time scope widening: `tests/expiry/test-expiry.test.js`'s synthetic invariant and whole-name real-hit cases named their script only by file-level mention, so D4 retires them; their fixtures now exec the script (fixture repair per the Rationale's collision closure, no assertion weakened). `tests/expiry/invariants.test.js`'s live-repo never-listed subject moves from `memory-sweep.js` (now a root through the `spec/bin/spec-paths` launcher, D5) to `spec/evals/host.sh`, reached by no gate, hook, launcher or entrypoint. 📌 Auto-picked add to scope (whole-suite gate). [no-ac: fixture repair of existing tests] | The collision closure at lock predicted these; the gate adjudicated them. |
 
 ## File Plan
 
@@ -66,6 +68,7 @@ one deliberate sweep deletes the prose one-offs and nothing that executes a pipe
 | tests/ac-matrix/oracle-literals.test.js | CREATE | tests | AC-20261103-05-1, AC-20261103-05-2, AC-20261103-05-3 |
 | tests/expiry/case-reach.test.js | CREATE | tests | AC-20261103-05-4, AC-20261103-05-5, AC-20261103-05-6 |
 | tests/expiry/invariants.test.js | MODIFY | tests | AC-20261103-05-7 |
+| tests/expiry/test-expiry.test.js | MODIFY | tests | D9: fixture repair — the kept-invariant and whole-name real-hit cases exec their script, so D4's reach keeps them |
 
 ## Contracts
 

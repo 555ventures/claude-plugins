@@ -16,6 +16,12 @@
 // so a hand-transcribed observed string can never go stale. review.md's steps 5–6 shrink to
 // an invocation line.
 //
+// `[oracle: literals]` is evaluated here, in
+// process: its stems are the backtick spans after the tag run and before any `→` tail; a stem found
+// in a File Plan file (Layer not tests, Action not DELETE, path existing under --root) is hard
+// finding `literal-survives`; a stemless bullet is `literals-no-stem` (--lint and full mode). It
+// reads and appends no manifest row and is exempt from `missing-disposition`.
+//
 // What this deliberately does NOT do: render a report (report-render.js is the sole render
 // authority), compute the review verdict (verdict.js reads this script's manifest rows, never
 // the reverse), parse runner output to discover skipped-test names (the orchestrator extracts
@@ -215,7 +221,7 @@ const literalApplies = isCritical && !!(specDateMatch && specDateMatch[1] >= CRI
 
 // Literal detection:the bullet's raw minus the declaration-slot run, the trailing bare-tag
 // run and the disposition tail from its `→`; any backtick span left counts.
-function hasLiteral(raw) {
+function literalText(raw) {
   let text = raw
   const slot = slotRun(raw.split('\n')[0])
   if (slot) text = text.replace(slot, '')
@@ -227,7 +233,15 @@ function hasLiteral(raw) {
   for (let i = arrows.length - 1; i >= 0; i--) {
     if (parseDisposition('\u2192' + text.slice(arrows[i] + 1)) !== null) { text = text.slice(0, arrows[i]); break }
   }
-  return /`[^`\n]+`/.test(text)
+  return text
+}
+function hasLiteral(raw) {
+  return /`[^`\n]+`/.test(literalText(raw))
+}
+// `[oracle: literals]` stems: every backtick span in the bullet after the tag run and before
+// any `→` tail.
+function literalStems(raw) {
+  return Array.from(new Set((literalText(raw).match(/`[^`\n]+`/g) || []).map(t => t.slice(1, -1))))
 }
 
 // --lint returns HERE, before the full mode's File Plan read, coverage grep, or manifest
@@ -269,10 +283,20 @@ if (lintMode) {
   // own applicability cutoff uses). An inapplicable (undated, or pre-floor-dated) spec computes
   // neither counter and carries neither key in --json's observed.lint — every pre-existing tmpdir
   // fixture (no specs/<date>/ segment) keeps today's exact 3-key shape.
+  for (const b of wellFormed) {
+    if (b.oracle === 'literals' && literalStems(b.raw).length === 0) {
+      lintFindings.push({
+        severity: 'hard', class: 'literals-no-stem', ac: b.id,
+        detail: `${b.id}: [oracle: literals] declares no stem`,
+      })
+    }
+  }
+
   let missingDispositionCount = 0
   let unresolvedDispositionCount = 0
   if (dispositionApplies) {
     for (const b of wellFormed) {
+      if (b.oracle === 'literals') continue // its oracle has no test by construction (D1)
       const disposition = parseDisposition(b.raw)
       if (disposition === null) {
         missingDispositionCount++
@@ -509,8 +533,57 @@ const manifestRows = readManifestRows(manifestPath)
 // ---- step 5: coverage matrix (skipped entirely in --has-drift-script mode: host owns it) ----
 
 let oracleCovered = 0
+
+// ---- [oracle: literals]: evaluated in-process over the File Plan's non-tests, non-DELETE
+// files that exist under --root; no manifest row is read or written for it.
+const literalsBullets = wellFormed.filter(b => b.oracle === 'literals')
+if (literalsBullets.length > 0) {
+  const scoped = new Set()
+  for (const r of filePlanRows) {
+    if (isTestsRow(r) || (r.action || '').trim().toLowerCase() === 'delete') continue
+    for (const p of r.paths) {
+      if (p.includes('*')) {
+        if (allFilesCache === null) allFilesCache = walkAll(root, root)
+        for (const f of allFilesCache) if (globMatch(p, f)) scoped.add(f)
+      } else if (fs.existsSync(path.join(root, p))) {
+        scoped.add(p)
+      }
+    }
+  }
+  const scopedText = new Map()
+  for (const f of scoped) {
+    try { scopedText.set(f, fs.readFileSync(path.join(root, f), 'utf8')) } catch { /* unreadable: not searched */ }
+  }
+  for (const b of literalsBullets) {
+    const stems = literalStems(b.raw)
+    if (stems.length === 0) {
+      findings.push({
+        severity: 'hard', class: 'literals-no-stem', ac: b.id,
+        detail: `${b.id}: [oracle: literals] declares no stem`,
+      })
+      continue
+    }
+    let survived = false
+    for (const stem of stems) {
+      for (const [f, text] of scopedText) {
+        if (!text.includes(stem)) continue
+        survived = true
+        findings.push({
+          severity: 'hard', class: 'literal-survives', ac: b.id,
+          detail: `${b.id}: literal \`${stem}\` survives in ${f}`,
+        })
+      }
+    }
+    if (!survived) {
+      oracleCovered++
+      warnings.push(`${b.id}: oracle = literals (${stems.length} stems, ${scopedText.size} files)`)
+    }
+  }
+}
+
 if (!hasDriftScript) {
   for (const b of wellFormed) {
+    if (b.oracle === 'literals') continue
     if (acHits.get(b.id) > 0) continue
     if (b.oracle) {
       const row = manifestRows.get(b.oracle)
@@ -775,7 +848,7 @@ const skipReconcileObserved = { skipped: skipLines.length, sanctioned }
 // loops, so class membership alone cannot tell which leg actually observed it (that was the bug:
 // adding it to both sets reddened both legs from a single-loop emission). The exit derivation
 // below ORs each set's class test with the corresponding emission-site origin Set instead.
-const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file', 'invalid-pre-green'])
+const ACM_FINDING_CLASSES = new Set(['malformed-ac', 'uncovered-ac', 'oracle-red-or-absent', 'missing-test-file', 'invalid-pre-green', 'literal-survives', 'literals-no-stem'])
 const SKIP_FINDING_CLASSES = new Set(['unsanctioned-skip', 'unmapped-skip', 'critical-env-skip'])
 const acMatrixExit = findings.some(f => ACM_FINDING_CLASSES.has(f.class) || acMatrixOrigin.has(f)) ? 1 : 0
 const skipReconcileExit = findings.some(f => SKIP_FINDING_CLASSES.has(f.class) || skipOrigin.has(f)) ? 1 : 0

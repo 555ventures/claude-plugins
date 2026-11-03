@@ -451,6 +451,23 @@ test('AC-20260823-08-9 / AC-20260903-03-10: spec-queue next with no queue file s
 // retires `bump`; `move <ref> <n>` is the whole reorder API (D7), counting pending positions as
 // `list` numbers them (done items keep their slots, undone-but-not-ready items count as
 // pending).
+// Queue item q149: every non-add subcommand refuses an unknown --flag before touching the queue.
+test('move/done/show/next/list/groom exit 2 on an unknown --flag such as --root and leave the queue file byte-identical', () => {
+  const dir = moveHost()
+  const before = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
+  const other = fs.realpathSync(tmpdir('spec-queue-other'))
+  for (const argv of [['move', 'task C', '1', '--root', other], ['done', 'task A', '--root', other],
+    ['show', 'q1', '--root', other], ['next', '--root', other], ['list', '--root', other], ['groom', '--bogus']]) {
+    const r = runNode(SCRIPT, argv, { cwd: dir })
+    assert.strictEqual(r.status, 2,
+      `\`spec-queue ${argv.join(' ')}\` silently drops the flag and acts on the cwd repo's queue: ` + r.stdout + r.stderr)
+    assert.match(r.stderr, new RegExp(`${argv[0]}: unknown flag --`),
+      'the refusal does not name the offending flag, leaving the caller no path forward: ' + r.stderr)
+  }
+  assert.strictEqual(fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8'), before,
+    'a refused invocation still rewrote the queue file: the move landed in the wrong repo')
+})
+
 function moveHost() {
   return host({
     queue: [

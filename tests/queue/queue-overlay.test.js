@@ -462,3 +462,46 @@ test('an unticked queue item whose brief file is gone is still reported as a que
   assert.strictEqual(orphans.length, 1,
     'an open item pointing at a missing brief is real drift and must stay visible: ' + JSON.stringify(orphans))
 })
+
+// Queue item q149: a queue prompt row carries no brief, so it can neither be a lane nor be the
+// pick runner-ups are judged against.
+test('a decide prompt at the queue head never seats itself as the only lane — two independent hardened specs both become lanes, the prompt row still printed first', () => {
+  const dir = host({
+    briefs: {
+      '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
+      '08-b.md': '# 08 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: web\n',
+    },
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 05',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 08',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'prompt', lane: 'decide', payload: 'pick the export format', added: '2026-08-23T10:00:00Z' },
+      { id: 'q2', kind: 'spec', spec: 'specs/20260701/01-a.md', added: '2026-08-23T10:01:00Z' },
+      { id: 'q3', kind: 'spec', spec: 'specs/20260701/02-b.md', added: '2026-08-23T10:02:00Z' },
+    ],
+  })
+  const lanes = runNode(SCRIPT, ['--root', dir, '--lanes', '--json'])
+  assert.strictEqual(lanes.status, 0, '--lanes --json refuses this host, so the fan-out has no lanes to read: ' + lanes.stderr)
+  const out = JSON.parse(lanes.stdout)
+  assert.deepStrictEqual(out.lanes.map(l => l.path), ['specs/20260701/01-a.md', 'specs/20260701/02-b.md'],
+    'a briefless prompt at the queue head serializes every hardened spec behind it and the fan-out sees no lanes: ' + lanes.stdout)
+  assert.deepStrictEqual(out.serialized, [],
+    'a spec held "behind the top pick" when the top is a prompt row never gets dispatched: ' + lanes.stdout)
+
+  const r = runNode(SCRIPT, ['--root', dir])
+  assert.strictEqual(r.status, 0, 'the dashboard fails to render with a prompt at the queue head: ' + r.stderr)
+  const lines = r.stdout.split('\n')
+  const idx = lines.findIndex(l => l.includes('🎯 Next'))
+  const block = lines.slice(idx + 1, lines.indexOf('', idx + 1))
+  assert.match(block[0], /^q1\s.*pick the export format/,
+    'the pending decision drops out of the Next block and the user never sees it: ' + r.stdout)
+  assert.deepStrictEqual(block.slice(1), [
+    '⚡ 2 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):',
+    '/spec:run @specs/20260701/01-a.md', '/spec:run @specs/20260701/02-b.md',
+  ], 'the two independent specs are not offered as parallel lanes: ' + r.stdout)
+
+  const next = runNode(SCRIPT, ['--root', dir, '--next'])
+  assert.match(next.stdout, /pick the export format/,
+    'the --next pointer moved off the queue head, changing the user-ordered top pick: ' + next.stdout)
+})

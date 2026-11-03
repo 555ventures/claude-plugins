@@ -38,6 +38,12 @@
 // Fail-open: any parse failure or unexpected shape allows the call (never wedge).
 // Owner: specs/20260902/06-mocks-provenance-ledger.md.
 //
+// File mode: `question-style-gate.js --file <doc.json>` runs tier 1 only over the document's
+// `questions` (a delegated driver's pending-question file, relayed verbatim as a live call —
+// the pending-question contract). The judge never runs in this
+// mode. Exit 0 silent, or exit 2 with the same BLOCKED block; an unreadable file exits 2 too.
+// `check` is exported so pending-question.js validates through the same code.
+//
 // While a mocks run (design/mocks/status.json, state !== APPROVED) or a genesis run
 // (.claude/genesis/status.json, handoff null) is live under the resolved root, a "derive"
 // judge verdict is treated as pass ONLY when some question's text names a product-fact key
@@ -202,7 +208,33 @@ function judge(questions, input) {
   return null
 }
 
+function fileMode(file) {
+  let doc
+  try {
+    doc = JSON.parse(require('node:fs').readFileSync(file, 'utf8'))
+  } catch (e) {
+    process.stderr.write(`question-style-gate: cannot read ${file}: ${e.message} — pass a readable JSON document\n`)
+    process.exit(2)
+  }
+  const problems = check({ tool_input: { questions: doc && doc.questions } })
+  if (problems.length > 0) {
+    process.stderr.write(blockedText(problems))
+    process.exit(2)
+  }
+  process.exit(0)
+}
+
+function blockedText(problems) {
+  return (
+    'BLOCKED — question not answerable by a busy reader with no implementation context.\n' +
+    problems.map((p) => `- ${p}`).join('\n') +
+    '\nRewrite and resubmit: plain language (behaviors, not identifiers), each option description = the consequence of picking it (pros/cons in a phrase), recommended pick first with its reason.\n'
+  )
+}
+
 function main() {
+  const fi = process.argv.indexOf('--file')
+  if (fi !== -1) fileMode(process.argv[fi + 1] || '')
   let raw = ''
   try {
     raw = require('node:fs').readFileSync(0, 'utf8')
@@ -222,11 +254,7 @@ function main() {
     process.exit(0) // fail-open
   }
   if (problems.length > 0) {
-    process.stderr.write(
-      'BLOCKED — question not answerable by a busy reader with no implementation context.\n' +
-        problems.map((p) => `- ${p}`).join('\n') +
-        '\nRewrite and resubmit: plain language (behaviors, not identifiers), each option description = the consequence of picking it (pros/cons in a phrase), recommended pick first with its reason.\n'
-    )
+    process.stderr.write(blockedText(problems))
     process.exit(2)
   }
   // Tier 2: only questions that pass the deterministic floor reach the judge.
@@ -256,4 +284,6 @@ function main() {
   process.exit(0)
 }
 
-main()
+module.exports = { check }
+
+if (require.main === module) main()

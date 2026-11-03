@@ -37,3 +37,31 @@ test('AC-20261101-04-4: plugin-tests.md and conventions/tests.md name the prose-
   assert.match(constraints, /\bphrase\b/, 'the mode bullet must name phrase from tests/helpers.js')
   assert.ok(!agent.includes('tests/doctrine-review.test.js'), 'plugin-tests.md must stop prescribing the wording-pin file as exemplar')
 })
+
+// specs/20261102/02-a-delegated-driver-stops-on-disk.md D6/D7/D8 — the delegated-stop contract is
+// named once in core, and the command surfaces that depend on it keep their references.
+
+test('core.md keeps a Delegated Stops section naming the pending-question file, so every stage slices one contract', () => {
+  const body = section('spec/doctrine/core.md', /^## Delegated Stops/, /^## /)
+  assert.match(body, phrase('.claude/pending-question.json'),
+    'core § Delegated Stops must name the file a child session writes, or a worker has no contract to follow')
+})
+
+test('run.md keeps the already-in-a-spec-worktree skip line, and the run and fix section lists in spec-paths serve Delegated Stops', () => {
+  const run = whole('spec/commands/run.md')
+  assert.match(run, phrase('📌 Auto-picked in place — this session already sits in a worktree on the spec\'s branch (veto anytime)'),
+    'without the skip line a lane sub-agent already on the spec branch is asked to make a second worktree that git refuses')
+  const paths = whole('spec/bin/spec-paths')
+  for (const cmd of ['run', 'fix']) {
+    const line = paths.split('\n').find((l) => new RegExp('^\\s+' + cmd + '\\)\\s+SECTIONS=').test(l))
+    assert.ok(line, 'spec-paths must keep the ' + cmd + ' section list')
+    assert.match(line, /\|Delegated Stops(\||")/, 'the ' + cmd + ' section list must serve Delegated Stops, or that command never reads the contract')
+  }
+})
+
+test('fix.md names the three delegated question kinds it writes', () => {
+  const fix = whole('spec/commands/fix.md')
+  for (const kind of ['fix-dirty-tree', 'fix-decisions', 'fix-dispositions']) {
+    assert.ok(fix.includes(kind), 'fix.md must name kind ' + kind + ', or a parent cannot match its standing answers to that ask')
+  }
+})

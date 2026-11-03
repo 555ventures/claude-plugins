@@ -59,7 +59,7 @@ test('consequence-bearing descriptions allow', () => {
   assert.strictEqual(res.status, 0, res.stderr)
 })
 
-test('missing or too-short description blocks with rewrite guidance', () => {
+test('missing or too-short description blocks with rewrite guidance — AC-20261102-02-5', () => {
   const res = run(
     ask([
       {
@@ -352,4 +352,32 @@ test('AC-20261029-01-4: the tier-2 judge binary is invoked with the consecutive 
   const at = argv.indexOf('--model')
   assert.ok(at !== -1 && argv[at + 1] === 'haiku',
     'the judge must run on the haiku alias; a dated id retires silently and the judge then fails open with no message: ' + JSON.stringify(argv))
+})
+
+// specs/20261102/02-a-delegated-driver-stops-on-disk.md D2: --file checks a pending-question
+// document with tier 1 only, and never consults the judge.
+function runFile(questions) {
+  const dir = tmpdir('question-file')
+  const file = path.join(dir, 'doc.json')
+  const argvFile = path.join(dir, 'argv.txt')
+  const bin = path.join(dir, 'fake-claude')
+  fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, kind: 'repair-round', questions }))
+  fs.writeFileSync(bin, `#!/bin/sh\necho called >> ${JSON.stringify(argvFile)}\nprintf '%s' '{"verdict":"pass"}'\n`, { mode: 0o755 })
+  const res = spawnSync('node', [HOOK, '--file', file], {
+    encoding: 'utf8',
+    env: { ...process.env, SPEC_QUESTION_JUDGE: '', SPEC_QUESTION_JUDGE_BIN: bin },
+  })
+  return { res, judged: fs.existsSync(argvFile) }
+}
+
+test('AC-20261102-02-4: --file exits 2 with the BLOCKED block on a short option description and exits 0 silently on a clean document, never invoking the judge', () => {
+  const q = (opts) => [{ question: 'Which storage should the app use for session data?', header: 'Storage', multiSelect: false, options: opts }]
+  const bad = runFile(q([{ label: 'short-option', description: 'short' }, GOOD_ALT]))
+  assert.strictEqual(bad.res.status, 2, 'a thin description in the sidecar must block like the live call, or a parent relays an unanswerable question: ' + bad.res.stdout + bad.res.stderr)
+  assert.ok(bad.res.stderr.startsWith('BLOCKED — question not answerable by a busy reader'), 'the block text must be the hook\'s own: ' + bad.res.stderr)
+  assert.ok(bad.res.stderr.includes('option "short-option": description must state the consequence'), 'the finding must name the option: ' + bad.res.stderr)
+  const good = runFile(q([GOOD_OPT, GOOD_ALT]))
+  assert.strictEqual(good.res.status, 0, 'a clean document must pass: ' + good.res.stderr)
+  assert.strictEqual(good.res.stdout + good.res.stderr, '', 'a clean document must print nothing: ' + good.res.stdout + good.res.stderr)
+  assert.ok(!bad.judged && !good.judged, 'the non-deterministic judge must never run in file mode, or a coin flip gates a relayed question')
 })

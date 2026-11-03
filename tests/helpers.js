@@ -87,14 +87,21 @@ function tmpdir(prefix) {
   return fs.mkdtempSync(path.join(RUN_ROOT, prefix + '-'))
 }
 
+// specs/20261102/02-a-delegated-driver-stops-on-disk.md D9: the child-session marker is stripped
+// from every spawned script unless the caller's opts.env sets it, so the suite's in-session
+// expectations hold when the gate itself runs inside a lane sub-agent.
+function childEnv(opts) {
+  return { ...process.env, CLAUDE_CODE_CHILD_SESSION: undefined, ...(opts.env || {}) }
+}
+
 function runNode(script, argv, opts = {}) {
   return spawnSync(process.execPath, [path.join(SPEC, script), ...argv],
-    { encoding: 'utf8', ...opts })
+    { encoding: 'utf8', ...opts, env: childEnv(opts) })
 }
 
 function runBash(script, argv, opts = {}) {
   return spawnSync('bash', [path.join(SPEC, script), ...argv],
-    { encoding: 'utf8', ...opts })
+    { encoding: 'utf8', ...opts, env: childEnv(opts) })
 }
 
 // specs/20260909/06-ephemeral-serve-ports.md D2/D4's one legitimate use — no test in this

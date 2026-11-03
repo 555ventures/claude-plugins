@@ -161,6 +161,15 @@ The spec's Decisions table is authoritative. Workers apply it verbatim, never in
 never override. An unlocked fork is a `blocked` return, not a guess. A dismissed
 `AskUserQuestion` STOPS the run — never invent the answer the user declined to give.
 
+## Delegated Stops
+
+A driver or command running in a child session (the harness sets `CLAUDE_CODE_CHILD_SESSION`; the
+sub-agent has no `AskUserQuestion` tool) never asks. It writes `.claude/pending-question.json` at
+its repo root through `pending-question.js`, prints `PENDING_QUESTION`, and stops. Only the parent
+session writes an answer — `by: user` from a live `AskUserQuestion` it asked, `by: standing` from an
+answer the user gave that session up front; the worker never does. A dismissal is a STOP exactly as
+§ Decisions. A delegated review ends at `MERGE_READY` and the parent merges from the main root.
+
 ## Question Style (every `AskUserQuestion`, every stage)
 
 Enforced by `question-style-gate.js` — its header comment is the contract.

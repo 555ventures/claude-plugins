@@ -120,6 +120,9 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { runChild, runHost, writeOut, appendLedger, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
+// Delegated stops (pending-question contract): in a child
+// session an ask is written to .claude/pending-question.json instead of printed.
+const pq = require('./pending-question.js')
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig, readPipelineRules, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
@@ -1195,6 +1198,9 @@ function admitMark() {
   }
 }
 
+const redStopKey = () => pq.stopKey('red-findings', marks.lastRedCheckOutput || '')
+const escalateStopKey = () => pq.stopKey('build-escalate', (marks.gateRuns || []).length)
+
 function handleMark() {
   switch (MARK) {
     case 'tests-authored': return handleTestsAuthored()
@@ -1240,6 +1246,19 @@ function deriveState() {
 }
 
 // ---- run -------------------------------------------------------------------------------------------
+if (!MARK && !STATE_ONLY) {
+  const bare = pq.bareRun(repoRoot, marks, [], (kind) =>
+    kind === 'red-findings' ? redStopKey() : kind === 'build-escalate' ? escalateStopKey() : null)
+  if (bare) {
+    if (bare.changed) saveSidecar()
+    writeOut(1, bare.text + '\n')
+    process.exit(0)
+  }
+}
+if (MARK && marks.dismissedStop) {
+  die('--mark ' + MARK + ' refused \u2014 marks.dismissedStop records a dismissed question (' + marks.dismissedStop.kind +
+    '); the run ended \u2014 delete ' + sidecarDir + ' to restart')
+}
 let forcedState = null
 if (MARK) { admitMark(); forcedState = handleMark() }
 if (!STATE_ONLY) ensureRedCheckAdvanced()
@@ -1283,7 +1302,25 @@ function redFindingsGuidance() {
         `test is vacuous: rewrite it red.`)
     }
   }
-  if (askGreen) {
+  if (askGreen && pq.isDelegated()) {
+    const editThenRerun = `edit then node ${__filename} ${specPath}`
+    out.push(pq.stopLine(repoRoot, 'build', {
+      kind: 'red-findings', state: 'RED_FINDINGS', spec: specRel,
+      stopKey: redStopKey(),
+      questions: [{
+        id: 'q1', header: 'Red check',
+        question: 'The red check found a test that is green before any code was written, on a critical-tier spec. How should the build proceed?',
+        options: [
+          { label: 'remove the AC-ID mention (Recommended)', description: 'The known cause: the file mentions an acceptance ID in a comment or test name; the test keeps its assertions and the red check re-runs',
+            resume: editThenRerun },
+          { label: 'rewrite the test red', description: 'Use when the test is vacuous: the test is rewritten to fail before the code lands, which costs a rewrite',
+            resume: editThenRerun },
+          { label: 'pause the build', description: 'The build stops here and the lane ends so the green test can be investigated by hand',
+            resume: 'stop' },
+        ],
+      }],
+    }, marks))
+  } else if (askGreen) {
     out.push(`Ask ONE AskUserQuestion \u2014 an unsanctioned-green on a critical-tier spec:\n` +
       `  remove the AC-ID mention (Recommended) \u2014 the known cause; the test keeps its assertions\n` +
       `  rewrite the test red \u2014 when the test is vacuous\n` +
@@ -1420,6 +1457,29 @@ function escalateStepBody() {
       `  node ${__filename} ${specPath} --mark escalate-choice re-arm\n`
   }
   const rec = escalateRecommendation()
+  if (pq.isDelegated()) {
+    const choice = (c) => `node ${__filename} ${specPath} --mark escalate-choice ${c}`
+    return `## ESCALATE \u2014 repair iteration cap (3) reached\n` +
+      `${rec.text}\n` +
+      pq.stopLine(repoRoot, 'build', {
+        kind: 'build-escalate', state: 'ESCALATE', spec: specRel,
+        stopKey: escalateStopKey(),
+        questions: [{
+          id: 'q1', header: 'Repair cap',
+          question: 'The build hit its repair cap with the gate still red. How should the lane continue?',
+          options: [
+            { label: `re-arm one more round${rec.pick === 're-arm' ? ' (Recommended when shrinking)' : ''}`, description: 'One more gate run is allowed; the failures were shrinking, and red again re-trips the cap',
+              resume: choice('re-arm') },
+            { label: 'restart cold', description: 'The build sidecar is deleted and the next run resumes from the tree as it is, which costs the recorded progress',
+              resume: choice('cold') },
+            { label: 'park and queue a /spec:fix', description: 'The build stays parked and the queue\'s top item becomes the repair, which ends this lane',
+              resume: choice('park') },
+            { label: 'amend the spec', description: 'The Decisions table is edited first, then the build re-arms; costs a spec change but fixes a wrong decision',
+              resume: choice('amend') },
+          ],
+        }],
+      }, marks) + '\n'
+  }
   return `## ESCALATE \u2014 repair iteration cap (3) reached\n` +
     `${rec.text}\n` +
     `Ask ONE AskUserQuestion \u2014 options, consequences in each description:\n` +

@@ -168,6 +168,12 @@ stop offers one in-session repair round (`--mark repair-round`, cap 1) before `/
 review's fix-cap stop lists the open findings and recommends abandon-and-queue. Merge strategy
 is derived in every command from `merge-back.sh inspect`'s RECOMMEND line. Only the user
 waives, in every lane — `/spec:fix` included. (specs/20261029/07)
+In a child session (the harness sets `CLAUDE_CODE_CHILD_SESSION`; sub-agents have no AskUserQuestion) every judgment stop in the
+build and review drivers, `/spec:run` Step 0 and `/spec:fix` writes `.claude/pending-question.json`
+at the lane's repo root and prints `PENDING_QUESTION`; the parent session relays it and records the
+answer (`by: user` or `by: standing`); a bare re-run resumes from the answered file, stops on a
+dismissal, and waits otherwise. A delegated review ends at `MERGE_READY`; the parent merges from the
+main root. (specs/20261102/02)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

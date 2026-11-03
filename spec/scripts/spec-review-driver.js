@@ -268,6 +268,9 @@ const { countLegFinding } = require('./lib/leg-findings')
 const { measureDrift } = require('./lib/close-tree-drift')
 // Base-candidate ORDER only (pin before ref); this driver keeps its own validity predicate.
 const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
+// Delegated stops (pending-question contract): in a child
+// session every ask is written to .claude/pending-question.json instead of printed.
+const pq = require('./pending-question.js')
 
 // a worktree review's RED_BLOCKING hard-stop
 // durably appends here, at the MAIN root, instead of the worktree's own (destructible)
@@ -1607,6 +1610,50 @@ function handleDispositions() {
           'leg-finding pools for this iteration')
       }
     }
+    if (pq.isDelegated()) {
+      const open = ret.dispositions.filter((d) => (d.recommended === 'waive' || d.recommended === 'reject') && d.final === undefined)
+      if (open.length) {
+        const doc = pq.readPending(repoRoot)
+        const answers = (doc && doc.kind === 'dispositions' && doc.answers) || {}
+        if (!open.every((d) => answers[d.ref])) {
+          const markLine = 'node ' + __filename + ' ' + specPath + ' --mark dispositions --file ' + file
+          const line = doc
+            ? pq.waitingLine(repoRoot)
+            : pq.stopLine(repoRoot, 'review', {
+              kind: 'dispositions', state: 'DISPOSITIONS', spec: specRel,
+              questions: open.map((d) => {
+                const other = d.recommended === 'waive' ? 'reject' : 'waive'
+                return {
+                  id: d.ref, header: 'Disposition',
+                  question: 'The disposer recommends to ' + d.recommended + ' finding ' + d.ref + ': ' + String(d.reason).replace(/`/g, '').slice(0, 200) + ' What should the review do with it?',
+                  options: [
+                    { label: 'accept ' + d.recommended + ' (Recommended)', description: 'The finding is ' + d.recommended + 'd as the disposer recommended, on the evidence it quoted; it stays on the record and the review moves on',
+                      resume: markLine },
+                    { label: 'fix instead', description: 'The finding goes to a fix round instead, which costs another review pass but removes the defect',
+                      resume: markLine },
+                    { label: other + ' instead', description: 'The finding is ' + other + 'd instead of ' + d.recommended + 'd, recorded as a user override of the disposer',
+                      resume: markLine },
+                  ],
+                }
+              }),
+            })
+          writeOut(1, line + '\n')
+          process.exit(0)
+        }
+        for (const d of open) {
+          const label = answers[d.ref].label
+          const fate = label.startsWith('accept ') ? d.recommended : label.replace(/ instead$/, '')
+          d.final = fate
+          if (fate !== d.recommended) {
+            d.overriddenBy = 'user'
+            d.overrideReason = 'answered through the delegated stop by ' + answers[d.ref].by
+          }
+        }
+        raw = JSON.stringify(ret, null, 2) + '\n'
+        fs.writeFileSync(file, raw)
+        pq.consumePending(repoRoot)
+      }
+    }
     // Weighted tally: a survivor ref counts 1; a leg ref counts that leg's finding count — the
     // SAME number verdict.js's legFindings sums for the row (lib/leg-findings.js), so the counts
     // this mark passes to the verdict pass below cover exactly what its arithmetic subtracts.
@@ -2507,7 +2554,14 @@ function handleRepairRound() {
   return r.stopped ? 'STOPPED' : null
 }
 
+const repairStopKey = () => pq.stopKey('repair-round', marks.stoppedIteration || liveIteration(), marks.repairRounds || 0)
+const escalateStopKey = () => pq.stopKey('review-escalate', liveIteration())
+
 function handleMark() {
+  if (marks.dismissedStop) {
+    die('--mark ' + MARK + ' refused \u2014 marks.dismissedStop records a dismissed question (' + marks.dismissedStop.kind +
+      '); the run ended \u2014 delete ' + sidecarDir + ' to restart')
+  }
   switch (MARK) {
     case 'skips-extracted': return handleSkipsExtracted()
     case 'reviewer-returned': return handleReviewerReturned()
@@ -2599,6 +2653,15 @@ function deriveState() {
 }
 
 // ---- run ----------------------------------------------------------------------------------------
+if (!MARK && !STATE_ONLY) {
+  const bare = pq.bareRun(repoRoot, marks, ['dispositions'], (kind) =>
+    kind === 'repair-round' ? repairStopKey() : kind === 'review-escalate' ? escalateStopKey() : null)
+  if (bare) {
+    if (bare.changed) saveSidecar()
+    writeOut(1, bare.text + '\n')
+    process.exit(0)
+  }
+}
 let forcedState = null
 if (MARK) forcedState = handleMark()
 const state = forcedState || deriveState()
@@ -2676,11 +2739,28 @@ function escalatePoolBlock() {
   const { survivors, legs } = dispositionPools(currentN)
   const open = survivors.length + legs.length
   const queueAdd = `node "$(spec-paths spec-queue)" add "${specRel}: review escalated at the fix cap \u2014 ${open} open findings" --lane fix --top`
-  return `open findings (${open}):\n` +
+  const listing = `open findings (${open}):\n` +
     survivors.map((sv, i) => `  s${i} [hard] ${sv.file}:${sv.line} \u2014 ${sv.claim}`).join('\n') +
     (survivors.length && legs.length ? '\n' : '') +
     legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)}`).join('\n') +
-    (open ? '\n' : '') +
+    (open ? '\n' : '')
+  if (pq.isDelegated()) return listing + pq.stopLine(repoRoot, 'review', {
+    kind: 'review-escalate', state: 'ESCALATE', spec: specRel,
+    stopKey: escalateStopKey(),
+    questions: [{
+      id: 'q1', header: 'Review cap',
+      question: 'The review hit its fix cap with ' + open + ' findings still open. How should the lane exit?',
+      options: [
+        { label: 'waive or reject everything through the disposer (Recommended)', description: 'A disposer return waives or rejects every open finding with evidence and the review closes normally; nothing more is fixed in this run',
+          resume: `node ${__filename} ${specPath} --mark dispositions --file <return.json>` },
+        { label: 'abandon', description: 'The review sidecar is deleted and the run restarts cold; the escalate row stays on the ledger so the cap is not reset',
+          resume: 'stop', then: `delete ${sidecarDir}` },
+        { label: 're-plan', description: 'The review ends and the spec returns to planning through the queue, so the findings are addressed by a new plan',
+          resume: 'stop', then: `node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan` },
+      ],
+    }],
+  }, marks) + '\n'
+  return listing +
     `Ask ONE AskUserQuestion \u2014 options:\n` +
     `  abandon and queue /spec:fix (Recommended) \u2014 delete ${sidecarDir}, then ${queueAdd}\n` +
     `  waive all and close \u2014 a disposer return with every entry waive, then --mark dispositions --file <return.json>\n` +
@@ -2704,7 +2784,24 @@ const STEPS = {
       red.map((r) => `❌ ${r.leg} exit=${r.exit} ${JSON.stringify(r.observed)}`).join('\n') +
       `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
       `A GATE_RED ledger line has been appended to ${marks.stoppedLedgerPath}.\n` + remedy +
-      ((marks.repairRounds || 0) >= REPAIR_ROUND_CAP
+      (pq.isDelegated() && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
+        ? pq.stopLine(repoRoot, 'review', {
+          kind: 'repair-round', state: 'STOPPED', spec: specRel,
+          stopKey: repairStopKey(),
+          questions: [{
+            id: 'q1', header: 'Review stop',
+            question: 'A blocking review leg went red. What should the lane do?',
+            options: [
+              { label: 'run one in-session repair round (Recommended)', description: 'The lane fixes the failing leg through the review fix seat and re-runs the legs; red again lands here with the round spent',
+                resume: `node ${__filename} ${specPath} --mark repair-round` },
+              { label: 'queue /spec:fix and stop', description: 'The review ends; the repair becomes the queue\'s top item',
+                resume: 'stop', then: `node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top` },
+              { label: 'abandon the review', description: 'The review sidecar is deleted and the run ends; the GATE_RED row stays on the ledger',
+                resume: 'stop', then: `delete ${sidecarDir}; the GATE_RED row stays on the ledger` },
+            ],
+          }],
+        }, marks) + '\n'
+      : (marks.repairRounds || 0) >= REPAIR_ROUND_CAP
         ? `repair round spent (${REPAIR_ROUND_CAP} of ${REPAIR_ROUND_CAP}) \u2014 two exits:\n` +
           `  queue /spec:fix \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top\n` +
           `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n`
@@ -2791,10 +2888,12 @@ const STEPS = {
       `  reviewer return: ${marks.reviewerReturnFile}\n` +
       `  manifest: ${manifestPath}\n` +
       `  outputs: ${outDir}\n` +
-      `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
-      `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). ` +
-      `${RIDE_ALONG}\n` +
-      `Write the return to a file, then:\n` +
+      (pq.isDelegated()
+        ? `${RIDE_ALONG}\nwrite the return file as the disposer produced it, then:\n`
+        : `Fix recommendations dispatch without a question; waive/reject recommendations go to the ` +
+          `user (AskUserQuestion; record the answer as final with overriddenBy:"user" when it differs). ` +
+          `${RIDE_ALONG}\n` +
+          `Write the return to a file, then:\n`) +
       `  node ${__filename} ${specPath} --mark dispositions --file <return.json>\n` +
       `DISPOSER_FAILED is a failed dispatch, never a disposition — re-dispatch before marking.`
   },
@@ -2901,6 +3000,9 @@ const STEPS = {
       // q242: the merge-skipped arm never prints the MERGE step text, so the re-stamp note
       // rides the DONE note instead — the correction is printed on every close path.
       printDoneNow(restampLine + 'review ran on the originating branch — MERGE skipped, nothing to merge.')
+    }
+    if (pq.isDelegated()) {
+      return `## MERGE_READY \u2014 ${specRel} is closed on ${source}; the parent session runs the merge from ${mainRoot}`
     }
     const target = runChild('git', ['-C', mainRoot, 'symbolic-ref', '--short', 'HEAD'],
       { encoding: 'utf8' }, 'git symbolic-ref').stdout.trim()

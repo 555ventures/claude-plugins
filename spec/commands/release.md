@@ -160,7 +160,7 @@ never a silent promote. There is no path from here that carries it into a promot
 
 1. **Verdict + ledger row** — run:
    ```
-   node "$(spec-paths release-legs)" record --root . --manifest {manifestPath} --milestone {milestone} --briefs {shipped brief numbers, comma-separated}
+   node "$(spec-paths release-legs)" record --root . --manifest {manifestPath} --milestone {milestone} --briefs {shipped brief ids (NN or NNa), comma-separated}
    ```
    This is the **sole** verdict/ledger invocation point on every path — an early Phase 2 STOP,
    a red-journeys STOP, a declined or failed promote, and this normal close all run the exact

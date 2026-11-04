@@ -105,7 +105,7 @@ test('AC-20260823-08-1: spec-queue add writes spec-queue.json inside the git com
     'the queue file must stay invisible to git status --porcelain from the linked worktree too: ' + statusWt)
 })
 
-test('AC-20260903-03-1: spec-queue add <spec path> --top queues a `spec` item at position 0, and spec-status --next picks that spec over the previously-top brief', () => {
+test('AC-20260903-03-1 / AC-20261103-11-5: spec-queue add <spec path> --top queues a `spec` item at position 0, and spec-status --next picks that spec over the previously-top brief', () => {
   const dir = host({
     briefs: { '05-x.md': '# 05 — X\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
     specs: {
@@ -236,7 +236,7 @@ test('AC-20260903-03-11: spec-queue add --after-spec/--after-brief refuses a mis
     'D2: a deleted gate target must keep the item not-ready with a (missing) state, never silently release it: ' + JSON.stringify(gated))
 })
 
-test('AC-20260903-03-8 / AC-20261013-02-9: spec-queue list renders exactly the numbered pending format with an after-gate marker and a done-count footer, or the empty-pending line', () => {
+test('AC-20261103-11-3 (was AC-20260903-03-8 / AC-20261013-02-9): spec-queue list renders exactly the numbered pending format with an after-gate marker and a done-count footer, or the empty-pending line', () => {
   function listHost(withPending) {
     return host({
       briefs: {
@@ -250,8 +250,9 @@ test('AC-20260903-03-8 / AC-20261013-02-9: spec-queue list renders exactly the n
       specs: {
         '20260701/01-x.md': 'date: 2026-07-01\nstatus: done\nbrief: 20',
         '20260701/02-x.md': 'date: 2026-07-01\nstatus: done\nbrief: 21',
-        '20260903/04-reports-write-the-queue.md': 'date: 2026-09-03\nstatus: hardened',
-        '20260903/06-hotfix.md': 'date: 2026-09-03\nstatus: draft',
+        // The empty-pending host carries no open ad-hoc spec (AC-20261103-11-3): both are done there.
+        '20260903/04-reports-write-the-queue.md': 'date: 2026-09-03\nstatus: ' + (withPending ? 'hardened' : 'done'),
+        '20260903/06-hotfix.md': 'date: 2026-09-03\nstatus: ' + (withPending ? 'draft' : 'done'),
       },
       queue: [
         ...(withPending ? [
@@ -266,18 +267,22 @@ test('AC-20260903-03-8 / AC-20261013-02-9: spec-queue list renders exactly the n
   }
 
   const dirPending = listHost(true)
+  const pendingBefore = fs.readFileSync(path.join(dirPending, '.git/spec-queue.json'), 'utf8')
   const rPending = runNode(SCRIPT, ['list'], { cwd: dirPending })
   assert.strictEqual(rPending.status, 0, rPending.stderr)
   const rowsP = ageRows(rPending.stdout)
-  assert.deepStrictEqual(rowsP.map((x) => x.age), [ageOf('2026-09-03T10:00:00Z'), ageOf('2026-09-03T10:01:00Z'), ageOf('2026-09-03T10:02:00Z')],
+  assert.deepStrictEqual(rowsP.map((x) => x.age), [ageOf('2026-09-03T10:00:00Z'), ageOf('2026-09-03T10:01:00Z'), ageOf('2026-09-03T10:02:00Z'), '?'],
     'D2: every `list` row must carry its age (days since `added`) between the id and the description — an absent column leaves the reader to date items by hand: ' + rPending.stdout)
-  assert.deepStrictEqual(rowsP.map((x) => x.flag), ['', '', ''],
+  assert.deepStrictEqual(rowsP.map((x) => x.flag), ['', '', '', ''],
     'D2: briefs, gated prompts and specs are never flagged stale however old — a stale flag here sends the reader to drop live work: ' + rPending.stdout)
   assert.deepStrictEqual(rowsP.map((x) => x.head + '  ' + x.rest), [
     '1  q1  brief 24 (status-and-queue-diet)',
     '2  q2  /spec:plan @docs/roadmap/26-x.md  ⏳ after 04-reports-write-the-queue (hardened)',
     '3  q3  spec specs/20260903/06-hotfix.md',
+    '4  —  spec specs/20260903/04-reports-write-the-queue.md',
   ], 'D8: numbering 1-3, ids, the gated prompt\'s ⏳ blocker marker and descriptions must survive the age column unchanged: ' + rPending.stdout)
+  assert.strictEqual(fs.readFileSync(path.join(dirPending, '.git/spec-queue.json'), 'utf8'), pendingBefore,
+    'AC-20261103-11-3: `list` reconciles the unqueued open ad-hoc spec virtually — writing it would persist a placement the user never asked for')
   assert.match(rPending.stdout.trim().split('\n').pop(),
     /^— 2 done · move: spec-queue move <ref> <n> · full text: spec-queue show <ref>$/,
     'D8: the footer must still name the done count and the move remedy: ' + rPending.stdout)
@@ -417,7 +422,7 @@ test('AC-20260903-03-4 (was AC-20260823-08-8): an on-disk brief missing from the
     'D4: the queue-auto-placed anomaly kind must be deleted from spec-status.js — a surviving entry means the retired mechanism still fires: ' + JSON.stringify(jStatus.anomalies))
 })
 
-test('AC-20260823-08-9 / AC-20260903-03-10: spec-queue next with no queue file seeds every non-done brief in roadmap order, zero auto_placed stamps, one summary line', () => {
+test('AC-20261103-11-4 (was AC-20260823-08-9 / AC-20260903-03-10): spec-queue next with no queue file seeds every non-done brief in roadmap order, zero auto_placed stamps, one summary line', () => {
   const dir = host({
     briefs: {
       '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
@@ -430,7 +435,7 @@ test('AC-20260823-08-9 / AC-20260903-03-10: spec-queue next with no queue file s
 
   const r = runNode(SCRIPT, ['next'], { cwd: dir })
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /seeded queue with 3 briefs \(roadmap order\)/,
+  assert.match(r.stdout, /seeded queue with 3 briefs, 0 specs/,
     'D7: seeding an absent queue file must print exactly this one summary line, or a first-run adoption looks like silence: ' + r.stdout)
   const summaryLines = r.stdout.split('\n').filter((l) => /^seeded queue/.test(l))
   assert.strictEqual(summaryLines.length, 1,
@@ -442,6 +447,52 @@ test('AC-20260823-08-9 / AC-20260903-03-10: spec-queue next with no queue file s
     'D7: seeding must order the briefs exactly as roadmap order: ' + JSON.stringify(briefs))
   assert.ok(q.items.every((i) => !i.auto_placed),
     'D7: seeding must stamp zero items auto_placed — the queue is opt-in adoption, not an automatic placement that needs a veto: ' + JSON.stringify(q.items))
+})
+
+// specs/20261103/11-the-queue-sees-ad-hoc-specs.md: the reconcile also seeds every open
+// ad-hoc (`brief: n/a`, not done) spec as a `spec` item after the briefs, in path order.
+test('AC-20261103-11-1: spec-queue next with no queue file and only ad-hoc specs seeds the two open ones, prints the summary and the first paste, and list names them (never an empty queue)', () => {
+  const dir = host({
+    specs: {
+      '20261101/01-a.md': 'date: 2026-11-01\nstatus: hardened\nbrief: n/a',
+      '20261101/02-b.md': 'date: 2026-11-01\nstatus: implementing\nbrief: n/a',
+      '20261101/03-c.md': 'date: 2026-11-01\nstatus: done\nbrief: n/a',
+    },
+  })
+  const r = runNode(SCRIPT, ['next'], { cwd: dir })
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stdout.trim(), 'seeded queue with 0 briefs, 2 specs\n/spec:run @specs/20261101/01-a.md',
+    'an ad-hoc-only host must get the seed line and the first open spec, not "queue empty" while work is open: ' + r.stdout)
+  assert.ok(!/queue empty/.test(r.stdout), 'the empty-queue line while hardened specs are open sends the maintainer away from live work: ' + r.stdout)
+  const items = readQueue(dir).items
+  assert.deepStrictEqual(items.map((i) => ({ id: i.id, kind: i.kind, spec: i.spec })), [
+    { id: 'q1', kind: 'spec', spec: 'specs/20261101/01-a.md' },
+    { id: 'q2', kind: 'spec', spec: 'specs/20261101/02-b.md' },
+  ], 'exactly the two open ad-hoc specs are queued, in path order, and the done one never is: ' + JSON.stringify(items))
+  const l = runNode(SCRIPT, ['list'], { cwd: dir })
+  assert.strictEqual(l.status, 0, l.stderr)
+  assert.deepStrictEqual(ageRows(l.stdout).map((x) => x.head + '  ' + x.rest), [
+    '1  q1  spec specs/20261101/01-a.md',
+    '2  q2  spec specs/20261101/02-b.md',
+  ], 'list must number both open ad-hoc specs; "nothing pending" here hides open work: ' + l.stdout)
+  assert.ok(!/nothing pending/.test(l.stdout), 'list printed the empty line over open specs: ' + l.stdout)
+})
+
+test('AC-20261103-11-2: spec-queue next seeds missing briefs first and then only the ad-hoc spec, never a spec item for a spec that carries a brief', () => {
+  const dir = host({
+    briefs: { '05-x.md': '# 05 — X\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
+    specs: {
+      '20261101/01-x.md': 'date: 2026-11-01\nstatus: hardened\nbrief: 05',
+      '20261101/02-y.md': 'date: 2026-11-01\nstatus: hardened\nbrief: n/a',
+    },
+  })
+  const r = runNode(SCRIPT, ['next'], { cwd: dir })
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /^seeded queue with 1 briefs, 1 specs$/m,
+    'the summary must count seeded briefs and seeded specs separately: ' + r.stdout)
+  const items = readQueue(dir).items
+  assert.deepStrictEqual(items.map((i) => i.kind + ' ' + (i.brief || i.spec)), ['brief 05', 'spec specs/20261101/02-y.md'],
+    'briefs come first, then the ad-hoc spec; a briefed spec is covered by its brief item and is never double-seeded: ' + JSON.stringify(items))
 })
 
 // Rewritten in place (never left red) — specs/20260903/03-pipeline-queue-mechanics.md D6
@@ -748,18 +799,20 @@ const writeFanout = (dir, obj) => fs.writeFileSync(path.join(dir, '.git/spec-fan
 
 test('AC-20261103-08-1: spec-queue add stamps origin and trigger on a free-text item and on a spec item, and writes no batch key without a fan-out table', () => {
   const dir = host({ specs: ORIGIN_SPECS })
+  // The spec add runs first: the first write seeds every open ad-hoc spec (spec 20261103/11 D2),
+  // and only the add's own payload is spared from that seed (D4).
+  const r2 = runNode(SCRIPT, ['add', 'specs/20260701/02-b.md', '--origin', 'specs/20260701/01-a.md', '--stage', 'plan', '--trigger', 'gap'], { cwd: dir })
+  assert.strictEqual(r2.status, 0, 'a spec item takes the same flags: ' + r2.stdout + r2.stderr)
   const r = runNode(SCRIPT, ['add', 'repair x', '--lane', 'fix', '--origin', 'specs/20260701/01-a.md', '--stage', 'review', '--trigger', 'red-leg'], { cwd: dir })
   assert.strictEqual(r.status, 0, 'the three provenance flags must be accepted by add, or no pipeline step can record who queued an item: ' + r.stdout + r.stderr)
   assert.match(r.stdout, /added/, 'add keeps printing its added line: ' + r.stdout)
-  const item = readQueue(dir).items[0]
+  const item = readQueue(dir).items.find((i) => i.kind === 'prompt')
   assert.deepStrictEqual(item.origin, { spec: 'specs/20260701/01-a.md', stage: 'review' }, 'origin must be the {spec, stage} pair, or the fan-out cannot tell which lane bore the item: ' + JSON.stringify(item))
   assert.strictEqual(item.trigger, 'red-leg', 'trigger must be stamped verbatim, or the render prints the wrong cause: ' + JSON.stringify(item))
   assert.ok(!('batch' in item), 'with no spec-fanout.json there is no run to stamp, or an item claims membership of a run that never existed: ' + JSON.stringify(item))
   assert.deepStrictEqual(Object.keys(item), ['id', 'kind', 'lane', 'payload', 'added', 'origin', 'trigger'], 'the new keys are appended after the existing ones, or readers that depend on key order shift: ' + JSON.stringify(item))
 
-  const r2 = runNode(SCRIPT, ['add', 'specs/20260701/02-b.md', '--origin', 'specs/20260701/01-a.md', '--stage', 'plan', '--trigger', 'gap'], { cwd: dir })
-  assert.strictEqual(r2.status, 0, 'a spec item takes the same flags: ' + r2.stdout + r2.stderr)
-  const spec = readQueue(dir).items.find((i) => i.kind === 'spec')
+  const spec = readQueue(dir).items.find((i) => i.kind === 'spec' && i.spec === 'specs/20260701/02-b.md')
   assert.ok(spec && spec.origin && spec.origin.stage === 'plan' && spec.trigger === 'gap',
     'the stamp applies whatever the item kind, or a /spec:plan lock queues an unmarked spec: ' + JSON.stringify(spec))
 })

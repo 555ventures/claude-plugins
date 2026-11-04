@@ -5,7 +5,7 @@
 // Owner: specs/20260903/03-pipeline-queue-mechanics.md.
 // The queue is the pipeline's memory for deferred work: an item can wait behind a spec or a
 // brief (an "after" gate) until that target is done, an ad-hoc spec can be queued by path at
-// any position, a landed brief is appended last with no mark, and a brief or spec is queued at
+// any position, a landed brief is appended last with no mark, an open ad-hoc spec is appended last, after the missing briefs, like a landed brief, and a brief or spec is queued at
 // most once. spec-status.js reads this file read-only as an input overlay to its `--next`
 // derivation — it never writes it, and this script never re-derives `--next`'s own
 // action/blockers shape; for a non-prompt item it delegates the paste line to
@@ -67,7 +67,7 @@ const { readLedgerRows } = require('./lib/observation')
 const { parseBrief, relateBriefs } = require('./lib/brief')
 const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
-  dedupeItems, reconcileMissingBriefs,
+  dedupeItems, reconcileMissingBriefs, reconcileMissingSpecs,
   promptDupScore, citesDoneSpec, LANES, promptAction,
   STAGES, TRIGGERS, originLine,
 } = require('./lib/queue')
@@ -292,11 +292,15 @@ function ctxFor(statusJson) {
 
 // Virtual reconcile shared by every subcommand: dedupe -> append missing on-disk briefs last, on a copy;
 // only a write subcommand persists the result.
-function reconciledItems(rawItems, statusJson, { append }) {
+function reconciledItems(rawItems, statusJson, { append, excludeSpec = null }) {
   let items = dedupeItems(rawItems)
   if (append) {
     const disk = onDiskBriefs(statusJson).filter(b => b.status !== 'done')
     items = reconcileMissingBriefs(items, disk).items
+    const openSpecs = statusJson.specs
+      .filter(sp => parseBrief(sp.brief).kind === 'adhoc' && sp.status !== 'done' && sp.path !== excludeSpec)
+      .map(sp => sp.path).sort()
+    items = reconcileMissingSpecs(items, openSpecs).items
   }
   return items
 }
@@ -474,7 +478,10 @@ switch (sub) {
     const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
     const ctx = ctxFor(statusJson)
     const { items: written } = persist(items, raw ? raw.seq : 0, ctx)
-    if (!raw) console.log(`seeded queue with ${written.length} briefs (roadmap order)`)
+    if (!raw) {
+      const n = k => written.filter(it => it.kind === k).length
+      console.log(`seeded queue with ${n('brief')} briefs, ${n('spec')} specs`)
+    }
     printTopLine(topPick(written, ctx))
     process.exit(0)
   }
@@ -584,7 +591,7 @@ switch (sub) {
     }
 
     const raw = loadQueue()
-    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
+    const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true, excludeSpec: specPath || null })
     const ctx = ctxFor(statusJson)
 
     // A brief or spec is queued at most once, whatever the existing item's doneness. A pending duplicate is

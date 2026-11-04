@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: critical           # spec/scripts/verdict.js changes how --briefs reaches the release ledger row (§ Risk Tiers: verdict.js is a trigger)
 area: pipeline
 breaking: false
 depends_on: [specs/20261103/06-the-fan-out-drains-the-queue.md]
 brief: n/a
 open_markers: 0
+diff_base: 0f1e8700fb0e365ea07e144caec143e22864a59d
 ---
 
 # The queue sees ad-hoc specs

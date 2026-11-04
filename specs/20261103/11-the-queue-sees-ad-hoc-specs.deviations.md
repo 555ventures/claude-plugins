@@ -1,0 +1,4 @@
+# Deviations — 11-the-queue-sees-ad-hoc-specs
+
+- Unplanned collision (A3 false): tests/queue/spec-queue.test.js `AC-20261103-08-1` goes red under D2 — its host has hardened ad-hoc spec `01-a.md`, now virtually seeded at `items[0]`, so the free-text item it adds lands at index 1 and `readQueue(dir).items[0]` is the spec. The test is a stale setup this spec owes (File Plan fix row: assert via `items.find(i => i.kind === 'prompt')` or use a host with no open ad-hoc spec); the script was not narrowed and the test was not edited by the scripts worker.
+  Resolved by the orchestrator under A3's if-false arm (fix row in the File Plan's existing tests/queue/spec-queue.test.js row, no assertion weakened): the test now runs the spec add first (D4 spares its own payload from the first seed) and finds the prompt and spec items by kind/path rather than by index.

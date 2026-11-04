@@ -55,7 +55,7 @@
 // with --profile release (remedy: `git rev-parse --verify <ref>^{commit}`); a --via value other
 // than loop/direct; --checkpoint outside disposer|empty|not-reached, --checkpoint-overrides
 // without --checkpoint disposer or not a non-negative integer; --sessionTokens neither a JSON
-// object nor null; any review-only flag with --profile release. Each refusal names its flag.
+// object nor null; any review-only flag with --profile release; a --briefs token that is not an NN or NNa id (stderr names the token). Each refusal names its flag.
 
 const fs = require('fs')
 const path = require('path')
@@ -65,6 +65,7 @@ const crypto = require('crypto')
 const { countLegFinding } = require('./lib/leg-findings')
 // One derivation of "this release leg measured nothing" shared with release-legs.js's summary.
 const { unmeasuredReason } = require('./lib/release-unmeasured')
+const { normBrief } = require('./lib/queue')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
@@ -115,6 +116,19 @@ for (let i = 0; i < argv.length; i++) {
   else { usage(); process.exit(2) }
 }
 if (!manifestPath) { usage(); process.exit(2) }
+// --briefs: NN or NNa ids only; the first other token (an empty one included) is a usage error.
+let briefIds = null
+if (briefsArg) {
+  briefIds = []
+  for (const raw of briefsArg.split(',')) {
+    const tok = raw.trim()
+    if (!/^\d+[A-Za-z]?$/.test(tok)) {
+      console.error(`verdict.js: --briefs token "${tok}" is not a brief id — pass NN or NNa ids, comma-separated (e.g. --briefs 04,04a)`)
+      process.exit(2)
+    }
+    briefIds.push(/^\d+$/.test(tok) ? Number(tok) : normBrief(tok))
+  }
+}
 if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
   console.error('verdict.js: --waived/--rejected/--fixDispatched must be numbers')
   process.exit(2)
@@ -501,10 +515,7 @@ if (ledger) {
   if (escalated) row.escalated = true
   if (profile === 'release') {
     if (milestone) row.milestone = milestone
-    if (briefsArg) {
-      const briefs = briefsArg.split(',').map(s => Number(s.trim())).filter(Number.isFinite)
-      if (briefs.length) row.briefs = briefs
-    }
+    if (briefIds && briefIds.length) row.briefs = briefIds
     const deployRow = legRows.get('deploy'), readyRow = legRows.get('ready')
     if (deployRow && readyRow) row.staging = (deployRow.exit === 0 && readyRow.exit === 0) ? 'pass' : 'fail'
     // A present leg row copies its observed object verbatim; an absent row (a STOP path) omits

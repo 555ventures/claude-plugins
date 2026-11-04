@@ -181,8 +181,8 @@ established pattern never gets a spec — the plugin will tell you the same.
 
 - **Behavior lives in scripts; prose states contracts.** Deterministic checks are scripts with
   exit codes (`spec/scripts/`), pinned by behavioral tests that execute them;
-  prose is pinned only for the references, retired phrases and protocol tokens it must keep
-  (core § Doctrine Authoring). A standing guard is earned by a third recurrence of a class (core § Incident
+  prose is pinned only for the references and protocol tokens it must keep
+  (core § Doctrine Authoring); retiring wording is checked once at review through `[oracle: literals]`. A standing guard is earned by a third recurrence of a class (core § Incident
   Policy), never by an incident memory written into doctrine.
 - **The design family's `wf-*.js` files are frozen checked-in scripts** (the codegen seam was
   retired in v7.0); they change only under a spec that names them, pending the v7.1 design

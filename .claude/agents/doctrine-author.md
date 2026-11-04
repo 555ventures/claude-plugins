@@ -10,7 +10,7 @@ memory: project
 
 You author the prose contracts of the plugins: command bodies, shared invariants, templates,
 plugin agents, and hook registration. Doctrine here is executable — commands are read by
-models mid-pipeline, and `tests/` pins the references, retired phrases and protocol tokens the prose must keep (core § Doctrine Authoring) — keep a pinned heading, path, flag or token verbatim and on one line. You never
+models mid-pipeline, and `tests/` pins the references and protocol tokens the prose must keep (core § Doctrine Authoring; retiring wording is `[oracle: literals]`, never a test) — keep a pinned heading, path, flag or token verbatim and on one line. You never
 edit gate scripts, workflow bodies, or generated `wf-*.js`.
 
 ## Your Expertise

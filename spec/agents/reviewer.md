@@ -81,7 +81,8 @@ were your range.
 - Config/override/flag promises are verified by **executing the path end-to-end with the
   override set**, never by reading the plumbing.
 - A `[no-ac: <reason>]` tag whose reason is false — the decision names testable behavior the
-  spec never turned into an AC — is **hard**.
+  spec never turned into an AC — is **hard**. A `[no-ac: wording …]` Decision whose wording
+  is not in the diff is a finding.
 - A regression pin (`SHALL CONTINUE TO` AC) whose covering test the diff deletes is hard even
   when the AC lives in an earlier spec.
 

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: standard
 area: test-expiry
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 4e19cf5b20dabd3019d013a40435546a0426ac27
 ---
 
 # Tests that earn their keep
@@ -42,6 +43,7 @@ one deliberate sweep deletes the prose one-offs and nothing that executes a pipe
 | D6 | The spec's own doctrine changes carry no `[oracle: literals]` criterion and no prose test: the review of this spec runs the installed plugin's `ac-matrix.js`, which reads `literals` as a manifest leg and would raise `oracle-red-or-absent`. The first consumer is the next spec after this version ships. [no-ac: wording — read by review] | Dogfooding the new oracle on the spec that introduces it reds its own review. |
 | D7 | `spec/.claude-plugin/plugin.json` is bumped with `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`. (AC-20261103-05-8) | Doctrine and script changes ship as one version; the gate's `--check` is the oracle. |
 | D8 | The one deliberate sweep `node "$(spec-paths test-expiry)" --root . --all-done --apply` runs once after this spec is `done`, on an installed plugin that carries it — queued as q26. This spec's File Plan holds no test deletion row. [no-ac: an operational follow-up the maintainer runs; no code of this spec changes] | Expiry deletes only through that command (grounding contract § Test expiry); the corrected classifier is what makes the run safe. |
+| D9 | Build-time scope widening: `tests/expiry/test-expiry.test.js`'s synthetic invariant and whole-name real-hit cases named their script only by file-level mention, so D4 retires them; their fixtures now exec the script (fixture repair per the Rationale's collision closure, no assertion weakened). `tests/expiry/invariants.test.js`'s live-repo never-listed subject moves from `memory-sweep.js` (now a root through the `spec/bin/spec-paths` launcher, D5) to `spec/evals/host.sh`, reached by no gate, hook, launcher or entrypoint. 📌 Auto-picked add to scope (whole-suite gate). [no-ac: fixture repair of existing tests] | The collision closure at lock predicted these; the gate adjudicated them. |
 
 ## File Plan
 
@@ -66,6 +68,7 @@ one deliberate sweep deletes the prose one-offs and nothing that executes a pipe
 | tests/ac-matrix/oracle-literals.test.js | CREATE | tests | AC-20261103-05-1, AC-20261103-05-2, AC-20261103-05-3 |
 | tests/expiry/case-reach.test.js | CREATE | tests | AC-20261103-05-4, AC-20261103-05-5, AC-20261103-05-6 |
 | tests/expiry/invariants.test.js | MODIFY | tests | AC-20261103-05-7 |
+| tests/expiry/test-expiry.test.js | MODIFY | tests | D9: fixture repair — the kept-invariant and whole-name real-hit cases exec their script, so D4's reach keeps them |
 
 ## Contracts
 
@@ -166,6 +169,13 @@ exemplar and is untouched. The `executes` hits on `expire-tests.js` and `lib/inv
 classification on synthetic hosts; a synthetic case kept today by a file-level mention and now
 retired is a fixture repair in the same wave, never a weakened clause — the build's whole-suite
 check adjudicates.
+
+Build/review deviations (folded 2026-11-03, all one-offs):
+- Fixture repairs (D9): `tests/expiry/test-expiry.test.js`'s kept-invariant case (spec 20260911/03 ACs 3 and 4) now execs `scripts/gate.sh` and its whole-name real-hit case execs `scripts/log.js`; `tests/expiry/invariants.test.js`'s live-repo never-listed subject (spec 20260911/03 AC 2) moved from `memory-sweep.js`, now a root through the `spec/bin/spec-paths` launcher, to `spec/evals/host.sh`. No assertion weakened.
+- A2's if-false arm fired at review: a case requiring its helper inside the test body (`citations-check.test.js`'s spec-paths case) was retired, so `lib/case-reach.js` now follows relative requires in the call text, and `caseRequires` resolves each require against the module that wrote it rather than the test file's directory (reviewer findings s0/s1, fixed, regression cases in `tests/expiry/case-reach.test.js`).
+
+### Advisory debt (review rv_1ef7c7b19fe2)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-aed1ad7bd43194483/tests/ceiling/sync-write-callers.test.js:33 — Also retired in the same live dry run: the five `tests/ceiling/sync-write-callers.test.js` AC-20261101-09-1 cases, which spawn pipeline scripts via `runNode('scripts/' + name + '.js', ...)` over a `FIVE` list of bare names — the script basename is interpolated, so no textual reach rule can see it. Not reachable by the D4 rule as locked; flagged for the maintainer before the q26 sweep.
 
 ## Canonical Delta
 

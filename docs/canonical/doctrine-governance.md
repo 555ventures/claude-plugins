@@ -6,8 +6,8 @@ governing rules now:
 
 - **One binding home per rule** (core.md § Doctrine Authoring): prose that restates canon
   living elsewhere shrinks to a pointer; touch-time dedup, never a sweep.
-- **Prose is pinned for three things only** (core.md § Doctrine Authoring): references it must keep, phrases it must no longer
-  contain, and protocol tokens an executor prints verbatim; a pin on the wording of a rule is
+- **Prose is pinned for two things only** (core.md § Doctrine Authoring): references it must keep and protocol tokens an
+  executor prints verbatim; retiring wording is checked once at review through `[oracle: literals]`, never a test; a pin on the wording of a rule is
   not a test — `/doctrine-review` reads wording (ADR-0037).
 - **Incident policy** (core.md § Incident Policy): an incident is fixed with a behavioral
   test in the same session; only a third recurrence of a class — counted across every readable

@@ -1,9 +1,9 @@
 ---
 name: feedback-pinned-sentence-hardwrap
-description: A pinned doctrine phrase (reference, retired phrase, or verbatim protocol token) must survive markdown line-wrap — keep it unwrapped, and expect tests to spell it with phrase() (whitespace runs become \s+); wording-of-a-rule pins no longer exist
+description: A pinned doctrine phrase (reference or verbatim protocol token) must survive markdown line-wrap — keep it unwrapped, and expect tests to spell it with phrase() (whitespace runs become \s+); wording-of-a-rule pins no longer exist
 metadata:
   type: feedback
-  reviewed: 2026-11-01
+  reviewed: 2026-11-03
 ---
 
 When a task says "keep this sentence verbatim — it's a regex pin," the danger isn't
@@ -25,10 +25,11 @@ done. Always re-run the pinned test after any prose rewrite that touches a load-
 sentence, even when the diff "obviously" kept the words intact.
 
 **Corrected 2026-11-01 (specs/20261101/04, core.md § Doctrine Authoring):** the suite now pins
-prose ONLY for three kinds: references (paths, spec-paths keys, flags, headings, step labels,
-caps), retired phrases (`doesNotMatch`), and protocol tokens printed verbatim. A pin on the
+prose ONLY for two kinds (narrowed from three by specs/20261103/05): references (paths,
+spec-paths keys, flags, headings, step labels, caps) and protocol tokens printed verbatim;
+retired wording is an `[oracle: literals]` AC checked once at review, never a test. A pin on the
 wording of a rule is not a test, and 51 such pins were deleted, so "keep this sentence verbatim,
-it's a regex pin" should now only come up for those three kinds. New pins slice by heading with
+it's a regex pin" should now only come up for those two kinds. New pins slice by heading with
 `section(rel, startRe, endRe)` and spell literals with `phrase(literal, flags)` from
 `tests/helpers.js`, which turns whitespace runs into `\s+`, so a wrap inside the phrase no longer
 false-negatives the test. The wrap risk remains for old-style bare-word pins and for any token

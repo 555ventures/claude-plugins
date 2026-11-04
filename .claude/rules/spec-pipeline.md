@@ -103,9 +103,10 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   message stating the **consequence of failure**, not the expectation.
 - Tests are **behavioral**: exec-a-script against a synthetic host in `tmpdir()` via
   `runNode`/`runBash`, asserting on status + output. Fixtures (`tests/fixtures/`) only when
-  the input must be a realistic multi-file artifact. Prose is pinned only for references, retired phrases and protocol
+  the input must be a realistic multi-file artifact. Prose is pinned only for references and protocol
   tokens (core § Doctrine Authoring), sliced by heading with `section` and spelled with `phrase`
-  from `tests/helpers.js` so a reflow never reds a pin; a pin on wording is not a test — a rule
+  from `tests/helpers.js` so a reflow never reds a pin; a criterion that retires wording declares
+  `[oracle: literals]` and leaves no test; a pin on wording is not a test — a rule
   that matters gets a script (core § Incident Policy).
 - Tests cite the owner id they pin in a header comment — spec path, AC-ID, or escape row id;
   pipeline-authored tests for new specs reference AC-IDs in the test name (`AC-{YYYYMMDD-NN}-1`).

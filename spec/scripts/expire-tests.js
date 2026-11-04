@@ -27,9 +27,13 @@
 // when every AC-ID it cites belongs to a spec that is `done` or `superseded`
 // (a superseded owner is a terminal retire state, same as done) AND none of three keep
 // clauses fire: (a) its own call text names a ledger escape class (`.claude/spec-runs.jsonl`'s
-// `class` keys, top-level or nested in `incidents[]`); (b) its FILE's text names the basename of
-// a script in lib/invariants.js's derived set (a script the pipeline itself runs) as a whole name,
-// never inside a longer one (`catalog.json` does not name `log.js`); (c) a cited AC
+// `class` keys, top-level or nested in `incidents[]`); (b) the case's REACH (lib/case-reach.js: its call
+// text plus the top-level declarations it names, one hop into relative requires, depth 3) names the
+// basename of a script in lib/invariants.js's derived set — or of a launcher under `bin/` — as a
+// whole name, never inside a longer one (`catalog.json` does not name `log.js`), AND holds a
+// child-process call; or the reach `require`s a relative file in that set. Text outside the
+// reach never keeps a case. A host declaring
+// `testCaseScanner` keeps the file-level text rule for the cases that scanner lists; (c) a cited AC
 // bullet (normalized whitespace, code spans stripped) contains `SHALL CONTINUE TO` and its own
 // spec is dated on or after the 20260911 floor — or the test is the one a `SHALL CONTINUE TO`
 // bullet of any such spec that is not superseded names with `→ reuses <file> :: <title>`, whatever
@@ -87,6 +91,7 @@ const fs = require('fs')
 const path = require('path')
 const { listTestFiles, scanCalls, scanCases, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
+const { caseReach, caseRequires } = require('./lib/case-reach')
 const {
   extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck, parseDisposition,
 } = require('./lib/spec-sections')
@@ -265,10 +270,27 @@ if (closingSpecRel !== null) {
 // and not followed by a name character — so `catalog.json` never names `log.js` and
 // `health.json()` never names `health.js`, while `scripts/log.js` and `'log.js'` still do.
 const escapeRe = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const invariantSet = deriveInvariants(root, config)
+const invariantScripts = new Set(invariantSet.scripts)
 const invariantNamePatterns = Array.from(
-  new Set(deriveInvariants(root, config).scripts.map((s) => path.posix.basename(s))),
+  new Set(invariantSet.scripts.concat(invariantSet.launchers || []).map((s) => path.posix.basename(s))),
   (base) => new RegExp('(?<![\\w.-])' + escapeRe(base) + '(?!\\w)'),
 )
+const CHILD_PROCESS_CALL = /\b(?:spawnSync|execFileSync|execSync|spawn|execFile|exec|fork)\s*\(/
+
+// True when a relative require the reach opened (each resolved against the directory of the file
+// that wrote it) lands on a file in the invariants set.
+function requiresInvariant(abs) {
+  return abs.some((t) => invariantScripts.has(relPosix(t)))
+}
+
+function keepsByReach(call, fileText, file) {
+  // A host-scanner case carries no JavaScript call text the resolver can read: file-level rule.
+  if (call.source === 'host') return invariantNamePatterns.some((re) => re.test(fileText))
+  const reach = caseReach(call.callText, path.join(root, file))
+  if (CHILD_PROCESS_CALL.test(reach) && invariantNamePatterns.some((re) => re.test(reach))) return true
+  return requiresInvariant(caseRequires(call.callText, path.join(root, file)))
+}
 
 function collectEscapeClasses() {
   const classes = new Set()
@@ -330,9 +352,7 @@ function classify(call, ids, fileText, file) {
   for (const cls of escapeClasses) {
     if (call.callText.includes(cls)) return 'class'
   }
-  for (const re of invariantNamePatterns) {
-    if (re.test(fileText)) return 'invariant'
-  }
+  if (keepsByReach(call, fileText, file)) return 'invariant'
   for (const id of ids) {
     const owners = acOwners.get(id) || []
     for (const owner of owners) {

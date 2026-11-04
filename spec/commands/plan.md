@@ -81,7 +81,7 @@ Write the spec per the template. `status: draft`. While drafting:
    `node "$(spec-paths ac-matrix)" --spec {spec path} --lint --resolve-root .` — zero findings
    to lock (`node "$(spec-paths count-tests)" --root . --titles [--file <rel>]` is the reference lookup for
    `unresolved-disposition`). Then: zero open forks; every shape-triggered micro-spike executed with evidence in
-   Assumptions; every Goal promise traced to a Decision that delivers it and an AC that goes red in its absence — run
+   Assumptions; every Goal promise traced to a Decision that delivers it and an AC that goes red in its absence (or a `[no-ac: wording …]` sanction for a prose-only Decision) — run
    `node "$(spec-paths promise-sweep)" --spec {spec path}` (no `--manifest`), resolving every `orphan-decision` finding
    by citing the delivering AC in the row or recording `[no-ac: <reason>]`; zero orphans to lock. Then run
    `node "$(spec-paths decision-lint)" --spec {spec path} --root .`, resolving every finding by tagging the row —

@@ -1,0 +1,248 @@
+#!/usr/bin/env node
+'use strict'
+// prototype.js — /spec:prototype driver. A throwaway worktree on proto/<stem> carries a dev-only pin
+// overlay; the user pins notes from their own browser round after round until they reply `approve`;
+// the pins then become design/prototypes/<stem>/contract.json and a queued /spec:plan.
+//
+//   node prototype.js <idea words | docs/roadmap/NN-*.md | stem> [--stem <name>] [--mark <verb>]
+//   node prototype.js serve --stem <s> --port <n>    pin endpoint: POST /pin {pins:[…]}, GET /pins
+//   node prototype.js check --stem <s> [--json]      is the prototype wired and consistent?
+//
+// States OPEN → ROUND (×N) → APPROVED → CONTRACTED → CLOSED. Marks: opened, round-done, approved,
+// contracted, closed (accepted from any resting state). State: design/prototypes/<stem>/status.json
+// (marks, rounds, branch, worktree, pinsPort); pins.json is the pin endpoint's; contract.json is
+// written at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
+
+const fs = require('fs')
+const path = require('path')
+const http = require('http')
+const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
+const state = require('./lib/state')
+const git = require('./lib/git')
+const { render } = require('./lib/report')
+
+const STEM_RE = /^[a-z0-9][a-z0-9._-]*$/
+const KINDS = ['behaviour', 'look']
+const now = () => new Date().toISOString()
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/, '')
+const pinsPort = (stem) => 4700 + ([...stem].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 200)
+const statusFile = (root, stem) => path.join(root, 'design', 'prototypes', stem, 'status.json')
+
+// ---- input: brief path | existing stem | idea words ---------------------------------------
+
+function resolveStem(ctx) {
+  const arg = ctx.arg
+  let stem, brief = null, auto = false
+  if (/\.md$/.test(arg)) { brief = arg; stem = path.basename(arg, '.md') }
+  else if (fs.existsSync(statusFile(ctx.root, arg))) stem = arg
+  else { stem = slug(arg); auto = true }
+  if (ctx.flags.stem && ctx.flags.stem !== true) { stem = String(ctx.flags.stem); auto = false }
+  if (!STEM_RE.test(stem)) refuse(`'${stem}' is not a usable stem — pass --stem <lowercase-name>`)
+  return { stem, brief, auto, idea: brief || fs.existsSync(statusFile(ctx.root, stem)) ? null : arg }
+}
+
+// ---- the driver ---------------------------------------------------------------------------
+
+function load(ctx) {
+  const r = resolveStem(ctx)
+  ctx.stem = r.stem
+  ctx.arg = r.stem // every printed mark line names the resolved stem
+  ctx.config = state.readConfig(ctx.root)
+  const saved = state.readProto(ctx.root, r.stem).status
+  return saved || {
+    stem: r.stem, brief: r.brief, idea: r.idea, stemAuto: r.auto, branch: 'proto/' + r.stem,
+    worktree: `.claude/worktrees/proto-${r.stem}`, pinsPort: pinsPort(r.stem), rounds: 0, ready: false, marks: {},
+  }
+}
+
+const save = (s, ctx) => state.writeProto(ctx.root, ctx.stem, { status: s })
+
+function phase(s) {
+  const m = s.marks
+  if (m.closed) return 'CLOSED'
+  if (!m.opened) return 'OPEN'
+  if (!m.approved) return 'ROUND'
+  return m.contracted ? 'CONTRACTED' : 'APPROVED'
+}
+
+// Worktree on proto/<stem> from trunk, with the overlay copied beside the host's dev entry.
+function setup(s, ctx) {
+  const wt = git.worktreeAdd(ctx.root, s.worktree, s.branch, git.trunk(ctx.config))
+  const dest = path.join(wt, path.dirname(ctx.config.prototype.overlay), 'proto-overlay.js')
+  const tpl = fs.readFileSync(path.join(__dirname, '..', 'templates', 'proto-overlay.js'), 'utf8')
+  state.writeText(dest, tpl.replace('__PIN_ENDPOINT__', `http://127.0.0.1:${s.pinsPort}`))
+  s.ready = true
+}
+
+const entryWired = (s, ctx) => {
+  const text = state.readText(path.join(ctx.root, s.worktree, ctx.config.prototype.overlay), '')
+  return /proto-overlay/.test(text)
+}
+
+function derive(s, ctx) {
+  const p = ctx.config.prototype
+  const cmd = (mark) => `node ${ctx.script} ${ctx.stem} --root ${ctx.root} --mark ${mark}`
+  const serveCmd = `node ${ctx.script} serve --stem ${ctx.stem} --port ${s.pinsPort} --root ${ctx.root}`
+  const startLines = [
+    `Start the app in the background from ${s.worktree}: ${p.bootCommand || '(the host boot command)'}  — it should answer at ${p.url}`,
+    `Start the pin endpoint in the background: ${serveCmd}`,
+  ]
+  switch (phase(s)) {
+    case 'OPEN':
+      if (!s.ready) return { name: 'OPEN', auto: setup }
+      return {
+        name: 'OPEN', mark: 'opened', accepts: ['closed'],
+        body: [
+          s.stemAuto ? `📌 Auto-picked stem ${ctx.stem} (veto anytime: re-run with --stem <name>)` : '',
+          `Prototype worktree ${s.worktree} on ${s.branch}, from ${git.trunk(ctx.config)}. The overlay file is already there as proto-overlay.js beside ${p.overlay}.`,
+          `1. In ${s.worktree}, import it from ${p.overlay} behind a dev flag (e.g. \`if (import.meta.env.DEV) import('./proto-overlay.js')\`) and commit on ${s.branch}.`,
+          ...startLines.map((l, i) => `${i + 2}. ${l}`),
+          s.brief ? `Build what ${s.brief} describes.` : `Build a throwaway prototype of: ${s.idea || ctx.stem}.`,
+        ].filter(Boolean).join('\n'),
+      }
+    case 'ROUND':
+      return {
+        name: 'ROUND', mark: 'round-done', accepts: ['approved', 'closed'],
+        body: [
+          `Round ${s.rounds + 1}. If the app or pin endpoint is not running:`, ...startLines.map((l) => '- ' + l),
+          `Print exactly: 🎨 ready for pins — ${p.url}   then END YOUR TURN.`,
+          `On the user's reply: a literal \`approve\` → ${cmd('approved')}`,
+          'Anything else is a change: apply it in the worktree, commit on the prototype branch, then mark round-done.',
+        ].join('\n'),
+      }
+    case 'APPROVED':
+      return { name: 'APPROVED', mark: 'contracted', accepts: ['closed'], body: `Approved after ${s.rounds} round(s). Mark contracted to write the contract from the pins.` }
+    case 'CONTRACTED':
+      return {
+        name: 'CONTRACTED', mark: 'closed',
+        body: render({
+          outcome: `✅ contract written — design/prototypes/${ctx.stem}/contract.json`,
+          bullets: 'Commit design/prototypes/' + ctx.stem + '/ on trunk. Worktree and branch stay until the specs built from this are done; then mark closed.',
+          queued: `/spec:plan design/prototypes/${ctx.stem}/contract.json`,
+          next: `/spec:plan design/prototypes/${ctx.stem}/contract.json`,
+        }),
+      }
+    default:
+      return { name: 'CLOSED', body: render({ outcome: `✅ prototype closed — ${ctx.stem}`, bullets: 'worktree and branch removed', next: 'nothing needs you — the contract carries on' }) }
+  }
+}
+
+const steps = {
+  opened(s, _f, ctx) {
+    if (!entryWired(s, ctx)) refuse(`${ctx.config.prototype.overlay} in ${s.worktree} does not import proto-overlay.js yet — add the dev-only import, commit it, then mark opened`)
+    s.marks.opened = now()
+  },
+  'round-done'(s) { s.rounds += 1; s.marks.lastRound = now() },
+  approved(s) { s.marks.approved = now() },
+  contracted(s, _f, ctx) {
+    const pins = state.readProto(ctx.root, ctx.stem).pins || []
+    if (!pins.length) refuse('no pins were recorded — a prototype that changed nothing is the direct lane; nothing to contract')
+    const rec = ({ id, kind, route, selector, note }) => ({
+      id, kind, route, ...(selector ? { selector } : {}), note, sentence: `When ${route}, ${String(note).trim().replace(/\.$/, '')}.`,
+    })
+    state.writeProto(ctx.root, ctx.stem, { contract: { stem: ctx.stem, rounds: s.rounds, pins: pins.map(rec) } })
+    const payload = `/spec:plan design/prototypes/${ctx.stem}/contract.json`
+    const q = state.readQueue(ctx.root)
+    if (!q.items.some((i) => i.payload === payload && !i.done)) {
+      q.seq += 1
+      q.items.push({ id: 'q' + q.seq, kind: 'prompt', payload, added: now() })
+      state.writeQueue(ctx.root, q)
+    }
+    s.marks.contracted = now()
+  },
+  closed(s, _f, ctx) {
+    git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch })
+    s.marks.closed = now()
+  },
+}
+
+const driver = makeDriver({
+  name: 'prototype', specArg: 'idea words | docs/roadmap/NN-*.md | stem', load, save, derive, steps,
+  script: __filename,
+})
+
+// ---- serve: the pin endpoint ---------------------------------------------------------------
+
+function validPin(p) {
+  if (!p || typeof p !== 'object') return 'a pin must be an object'
+  if (!KINDS.includes(p.kind)) return `kind must be ${KINDS.join(' or ')}`
+  if (typeof p.route !== 'string' || !p.route.startsWith('/')) return 'route must be a path starting with /'
+  if (typeof p.note !== 'string' || !p.note.trim()) return 'note must not be empty'
+  if (p.selector !== undefined && typeof p.selector !== 'string') return 'selector must be a string'
+  return null
+}
+
+function serve(a) {
+  const stem = a.flags.stem, port = Number(a.flags.port)
+  if (!STEM_RE.test(String(stem)) || !Number.isInteger(port)) refuse('usage: serve --stem <stem> --port <n> [--root <dir>]')
+  const root = a.root
+  const reply = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
+  const server = http.createServer((req, res) => {
+    res.setHeader('access-control-allow-origin', '*')
+    res.setHeader('access-control-allow-headers', 'content-type')
+    if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
+    if (req.method === 'GET' && req.url === '/pins') return reply(res, 200, state.readProto(root, stem).pins || [])
+    if (req.method !== 'POST' || req.url !== '/pin') return reply(res, 404, { error: 'POST /pin or GET /pins' })
+    let raw = ''
+    req.on('data', (c) => { raw += c; if (raw.length > 1e6) req.destroy() })
+    req.on('end', () => {
+      let body
+      try { body = JSON.parse(raw) } catch { return reply(res, 400, { error: 'body is not JSON' }) }
+      const list = body && body.pins
+      if (!Array.isArray(list) || !list.length) return reply(res, 400, { error: 'send {pins: [ … ]} with at least one pin' })
+      for (const p of list) { const why = validPin(p); if (why) return reply(res, 400, { error: why }) }
+      const docs = state.readProto(root, stem)
+      const pins = docs.pins || []
+      let n = pins.reduce((m, p) => Math.max(m, Number(String(p.id).slice(1)) || 0), 0)
+      const round = ((docs.status && docs.status.rounds) || 0) + 1
+      const added = list.map((p) => ({ id: 'p' + ++n, kind: p.kind, route: p.route, ...(p.selector ? { selector: p.selector } : {}), note: p.note.trim(), round, at: now() }))
+      state.writeProto(root, stem, { pins: [...pins, ...added] })
+      reply(res, 201, { ids: added.map((p) => p.id) })
+    })
+  })
+  server.listen(port, '127.0.0.1', () => writeOut(1, `pin endpoint http://127.0.0.1:${port} (stem ${stem})\n`))
+}
+
+// ---- check ---------------------------------------------------------------------------------
+
+function check(a) {
+  const stem = String(a.flags.stem)
+  const s = state.readProto(a.root, stem).status
+  if (!s) refuse(`no prototype '${stem}' — run /spec:prototype first`)
+  const ctx = { root: a.root, config: state.readConfig(a.root) }
+  const problems = []
+  const wt = path.resolve(a.root, s.worktree)
+  if (!fs.existsSync(wt) || !git.worktreeList(a.root).includes(fs.realpathSync(wt))) problems.push(`worktree ${s.worktree} is missing`)
+  else if (!entryWired(s, ctx)) problems.push(`${ctx.config.prototype.overlay} does not import proto-overlay.js`)
+  const pins = (state.readProto(a.root, stem).pins || []).length
+  const out = { stem, step: phase(s), rounds: s.rounds, pins, problems }
+  writeOut(1, a.json ? JSON.stringify(out) + '\n' : `${stem}: ${out.step}, ${s.rounds} round(s), ${pins} pin(s)${problems.length ? '\n' + problems.map((p) => '✗ ' + p).join('\n') : ' — ok'}\n`)
+  return problems.length ? 1 : 0
+}
+
+// ---- entry ---------------------------------------------------------------------------------
+
+function main(argv) {
+  const sub = ['serve', 'check'].includes(argv[0]) && argv.includes('--stem') ? argv[0] : null
+  try {
+    const a = parseArgv(sub ? argv.slice(1) : argv)
+    if (sub === 'serve') return void serve(a)
+    if (sub === 'check') return check(a)
+    // `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
+    const out = [a.pos.join(' '), '--root', a.root].filter(Boolean)
+    if (a.mark) out.push('--mark', a.mark)
+    if (a.state) out.push('--state')
+    if (a.json) out.push('--json')
+    for (const [k, v] of Object.entries(a.flags)) out.push('--' + k, ...(v === true ? [] : [v]))
+    return driver(out)
+  } catch (e) {
+    writeOut(2, `prototype: ${e.message}\n`)
+    return typeof e.exit === 'number' ? e.exit : 1
+  }
+}
+
+if (require.main === module) {
+  const code = main(process.argv.slice(2))
+  if (code !== undefined) process.exitCode = code
+}
+module.exports = { main }

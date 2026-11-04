@@ -233,3 +233,22 @@ Later builders: use these, do not re-derive them.
 - Tests: `tests/helpers.js` exports `ROOT, SPEC, RUN_ROOT, tmpdir, gitRepo, runNode, runBash,
   freePort`; `runNode(script)` resolves `script` against `spec/` (or takes an absolute path).
   `npm test` = `node --test --test-timeout=45000 'tests/**/*.test.js'` (no stdout preload).
+
+### fanout.js notes
+
+Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout created and marked with
+`lib/pending.markLane`; `run.js` detects it with `lib/pending.isLane(cwd)`):
+
+- **In lane mode run.js stops at MERGE_READY after COMMIT; fanout merges.** It writes run state
+  `step: 'MERGE_READY'` (readable by fanout as `readRun(<worktree>/<spec>).step`) with the branch
+  committed, and does not merge, remove the worktree, delete the branch, clear the sidecar or write
+  `status: done` — fanout does all of that (status done + sidecar clear + commit in the lane,
+  `mergeBack` into trunk, `gate` on root, `worktreeRemove` with the branch, queue tick).
+- OPEN in lane mode creates no second worktree: it runs in place in the lane worktree
+  (`.claude/worktrees/spec-<stem>`, branch `spec/<stem>`, both made by fanout from trunk) and still
+  runs `setupCommand`.
+- Any question or ESCALATE in lane mode: `writePending(<worktree>, {lane: <stem>, question,
+  options})`, print `stopLine`, exit 0, run state left at its step. Re-dispatched with the same
+  `/spec:run <spec>` after fanout records the answer, run.js reads `readPending(<worktree>).answer`,
+  `consumePending`s it, and continues. fanout treats a pending doc with `answer: null` as "stopped".
+- run.js must not refuse a re-run in a lane whose state is already MERGE_READY (no-op exit 0).

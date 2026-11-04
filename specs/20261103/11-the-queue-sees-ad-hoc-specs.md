@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: critical           # spec/scripts/verdict.js changes how --briefs reaches the release ledger row (§ Risk Tiers: verdict.js is a trigger)
 area: pipeline
 breaking: false
@@ -181,6 +181,17 @@ Collision closure (literals `seeded queue with`, `briefs (roadmap order)`, `noth
 implementation (A3); `spec/scripts/release-legs.js` forwards `--briefs` verbatim and is unchanged;
 `tests/verdict-require-leg.test.js` passes `--briefs 16`, a valid id whose row shape is unchanged;
 `docs/canonical/release-pipeline.md` is updated by the Canonical Delta at close.
+
+Build deviation (2026-11-03, folded from the sidecar): A3's inventory missed one collision —
+spec 08's AC-1 test added a free-text item on a host holding an open ad-hoc spec and read
+`items[0]`, which D2 now seeds with the spec. Fixed under A3's if-false arm in the existing
+`tests/queue/spec-queue.test.js` row: the spec add runs first (D4 spares its payload) and items
+are found by kind/path, no assertion weakened. The D2 filter is spelled
+`parseBrief(sp.brief).kind === 'adhoc'` (same meaning as `brief === null`) because spec 10's
+variant-lint refuses a raw `.brief` equality outside `lib/brief.js`.
+
+### Advisory debt (review rv_364f5452958b)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-aca3b0416339914e9/spec/scripts/spec-queue.js:8 — The header-comment sentence D2 adds to spec-queue.js was spliced into the middle of a hard-wrapped comment paragraph as one ~170-char line instead of being reflowed with the surrounding ~100-col lines.
 
 ## Canonical Delta
 

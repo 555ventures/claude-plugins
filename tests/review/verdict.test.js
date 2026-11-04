@@ -1023,7 +1023,7 @@ const RELEASE_SEVEN_LEGS = [
   { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
 ]
 
-test('AC-20260813-02-5 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per D5): --profile release --ledger with --milestone/--briefs and all seven green legs incl. ci observed conclusion=success derives plain CLEAN (never CLEAN-with-qualifier) matching release.md\'s template', () => {
+test('AC-20260813-02-5 / AC-20261103-11-8 (AC-20260805-02-8 / AC-20260810-07-5, byte-identical per D5): --profile release --ledger with --milestone/--briefs and all seven green legs incl. ci observed conclusion=success derives plain CLEAN (never CLEAN-with-qualifier) matching release.md\'s template', () => {
   const dir = tmpdir('verdict')
   const manifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
   const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
@@ -1742,4 +1742,33 @@ test('AC-20260903-02-8: WHEN a review manifest is green on every other leg and c
     'D3: the hard-stop pass (no --workflow) must also derive GATE_RED from the red suite row alone — a red ' +
     `blocking leg reaches GATE_RED before a panel would ever be required: ${noWorkflow.stdout} / ${noWorkflow.stderr}`)
   assert.strictEqual(noWorkflow.status, 1, 'GATE_RED with no --workflow must exit 1: ' + noWorkflow.stderr)
+})
+
+// specs/20261103/11-the-queue-sees-ad-hoc-specs.md D5: --briefs takes NN or NNa ids; a plain id
+// keeps its number, a lettered id is recorded as its normalized string, anything else exits 2.
+test('AC-20261103-11-6: --profile release --ledger --briefs 04,04a records [4,"04a"] and 4A records ["04a"] on a CLEAN row', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
+  const run = (briefs) => runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
+    '--milestone', 'v1.2.3', '--briefs', briefs])
+  const a = run('04,04a')
+  assert.strictEqual(a.stdout.split('\n')[0], 'CLEAN', 'a valid mixed list must not change the verdict: ' + a.stdout + a.stderr)
+  assert.deepStrictEqual(JSON.parse(a.stdout.trim().split('\n')[1]).briefs, [4, '04a'],
+    'the lettered brief id silently dropped from the ledger row hides a shipped brief: ' + a.stdout)
+  const b = run('4A')
+  assert.deepStrictEqual(JSON.parse(b.stdout.trim().split('\n')[1]).briefs, ['04a'],
+    'an upper-case lettered id must be normalized to 04a, not dropped: ' + b.stdout + b.stderr)
+})
+
+test('AC-20261103-11-7: --briefs with a token that is not an NN or NNa id exits 2 with empty stdout and stderr naming the token', () => {
+  const dir = tmpdir('verdict')
+  const manifest = writeManifest(dir, RELEASE_SEVEN_LEGS)
+  for (const [briefs, token] of [['04,x', 'x'], ['04,,05', '']]) {
+    const r = runNode(SCRIPT, ['--manifest', manifest, '--profile', 'release', '--ledger',
+      '--milestone', 'v1.2.3', '--briefs', briefs])
+    assert.strictEqual(r.status, 2, '--briefs ' + briefs + ' must be a usage error, or a typo silently drops a shipped brief: ' + r.stdout + r.stderr)
+    assert.strictEqual(r.stdout, '', 'a refused --briefs must print nothing so release-legs record appends no ledger row: ' + r.stdout)
+    assert.ok(r.stderr.includes('--briefs token "' + token + '" is not a brief id'),
+      'stderr must name the offending token: ' + r.stderr)
+  }
 })

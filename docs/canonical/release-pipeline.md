@@ -19,11 +19,12 @@ release.md's prose:
   session-observed legs (journeys, production via `append`; rollback via `rollback --decision
   run|decline`). It validates the closed grammar, derives the row's exit itself, and
   refuses a duplicate row for a leg already in the manifest.
-- `record --root <dir> --manifest <path> [--milestone <s>] [--briefs N,N]` — the single
+- `record --root <dir> --manifest <path> [--milestone <s>] [--briefs NN,NNa]` — the single
   `verdict.js --profile release --ledger` invocation point on **every** path: early-leg STOP,
   red-journeys STOP, declined promote, and the normal close alike. It derives
   `--require migrations` from the config itself, streams verdict.js's two lines verbatim, and
-  exits with verdict.js's own exit.
+  exits with verdict.js's own exit. verdict.js records a plain id as its number and a lettered id
+  as its `NNa` string, and refuses any other token with exit 2 naming it.
 
 Exit alphabet, all three subcommands: 0 = green/recorded · 1 = red, or (for `stage`) any leg
 unmeasured · 2 = usage or precondition failure, every 2 naming its remedy. A row that measured

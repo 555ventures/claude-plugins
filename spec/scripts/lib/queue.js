@@ -128,6 +128,20 @@ function reconcileMissingBriefs(items, onDiskBriefs) {
   return { items: items.concat(inserted), inserted }
 }
 
+// Appends every open ad-hoc spec path not already queued as a spec item at the very end (after any
+// missing briefs), in the given (path) order, with `id: null` — the caller assigns real ids.
+// Returns NEW arrays.
+function reconcileMissingSpecs(items, openSpecs) {
+  const present = new Set(items.filter(it => it.kind === 'spec').map(it => it.spec))
+  const inserted = []
+  for (const p of openSpecs) {
+    if (present.has(p)) continue
+    inserted.push({ id: null, kind: 'spec', spec: p })
+    present.add(p)
+  }
+  return { items: items.concat(inserted), inserted }
+}
+
 // Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4.
 // Short words and punctuation carry no duplicate signal.
 function promptTokens(payload) {
@@ -220,6 +234,6 @@ function namedFiles(text, { exists, plans } = {}) {
 module.exports = {
   STAGES, TRIGGERS, originLine, namedFiles,
   normBrief, isSupersededBriefText, evaluateWhen, isItemDone, isItemReady, makeCtx,
-  dedupeItems, reconcileMissingBriefs,
+  dedupeItems, reconcileMissingBriefs, reconcileMissingSpecs,
   promptTokens, jaccard, isPathPayload, promptDupScore, citesDoneSpec, LANES, promptAction,
 }

@@ -20,7 +20,10 @@ entries across briefs (a queued spec's own position overrides its brief's); a no
 entries carry an `after <target> (<state>)` blocker and sink with the other blocked entries;
 prompt items surface verbatim; red-observation `/spec:fix` entries still rank first; linked
 worktrees suppress the overlay entirely. A brief that lands on the roadmap is appended last
-with no mark or notice. No queue file means the derivation is unchanged. Statuses and payloads
+with no mark or notice. Every open ad-hoc spec (`brief: n/a`, not done) is appended after the
+briefs as a spec item, in specs/ file order, so the queue is never empty while one is open; `add`
+of a not-yet-queued ad-hoc spec places it where asked. The first seed prints `seeded queue with N
+briefs, M specs`. (specs/20261103/11-the-queue-sees-ad-hoc-specs.md) No queue file means the derivation is unchanged. Statuses and payloads
 stay derived — the queue stores only ordering, gates, free-text payloads, and done-when
 predicates.
 

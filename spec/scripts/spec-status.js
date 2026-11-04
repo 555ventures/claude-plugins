@@ -93,6 +93,8 @@ function writeOut(str) {
   syncWrite(1, str + '\n')
 }
 const { parseFilePlan } = require('./lib/file-plan')
+const { globMatch } = require('./lib/glob-match')
+const { policy: hostPolicy, readConfig: readHostConfig } = require('./lib/host-config')
 // sinceLastRelease feeds the
 // footer's ignorable done-since-release clause — computed once over the SAME `ledgerRows` this
 // file already reads for the observation sub-state below, never a second ledger read.
@@ -406,6 +408,7 @@ if (queueOverlay.on) {
       return {
         action: promptAction(it), path: null, status: 'queued', brief: null, blockers,
         note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i, __queueId: it.id,
+        __after: (it.after && it.after.spec) || null,
       }
     })
 }
@@ -550,6 +553,36 @@ function briefSerialReason(a, b) {
   return null
 }
 
+// 'a' | 'a, b' | 'a, b (+3 more)' — shared by the 🔶 heads-up and the File Plan overlap reason.
+function shownFiles(paths) {
+  return paths.slice(0, 2).join(', ') + (paths.length > 2 ? ` (+${paths.length - 2} more)` : '')
+}
+
+// Parallelism verdict between two deriveNext entries — the one derivation for the vs-top
+// annotation and pairwise lane admission. Both briefed → the brief verdict; otherwise both
+// need a File Plan with rows, and the shared paths minus the exempt set (policy.fanout.overlapExempt
+// globs plus the pipeline rules file) decide. string = serial, null = parallel, undefined = no claim.
+let exemptCache = null
+function exemptSet() {
+  if (!exemptCache) {
+    const cfg = readHostConfig(root)
+    exemptCache = {
+      globs: hostPolicy(root).fanout.overlapExempt,
+      rules: cfg && typeof cfg.pipelineRules === 'string' && cfg.pipelineRules ? cfg.pipelineRules : null,
+    }
+  }
+  return exemptCache
+}
+function pairSerialReason(a, b) {
+  if (a.brief && b.brief) return briefSerialReason(a.brief, b.brief)
+  const sa = specs.find(x => x.path === a.path), sb = specs.find(x => x.path === b.path)
+  if (!sa || !sb || !sa.filePlan.length || !sb.filePlan.length) return undefined
+  const ex = exemptSet()
+  const shared = sa.filePlan.filter(f => sb.filePlan.includes(f))
+    .filter(f => f !== ex.rules && !ex.globs.some(g => globMatch(g, f)))
+  return shared.length ? `File Plan overlap: ${shownFiles(shared)}` : null
+}
+
 // Does brief a transitively depend on brief b (via roadmap `Depends on:` headers)?
 function briefDepPath(a, b) {
   const seen = new Set()
@@ -662,10 +695,11 @@ function deriveNext() {
     : entries[0]
   // A queue prompt entry (top.brief === null) makes no worktree-build parallelism claim —
   // same reasoning as the escape exclusion just above.
-  if (top && !top.blockers.length && top.brief) {
+  if (top && !top.blockers.length) {
     for (const e of entries.slice(1)) {
-      if (e === top || e.blockers.length || !e.brief || !top.brief || e.action === '/spec:fix') continue
-      const reason = briefSerialReason(e.brief, top.brief)
+      if (e === top || e.blockers.length || e.action === '/spec:fix' || e.queue) continue
+      const reason = pairSerialReason(e, top)
+      if (reason === undefined) continue
       if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
     }
@@ -693,7 +727,7 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeOut(JSON.stringify({
-      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, ...e }) =>
+      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, __after, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)
@@ -748,8 +782,8 @@ if (lanesMode) {
   }))
   const fixes = all.filter(e => e.action === '/spec:fix' || (e.queue && String(e.action).startsWith('/spec:fix '))).map(e =>
     e.queue
-      ? { action: `/spec:fix ${e.__queueId}`, path: null, note: e.note, queue_id: e.__queueId }
-      : { action: e.action, path: e.path, note: e.note, queue_id: null })
+      ? { action: `/spec:fix ${e.__queueId}`, path: null, note: e.note, queue_id: e.__queueId, after: e.__after || null }
+      : { action: e.action, path: e.path, note: e.note, queue_id: null, after: null })
   writeOut(JSON.stringify({ lanes: runLanes, serialized, fixes }, null, 2))
   process.exit(0)
 }
@@ -805,8 +839,8 @@ function laneAdmission(entries) {
   const laneClash = new Map()
   for (const e of unblocked.slice(1)) {
     if (e.parallel !== true) continue
-    const clash = lanes.slice(1).find(l => briefSerialReason(e.brief, l.brief))
-    if (clash) laneClash.set(e, briefSerialReason(e.brief, clash.brief))
+    const clash = lanes.slice(1).find(l => pairSerialReason(e, l))
+    if (clash) laneClash.set(e, pairSerialReason(e, clash))
     else lanes.push(e)
   }
   const later = unblocked.slice(1).filter(e => !lanes.includes(e))
@@ -925,9 +959,9 @@ const waitClause = n => `${n} more open`
       }
     }
     overlaps.forEach((o, i) => {
-      const shownFiles = o.shared.slice(0, 2).join(', ') + (o.shared.length > 2 ? ` (+${o.shared.length - 2} more)` : '')
+      const shown = shownFiles(o.shared)
       const pair = lanes.length > 2 ? `${path.basename(o.a.path)} × ${path.basename(o.b.path)}: ` : ''
-      out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shownFiles}`)
+      out.push(`   ${i === overlaps.length - 1 ? '└─' : '├─'} 🔶 ${pair}merge-conflict risk: ${shown}`)
     })
   } else if (lanes.length === 1) {
     laneRendered = true

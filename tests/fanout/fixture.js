@@ -4,7 +4,7 @@ const path = require('node:path')
 const assert = require('node:assert')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20261102/03-one-session-runs-the-lanes.md and specs/20261103/04-predictable-stops-become-host-policy.md File Plan: the synthetic host shared by the
+// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md File Plan: the synthetic host shared by the
 // fan-out driver tests — a roadmap, hardened specs, optional parked and dependent specs, a queued
 // fix and a red-CI row, plus helpers that stand a lane's worktree up the way the harness does
 // (a linked worktree on spec/<stem>) and write the fake pending question and review sidecar a
@@ -26,15 +26,29 @@ const SPECS = {
   '04-z': { brief: '33', status: 'hardened' },
 }
 
-function writeSpec(root, stem, brief, status) {
+// The fixture's spec rows as repo-relative paths, by the names the tests use.
+const ROWS = {
+  S03: specRel('03-x'), S04: specRel('04-z'), S06: specRel('06-y'),
+  S08s: specRel('08-s'), S08k: specRel('08-k'), S08p: specRel('08-p'), S08c: specRel('08-c'),
+}
+
+// fm: extra frontmatter lines appended after date/status/brief; body: replaces the `# <stem>` body.
+function writeSpec(root, stem, brief, status, { fm = '', body = '# ' + stem + '\n' } = {}) {
   const p = path.join(root, specRel(stem))
   fs.mkdirSync(path.dirname(p), { recursive: true })
-  fs.writeFileSync(p, '---\ndate: 2026-11-02\nstatus: ' + status + '\nbrief: ' + brief + '\n---\n\n# ' + stem + '\n')
+  fs.writeFileSync(p, '---\ndate: 2026-11-02\nstatus: ' + status + '\nbrief: ' + brief + '\n' + (fm ? fm + '\n' : '') + '---\n\n' + body)
 }
+
+const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Layer | Summary |\n|------|--------|-------|---------|\n' +
+  paths.map((x) => '| `' + x + '` | MODIFY | scripts | change |').join('\n') + '\n'
 
 // opts: parked — a hardened spec 05-p on an independent brief whose branch lives in a linked
 // worktree; dependent — a hardened spec 07-d on a brief that depends on brief 32; fixes — a queued
-// `--lane fix` item q107 plus a red-CI row on a done spec.
+// `--lane fix` item q107 plus a red-CI row on a done spec; blocked — hardened 08-k (brief 35) that
+// depends on 03-x; draft — a draft 08-p (brief 35); selfSurface — hardened 08-s (brief 35) whose File
+// Plan names spec/scripts/fanout-driver.js; critical — a rules file whose Risk Tiers names src/db.js
+// (config pipelineRules), 03-x planning src/db.js and a hardened critical 08-c (brief 35) planning it;
+// bornFix — queue items q108 (fix, after 03-x) and q109 (fix, after the done 01-base).
 function fanoutHost(opts = {}) {
   const root = fs.realpathSync(tmpdir('fanout'))
   const git = gitRepo(root)
@@ -48,12 +62,25 @@ function fanoutHost(opts = {}) {
   brief('33', 'solo')
   const specs = { ...SPECS }
   if (opts.dependent) { brief('34', 'after', '32'); specs['07-d'] = { brief: '34', status: 'hardened' } }
-  if (opts.parked) { brief('35', 'park'); specs['05-p'] = { brief: '35', status: 'hardened' } }
-  if (opts.fixes) specs['01-base'] = { brief: '31', status: 'done' }
-  for (const [stem, s] of Object.entries(specs)) writeSpec(root, stem, s.brief, s.status)
-  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(root, '.claude/spec.config.json'),
-    JSON.stringify({ gateCommand: 'bash ./gate.sh', testCommand: 'bash ./gate.sh' }, null, 2) + '\n')
+  if (opts.parked || opts.blocked || opts.draft || opts.selfSurface || opts.critical) brief('35', 'park')
+  if (opts.parked) specs['05-p'] = { brief: '35', status: 'hardened' }
+  if (opts.blocked) specs['08-k'] = { brief: '35', status: 'hardened', fm: 'depends_on: [' + specRel('03-x') + ']' }
+  if (opts.draft) specs['08-p'] = { brief: '35', status: 'draft' }
+  if (opts.selfSurface) specs['08-s'] = { brief: '35', status: 'hardened', body: filePlan('spec/scripts/fanout-driver.js') }
+  if (opts.critical) {
+    specs['03-x'] = { ...specs['03-x'], body: filePlan('src/db.js') }
+    specs['08-c'] = { brief: '35', status: 'hardened', fm: 'tier: critical', body: filePlan('src/db.js') }
+  }
+  if (opts.fixes || opts.bornFix) specs['01-base'] = { brief: '31', status: 'done' }
+  for (const [stem, s] of Object.entries(specs)) writeSpec(root, stem, s.brief, s.status, { fm: s.fm, body: s.body })
+  fs.mkdirSync(path.join(root, '.claude/rules'), { recursive: true })
+  const config = { gateCommand: 'bash ./gate.sh', testCommand: 'bash ./gate.sh' }
+  if (opts.critical) {
+    config.pipelineRules = '.claude/rules/spec-pipeline.md'
+    fs.writeFileSync(path.join(root, config.pipelineRules),
+      '# Pipeline rules\n\n## Risk Tiers\n\n- `src/db.js` — the schema surface\n\n## Planning\n\n- nothing\n')
+  }
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(config, null, 2) + '\n')
   fs.writeFileSync(path.join(root, 'gate.sh'), '#!/usr/bin/env bash\n[ -e .gate-red ] && exit 1\npwd > .gate-cwd\nexit 0\n')
   git('add', '-A')
   git('commit', '-q', '-m', 'seed fan-out host')
@@ -68,10 +95,18 @@ function fanoutHost(opts = {}) {
       { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
     ] }))
   }
+  if (opts.bornFix) {
+    fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 109, items: [
+      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
+      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
+      { id: 'q108', kind: 'prompt', lane: 'fix', payload: 'repair what 03-x left', after: { spec: specRel('03-x') }, added: '2026-11-02T10:02:00Z' },
+      { id: 'q109', kind: 'prompt', lane: 'fix', payload: 'repair what 01-base left', after: { spec: specRel('01-base') }, added: '2026-11-02T10:03:00Z' },
+    ] }))
+  }
   const common = path.join(root, '.git')
-  const wt = (stem) => root + '-wt-' + stem
+  const wt =(stem) => root + '-wt-' + stem
   const h = {
-    root, git, common, wt, specRel,
+    root, git, common, wt, specRel, specs,
     stateFile: path.join(common, 'spec-fanout.json'),
     reportFile: path.join(common, 'spec-fanout', 'report.json'),
     run: (args = [], o = {}) => runNode(DRIVER, ['--root', root, ...args], { cwd: o.cwd || root, env: o.env }),
@@ -105,7 +140,8 @@ function fanoutHost(opts = {}) {
     // cleanup: false leaves both, as when the review driver died after the merge landed.
     mergeLane(stem, { markDone = false, cleanup = true } = {}) {
       if (markDone) {
-        writeSpecAt(wt(stem), stem, SPECS[stem].brief, 'done')
+        const row = specs[stem]
+        writeSpec(wt(stem), stem, row.brief, 'done', { fm: row.fm, body: row.body })
         execGit(wt(stem), 'add', '-A')
         execGit(wt(stem), 'commit', '-q', '-m', 'close ' + stem)
       }
@@ -113,6 +149,12 @@ function fanoutHost(opts = {}) {
       if (!cleanup) return
       git('worktree', 'remove', '--force', wt(stem))
       git('branch', '-q', '-d', 'spec/' + stem)
+    },
+    // Specs closed on main, as after their lanes merged: the rows flip to done and the change is committed.
+    markDone(...stems) {
+      for (const stem of stems) { const row = specs[stem]; writeSpec(root, stem, row.brief, 'done', { fm: row.fm, body: row.body }) }
+      git('add', '-A')
+      git('commit', '-q', '-m', 'close ' + stems.join(','))
     },
     // The harness keeps a lock on a worker's worktree after its return.
     lockLane: (stem) => git('worktree', 'lock', '--reason', 'claude agent agent-' + stem, wt(stem)),
@@ -128,7 +170,14 @@ function fanoutHost(opts = {}) {
     assert.strictEqual(r.status, 0, 'the driver step ' + (what || args.join(' ')) + ' must exit 0 for the rest of the test to mean anything: ' + r.stderr + r.stdout)
     return r
   }
-  h.plan = (args = []) => { h.must(args, 'plan'); return h.must(['--mark', 'planned'], '--mark planned') }
+  // No --spec and no --batch plans the default two lanes 03-x and 04-z; a test of the derived batch calls
+  // h.must([...]) then h.must(['--mark', 'planned']) itself.
+  h.plan = (args = []) => {
+    const explicit = args.includes('--spec') || args.includes('--batch') || fs.existsSync(h.stateFile)
+    const planArgs = explicit ? args : ['--spec', specRel('03-x'), '--spec', specRel('04-z'), ...args]
+    h.must(planArgs, 'plan')
+    return h.must(['--mark', 'planned'], '--mark planned')
+  }
   h.dispatch = (id, agent) => h.must(['--mark', 'dispatched', '--lane', id, '--agent', agent], '--mark dispatched ' + id)
   // plan + dispatch of the default two lanes: L1 = 03-x (agent lane-one), L2 = 04-z (agent lane-two).
   h.dispatchedPair = (planArgs = []) => {
@@ -141,11 +190,6 @@ function fanoutHost(opts = {}) {
 
 function execGit(cwd, ...args) {
   return require('node:child_process').execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
-}
-
-function writeSpecAt(dir, stem, brief, status) {
-  const p = path.join(dir, specRel(stem))
-  fs.writeFileSync(p, '---\ndate: 2026-11-02\nstatus: ' + status + '\nbrief: ' + brief + '\n---\n\n# ' + stem + '\n')
 }
 
 const opt = (label, description, resume) => ({ label, description, resume })
@@ -214,6 +258,6 @@ function askBlocks(text) {
 }
 
 module.exports = {
-  fanoutHost, askBlocks, specRel, DIR, LANE_AGENT,
+  fanoutHost, askBlocks, specRel, DIR, LANE_AGENT, ROWS, writeSpec,
   repairRoundDoc, dispositionsDoc, redFindingsDoc,
 }

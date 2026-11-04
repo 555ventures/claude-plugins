@@ -1,6 +1,6 @@
 ---
 description: Run several hardened specs' lanes from this one session — a deterministic driver plans the lanes, dispatches worktree-isolated sub-agents, relays their questions to you in one batch, merges each finished lane from the main root one at a time with the gate after each, and renders one report; driver-stepped and /clear-safe
-argument-hint: "[<spec path>…] [--lanes N] [--include-fixes] [--override-serial] [--ask <key|all>]"
+argument-hint: "[<spec path>…] [--batch <ids|all>] [--include-fixes] [--override-serial] [--ask <key|all>]"
 allowed-tools: Bash(spec-paths:*), Bash(node:*), Bash(git:*), Read, Agent, SendMessage, AskUserQuestion
 ---
 
@@ -16,9 +16,9 @@ The script derives and writes; you do the one judgment step it prints.
 
 - `<spec path>…` — run exactly these specs, in the order given; each becomes a `--spec <path>` flag on
   the driver line. A member blocked by a dependency or held back for a shared brief waits and is
-  dispatched when the lane it waits on has merged. With none, the queue's startable lanes go in one wave.
-- `--lanes N` — cap on concurrent lanes (default 4).
-- `--include-fixes` — red-CI and queued `/spec:fix` items become one serial fix group after the run lanes.
+  dispatched when the lane it waits on has merged. With none, the driver derives the batch — the queue's startable specs in order, stopping before a spec that touches a pipeline self-surface (policy.fanout.selfSurfaces), a critical spec sharing a § Risk Tiers file with an unmerged lane, a dependency the batch cannot meet, or a planning item — prints it as one 📌 Auto-picked batch line, and runs it to the end; the next bare run after --mark reported starts the next batch.
+- `--batch <ids|all>` — the veto of the derived batch; ids are spec stems or paths.
+- `--include-fixes` — pre-existing red-CI and queued `/spec:fix` items become one serial fix group after the run lanes (fixes born of the batch join without the flag).
 - `--override-serial` — admit shared-brief specs the queue held back (never a `depends on` hold).
 - `--ask <key|all>` — repeatable, on the planning run: relay that `policy.stops` stop (`repairRound`,
   `buildEscalate`, `reviewEscalate`, `redFindings`, `rejectWithEvidence`) to you for this fan-out instead of the host's auto-pick.
@@ -48,6 +48,11 @@ The script derives and writes; you do the one judgment step it prints.
   a red main (MERGE_RED) stops the queue until `--mark gate-repaired` is green.
 - Never edit `spec-fanout.json` or a lane's `.claude/pending-question.json` by hand; to change the lane
   set, delete the state file the driver names.
+- Four lanes run at once — a resource constant, not a flag.
+- A fix the batch's own lanes queued (after-spec a member) joins the batch once that member merges; --include-fixes adds the fixes that existed before the run.
+- A spec whose lane stopped in this run is never re-admitted — resume it by hand or start the next batch.
+- A merge-ready lane lands before any new lane is dispatched.
+- Two briefless specs that share only policy.fanout.overlapExempt paths run in parallel.
 - A refusal (exit 2) names its own remedy — print its stderr and do that.
 - Non-goals: no `/spec:plan` lane (a spec must already be hardened), no automatic answers beyond the
   host's policy.stops.

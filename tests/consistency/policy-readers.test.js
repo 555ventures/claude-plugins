@@ -104,3 +104,12 @@ test('AC-20261103-09-10: disposer § Return contract names repro with command an
   assert.ok(has(section(body('spec/commands/fanout.md'), /^## Input/, 2), 'rejectWithEvidence'), 'fanout § Input must list rejectWithEvidence for --ask, or the per-run override is undiscoverable')
   assert.ok(has(section(body('spec/commands/init.md'), /^### Policy round 2/, 3), 'rejectWithEvidence accept'), 'init Policy round 2 must name the rejectWithEvidence default, or init is read as leaving the key unwritten')
 })
+
+// specs/20261103/06-the-fan-out-drains-the-queue.md D9: the fanout policy keys have a prose reader.
+test('AC-20261103-06-25: fanout.md names policy.fanout.selfSurfaces and policy.fanout.overlapExempt in its Input or Rules text', () => {
+  const fanout = body('spec/commands/fanout.md')
+  const text = section(fanout, /^## Input/, 2) + '\n' + section(fanout, /^## Rules/, 2)
+  for (const k of ['policy.fanout.selfSurfaces', 'policy.fanout.overlapExempt']) {
+    assert.ok(phrase(k).test(text), 'fanout.md § Input or § Rules must name ' + k + ', or the key has no prose reader and a host cannot tell what it governs')
+  }
+})

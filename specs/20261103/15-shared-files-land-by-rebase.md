@@ -185,7 +185,7 @@ must print nothing; `docs/canonical/` is rewritten from § Canonical Delta.
   → writes tests/fanout/fanout-driver.test.js
 - **AC-20261103-15-15**: WHEN `policy(root)` is read or `validatePolicy` meets a `fanout` block THE SYSTEM SHALL carry no fanout key and report the block as unknown (e.g. `'fanout' in policy(root) === false`; `validatePolicy({ fanout: { selfSurfaces: [] } })` → `['unknown key fanout']`; `policy(root).stops.repairRound === 'repair'` still)
   → rewrites tests/host-config/policy-block.test.js :: AC-20261103-06-7:
-- **AC-20261103-15-16** `[oracle: literals]`: WHEN the File Plan's non-tests files are read THE SYSTEM SHALL carry none of the retired names and reasons: `selfSurfaces`, `overlapExempt`, `riskTierPaths`, `exemptSet`, `parallelism unknown`, `File Plan overlap:`, `touches pipeline self-surface`, `shares Risk Tiers path`
+- **AC-20261103-15-16** `[oracle: literals]`: WHEN the File Plan's non-tests files are read THE SYSTEM SHALL carry none of the retired code names `riskTierPaths` and `exemptSet`; the six retired policy keys and printed reasons (the self-surface glob key, the exempt-list key, the parallelism-unknown branch, the File-Plan-overlap reason, the self-surface reason and the Risk-Tiers-sharing reason) are checked by the Review checks grep above, over live surfaces only, because spec 06 — a File Plan row for its retire tags — keeps them as its history
 - **AC-20261103-15-17**: WHEN `spec/templates/grounding-contract.md` is edited THE SYSTEM SHALL CONTINUE TO carry a `contractHash` in `.claude/spec.config.json` equal to `spec-paths contract-hash` of the edited file (e.g. `JSON.parse(read('.claude/spec.config.json')).contractHash === runBash('bin/spec-paths', ['contract-hash']).stdout.trim()` after D7's edit and restamp)
   → reuses tests/host-config/contract-keys.test.js :: AC-20261103-04-2
 
@@ -267,6 +267,12 @@ name `File Plan overlap` as history in Out-of-scope prose (roadmap briefs are ne
 `tests/host-config/policy-block.test.js`'s `strategy derived` is the `mergeStrategy` enum's default, untouched
 here. Of the paths leg's `executes` hits outside the File Plan, `tests/status/status-diet.test.js` is the only
 one reading a parallelism word, and it pins the absence of a retired footer — unaffected.
+
+2026-11-04, review 1 fix: AC-20261103-15-16's literals oracle scans every non-tests File Plan row,
+and spec 06 is one (its retire tags) that keeps six of the retired words as history, so the AC as
+locked could never go green. The oracle keeps the two code names no spec doc spells; the six policy
+keys and reasons are covered by the Review checks grep, which already leaves `specs/**` out, and the
+review-1 reviewer ran that grep over the live surfaces with zero hits.
 
 ## Canonical Delta
 

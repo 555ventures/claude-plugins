@@ -158,6 +158,8 @@ never a silent promote. There is no path from here that carries it into a promot
 
 ## Phase 4 — Record & report
 
+0. **Version bump** — on a marketplace host (`.claude-plugin/marketplace.json` present), for each plugin run
+   `node scripts/plugin-bump.js --shipped --plugin <name>` then `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"` before the tag.
 1. **Verdict + ledger row** — run:
    ```
    node "$(spec-paths release-legs)" record --root . --manifest {manifestPath} --milestone {milestone} --briefs {shipped brief ids (NN or NNa), comma-separated}

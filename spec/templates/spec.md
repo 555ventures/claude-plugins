@@ -1,7 +1,7 @@
 ---
 date: { YYYY-MM-DD }
 status: draft            # draft → hardened → implementing → done (hook-enforced); to retire a preserved spec: superseded (terminal — drops out of /spec:status silently; optional superseded_by: <what replaced it> is free-form provenance)
-tier: standard           # standard | critical (critical: irreversible/high-blast-radius surfaces — auth, migrations, money, data deletion). Work too small to need a spec gets none.
+tier: standard           # standard | critical (critical: irreversible/high-blast-radius surfaces — auth, migrations, money, data deletion); a property of the files touched, never of the spec as a whole. Work too small to need a spec gets none.
 area: { area-name }      # primary feature/domain/module; "cross-cutting" if none
 breaking: false        # true needs a Decision tagged [breaking: <what breaks for whom>] or [asked: …]; lock refuses breaking-unasked otherwise
 depends_on: []
@@ -94,7 +94,7 @@ depends_on: []
 
 ## Acceptance Criteria
 
-<!-- Every AC maps to a test or to a declared oracle; prose is never a test's subject. AC-IDs are NAMESPACED with the spec id — AC-{YYYYMMDD-NN}-1
+<!-- Every AC maps to a test or to a declared oracle; prose is never a test's subject. An AC test is scaffolding deleted at close unless its title carries `[invariant]` or its bullet is a `SHALL CONTINUE TO` pin. AC-IDs are NAMESPACED with the spec id — AC-{YYYYMMDD-NN}-1
      where YYYYMMDD is the date dir and NN the spec number — so the review grep matrix never
      collides across two specs touching one test file. Reference the AC-ID per the host's
      convention (test name, comment, or docstring — pipeline rules § Test Rules). Hosts with

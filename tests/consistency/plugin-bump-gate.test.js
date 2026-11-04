@@ -18,8 +18,8 @@ const { ROOT, tmpdir, gitRepo } = require('../helpers')
 // reviewer-held for weeks without anyone noticing.
 //
 // Two structural pins, both of which must stay free of AC-ID tags so the sweep never reads them:
-//   1. the gate wiring itself — `--check` runs against THIS checkout and must be green, plus one
-//      synthetic red so a silently no-op'd script cannot pass as "green";
+//   1. the gate wiring itself — one synthetic red so a silently no-op'd script cannot pass as
+//      "green" (the landing step runs `--check`, not every branch's gate);
 //   2. every enforcer.configPath, and every tests/ path inside a verifiedRun, that the manifest
 //      cites resolves to a file in the tree — a retired
 //      wiring reddens the gate on the next run instead of going silent.
@@ -54,15 +54,31 @@ function host(version) {
   return { dir, g }
 }
 
-test('gate wiring: scripts/plugin-bump.js --check at this repo root exits 0 with one ✅ line per marketplace plugin', () => {
-  const plugins = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf8')).plugins
-  const r = run(['--check'], ROOT)
-  assert.strictEqual(r.status, 0,
-    'the version-bump oracle is red or refusing on this checkout — a change under a plugin directory landed without a bump, or the base is unresolvable:\n' + r.stdout + r.stderr)
-  for (const p of plugins) {
-    assert.match(r.stdout, new RegExp('^✅ ' + p.name + ' ', 'm'),
-      'plugin ' + p.name + ' has no ✅ line — the gate is not actually checking every marketplace plugin: ' + r.stdout)
+test('AC-20261103-13-11: --shipped lists the CLEAN-reviewed specs newer than the manifest\'s last commit as "<path> — <H1>", and nothing without a ledger', () => {
+  const h = host('7.1.0')
+  fs.writeFileSync(path.join(h.dir, 'spec', '.claude-plugin', 'plugin.json'), manifestJson('7.2.0'))
+  h.g('add', '-A')
+  const prev = process.env.GIT_COMMITTER_DATE
+  process.env.GIT_COMMITTER_DATE = '2026-06-01T00:00:00Z'
+  try { h.g('commit', '-q', '-m', 'bump') } finally { if (prev === undefined) delete process.env.GIT_COMMITTER_DATE; else process.env.GIT_COMMITTER_DATE = prev }
+  const X = 'specs/20260701/01-x.md', Y = 'specs/20260501/01-y.md'
+  for (const [rel, title] of [[X, 'The X title'], [Y, 'The Y title']]) {
+    fs.mkdirSync(path.dirname(path.join(h.dir, rel)), { recursive: true })
+    fs.writeFileSync(path.join(h.dir, rel), `---\nstatus: done\n---\n\n# ${title}\n`)
   }
+  const none = run(['--shipped', '--plugin', 'spec'], h.dir)
+  assert.strictEqual(none.status, 0, '--shipped with no ledger must exit 0, not refuse: ' + none.stderr)
+  assert.strictEqual(none.stdout, '', 'with no ledger nothing shipped — any output would seed a false changelog: ' + none.stdout)
+  fs.mkdirSync(path.join(h.dir, '.claude'), { recursive: true })
+  const rows = [
+    { ts: '2026-05-01T00:00:00Z', stage: 'review', spec: Y, verdict: 'CLEAN', runId: 'rv_y' },
+    { ts: '2026-07-01T00:00:00Z', stage: 'review', spec: X, verdict: 'CLEAN', runId: 'rv_x' },
+  ]
+  fs.writeFileSync(path.join(h.dir, '.claude', 'spec-runs.jsonl'), rows.map(r => JSON.stringify(r)).join('\n') + '\n')
+  const r = run(['--shipped', '--plugin', 'spec'], h.dir)
+  assert.strictEqual(r.status, 0, '--shipped must exit 0 on a valid host: ' + r.stdout + r.stderr)
+  assert.strictEqual(r.stdout.trim(), X + ' — The X title',
+    'only the spec reviewed after the manifest\'s last commit ships in the next bump; the earlier one is already carried by a prior version: ' + r.stdout)
 })
 
 test('gate wiring: an unbumped change under a plugin directory is red, names the plugin and the --bump remedy', () => {

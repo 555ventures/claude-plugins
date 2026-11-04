@@ -69,8 +69,7 @@ Run `/spec:mocks` to see every declared surface drawn as a wireframe and the jou
 
 ## Conventions carried by every brief
 
-- Decomposition caps: one brief → one spec by default; /spec:plan splits only past ~12
-  source-layer File Plan rows (tests/docs/ledger uncounted) or a second primary area; a
+- Decomposition caps: one brief → one spec by default; the split rule is core § Decomposition; a
   brief that can't be told in ≤1 page of Scope splits into two briefs.
 - { project-specific conventions every planning session must honor — invariants, review
   triggers, do-not-build entries }

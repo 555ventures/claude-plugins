@@ -54,12 +54,12 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
   doctrine, and a plugin.json `description` update (the changelog surface, last-3-versions
   form). A new plugin needs `<plugin>/.claude-plugin/plugin.json` and a
   `.claude-plugin/marketplace.json` entry.
-- Version bump discipline: every change under a plugin directory bumps that plugin's
-  `.claude-plugin/plugin.json` semver via
-  `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"` (derives the
-  next minor, rotates the changelog to three entries). A spec's plugin.json File Plan row cites
-  that command; Decisions name no version literal and no sibling claims —
-  `node scripts/plugin-bump.js --check` in the gate is the oracle.
+- Version bump discipline: the bump happens at release, not per spec. The owning plugin's
+  `.claude-plugin/plugin.json` semver bumps once per `/spec:release`, or once per landing to main
+  where no release stage exists, via
+  `node scripts/plugin-bump.js --bump --plugin <name> --changelog "<paragraph>"`, with
+  `node scripts/plugin-bump.js --shipped --plugin <name>` listing the CLEAN specs the bump
+  carries. A spec never carries a plugin.json File Plan row and never names a version.
 - **Every control the least-technical actor can press is specified three ways before lock**: the
   sentence they see on SUCCESS, the PATH BACK, and the farthest ARTIFACT the click reaches. A
   click with no path back that reaches a dated or contractual artifact is a plan defect, not a
@@ -123,11 +123,11 @@ Standard-tier-shaped direct work: doctrine prose edits, new sweeps in
 
 ## Review Checks
 
-- A doctrine/behavior change without a plugin.json version bump is **hard** — pinned
-  mechanically by `scripts/plugin-bump.js --check` (gate, via the untagged standing guard
-  `tests/consistency/plugin-bump-gate.test.js` — never an AC-tagged test, which the close sweep retires)
-  against the merge base; the reviewer keeps only the residue a branch-level check cannot see
-  (a second behavior change on a branch that already bumped once).
+- A release or landing to main that ships doctrine/behavior changes without the plugin.json bump
+  is **hard** — checked at release/landing by `scripts/plugin-bump.js --check`; the standing
+  guard is the synthetic cases of `tests/consistency/plugin-bump-gate.test.js` (never an
+  AC-tagged test, which the close sweep retires), not a run against the checkout. A spec's own
+  diff owes no bump.
 - A script or test importing a non-builtin package is **hard**. Any non-builtin import
   anywhere stays a hard finding, no exceptions.
 - An error path that doesn't name its remedy command, or a new exit code not documented in

@@ -93,10 +93,12 @@ Write the spec per the template. `status: draft`. While drafting:
    additive change may instead declare `changes: additive-only` + `existing rows: unaffected` and stay standard);
    `additive-claim-contradicted` by dropping that declaration and setting `tier: critical`, or removing the migrating change;
    zero findings to lock. Any `📌 adds or changes dependencies — <path> (veto anytime)` notice line is advisory and
-   rides step 2b on critical tier. A Decision that retires or narrows prose elsewhere, or that extends a list an
-   existing test pins (a `spec-paths` key or section list, a policy seat, a closed enum, a frozen table) runs
-   `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` with the list's own
-   name among the literals and enumerates every literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
+   rides step 2b on critical tier. Every lock runs
+   `node "$(spec-paths collision-closure)" --spec {spec path} --root .` (the overlap leg), and each undeclared overlap hit is
+   resolved before the lock by folding the draft into the sibling or declaring `depends_on`. A Decision that retires or narrows prose elsewhere, or that extends a list an
+   existing test pins (a `spec-paths` key or section list, a policy seat, a closed enum, a frozen table) adds
+   `--literal <stem>…` to that run, with the list's own
+   name among the literals, and enumerates every literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
    write the roadmap brief now; if it must run before the current work,
    `node "$(spec-paths spec-queue)" add NN --top --origin {spec path} --stage plan --trigger gap`; any follow-up that must wait for this spec →
    `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide --after-spec {spec path} --origin {spec path} --stage plan --trigger close-followup`.
@@ -113,13 +115,13 @@ Write the spec per the template. `status: draft`. While drafting:
    `printf '%s\n' '<json>' >>`), before the status flip: `spikes` = executed micro-spikes;
    `promiseSweep` = step 2's `promise-sweep.js` printed counters copied verbatim; `acLint` =
    `{"mixed":N}` from step 2's FIRST `ac-matrix --lint` run; `collisions` = `{hits, waived}` from
-   `collision-closure.js`, `{"skipped":true}` when no Decision triggered it — never omitted; `decisionLint` =
+   that `collision-closure.js` run — never omitted; `decisionLint` =
    `{restrictions,deferrals}` from `decision-lint.js`'s stdout. Numbers, enums, paths only:
 
    ```
    {"ts":"<ISO-8601>","stage":"plan","spec":"<repo-relative spec path>","tier":"<tier>",
     "brief":"NN"|"n/a","spikes":N,"promiseSweep":{"rows":N,"carried":N,"sanctioned":N,
-    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N}|{"skipped":true},
+    "orphans":0},"acLint":{"mixed":N},"collisions":{"hits":N,"waived":N},
     "decisionLint":{"restrictions":N,"deferrals":N},"verdict":"locked"}
    ```
 

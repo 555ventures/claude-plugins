@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 'use strict'
-// expire-tests.js --root <r> --spec <spec path>  [--apply] [--json]
-// expire-tests.js --root <r> --all-done          [--apply] [--json]
+// expire-tests.js --root <r> --spec <spec path>  [--apply [--no-gate]] [--json]
+// expire-tests.js --root <r> --all-done          [--apply [--no-gate]] [--json]
 // expire-tests.js --root <r> --invariants        [--json]
 //
-// Owner: specs/20260911/03-tests-expire-at-close.md.
+// Owner: specs/20260911/03-tests-expire-at-close.md; specs/20261103/13-a-change-is-sized-by-its-files.md
+// D10 (keep clauses), D11 (--no-gate).
 //
 // A spec's tests die when the spec does. This is the ONE place the classification runs — the review
 // driver's close and /spec:doctor check 20 both call it.
@@ -20,14 +21,10 @@
 // when every AC-ID it cites belongs to a spec that is `done` or `superseded`
 // (a superseded owner is a terminal retire state, same as done) AND none of three keep
 // clauses fire: (a) its own call text names a ledger escape class (`.claude/spec-runs.jsonl`'s
-// `class` keys, top-level or nested in `incidents[]`); (b) the case's REACH (lib/case-reach.js: its call
-// text plus the top-level declarations it names, one hop into relative requires, depth 3) names the
-// basename of a script in lib/invariants.js's derived set — or of a launcher under `bin/` — as a
-// whole name, never inside a longer one (`catalog.json` does not name `log.js`), AND holds a
-// child-process call; or the reach `require`s a relative file in that set. Text outside the
-// reach never keeps a case. A host declaring
-// `testCaseScanner` keeps the file-level text rule for the cases that scanner lists; (c) a cited AC
-// bullet (normalized whitespace, code spans stripped) contains `SHALL CONTINUE TO` and its own
+// `class` keys, top-level or nested in `incidents[]`); (b) its title or the contiguous comment block
+// above it (the span an AC-ID is read from) holds the token `[invariant]` (kept as invariant) or
+// `[pin]` (kept as pin) — a kept test is a tagged choice, never a side effect of what it spawns;
+// a host-scanner case is judged on the same span; (c) a cited AC bullet (normalized whitespace, code spans stripped) contains `SHALL CONTINUE TO`
 // spec is dated on or after the 20260911 floor — or the test is the one a `SHALL CONTINUE TO`
 // bullet of any such spec that is not superseded names with `→ reuses <file> :: <title>`, whatever
 // id the test itself carries (a reused test keeps the tag of the spec that wrote it; a pointer
@@ -56,11 +53,12 @@
 // code is unaffected. The indent check is vacuous in a file with no indentation at all, so an
 // overrun there can still end on an enclosing `})` — the host gate's parse catches it. A dry run mutates nothing on disk, and
 // this script's own `--apply` flag is the ONLY way anything it derives
-// reaches the tree: the close-time review driver never passes `--apply` and never will; a human
-// running `/spec:doctor` check 20's remedy by hand is the one path that deletes a test.
+// reaches the tree: the review driver's close passes `--apply --no-gate` (deletions ride the close
+// commit); /spec:doctor check 20's `--all-done --apply` is the catch-up sweep.
 //
 // An --apply is a change to the host like any other, so it lands through the host's own
-// `gateCommand`, run in --root once every write is made. A red gate puts every touched file back
+// `gateCommand`, run in --root once every write is made (unless `--no-gate`: the writes are made,
+// no gate runs, `gate` is `{"skipped":"no-gate"}`; `--no-gate` without `--apply` is a usage error). A red gate puts every touched file back
 // byte-for-byte (deleted files and directories recreated) and names the gate and its output's tail
 // on stderr. A host with no `gateCommand` gets the writes and one stderr
 // warning that nothing checked them. A dry run never runs the gate.
@@ -82,7 +80,6 @@ const path = require('path')
 const { relPosix: relPosixFrom } = require('./lib/util')
 const { listTestFiles, scanCalls, scanCases, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
-const { caseReach, caseRequires } = require('./lib/case-reach')
 const {
   extractSection, parseAcBullets, AC_ID_RE_GLOBAL, normalizeForPinCheck, parseDisposition,
 } = require('./lib/spec-sections')
@@ -91,7 +88,7 @@ const { readConfig } = require('./lib/host-config')
 const { resolveGateForFiles } = require('./lib/gate-resolve')
 const hostRun = require('./lib/host-run')
 
-const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply] [--json]'
+const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply [--no-gate]] [--json]'
 const EXPIRY_APPLIES_FROM = '20260911'
 
 const { writeLine: writeOut } = require('./lib/sync-write')
@@ -107,6 +104,7 @@ let specArg = null
 let allDone = false
 let invariantsMode = false
 let apply = false
+let noGate = false
 let asJson = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -116,6 +114,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--all-done') allDone = true
   else if (a === '--invariants') invariantsMode = true
   else if (a === '--apply') apply = true
+  else if (a === '--no-gate') noGate = true
   else if (a === '--json') asJson = true
   else die('usage: ' + USAGE)
 }
@@ -129,6 +128,8 @@ try {
   rootStat = null
 }
 if (!rootStat || !rootStat.isDirectory()) die('usage: ' + USAGE + ' — --root must name an existing directory')
+
+if (noGate && !apply) die('usage: ' + USAGE + ' — --no-gate needs --apply')
 
 const modeCount = (specArg !== null ? 1 : 0) + (allDone ? 1 : 0) + (invariantsMode ? 1 : 0)
 if (modeCount !== 1) die('usage: ' + USAGE + ' — exactly one of --spec/--all-done/--invariants is required')
@@ -243,31 +244,7 @@ if (closingSpecRel !== null) {
   }
 }
 
-// ---- invariants set + defect-class ids -----------------------------------------------------------
-// Whole-name match per basename: `catalog.json` never names `log.js`; `scripts/log.js` and `'log.js'` do.
-const { escapeRegExp: escapeRe } = require('./lib/util')
-const invariantSet = deriveInvariants(root, config)
-const invariantScripts = new Set(invariantSet.scripts)
-const invariantNamePatterns = Array.from(
-  new Set(invariantSet.scripts.concat(invariantSet.launchers || []).map((s) => path.posix.basename(s))),
-  (base) => new RegExp('(?<![\\w.-])' + escapeRe(base) + '(?!\\w)'),
-)
-const CHILD_PROCESS_CALL = /\b(?:spawnSync|execFileSync|execSync|spawn|execFile|exec|fork)\s*\(/
-
-// True when a relative require the reach opened (each resolved against the directory of the file
-// that wrote it) lands on a file in the invariants set.
-function requiresInvariant(abs) {
-  return abs.some((t) => invariantScripts.has(relPosix(t)))
-}
-
-function keepsByReach(call, fileText, file) {
-  // A host-scanner case carries no JavaScript call text the resolver can read: file-level rule.
-  if (call.source === 'host') return invariantNamePatterns.some((re) => re.test(fileText))
-  const reach = caseReach(call.callText, path.join(root, file))
-  if (CHILD_PROCESS_CALL.test(reach) && invariantNamePatterns.some((re) => re.test(reach))) return true
-  return requiresInvariant(caseRequires(call.callText, path.join(root, file)))
-}
-
+// ---- defect-class ids ------------------------------------------------------------------------------
 function collectEscapeClasses() {
   const classes = new Set()
   let text
@@ -318,12 +295,14 @@ function allCitedDone(ids) {
   })
 }
 
-function classify(call, ids, fileText, file) {
+function classify(call, ids, file) {
   if (!allCitedDone(ids)) return 'open'
   for (const cls of escapeClasses) {
     if (call.callText.includes(cls)) return 'class'
   }
-  if (keepsByReach(call, fileText, file)) return 'invariant'
+  const span = (call.title || '') + '\n' + (call.commentAbove || '')
+  if (span.includes('[invariant]')) return 'invariant'
+  if (span.includes('[pin]')) return 'pin'
   for (const id of ids) {
     const owners = acOwners.get(id) || []
     for (const owner of owners) {
@@ -357,7 +336,7 @@ for (const file of testFiles) {
       ? ids.some((id) => closingSpecAcIds.has(id))
       : true // --all-done: every tagged test is in scope
     if (!inScope) continue
-    const cls = classify(call, ids, src, file)
+    const cls = classify(call, ids, file)
     if (cls === 'retired') {
       call.row = { file, acIds: ids, title: call.title }
       retired.push(call.row)
@@ -509,7 +488,7 @@ for (const [file, calls] of retiredByFile) {
 retired = retired.filter((r) => !refused.has(r))
 
 // ---- --apply: write, then the host's gate decides whether the writes stay -----------------------
-let gate = null
+let gate = noGate && apply ? { skipped: 'no-gate' } : null
 if (apply && writes.length > 0) {
   for (const w of writes) {
     if (w.after !== null) {
@@ -531,7 +510,9 @@ if (apply && writes.length > 0) {
   const declared = config && typeof config.gateCommand === 'string' ? config.gateCommand.trim() : ''
   const placeholder = /\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(declared)
   const command = placeholder && surviving.length === 0 ? '' : resolveGateForFiles(declared, surviving)
-  if (!command) {
+  if (noGate) {
+    // writes stay; the caller's own gate certifies the tree
+  } else if (!command) {
     writeOut(2, (placeholder
       ? '⚠ the sweep left no test file in the directories it touched to point the gateCommand\'s ' +
         '{testDirs}/{scopeDirs}/{testFiles} at'
@@ -560,7 +541,7 @@ if (apply && writes.length > 0) {
     }
   }
 }
-const exitCode = gate && !gate.ok ? 1 : 0
+const exitCode = gate && gate.ok === false ? 1 : 0
 
 // ---- render --------------------------------------------------------------------------------------
 const scope = closingSpecRel !== null ? 'spec:' + closingSpecRel : 'all-done'
@@ -580,6 +561,6 @@ const lines = retired.map((r) => 'retire ' + r.file + ' — ' + r.title)
 const keptTotal = kept.class + kept.invariant + kept.pin + kept.open
 lines.push('expiry: scanned ' + scanned + ' tagged ' + tagged + ' kept ' + keptTotal +
   ' retired ' + retired.length + (unscannable.length ? ' unscannable ' + unscannable.length : '') + ' (' +
-  (!apply ? 'dry run' : gate && gate.reverted ? 'reverted: gate red' : gate && !gate.ok ? 'applied: gate red' : 'applied') + ')')
+  (!apply ? 'dry run' : gate && gate.reverted ? 'reverted: gate red' : gate && gate.ok === false ? 'applied: gate red' : 'applied') + ')')
 writeOut(1, lines.join('\n'))
 process.exit(exitCode)

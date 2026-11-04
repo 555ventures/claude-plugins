@@ -5,9 +5,9 @@ argument-hint: "[symptom in plain words] — optional; bare mid-session derives 
 
 # Spec Fix
 
-The Direct lane's playbook (core § Pipeline Entry) for a defect repair spanning more than two of
-the host's `layerGroups` or touching text a user sees in the product; inside one or two layers it
-is a plain commit. Behaviour is new — not a repair — only when no existing doc, test, type or mock
+The Direct lane's playbook (core § Pipeline Entry) for a defect repair under ~100 production lines
+touching at most three non-test files, whatever the host's `layerGroups` count, or touching text a
+user sees in the product; above that floor a repair is a spec. Behaviour is new — not a repair — only when no existing doc, test, type or mock
 states it; new behaviour, a new screen or an unmade product decision STOPs here naming `/spec:plan`
 (or `/spec:prototype`). No driver, no gate, no File Plan; its one ledger row is the `stage:"fix"`
 row, or the escape row when the commit touches lines a reviewed spec landed — `/git:commit` step 3 writes it.

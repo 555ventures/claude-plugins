@@ -49,6 +49,7 @@ rebuild it as a markdown table. Then add the one thing the script can't: narrati
 1. **After the block, narrate in one or two sentences** what the dashboard means for the user.
 2. **Decide lines** — narrate each printed `⚠️` pair in plain language.
 3. **The footer glyph is the verdict** — read it back in one clause.
+4. **The two `📈` lines** print suite runs per spec and the test:production line ratio from the ledger, `n/a` when no review row exists — read them back as numbers, never as a verdict; no ratchet guards them.
 
 ## `--all` (everything the default screen omits)
 

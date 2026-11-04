@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: standard           # per ADR-0039 D3 the tier is a property of files touched: the spec-status.js and grounding-contract.md rows are § Risk Tiers surfaces, so their ACs carry literal examples; the spec as a whole is standard
 area: pipeline
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: ef99329883a59bb18451b50a68c6c991ffe2f41a
 ---
 
 # A change is sized by its files
@@ -66,6 +67,8 @@ deletes what it classified.
 | D15 | ADR-0039 D6, metric before guard. `spec/scripts/lib/observation.js` exports `ceremonyMetrics(rows)` → `{ specs, suiteRuns, closes, testLines, productionLines }`: over distinct specs with a CLEAN review row, `suiteRuns` sums each spec's review-row legs named `suite` or `slow` whose `observed` has no `unavailable` key plus each build row's `gate.finalRounds` when `gate.postGate` is true; `closes`/`testLines`/`productionLines` sum review rows carrying `lines`. `spec/scripts/spec-status.js` prints, after the decide lines (and after 🧹 Hygiene under `--all`) and before the footer, two lines: `📈 suite runs per spec: <suiteRuns/specs to 1 decimal> (<specs> specs)` and `📈 test:production lines: <testLines/productionLines to 2 decimals> (+<testLines>/+<productionLines> over <closes> close(s))`; `n/a` replaces the number when `specs` is 0 or `productionLines` is 0. `--json` and `--next --json` are unchanged. No ratchet, no anomaly, no blocking. (AC-20261103-13-9) | Betterer and Sonar ratchet only after a measured baseline; core § Incident Policy's admission bar needs the number before any guard is proposed. |
 | D16 | `spec/commands/doctor.md` check 20 shrinks to the two dry runs plus one sentence: the close applies expiry; `--all-done --apply` is the catch-up for tests that closed before this version, still behind one `AskUserQuestion`. `spec/commands/status.md` names the 📈 lines in its block list. `spec/templates/spec.md` § Acceptance Criteria comment: an AC test is scaffolding deleted at close unless its title carries `[invariant]` or its bullet is a `SHALL CONTINUE TO` pin. `[no-ac: wording — read by review]` | One binding home per rule (core § Doctrine Authoring). |
 | D17 | Fixture currency: `tests/review/review-driver.fixtures.js`'s `GREEN_TEST` title gains ` [invariant]` so the shared close rehearsals keep their one tagged test through the now-applied expiry; `tests/review/review-driver-close-expiry.test.js` and the new `tests/review/review-driver-close-slow.test.js` are the only places the deletion and the slow run are exercised. Retired AC tags: specs/20260912/15 AC-1, AC-2, AC-6; specs/20261103/05 AC-4, AC-5, AC-6; specs/20261101/07 AC-2, AC-3, AC-4, AC-5 — each bullet ends `[retired: specs/20261103/13-a-change-is-sized-by-its-files.md]`. `[no-ac: fixture and tag currency; the ACs above cover the behaviour]` | Rules § Gotchas: a new close-time side effect strands every shared setup that rehearses the step; a deleted test case's AC-ID is tagged retired in the same batch. |
+| D18 | Scope widened at build: `tests/review/review-driver-policy.test.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names File Plan row .claude/spec.config.json — an in-place update of a pin on planned work] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
+| D19 | Scope widened at build: `tests/expiry/invariants.test.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names File Plan row .claude/spec.config.json, spec/scripts/review-legs.js, specs/20261103/05-tests-that-earn-their-keep.md — an in-place update of a pin on planned work] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
 
 ## File Plan
 
@@ -109,6 +112,8 @@ deletes what it classified.
 | tests/collision-closure-overlap.test.js | CREATE | tests | AC-20261103-13-10 |
 | tests/consistency/plugin-bump-gate.test.js | MODIFY | tests | AC-20261103-13-11, AC-20261103-13-12; the this-checkout `--check` case deleted (D8) |
 | tests/ceiling/host-scanner.test.js | MODIFY | tests | AC-20261103-13-13 added to the reused case's title after its prefix |
+| tests/review/review-driver-policy.test.js | MODIFY | tests | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
+| tests/expiry/invariants.test.js | MODIFY | tests | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
 | specs/20260912/15-the-close-stops-deleting-tests.md | MODIFY | other | D17 retired tags on AC-1, AC-2, AC-6 |
 | specs/20261103/05-tests-that-earn-their-keep.md | MODIFY | other | D17 retired tags on AC-4, AC-5, AC-6 |
 | specs/20261101/07-the-gate-is-scoped-and-the-slow-tier-has-a-home.md | MODIFY | other | D17 retired tags on AC-2, AC-3, AC-4, AC-5 |

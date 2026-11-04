@@ -90,7 +90,7 @@ test('AC-20260911-50-1: silent-fallback escape stays covered', () => { assert.ok
 const { test } = require('node:test')
 const assert = require('node:assert')
 const { spawnSync } = require('node:child_process')
-test('AC-20260911-50-2: the pipeline gate script keeps working', () => {
+test('AC-20260911-50-2: the pipeline gate script keeps working [invariant]', () => {
   assert.strictEqual(spawnSync('bash', ['scripts/gate.sh']).status, 0)
 })
 `)
@@ -122,35 +122,81 @@ const CLASSIFY_KEPT_FILES = [
   'tests/kept-open.test.js', 'tests/untagged.test.js',
 ]
 
-test('AC-20260911-03-3 / AC-20260912-13-1: WHEN expire-tests.js --spec <done spec> --json runs (dry run) over a fixture host holding one test per outcome THE SYSTEM classifies 5 tagged tests as kept.class:1, kept.invariant:1, kept.pin:1, kept.open:1 and exactly one retired, reports the retired test\'s now-would-be-empty file under emptied exactly as an --apply run would, leaves every file byte-identical, and reports applied:false', () => {
-  const root = makeClassifyHost('expiry-dry')
-  const before = {}
-  for (const f of CLASSIFY_KEPT_FILES.concat(['tests/old/gone.test.js'])) {
-    before[f] = fs.readFileSync(path.join(root, f), 'utf8')
-  }
+// specs/20261103/13-a-change-is-sized-by-its-files.md D10/D11, AC-20261103-13-1/-2: keep clause (b) is
+// a tagged choice — [invariant] / [pin] in the title or the comment block above — never a reach rule;
+// --no-gate (with --apply only) writes and skips the gate.
+const TOKEN_SPEC_REL = 'specs/20260911/50-closing.md'
+const TOKEN_FILES = {
+  class: 'tests/kept-class.test.js', spawn: 'tests/kept-invariant.test.js', title: 'tests/kept-token.test.js',
+  pin: 'tests/kept-bracket-pin.test.js', sct: 'tests/kept-pin.test.js', open: 'tests/kept-open.test.js',
+}
+const TOKEN_HEAD = "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n"
 
-  const r = runNode('scripts/expire-tests.js', ['--root', root, '--spec', CLASSIFY_SPEC_REL, '--json'], { encoding: 'utf8' })
+function makeTokenHost(prefix, gateCommand) {
+  const root = tmpdir(prefix)
+  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
+  fs.mkdirSync(path.join(root, 'scripts'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({ gateCommand }))
+  fs.writeFileSync(path.join(root, 'scripts/gate.sh'), '#!/usr/bin/env bash\necho gate\n')
+  fs.writeFileSync(path.join(root, '.claude/spec-runs.jsonl'),
+    JSON.stringify({ stage: 'escape', class: 'silent-fallback', spec: 'specs/20260901/01-x.md' }) + '\n')
+  const fm = (st) => `---\nstatus: ${st}\ntier: standard\ndiff_base: 0000000000000000000000000000000000000000\n---\n`
+  writeSpec(root, TOKEN_SPEC_REL, fm('done') + `# Closing Fixture Spec
+
+## Acceptance Criteria
+
+- **AC-20260911-50-1**: THE SYSTEM keeps a class-kept test alive via an escape row.
+- **AC-20260911-50-2**: THE SYSTEM spawns the gate script and carries no bracket token.
+- **AC-20260911-50-3**: THE SYSTEM carries a bracket token in the title.
+- **AC-20260911-50-4**: THE SYSTEM carries a bracket token in the comment block above.
+- **AC-20260911-50-5**: THE SYSTEM is kept by a sibling pin AC.
+- **AC-20260911-50-6**: THE SYSTEM is kept by a sibling open AC.
+`)
+  writeSpec(root, 'specs/20260912/02-pin-donor.md', fm('done') +
+    '# Pin Donor Spec\n\n## Acceptance Criteria\n\n- **AC-20260912-02-9**: WHEN a caller invokes the donor path THE SYSTEM SHALL CONTINUE TO return the same value.\n')
+  writeSpec(root, 'specs/20260912/01-other-open.md', fm('implementing') +
+    '# Open Sibling Spec\n\n## Acceptance Criteria\n\n- **AC-20260912-01-9**: THE SYSTEM has not shipped this behavior yet.\n')
+  writeTest(root, TOKEN_FILES.class, TOKEN_HEAD + "test('AC-20260911-50-1: silent-fallback escape stays covered', () => { assert.ok(true) })\n")
+  writeTest(root, TOKEN_FILES.spawn, TOKEN_HEAD + "const { spawnSync } = require('node:child_process')\ntest('AC-20260911-50-2: the pipeline gate script keeps working', () => {\n  assert.strictEqual(spawnSync('bash', ['scripts/gate.sh']).status, 0)\n})\n")
+  writeTest(root, TOKEN_FILES.title, TOKEN_HEAD + "test('AC-20260911-50-3: tagged by its title [invariant]', () => { assert.ok(true) })\n")
+  writeTest(root, TOKEN_FILES.pin, TOKEN_HEAD + "// AC-20260911-50-4 [pin]\ntest('tagged by its comment block', () => { assert.ok(true) })\n")
+  writeTest(root, TOKEN_FILES.sct, TOKEN_HEAD + "test('AC-20260911-50-5 / AC-20260912-02-9: a post-floor SHALL CONTINUE TO pin', () => { assert.ok(true) })\n")
+  writeTest(root, TOKEN_FILES.open, TOKEN_HEAD + "test('AC-20260911-50-6 / AC-20260912-01-9: a still-implementing sibling spec', () => { assert.ok(true) })\n")
+  return root
+}
+
+test('AC-20261103-13-1: WHEN expire-tests.js --spec <done spec> --json runs over six tagged tests (escape class, a gate-script spawner with no bracket token, [invariant] in a title, [pin] in a comment block, a SHALL CONTINUE TO donor, an open sibling) THE SYSTEM reports kept {class:1, invariant:1, pin:2, open:1} and retires only the spawner, writing nothing on a dry run', () => {
+  const root = makeTokenHost('expiry-token', 'bash scripts/gate.sh')
+  const before = {}
+  for (const f of Object.values(TOKEN_FILES)) before[f] = fs.readFileSync(path.join(root, f), 'utf8')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--spec', TOKEN_SPEC_REL, '--json'], { encoding: 'utf8' })
   assert.strictEqual(r.status, 0, 'a dry run over a well-formed fixture host must succeed: ' + r.stdout + r.stderr)
   const out = JSON.parse(r.stdout)
-  assert.strictEqual(out.tagged, 5,
-    'D3: exactly 5 tests cite one of the closing spec\'s AC-IDs — the 6th, untagged test must never be counted: ' + JSON.stringify(out))
-  assert.deepStrictEqual(out.kept, { class: 1, invariant: 1, pin: 1, open: 1 },
-    'D3: each keep clause (escape class, invariant script, SHALL CONTINUE TO pin, open sibling spec) must ' +
-    'keep exactly the one test built for it — a wrong count means a keep clause is over- or under-firing: ' +
-    JSON.stringify(out.kept))
-  assert.strictEqual(out.retired.length, 1,
-    'D3: exactly the plain test with no keep clause must be reported retired: ' + JSON.stringify(out.retired))
-  assert.ok(out.emptied.includes('tests/old/gone.test.js'),
-    'D1: a dry run must run the same in-memory span-removal and blank-run-collapse pass an --apply would and ' +
-    'push the file left with zero scanCalls hits onto emptied — a close reading emptied before it applies must ' +
-    'see the true count, not an always-empty array: ' + JSON.stringify(out.emptied))
-  assert.strictEqual(out.applied, false, 'a dry run (no --apply) must never report applied:true: ' + JSON.stringify(out))
-
-  for (const f of CLASSIFY_KEPT_FILES.concat(['tests/old/gone.test.js'])) {
-    assert.strictEqual(fs.readFileSync(path.join(root, f), 'utf8'), before[f],
-      'D1: emptied must be classified WITHOUT writing to disk — a dry run reporting the file under emptied ' +
-      'must still leave it byte-identical — ' + f + ' changed: ' + JSON.stringify({ before: before[f] }))
+  assert.strictEqual(out.tagged, 6, 'all six tests cite the closing spec: ' + JSON.stringify(out))
+  assert.deepStrictEqual(out.kept, { class: 1, invariant: 1, pin: 2, open: 1 },
+    'clause (b) must keep exactly the bracket-tagged tests — a reach rule still keeping the spawner, or a token not read, keeps the suite growing: ' + JSON.stringify(out.kept))
+  assert.deepStrictEqual(out.retired.map((x) => x.file), [TOKEN_FILES.spawn],
+    'a test that spawns a script is not thereby an invariant — only the untagged spawner may be retired: ' + JSON.stringify(out.retired))
+  assert.strictEqual(out.applied, false, 'a dry run never reports applied:true: ' + JSON.stringify(out))
+  for (const f of Object.values(TOKEN_FILES)) {
+    assert.strictEqual(fs.readFileSync(path.join(root, f), 'utf8'), before[f], 'a dry run changed ' + f)
   }
+})
+
+test('AC-20261103-13-2: WHEN --apply --no-gate --json runs over a host whose gateCommand is red THE SYSTEM removes the retired case, exits 0, reports applied:true and gate {skipped:"no-gate"} without running the gate; WHEN --no-gate lacks --apply THE SYSTEM exits 2 naming --no-gate', () => {
+  const root = makeTokenHost('expiry-nogate', 'touch gate-ran && exit 1')
+  const r = runNode('scripts/expire-tests.js', ['--root', root, '--spec', TOKEN_SPEC_REL, '--apply', '--no-gate', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, '--no-gate must not run the red gate, so the apply lands: ' + r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.applied, true, 'close applies the deletions as tree edits: ' + r.stdout)
+  assert.deepStrictEqual(out.gate, { skipped: 'no-gate' }, 'the JSON must say the gate was skipped, not null or ok: ' + r.stdout)
+  assert.ok(!fs.existsSync(path.join(root, 'gate-ran')), 'the gate ran despite --no-gate; close would re-run the whole gate per apply')
+  assert.ok(!fs.existsSync(path.join(root, TOKEN_FILES.spawn)), 'the retired case was not removed from disk')
+
+  const dry = makeTokenHost('expiry-nogate-dry', 'exit 0')
+  const d = runNode('scripts/expire-tests.js', ['--root', dry, '--spec', TOKEN_SPEC_REL, '--no-gate', '--json'], { encoding: 'utf8' })
+  assert.strictEqual(d.status, 2, '--no-gate without --apply is a usage error: ' + d.stdout + d.stderr)
+  assert.match(d.stderr, /--no-gate/, 'the usage line must name --no-gate so the caller sees what was refused')
 })
 
 test('AC-20260911-03-4: WHEN the same run adds --apply THE SYSTEM removes the retired test, leaves the four kept tests and the untagged test byte-identical, deletes the file whose only test was retired together with its now-empty directory, and lists that file under emptied', () => {
@@ -1047,28 +1093,6 @@ test('WHEN --apply runs on a host with no gateCommand THE SYSTEM applies, exits 
   const d = runNode('scripts/expire-tests.js', ['--root', dry, '--all-done', '--json'], { encoding: 'utf8' })
   assert.strictEqual(d.status, 0, d.stdout + d.stderr)
   assert.ok(!fs.existsSync(path.join(dry, 'ran-the-gate')), 'a dry run never runs the host gate')
-})
-
-test('an invariant script keeps a test file only when the file names it as a whole name — catalog.json never names log.js, health.json() never names health.js', () => {
-  const root = writeExpiryHost('expiry-whole-name')
-  setGate(root, 'node scripts/log.js && node scripts/health.js')
-  writeTest(root, 'scripts/log.js', '\n')
-  writeTest(root, 'scripts/health.js', '\n')
-  writeTest(root, 'tests/false-hit.test.js', `import { test } from 'vitest'
-const words = 'catalog.json'
-const probe = (r) => r.health.json()
-test('retired despite the look-alike names (AC-20260920-01-1)', () => {})
-`)
-  writeTest(root, 'tests/real-hit.test.js', `import { test } from 'vitest'
-import { spawnSync } from 'node:child_process'
-const script = 'scripts/log.js'
-test('kept: this file execs a script the gate runs (AC-20260920-01-2)', () => { spawnSync('node', [script]) })
-`)
-  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'], { encoding: 'utf8' })
-  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
-  const out = JSON.parse(r.stdout)
-  assert.strictEqual(out.kept.invariant, 1, r.stdout)
-  assert.deepStrictEqual(out.retired.map((x) => x.file), ['tests/false-hit.test.js'])
 })
 
 test('a git-ignored build directory is not the host — its copies of scripts and tests never change what the sweep keeps or retires', () => {

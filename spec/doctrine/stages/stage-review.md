@@ -79,7 +79,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   under Rationale in the same write as the status flip, and the step prints the softs under the
   advisory heading — none fixed here. A soft worth fixing after close is a Direct-lane commit
   through the host gate after merge-back; `--mark closed` refuses any drift between the committed
-  close tree and the judged tree. Where `policy.testExpiry` is `off`, expiry is not run: the step prints `test expiry: off by policy`, `marks.testsExpiry` is `{off: "policy"}` and the review ledger row carries no `tests` key. Apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
+  close tree and the judged tree. Where `policy.testExpiry` is `off`, expiry is not run: the step prints `test expiry: off by policy`, `marks.testsExpiry` is `{off: "policy"}` and the review ledger row carries no `tests` key. Test expiry is applied at CLOSE (`expire-tests.js --apply --no-gate`; the deletions ride the close commit), and a test the reviewer or disposer orders in a fix round is written with `[invariant]` in its title. Apply the spec's Canonical Delta to `docs/canonical/{area}.md`. Fold the deviations sidecar:
   recurring-shaped entries become one-line Gotchas entries (format per the host Gotchas section's
   header comment); one-offs go to the spec's Rationale; delete the sidecar. Queue any follow-up
   needing its own spec or the user's decision, never leave it narrated:

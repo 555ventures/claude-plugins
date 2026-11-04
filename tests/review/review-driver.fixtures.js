@@ -31,7 +31,7 @@ const GREEN_TEST = `'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert')
 const foo = require('../src/foo.js')
-test('AC-20260820-99-1: foo() returns 42', () => { assert.strictEqual(foo(), 42) })
+test('AC-20260820-99-1: foo() returns 42 [invariant]', () => { assert.strictEqual(foo(), 42) })
 `
 
 function specBody({ status = 'implementing', tier = 'standard', diffBase, acId = 'AC-20260820-99-1', area = null, canonicalDelta = null }) {
@@ -67,7 +67,8 @@ ${canonicalDelta}
 
 // gotchas: when a number, the host declares pipelineRules and ships a rules file holding that
 // many Gotchas entries BEFORE the diff base (so reconcile never sees it as out-of-plan).
-function makeHost({ gateFails = false, specOpts = {}, gotchas = null } = {}) {
+// config: extra host config keys committed in the base, so reconcile never sees them as out-of-plan.
+function makeHost({ gateFails = false, specOpts = {}, gotchas = null, config = {} } = {}) {
   const root = fs.realpathSync(tmpdir('rvdrv'))
   const g = gitRepo(root)
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
@@ -78,6 +79,7 @@ function makeHost({ gateFails = false, specOpts = {}, gotchas = null } = {}) {
     testCommand: 'node --test',
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'none' },
+    ...config,
   }
   if (gotchas !== null) {
     cfg.pipelineRules = '.claude/rules/spec-pipeline.md'

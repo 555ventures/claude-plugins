@@ -133,7 +133,7 @@ Per-spec review proves a diff works on a dev boot; release proves the milestone 
 | `/spec:plan` | Author + adversarially harden a spec | Per feature |
 | `/spec:run` | Isolates in the spec's own worktree, then runs the whole feature: test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions — the only way into the build and review stages | Per feature |
 | `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
-| `/spec:fix` | Root-cause repair in the Direct lane: root-cause statement before the first edit, a decisions stop on every authored string, one fresh reviewer, then the host gate and `/git:commit` (which records the fix row) | A defect that spans more than two layers or touches user-visible text; one- or two-file fixes are a plain commit |
+| `/spec:fix` | Root-cause repair in the Direct lane: root-cause statement before the first edit, a decisions stop on every authored string, one fresh reviewer, then the host gate and `/git:commit` (which records the fix row) | A repair under ~100 production lines touching at most three non-test files, whatever the host's layerGroups, or one that touches user-visible text; above that floor a repair is a spec |
 | `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
 | `/spec:queue` | Your intended work order across briefs and specs — the one thing the pipeline cannot derive | When the order matters |
 | `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |

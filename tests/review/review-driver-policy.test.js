@@ -148,8 +148,8 @@ test('AC-20261029-09-5: WHEN policy.testExpiry is "off" THE SYSTEM prints "test 
 
 test('AC-20261029-09-5: WHEN policy.testExpiry is "classify" THE SYSTEM prints the 🧹 line naming 1 retirable test as today', () => {
   const c = closeFor('classify')
-  assert.match(c.out, /🧹 1 tests are retirable/,
-    'the classify arm stopped reporting the retirable count: ' + c.out)
+  assert.match(c.out, /🧹 1 tests expired with this spec/,
+    'the classify arm stopped reporting the expired count: ' + c.out)
   assert.ok(!c.out.includes('off by policy'), 'the classify arm printed the off-by-policy line: ' + c.out)
 })
 

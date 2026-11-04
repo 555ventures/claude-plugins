@@ -42,7 +42,10 @@
 // file's deletion), CLOSE enumerates every entry, and `--mark closed` refuses while the file
 // exists or the last observation recorded a malformed line.
 //
-// `--mark closed` re-runs the host's resolved gateCommand and then the bare testCommand over the
+// CLOSE applies test expiry (`expire-tests.js --apply --no-gate`, specs/20261103/13 D11) so the deletions
+// ride the close commit, and records `lines:{tests,production}` on the row from the base diff (D14).
+// `--mark closed` re-runs the host's resolved gateCommand, then the bare testCommand, then the bare
+// optional slowTestCommand (D13: `slow red at close`) over the
 // committed close tree (the files CLOSE writes land after the legs ran), with NODE_TEST_CONTEXT
 // scrubbed from the child env; it also measures the committed close tree against the judged tree
 // (lib/close-tree-drift.js). Review refs refs/spec-review/<runId>/judged and .../close are written
@@ -105,6 +108,7 @@ const { sessionModel, sessionUsage, usageDelta } = require('./lib/session-stamp.
 // A `leg:<name>` disposition covers that leg's WHOLE finding count — the unit verdict.js sums.
 const { countLegFinding } = require('./lib/leg-findings')
 const { measureDrift } = require('./lib/close-tree-drift')
+const { fileShapes, isTestClassified } = require('./lib/file-shapes')
 // Base-candidate ORDER only (pin before ref); this driver keeps its own validity predicate.
 const { BASE_KEYS, pinnedBaseCandidates } = require('./lib/base-derivation')
 // Delegated stops: in a child session every ask is written to .claude/pending-question.json.
@@ -836,6 +840,23 @@ function writeReviewRef(runId, leaf, sha) {
   }
 }
 
+// The test:production line split of the branch: numstat against the base summed as insertions +
+// deletions per path; a binary `-` pair counts 0.
+function closeLines() {
+  const shapes = fileShapes(readConfig(repoRoot))
+  const out = { tests: 0, production: 0 }
+  const r = runChild('git', ['-C', repoRoot, 'diff', '--numstat', '--no-renames', baseSha], { encoding: 'utf8' },
+    'numstat of the branch (close row lines)')
+  if (r.status !== 0) return out
+  for (const line of r.stdout.split('\n')) {
+    const m = /^(\S+)\t(\S+)\t(.+)$/.exec(line)
+    if (!m) continue
+    const n = (/^\d+$/.test(m[1]) ? Number(m[1]) : 0) + (/^\d+$/.test(m[2]) ? Number(m[2]) : 0)
+    out[isTestClassified(m[3], shapes) ? 'tests' : 'production'] += n
+  }
+  return out
+}
+
 // ---- CLOSE driver work: authoritative verdict + ledger append + status flip --------------------
 function doCloseWork(n) {
   const runId = ensureRunId()
@@ -862,14 +883,15 @@ function doCloseWork(n) {
   if (r.status === 2) die('verdict.js (authoritative pass) failed: ' + (r.stdout + r.stderr).trim())
   const lines = r.stdout.split('\n')
 
-  // expire-tests.js classifies (never applies) every test tagged with this spec's AC-IDs, after the
-  // authoritative verdict and before the ledger append. A non-zero exit or unparseable output
-  // refuses the close (status unchanged, no ledger append).
+  // expire-tests.js applies (`--apply --no-gate`) the expiry of every test tagged with this spec's AC-IDs,
+  // after the authoritative verdict and before the ledger append; the deletions are uncommitted tree
+  // edits that ride the close commit, and `--mark closed` re-runs the host gate over that tree. A
+  // non-zero exit or unparseable output refuses the close (status unchanged, no ledger append).
   const expiryOff = policy(repoRoot).testExpiry === 'off'
   const er = expiryOff ? null : runChild(process.execPath, [testExpiryBin, '--root', repoRoot, '--spec', specRel,
-    '--json'], { encoding: 'utf8' }, 'expire-tests.js (close-time expiry classification)')
+    '--apply', '--no-gate', '--json'], { encoding: 'utf8' }, 'expire-tests.js (close-time expiry)')
   if (expiryOff) marks.testsExpiry = { off: 'policy' }
-  const expiryRemedy = 'node "$(spec-paths test-expiry)" --root . --spec ' + specRel
+  const expiryRemedy = 'node "$(spec-paths test-expiry)" --root . --spec ' + specRel + ' --apply --no-gate'
   if (!expiryOff && er.status !== 0) {
     die('expire-tests.js failed at close — status unchanged. Remedy: ' + expiryRemedy + '\n' +
       (er.stdout + er.stderr).trim())
@@ -884,7 +906,10 @@ function doCloseWork(n) {
     die('expire-tests.js printed unparseable output at close — status unchanged. Remedy: ' + expiryRemedy)
   }
   const testsRow = expiryOff ? null : { born: expiry.tagged, kept: expiry.tagged - expiry.retired.length, retired: expiry.retired.length }
-  if (!expiryOff) marks.testsExpiry = { ...testsRow, filesRemoved: expiry.emptied.length }
+  if (!expiryOff) marks.testsExpiry = {
+    ...testsRow, filesRemoved: expiry.emptied.length, applied: true,
+    files: Array.from(new Set(expiry.retired.map((x) => x.file))).sort(),
+  }
 
   // `gotchas` rides the row only when a rules file was observed; `tests` rides every close row,
   // after gotchas when present.
@@ -892,6 +917,7 @@ function doCloseWork(n) {
   const row = JSON.parse(lines[1])
   if (gotchas !== null) row.gotchas = gotchas
   if (testsRow) row.tests = testsRow
+  row.lines = closeLines()
   // sessionTokens (when verdict.js carried it) stays the LAST key, after the keys added here.
   if (Object.prototype.hasOwnProperty.call(row, 'sessionTokens')) { const st = row.sessionTokens; delete row.sessionTokens; row.sessionTokens = st }
   lines[1] = JSON.stringify(row)
@@ -1473,9 +1499,22 @@ function tailLines(text, n) {
   if (lines.length && lines[lines.length - 1] === '') lines.pop()
   return lines.slice(-n).join('\n')
 }
-// Gate + whole-suite only; nothing here deletes a test (that is /spec:doctor check 20's
-// `--all-done --apply`, run by a human).
+// Gate, whole-suite, then the optional slowTestCommand (specs/20261103/13 D13); the close's test
+// deletions were already applied by doCloseWork() and are inside the committed tree being certified.
 function runCloseTimeGate() {
+  runCloseGateAndSuite()
+  const slow = readConfig(repoRoot).slowTestCommand
+  if (typeof slow !== 'string' || !slow.trim()) return
+  const sr = runHost(slow, { cwd: repoRoot, encoding: 'utf8' }, 'close-time slow tier (' + slow + ')')
+  if (sr.status === 0) return
+  // The literal anchor opens its own line (AC-20261103-13-5), so this refusal skips die()'s name prefix.
+  process.stderr.write('slow red at close — ' + slow + ' exited ' + sr.status + ' over the committed close tree.\n' +
+    'Fix what the slow tier names, commit the fix, then re-run `node ' + __filename + ' ' + specPath +
+    ' --mark closed`.\n--- last 40 lines of slow output ---\n' + tailLines((sr.stdout || '') + (sr.stderr || ''), 40) + '\n')
+  process.exit(2)
+}
+
+function runCloseGateAndSuite() {
   const gateConfig = readConfig(repoRoot)
   const resolved = resolveGate(specText, gateConfig)
   if (!resolved.gate) {
@@ -1659,6 +1698,7 @@ function refuseCloseTreeDrift() {
   const sha = pinned || judgedSha()
   const excludes = [specRel, 'docs/canonical/', '.claude/spec-runs.jsonl', '.claude/spec-runs/', sidecarRel,
     path.relative(repoRoot, deviationsPath), '.claude/agent-memory/']
+  if (marks.testsExpiry && Array.isArray(marks.testsExpiry.files)) excludes.push(...marks.testsExpiry.files)
   if (pipelineRulesPath) excludes.push(path.relative(repoRoot, pipelineRulesPath))
   // The judged tree is a working-tree snapshot that also holds whatever the reviewer's legs left
   // behind (untracked build output a host never ignored); lib/close-tree-drift.js counts only paths
@@ -2548,11 +2588,11 @@ const STEPS = {
         `running in a linked worktree (main root: ${mainRoot}), so the ledger and retained ` +
         `evidence are promoted there only once the merge lands, not committed from the worktree ` +
         `now; this is the close commit.\n` + gateRerunNote
-    // Printed only when classification found something retirable; nothing is deleted at close.
+    // Printed only when the applied expiry removed something.
     const testsExpiredLine = (marks.testsExpiry && marks.testsExpiry.off === 'policy')
       ? `test expiry: off by policy\n`
       : (marks.testsExpiry && marks.testsExpiry.retired > 0)
-      ? `🧹 ${marks.testsExpiry.retired} tests are retirable with this spec (${marks.testsExpiry.filesRemoved} files would empty) — nothing is deleted at close; sweep deliberately with: node "$(spec-paths test-expiry)" --root . --all-done --apply\n`
+      ? `🧹 ${marks.testsExpiry.retired} tests expired with this spec (${marks.testsExpiry.filesRemoved} files removed) — the deletions ride the close commit\n`
       : ''
     // the advisory block prints only when the current return carries >= 1 soft.
     const closeSofts = currentSofts()

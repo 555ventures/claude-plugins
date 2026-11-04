@@ -86,21 +86,22 @@ manifest before stamping.
 
 ## Test expiry (required)
 
-A spec's tests are classified at close, deleted only by a deliberate sweep. At review close the
-plugin runs `expire-tests.js` in dry-run mode over every test tagged with the closing spec's own
-AC-IDs, reporting which are retirable — a test that cites a ledger escape class, exercises a
-script the pipeline itself runs, or pins an AC bullet carrying `SHALL CONTINUE TO` (the opt-in
-permanence marker) stays kept. Close writes nothing to the tree, and `--mark closed` writes
-nothing either. The one path that deletes a test is
-`node "$(spec-paths test-expiry)" --root . --all-done --apply`, run deliberately after review, on
-one host at a time, never by the close itself. The host obligation follows from that:
+A spec's tests are classified and deleted at close. At review close the plugin runs
+`expire-tests.js --apply` over every test tagged with the closing spec's own AC-IDs and deletes the
+retirable ones; the deletions ride the close commit. A test outlives its spec in two ways only:
+an `[invariant]`/`[pin]` token in its title, or an AC bullet carrying `SHALL CONTINUE TO` (the
+opt-in permanence marker); a test that cites a ledger escape class or exercises a script the
+pipeline itself runs also stays kept. A non-JavaScript host expires through its `testCaseScanner`
+(§ Required config keys) listing each case with a span. The sweep
+`node "$(spec-paths test-expiry)" --root . --all-done --apply` stays as the catch-up path for tests
+that closed before this version, run deliberately on one host at a time. The host obligation follows:
 
 - **A check that requires a test carrier per acceptance criterion scopes its carriers to specs
   that are NOT `done`.** A `done` spec owes a carrier only for a criterion whose bullet says
   `SHALL CONTINUE TO`; every other criterion of a done spec is retirable once classified. This is
   exactly the rule the plugin's own `ac-drift.js` applies repo-wide (`/spec:doctor` check 17).
 - A host check that demands a carrier for **every** AC of a done spec goes red once the
-  deliberate sweep actually runs, and stays red: the sweep deletes the retirable tests, so a
+  close deletes tests, and stays red: the close deletes the retirable tests, so a
   check expecting a carrier for every criterion of a done spec finds none for the ones it
   retired, with no path forward short of rescoping the check.
 - Relabelling a criterion `SHALL CONTINUE TO` to satisfy such a check is never the remedy — that
@@ -113,10 +114,10 @@ The pipeline generates no coverage check of its own; a host that authors one own
 `testCommand` is the fast tier: every gate, suite, at-risk and close-time run executes it.
 `slowTestCommand` (a shell string, no placeholders) is the host's own invocation of the tests it
 has excluded from `testCommand` by its runner's own mechanism — a marker, a project, a tag; the
-plugin names none. It runs once per review legs iteration as the blocking `slow` leg and never at
-close. `gateCommand` carries `{testDirs}` (or `{scopeDirs}`) wherever the runner accepts appended
+plugin names none. It runs once at review close and once at release as a blocking `slow` leg, never in the build
+loop or the review legs. `gateCommand` carries `{testDirs}` (or `{scopeDirs}`) wherever the runner accepts appended
 paths; an unscoped gate is reported by `/spec:doctor` (check 25), never refused. Absent
-`slowTestCommand` = no slow leg.
+`slowTestCommand` = no slow run.
 
 ## Deliverable manifest (required)
 

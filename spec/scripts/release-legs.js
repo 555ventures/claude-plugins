@@ -98,6 +98,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const { runAsync } = require('./lib/host-run')
+const { readManifest } = require('./lib/manifest')
 const { spawn, spawnSync } = require('child_process')
 const { readConfig, CONFIG_RELPATH } = require('./lib/host-config')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
@@ -127,20 +128,6 @@ function sh(cmd, opts = {}) {
 
 // Count parsing lives in lib/count-observation.js (shared with review-legs.js), reading the LAST match.
 
-function readManifestRows(manifestPath) {
-  if (!fs.existsSync(manifestPath)) return []
-  const rows = []
-  for (const line of fs.readFileSync(manifestPath, 'utf8').split('\n')) {
-    if (!line.trim()) continue
-    try { rows.push(JSON.parse(line)) } catch { /* ignored — not this script's job to validate */ }
-  }
-  return rows
-}
-
-function manifestHasRows(manifestPath) {
-  if (!fs.existsSync(manifestPath)) return false
-  return fs.readFileSync(manifestPath, 'utf8').split('\n').some(l => l.trim())
-}
 
 function requireReleaseBlock(config, label) {
   if (!config.release || typeof config.release !== 'object' || Array.isArray(config.release)) {
@@ -312,7 +299,8 @@ async function cmdStage(argv) {
 
   // One fresh manifest per release run — a re-run onto a stale manifest would double every
   // leg row and corrupt verdict.js's leg map silently.
-  if (manifestHasRows(manifest)) {
+  const priorManifest = readManifest(manifest)
+  if (priorManifest && priorManifest.rows.length > 0) {
     console.error(`release-legs.js stage: --manifest ${manifest} already contains row(s) — start a ` +
       'fresh manifest per release run (a re-run onto a stale manifest would double every leg row)')
     process.exit(2)
@@ -422,7 +410,7 @@ function cmdAppend(argv) {
   }
 
   // Refuse a duplicate row for any leg already in the manifest.
-  if (readManifestRows(manifest).some(r => r.leg === leg)) {
+  if ((readManifest(manifest) || { rows: [] }).rows.some(r => r.leg === leg)) {
     console.error(`release-legs.js append: manifest ${manifest} already has a ${leg} row — append ` +
       'refuses a duplicate (it would corrupt verdict.js\'s per-leg map)')
     process.exit(2)
@@ -452,7 +440,7 @@ async function cmdRollback(argv) {
     process.exit(2)
   }
   root = path.resolve(root)
-  const rows = readManifestRows(manifest)
+  const rows = (readManifest(manifest) || { rows: [] }).rows
   const prod = rows.find(r => r.leg === 'production')
   if (!prod || !prod.observed || prod.observed.result !== 'failed') {
     console.error(`release-legs.js rollback: manifest ${manifest} has no production row with result failed — ` +

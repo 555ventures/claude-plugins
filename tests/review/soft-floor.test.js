@@ -3,7 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { makeHost, readState, readStateRaw, run, stateOf, toReviewer, returnFileWith, disposerReturn, CLEAN_RETURN } = require('./disposer-gate.fixtures')
+const { makeHost, readState, readStateRaw, run, stateOf, toReviewer, returnFileWith, disposerReturn, appendSealedRow, CLEAN_RETURN } = require('./disposer-gate.fixtures')
 
 // specs/20260909/04-review-soft-floor.md D5-D9, D11 — spec-review-driver.js's DISPOSITIONS step
 // and reviewer-returned/dispositions mark handlers against a synthetic host, exercised via a
@@ -149,9 +149,7 @@ test('D6 (fix review): WHEN --mark reviewer-returned carries an empty-hard-pool 
   // Hand-edit the manifest to append a "gate" row stamped scope:"fix-delta" — once D1 stamps
   // every other row "full", this single override disagrees with the rest of the manifest, the
   // same fixture AC-20260902-05-8 (review-driver-fix-cycle.test.js) uses to force UNVERIFIED.
-  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
-  fs.appendFileSync(manifestPath,
-    JSON.stringify({ leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1 }, scope: 'fix-delta' }) + '\n')
+  appendSealedRow(host, 1, { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1 }, scope: 'fix-delta' })
 
   const stateBefore = readStateRaw(host.sidecar)
   const r = run(host.root, host.spec, '--mark', 'reviewer-returned', '--file',

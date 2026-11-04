@@ -74,6 +74,7 @@ const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/coun
 const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
 const { fmMap } = require('./lib/frontmatter')
 const runCache = require('./lib/run-cache')
+const { readManifest } = require('./lib/manifest')
 
 function usage() {
   console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>] [--tree <40-hex>]')
@@ -461,8 +462,7 @@ async function main() {
   fs.writeFileSync(path.join(outDir, 'promise-sweep.txt'), psr.out + psr.err)
 
   // ---- summary ----------------------------------------------------------------------------
-  const all = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
-  const byLeg = new Map(all.map(r => [r.leg, r]))
+  const { byLeg } = readManifest(manifest)
   // rows ac-matrix.js / promise-sweep.js append themselves take their script's wall-clock (the
   // skip-reconcile row rides ac-matrix's spawn, so it records 0); timings.json keeps manifest order.
   const ms = (leg) => leg in timings ? timings[leg]

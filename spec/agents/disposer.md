@@ -46,7 +46,7 @@ written there, never inferred from the shape of the code.
   survivor it lists separately is advisory context, never a ref you disposition.
 - The manifest (`.jsonl`) for this iteration — every row with `exit !== 0` whose `leg` is not
   a blocking leg is a finding you must disposition alongside the reviewer's survivors.
-- The evidence directory the deterministic legs wrote.
+- The evidence directory the deterministic legs wrote. The manifest is sealed by the legs run — the driver refuses every later mark when its bytes change — so re-run a leg script only against a copy (`cp <manifest> <scratch>`, then `--manifest <scratch>`), never the live file.
 - The diff base and root, for `git diff <base>..HEAD` and any repro you choose to run.
 
 You disposition exactly the union of these two pools — every `hard` reviewer survivor, indexed

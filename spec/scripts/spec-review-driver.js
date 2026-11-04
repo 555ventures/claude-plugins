@@ -26,6 +26,12 @@
 // marks.judgedTree is overlay-only, scope-reconcile.js --probe-at-risk finds no test file naming a
 // changed path, and the judged tree's suite is cached green; `always` runs it every time.
 //
+// The legs seal the manifest (specs/20261104/01-the-legs-seal-the-manifest.md D4): runLegs records
+// marks.manifestDigest[n] = sha256 of manifest-<n>.jsonl right after review-legs.js returns, and EVERY
+// invocation exits 2 before any mark or derivation when the live iteration's bytes differ — naming the
+// duplicated leg or "edited by hand", the copy-first rule, and the remedy (rm the manifest, re-run the
+// driver; that iteration regenerates and reseals). A missing file or an unrecorded digest is unchecked.
+//
 // What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
 // a user-facing report — it prints machine summaries plus which judgment is due and the
 // evidence paths; report assembly stays with the session via report-render.js. It never asserts
@@ -100,6 +106,7 @@ const { runChild, runHost, writeOut, appendLedger: appendLedgerLib, loadSidecar,
 const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
 const { readConfig, readPipelineRules, policy, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 const runCache = require('./lib/run-cache')
+const { readManifest } = require('./lib/manifest')
 const { computeTestsExecuted, computeSkips } = require('./lib/count-observation')
 // The close-time gate re-run shares review-legs.js's own {testDirs}/{scopeDirs} resolution.
 const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
@@ -226,7 +233,8 @@ function dispositionPools(n) {
   try { allSurvivors = JSON.parse(fs.readFileSync(marks.reviewerReturnFile, 'utf8')).survivors || [] } catch { /* ignore */ }
   const survivors = allSurvivors.filter((s) => s.severity === 'hard')
   const softs = allSurvivors.filter((s) => s.severity !== 'hard')
-  const legs = readManifestRows(manifestPathFor(n)).filter((r) => !BLOCKING_LEGS.has(r.leg) && r.exit !== 0)
+  const m = readManifest(manifestPathFor(n))
+  const legs = (m ? [...m.byLeg.values()] : []).filter((r) => !BLOCKING_LEGS.has(r.leg) && r.exit !== 0)
   return { survivors, softs, legs }
 }
 
@@ -542,15 +550,13 @@ function listManifestNumbers() {
     .map((f) => /^manifest-(\d+)\.jsonl$/.exec(f))
     .filter(Boolean).map((m) => Number(m[1])).sort((a, b) => a - b)
 }
-function readManifestRows(p) {
-  if (!fs.existsSync(p)) return []
-  return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.trim())
-    .map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
-}
+// Every manifest read goes through lib/manifest.js; an absent file reads as no rows.
+function rowsAt(p) { const m = readManifest(p); return m ? m.rows : [] }
+function rowsOf(n) { return rowsAt(manifestPathFor(n)) }
 // A manifest's number is a storage key only; its kind is the `scope` review-legs.js stamps, and the
 // live iteration is the sidecar's recorded `iteration`.
 function isFixDeltaManifest(n) {
-  return readManifestRows(manifestPathFor(n)).some((r) => r.scope === 'fix-delta')
+  return rowsOf(n).some((r) => r.scope === 'fix-delta')
 }
 // A fix round is one fix-applied: rounds are the distinct fixDeltaFrom sources (a skips re-run
 // inherits its round's source). A manifest with no recorded source counts as its own round.
@@ -614,6 +620,12 @@ function runLegs(n, opts = {}) {
   // original count so a later, larger gate count re-enters SKIPS.
   if (opts.skipsFile) marks.legsMode[String(n)].skipsGateCount = opts.skipsGateCount
   marks.iteration = n
+  // Seal: the digest of the bytes this legs run wrote (hard stops included — STOPPED re-reads the file).
+  const sealed = readManifest(manifestPathFor(n))
+  if (sealed) {
+    marks.manifestDigest = marks.manifestDigest || {}
+    marks.manifestDigest[String(n)] = sealed.digest
+  }
   saveSidecar()
   return { code: r.status, out: r.stdout, err: r.stderr }
 }
@@ -622,7 +634,7 @@ function runLegs(n, opts = {}) {
 // review-legs.js exiting 0 over a manifest nobody wrote.
 function verifyManifestWritten(n) {
   const p = manifestPathFor(n)
-  const rows = readManifestRows(p)
+  const rows = rowsAt(p)
   if (!rows.length) {
     die('legs iteration ' + n + ' reported success but ' + p + ' is missing or has no parseable ' +
       'rows — nothing it was meant to produce can be trusted; delete ' + sidecarDir + ' and ' +
@@ -745,14 +757,14 @@ function decideReuse(curN, priorManifest, fixDelta) {
     return { tree }
   }
   const scope = fixDelta ? 'fix-delta' : 'full'
-  const greens = readManifestRows(priorManifest)
+  const greens = rowsAt(priorManifest)
     .filter((r) => REUSABLE_LEGS.includes(r.leg) && legGreen(r) && r.scope === scope).map((r) => r.leg)
   console.log('♻️ tree unchanged since legs ' + curN + ' — reusing green rows: ' + greens.join(', '))
   return { tree, reuseFrom: priorManifest }
 }
 // REUSABLE legs red in the prior rows and green in the new manifest, over the same tree.
 function recordFlaky(n, curN, priorRows) {
-  const now = readManifestRows(manifestPathFor(n))
+  const now = rowsOf(n)
   const flaky = priorRows.filter((p) => REUSABLE_LEGS.includes(p.leg) && !legGreen(p) &&
     now.some((r) => r.leg === p.leg && legGreen(r))).map((p) => p.leg)
   if (!flaky.length) return
@@ -1030,7 +1042,7 @@ function handleSkipsExtracted() {
   // validate before any write. An empty file against a gate reporting skips is refused (exit 2,
   // nothing written); a count mismatch is a warning, not a refusal — runners group identical skips.
   const curN = liveIteration()
-  const gateCount = gateSkipsCount(readManifestRows(manifestPathFor(curN)))
+  const gateCount = gateSkipsCount(rowsOf(curN))
   const listed = fs.readFileSync(resolved, 'utf8').split('\n').filter((l) => l.trim()).length
   if (listed === 0 && gateCount > 0) {
     die('--file ' + file + ' lists no skipped-test names but the gate reported ' + gateCount +
@@ -1049,7 +1061,7 @@ function handleSkipsExtracted() {
     marks.fixDeltaFrom[String(n)] = marks.fixDeltaFrom[String(curN)]
   }
   const priorManifest = manifestPathFor(curN)
-  const priorRows = readManifestRows(priorManifest)
+  const priorRows = rowsAt(priorManifest)
   const reuse = decideReuse(curN, priorManifest, inheritFix)
   const r = runLegsIteration(n, { skipsFile: resolved, skipsGateCount: gateCount, fixDelta: inheritFix, ...reuse })
   if (reuse.reuseFrom) recordFlaky(n, curN, priorRows)
@@ -2169,7 +2181,7 @@ function finishMerge(mainRootDir, source, wt) {
 const REPAIR_ROUND_CAP = 1
 function handleRepairRound() {
   const n = liveIteration()
-  if (n === 0 || !isRedBlocking(readManifestRows(manifestPathFor(n)))) {
+  if (n === 0 || !isRedBlocking(rowsOf(n))) {
     die('--mark repair-round refused \u2014 the run is not at STOPPED (state unchanged); re-run `node ' +
       __filename + ' ' + specPath + '` and execute the step it prints')
   }
@@ -2184,7 +2196,7 @@ function handleRepairRound() {
   fs.mkdirSync(outDirFor(n), { recursive: true })
   const priorManifest = path.join(outDirFor(n), 'prior-manifest.jsonl')
   fs.copyFileSync(manifestPathFor(n), priorManifest)
-  const priorRows = readManifestRows(priorManifest)
+  const priorRows = rowsAt(priorManifest)
   fs.rmSync(manifestPathFor(n), { force: true })
   const reuse = decideReuse(n, priorManifest, !!mode.fixDelta)
   const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta, ...reuse })
@@ -2237,20 +2249,20 @@ function deriveState() {
 
   let n = liveIteration()
 
-  if (n === 0 || readManifestRows(manifestPathFor(n)).length === 0) {
+  if (n === 0 || rowsOf(n).length === 0) {
     // the recorded iteration owns the number — a missing manifest is regenerated at that same
     // number, in the mode legs last ran in, never replaced by judging an older one live.
     const mode = (n > 0 && legsModeFor(n)) || {}
     n = n || 1
     const r = runLegsIteration(n, { skipsFile: mode.skipsFile || undefined, skipsGateCount: mode.skipsGateCount, fixDelta: !!mode.fixDelta })
     if (r.stopped) return 'STOPPED'
-  } else if (isRedBlocking(readManifestRows(manifestPathFor(n)))) {
+  } else if (isRedBlocking(rowsOf(n))) {
     // STOPPED is sticky — a bare re-invocation stays idempotent. Re-entry: fix the issue, delete the
     // sidecar (or this iteration's manifest).
     return 'STOPPED'
   }
 
-  const rows = readManifestRows(manifestPathFor(n))
+  const rows = rowsOf(n)
 
   // SKIPS is per iteration — the gate's count against the count recorded at this iteration's extraction.
   const liveMode = legsModeFor(n) || {}
@@ -2286,6 +2298,25 @@ function deriveState() {
 }
 
 // ---- run ----------------------------------------------------------------------------------------
+// The seal: refuse every invocation when the live manifest's bytes differ from the digest the legs
+// run recorded. A missing file is the remedy's own state, never drift; no recorded digest = unchecked.
+{
+  const sealN = liveIteration()
+  const sealedDigest = marks.manifestDigest && marks.manifestDigest[String(sealN)]
+  const live = sealedDigest ? readManifest(manifestPathFor(sealN)) : null
+  if (live && live.digest !== sealedDigest) {
+    const mp = manifestPathFor(sealN)
+    const dup = /^duplicate leg (\S+) \(rows (\d+), (\d+)\)$/.exec(live.cause || '')
+    const cause = dup
+      ? `leg:${dup[1]} appears ${live.rows.filter((r) => r.leg === dup[1]).length} times — a leg script was re-run with --manifest pointing at the live file`
+      : 'edited by hand'
+    die(`${mp} changed after the legs run that sealed it\n` +
+      `  (sealed ${sealedDigest.slice(0, 8)}…, now ${live.digest.slice(0, 8)}…): ${cause}. Re-run a leg only against a copy:\n` +
+      `  cp ${mp} <scratch> && node "$(spec-paths <leg script>)" … --manifest <scratch>\n` +
+      `  To recover: rm ${mp} and re-run \`node ${__filename} ${specPath}\` — legs regenerate at\n` +
+      `  iteration ${sealN} (a green gate/suite over the same tree is reused from the run cache).`)
+  }
+}
 if (!MARK && !STATE_ONLY) {
   const bare = pq.bareRun(repoRoot, marks, ['dispositions'], (kind) =>
     kind === 'repair-round' ? repairStopKey() : kind === 'review-escalate' ? escalateStopKey() : null)
@@ -2406,7 +2437,7 @@ function escalatePoolBlock() {
 
 const STEPS = {
   STOPPED: () => {
-    const rows = readManifestRows(manifestPathFor(marks.stoppedIteration || currentN))
+    const rows = rowsOf(marks.stoppedIteration || currentN)
     const red = rows.filter((r) => BLOCKING_LEGS.has(r.leg) &&
       (r.leg === 'smoke' ? (r.exit !== 0 && r.exit !== 4) : r.exit !== 0))
     // Name the path the GATE_RED row landed in, sourced from the sidecar mark, never re-derived.

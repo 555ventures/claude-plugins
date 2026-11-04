@@ -15,7 +15,8 @@
 // is unmeasured (lib/release-unmeasured.js). --ledger prints one ledger row; its derived fields
 // come from the manifest rows' typed `observed` objects, never asserted.
 //
-// Manifest: every row's `observed` must be a non-null JSON object — any other shape invalidates
+// Manifest (read through lib/manifest.js): one row per leg; a duplicate invalidates the manifest.
+// Every row's `observed` must be a non-null JSON object — any other shape invalidates
 // the WHOLE manifest -> UNVERIFIED on both profiles. This script copies typed fields and performs
 // no pattern match against any `observed` value. A red non-blocking row contributes its finding
 // count (lib/leg-findings.js countLegFinding, floored at 1) to the same undispositioned pool as
@@ -66,6 +67,7 @@ const { countLegFinding } = require('./lib/leg-findings')
 // One derivation of "this release leg measured nothing" shared with release-legs.js's summary.
 const { unmeasuredReason } = require('./lib/release-unmeasured')
 const { normBrief } = require('./lib/queue')
+const { readManifest } = require('./lib/manifest')
 
 function usage() {
   console.error('usage: verdict.js --manifest <path> [--workflow <path>] [--waived N] [--rejected N] ' +
@@ -261,36 +263,17 @@ if (baseShaArg !== null && headShaArg !== null) {
   }
 }
 
-// ---- manifest: JSONL rows, one per leg; last-in-file wins, insertion order preserved ------
+// ---- manifest: JSONL rows, one per leg; lib/manifest.js is the one reader ----------------
 
-let manifestRaw
-try {
-  manifestRaw = fs.readFileSync(manifestPath, 'utf8')
-} catch (e) {
-  console.error(`verdict.js: cannot read --manifest ${manifestPath} — confirm the evidence manifest was created: ${e.message}`)
+const loadedManifest = readManifest(manifestPath)
+if (loadedManifest === null) {
+  console.error(`verdict.js: cannot read --manifest ${manifestPath} — confirm the evidence manifest was created`)
   process.exit(2)
 }
-const legRows = new Map()
-let manifestValid = true
-// The first row-parse failure is the cause printed on UNVERIFIED's stderr line.
-let invalidCause = null
-let lineNo = 0
-for (const line of manifestRaw.split('\n')) {
-  lineNo++
-  if (!line.trim()) continue
-  try {
-    const row = JSON.parse(line)
-    if (!row.leg || typeof row.exit !== 'number') throw new Error('missing leg/exit')
-    // `observed` must be a non-null, non-array JSON object — any other shape invalidates the whole manifest.
-    if (row.observed === null || typeof row.observed !== 'object' || Array.isArray(row.observed)) {
-      throw new Error('observed must be a non-null JSON object')
-    }
-    legRows.set(row.leg, row)
-  } catch {
-    manifestValid = false
-    if (invalidCause === null) invalidCause = 'row ' + lineNo + ' unparseable'
-  }
-}
+const legRows = loadedManifest.byLeg
+let manifestValid = loadedManifest.valid
+// The first row failure is the cause printed on UNVERIFIED's stderr line.
+let invalidCause = loadedManifest.cause
 
 // ---- workflow return (absent under --profile release) -------------------------------------
 

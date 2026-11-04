@@ -925,7 +925,7 @@ test('AC-20260902-05-7 (missing legs): WHEN verdict.js derives UNVERIFIED becaus
     `row: ${JSON.stringify(r.stdout)}`)
 })
 
-test('AC-20260902-05-7 (invalid manifest): WHEN a row\'s observed field is a string THE SYSTEM SHALL print a stderr line beginning "verdict.js: UNVERIFIED — manifest invalid: "', () => {
+test('AC-20260902-05-7 / AC-20261104-01-5 (invalid manifest): WHEN a row\'s observed field is a string THE SYSTEM SHALL print a stderr line beginning "verdict.js: UNVERIFIED — manifest invalid: "', () => {
   const dir = tmpdir('verdict-05-7-invalid')
   const rows = SIX_GREEN.map(r => (r.leg === 'gate' ? { leg: 'gate', exit: 0, observed: 'skips=2 todos=1' } : r))
   const manifest = writeManifest(dir, rows)

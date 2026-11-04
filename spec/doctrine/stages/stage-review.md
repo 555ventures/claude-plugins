@@ -59,6 +59,7 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   hunk quoted — neither present returns `advisory`. No
   finding dies by argument — dismissed only on executed contrary evidence, a quoted spec
   sanction, or a demonstrated miscitation, presented to the user.
+- **The manifest is sealed by the legs run** — the driver refuses every later mark when its bytes change — so a leg script is re-run only against a copy (`cp <manifest> <scratch>`, then `--manifest <scratch>`), never the live file; on a refusal, `rm` the manifest and re-run the driver.
 - **Dispositions (the DISPOSITIONS step).** Only the hard pool needs judgment; softs are advisory
   — printed once, recorded in the artifact and the ledger's `findings.soft`, never dispositioned;
   softs may ride a fix round (same workers, same files; the fix-delta pass re-reviews whatever changed), never queued. Dispatch **one** `Agent {subagent_type:

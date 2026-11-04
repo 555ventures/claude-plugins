@@ -136,7 +136,7 @@ test('AC-20260814-01-3a / continues AC-20260815-03-7: an [oracle:] AC whose decl
     `TO exit 0 — got ${res.status} (stderr: ${res.stderr})`)
 })
 
-test('AC-20260814-01-3b: an [oracle:] AC whose declared leg is red or absent from the manifest is a hard oracle-red-or-absent finding, identical standing to uncovered', () => {
+test('AC-20260814-01-3b / AC-20261104-01-11: an [oracle:] AC whose declared leg is red or absent from the manifest is a hard oracle-red-or-absent finding, identical standing to uncovered', () => {
   const dir = tmpdir('acm3b')
   fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'tests/oracle.test.js'), '// unrelated\n')

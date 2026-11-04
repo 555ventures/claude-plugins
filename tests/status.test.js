@@ -10,14 +10,18 @@ const spec = (st, brief, files) => `---\nstatus: ${st}\nbrief: ${brief}\n---\n# 
 const run = (d, ...a) => runNode('scripts/status.js', [...a, '--root', d, '--json'])
 const queue = (d, ...a) => runNode('scripts/queue.js', [...a, '--root', d])
 
-test('roadmap states: done, implementing, open, superseded', () => {
+test('roadmap states: done, implementing (from a run sidecar or lane worktree), open, superseded', () => {
   const d = tmpdir('status'); gitRepo(d)
   w(d, 'docs/roadmap/00-overview.md', '# Overview\n')
-  for (const n of ['01-a', '02-b', '03-c', '04-d']) w(d, `docs/roadmap/${n}.md`, `# ${n.slice(0, 2)} — T${n}\n` + (n === '04-d' ? '\n> Superseded by 01\n' : ''))
+  for (const n of ['01-a', '02-b', '03-c', '04-d', '05-e']) w(d, `docs/roadmap/${n}.md`, `# ${n.slice(0, 2)} — T${n}\n` + (n === '04-d' ? '\n> Superseded by 01\n' : ''))
   w(d, 'specs/20261104/01-x.md', spec('done', '01', ['a.js']))
-  w(d, 'specs/20261104/02-y.md', spec('implementing', '02', ['b.js']))
+  w(d, 'specs/20261104/02-y.md', spec('hardened', '02', ['b.js']))
+  w(d, 'specs/20261104/02-y.run/state.json', '{"step":"BUILD"}')
+  w(d, 'specs/20261104/03-z.md', spec('implementing', '03', ['c.js'])) // stale frontmatter, nothing in flight
+  w(d, 'specs/20261104/05-v.md', spec('hardened', '05', ['e.js']))
+  fs.mkdirSync(path.join(d, '.claude/worktrees/spec-05-v'), { recursive: true })
   const r = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(r.roadmap.map((b) => b.state), ['done', 'implementing', 'open', 'superseded'])
+  assert.deepStrictEqual(r.roadmap.map((b) => b.state), ['done', 'implementing', 'open', 'superseded', 'implementing'])
   const text = runNode('scripts/status.js', ['--root', d]).stdout
   for (const e of ['✅', '🔶', '⬜', '⛔', '🗺️']) assert.ok(text.includes(e))
 })

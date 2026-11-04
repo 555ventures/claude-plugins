@@ -1,0 +1,257 @@
+diff --git a/src/auth.js b/src/auth.js
+new file mode 100644
+index 0000000..21138e5
+--- /dev/null
++++ b/src/auth.js
+@@ -0,0 +1,19 @@
++'use strict'
++const keys = require('./keys')
++
++const unauthorized = () => ({ status: 401, body: { error: 'unauthorized' } })
++
++function authenticate(req) {
++  const header = req.headers && req.headers.authorization
++  if (typeof header !== 'string') return null
++  const m = /^bearer (.+)$/i.exec(header)
++  if (!m) return null
++  return keys.findByKey(m[1])
++}
++
++const requireKey = (req) => (authenticate(req) ? null : unauthorized())
++
++// POST /keys is open only while no key exists.
++const bootstrapGuard = (req) => (keys.count() === 0 ? null : requireKey(req))
++
++module.exports = { authenticate, requireKey, bootstrapGuard }
+diff --git a/src/keys.js b/src/keys.js
+new file mode 100644
+index 0000000..713a467
+--- /dev/null
++++ b/src/keys.js
+@@ -0,0 +1,50 @@
++'use strict'
++const crypto = require('node:crypto')
++
++let items = []
++let nextId = 1
++let store = null
++
++const hashOf = (key) => crypto.createHash('sha256').update(key).digest('hex')
++
++function reset() { items = []; nextId = 1; store = null }
++
++function attach(s) {
++  store = s
++  const section = s.read('keys')
++  items = section ? section.items : []
++  nextId = section ? section.nextId : 1
++}
++
++const persist = () => { if (store) store.write('keys', { nextId, items }) }
++
++const notFound = () => ({ status: 404, body: { error: 'not found' } })
++
++function create(req) {
++  const name = req.body && req.body.name
++  if (typeof name !== 'string' || !name) return { status: 400, body: { error: 'name required' } }
++  const key = 'tk_' + crypto.randomBytes(16).toString('hex')
++  const record = { id: nextId++, name, hash: hashOf(key) }
++  items.push(record)
++  persist()
++  return { status: 201, body: { id: record.id, name, key } }
++}
++
++function list() {
++  return { status: 200, body: items.map(({ id, name }) => ({ id, name })) }
++}
++
++function remove(req) {
++  const record = items.find((k) => k.id === Number(req.params.id))
++  if (!record) return notFound()
++  items.splice(items.indexOf(record), 1)
++  persist()
++  return { status: 204, body: null }
++}
++
++const findByKey = (key) => {
++  const hash = hashOf(key)
++  return items.find((k) => k.hash === hash) || null
++}
++
++module.exports = { create, list, remove, reset, attach, findByKey, count: () => items.length }
+diff --git a/src/router.js b/src/router.js
+index df81fbd..2f46561 100644
+--- a/src/router.js
++++ b/src/router.js
+@@ -1,8 +1,8 @@
+ 'use strict'
+-// Minimal route table: entries of { method, path, handler }. `:name` segments capture into req.params.
++// Minimal route table: entries of { method, path, handler, guard }. `:name` segments capture into req.params.
+ const routes = []
+ 
+-function add(method, path, handler) { routes.push({ method, path, handler }) }
++function add(method, path, handler, guard) { routes.push({ method, path, handler, guard }) }
+ 
+ function params(pattern, path) {
+   const p = pattern.split('/')
+@@ -21,18 +21,27 @@ function match(method, path) {
+   for (const r of routes) {
+     if (r.method !== method) continue
+     const p = params(r.path, path)
+-    if (p) return (req) => { req.params = p; return r.handler(req) }
++    if (p) return (req) => {
++      req.params = p
++      const denied = r.guard ? r.guard(req) : null
++      return denied || r.handler(req)
++    }
+   }
+   return null
+ }
+ 
+ const todos = require('./todos')
++const keys = require('./keys')
++const { requireKey, bootstrapGuard } = require('./auth')
+ 
+ add('GET', '/', () => ({ status: 200, body: { ok: true } }))
+ add('GET', '/health', require('./health').handler)
+-add('POST', '/todos', todos.create)
+-add('GET', '/todos', todos.list)
+-add('PATCH', '/todos/:id', todos.update)
+-add('DELETE', '/todos/:id', todos.remove)
++add('POST', '/todos', todos.create, requireKey)
++add('GET', '/todos', todos.list, requireKey)
++add('PATCH', '/todos/:id', todos.update, requireKey)
++add('DELETE', '/todos/:id', todos.remove, requireKey)
++add('POST', '/keys', keys.create, bootstrapGuard)
++add('GET', '/keys', keys.list, requireKey)
++add('DELETE', '/keys/:id', keys.remove, requireKey)
+ 
+ module.exports = { add, match, routes }
+diff --git a/src/server.js b/src/server.js
+index ce6b93f..a1c5e58 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -5,6 +5,7 @@ const { createLogger } = require('./logger')
+ const { createRateLimiter } = require('./rate-limit')
+ const { createStore } = require('./store')
+ const todos = require('./todos')
++const keys = require('./keys')
+ 
+ function readBody(req) {
+   return new Promise((resolve) => {
+@@ -17,7 +18,11 @@ function readBody(req) {
+ }
+ 
+ function createApp({ logger = createLogger(), rateLimit, store } = {}) {
+-  if (store) todos.attach(createStore({ file: store.file, logger }))
++  if (store) {
++    const s = createStore({ file: store.file, logger })
++    todos.attach(s)
++    keys.attach(s)
++  }
+   const limiter = rateLimit ? createRateLimiter(rateLimit) : null
+   return http.createServer(async (req, res) => {
+     const start = process.hrtime.bigint()
+diff --git a/tests/todos.test.js b/tests/todos.test.js
+index a91d4d3..7d7aead 100644
+--- a/tests/todos.test.js
++++ b/tests/todos.test.js
+@@ -4,16 +4,39 @@ const assert = require('node:assert')
+ const { createApp } = require('../src/server')
+ const todos = require('../src/todos')
+ 
+-beforeEach(() => todos.reset())
++// src/keys.js lands with spec 06; load it defensively so this file still loads before it exists.
++function loadKeys() { try { return require('../src/keys') } catch { return null } }
++
++let key = null
++
++beforeEach(async () => {
++  todos.reset()
++  const keys = loadKeys()
++  if (keys) keys.reset()
++  // Mint the key through the open bootstrap route (POST /keys is open while zero keys exist).
++  const server = createApp()
++  await new Promise((r) => server.listen(0, r))
++  try {
++    const res = await fetch(`http://localhost:${server.address().port}/keys`, {
++      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'test' }),
++    })
++    key = res.status === 201 ? (await res.json()).key : null
++  } finally { server.close() }
++})
+ 
+ async function withServer(fn) {
+   const server = createApp()
+   await new Promise((r) => server.listen(0, r))
+   try { await fn(`http://localhost:${server.address().port}`) } finally { server.close() }
+ }
+-const json = (method, body) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
++const auth = () => ({ authorization: `Bearer ${key}` })
++const json = (method, body) => ({ method, headers: { 'content-type': 'application/json', ...auth() }, body: JSON.stringify(body) })
++const authed = (method) => ({ method, headers: auth() })
++const anon = (method, body) => (body === undefined
++  ? { method }
++  : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+ 
+-test('POST /todos creates a todo', async () => {
++test('AC-20261104-06-10: POST /todos creates a todo', async () => {
+   await withServer(async (base) => {
+     const res = await fetch(`${base}/todos`, json('POST', { title: 'a' }))
+     assert.strictEqual(res.status, 201)
+@@ -21,6 +44,7 @@ test('POST /todos creates a todo', async () => {
+   })
+ })
+ 
++
+ test('POST /todos without title is 400', async () => {
+   await withServer(async (base) => {
+     const res = await fetch(`${base}/todos`, json('POST', {}))
+@@ -33,7 +57,7 @@ test('GET /todos lists todos', async () => {
+   await withServer(async (base) => {
+     await fetch(`${base}/todos`, json('POST', { title: 'a' }))
+     await fetch(`${base}/todos`, json('POST', { title: 'b' }))
+-    const res = await fetch(`${base}/todos`)
++    const res = await fetch(`${base}/todos`, authed('GET'))
+     assert.strictEqual(res.status, 200)
+     assert.deepStrictEqual((await res.json()).map((t) => t.title), ['a', 'b'])
+   })
+@@ -51,15 +75,15 @@ test('PATCH /todos/:id updates a todo', async () => {
+ test('DELETE /todos/:id removes a todo', async () => {
+   await withServer(async (base) => {
+     await fetch(`${base}/todos`, json('POST', { title: 'a' }))
+-    const res = await fetch(`${base}/todos/1`, { method: 'DELETE' })
++    const res = await fetch(`${base}/todos/1`, authed('DELETE'))
+     assert.strictEqual(res.status, 204)
+-    assert.deepStrictEqual(await (await fetch(`${base}/todos`)).json(), [])
++    assert.deepStrictEqual(await (await fetch(`${base}/todos`, authed('GET'))).json(), [])
+   })
+ })
+ 
+ test('PATCH and DELETE on unknown id are 404', async () => {
+   await withServer(async (base) => {
+-    for (const init of [json('PATCH', { done: true }), { method: 'DELETE' }]) {
++    for (const init of [json('PATCH', { done: true }), authed('DELETE')]) {
+       const res = await fetch(`${base}/todos/99`, init)
+       assert.strictEqual(res.status, 404)
+       assert.deepStrictEqual(await res.json(), { error: 'not found' })
+@@ -69,12 +93,12 @@ test('PATCH and DELETE on unknown id are 404', async () => {
+ 
+ test('malformed percent-encoded id is 404 and the server keeps serving', async () => {
+   await withServer(async (base) => {
+-    for (const init of [json('PATCH', { done: true }), { method: 'DELETE' }]) {
++    for (const init of [json('PATCH', { done: true }), authed('DELETE')]) {
+       const res = await fetch(`${base}/todos/%E0`, init)
+       assert.strictEqual(res.status, 404)
+       assert.deepStrictEqual(await res.json(), { error: 'not found' })
+     }
+-    assert.strictEqual((await fetch(`${base}/todos`)).status, 200)
++    assert.strictEqual((await fetch(`${base}/todos`, authed('GET'))).status, 200)
+   })
+ })
+ 
+@@ -82,4 +106,3 @@ async function seedThree(base) {
+   for (const title of ['a', 'b', 'c']) await fetch(`${base}/todos`, json('POST', { title }))
+   await fetch(`${base}/todos/3`, json('PATCH', { done: true }))
+ }
+-

@@ -1,0 +1,187 @@
+diff --git a/src/rate-limit.js b/src/rate-limit.js
+new file mode 100644
+index 0000000..7d78ab8
+--- /dev/null
++++ b/src/rate-limit.js
+@@ -0,0 +1,26 @@
++'use strict'
++const IDLE_MS = 600000
++
++function createRateLimiter({ capacity, refillPerSec, now = Date.now } = {}) {
++  if (!Number.isInteger(capacity) || capacity <= 0) throw new TypeError('rateLimit.capacity must be a positive integer')
++  if (typeof refillPerSec !== 'number' || !Number.isFinite(refillPerSec) || refillPerSec <= 0) throw new TypeError('rateLimit.refillPerSec must be a positive number')
++  const buckets = new Map()
++
++  function take(ip) {
++    const t = now()
++    for (const [k, b] of buckets) if (t - b.last >= IDLE_MS) buckets.delete(k)
++    let b = buckets.get(ip)
++    if (!b) { b = { tokens: capacity, last: t }; buckets.set(ip, b) }
++    b.tokens = Math.min(capacity, b.tokens + ((t - b.last) / 1000) * refillPerSec)
++    b.last = t
++    if (b.tokens >= 1) {
++      b.tokens -= 1
++      return { allowed: true, remaining: Math.floor(b.tokens) }
++    }
++    return { allowed: false, remaining: 0, retryAfter: Math.max(1, Math.ceil((1 - b.tokens) / refillPerSec)) }
++  }
++
++  return { take, size: () => buckets.size }
++}
++
++module.exports = { createRateLimiter }
+diff --git a/src/server.js b/src/server.js
+index 506081e..4117dfe 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -2,6 +2,7 @@
+ const http = require('node:http')
+ const router = require('./router')
+ const { createLogger } = require('./logger')
++const { createRateLimiter } = require('./rate-limit')
+ 
+ function readBody(req) {
+   return new Promise((resolve) => {
+@@ -13,13 +14,23 @@ function readBody(req) {
+   })
+ }
+ 
+-function createApp({ logger = createLogger() } = {}) {
++function createApp({ logger = createLogger(), rateLimit } = {}) {
++  const limiter = rateLimit ? createRateLimiter(rateLimit) : null
+   return http.createServer(async (req, res) => {
+     const start = process.hrtime.bigint()
+     const path = new URL(req.url, 'http://localhost').pathname
+     res.on('finish', () => {
+       logger.log(req.method, path, res.statusCode, Math.round(Number(process.hrtime.bigint() - start) / 1e6))
+     })
++    if (limiter && path !== '/health') {
++      const r = limiter.take(req.socket.remoteAddress || 'unknown')
++      res.setHeader('x-ratelimit-remaining', String(r.remaining))
++      if (!r.allowed) {
++        res.writeHead(429, { 'content-type': 'application/json', 'retry-after': String(r.retryAfter) })
++        res.end(JSON.stringify({ error: 'rate limited', retryAfter: r.retryAfter }))
++        return
++      }
++    }
+     const handler = router.match(req.method, path)
+     req.body = await readBody(req)
+     const out = handler ? handler(req) : { status: 404, body: { error: 'not found' } }
+diff --git a/tests/rate-limit.test.js b/tests/rate-limit.test.js
+new file mode 100644
+index 0000000..29003ca
+--- /dev/null
++++ b/tests/rate-limit.test.js
+@@ -0,0 +1,112 @@
++'use strict'
++const { test } = require('node:test')
++const assert = require('node:assert')
++const { createApp } = require('../src/server')
++const { createRateLimiter } = require('../src/rate-limit')
++
++async function withServer(opts, fn) {
++  const server = createApp(opts)
++  await new Promise((r) => server.listen(0, r))
++  try { await fn(`http://localhost:${server.address().port}`) } finally { server.close() }
++}
++
++test('AC-1: capacity 2 allows two takes then refuses with retryAfter 1', () => {
++  const l = createRateLimiter({ capacity: 2, refillPerSec: 1, now: () => 0 })
++  assert.deepStrictEqual(l.take('1.1.1.1'), { allowed: true, remaining: 1 })
++  assert.deepStrictEqual(l.take('1.1.1.1'), { allowed: true, remaining: 0 })
++  assert.deepStrictEqual(l.take('1.1.1.1'), { allowed: false, remaining: 0, retryAfter: 1 })
++})
++
++test('AC-2: app answers 200 then 429 with Retry-After and remaining headers', async () => {
++  await withServer({ rateLimit: { capacity: 1, refillPerSec: 0.5, now: () => 0 } }, async (base) => {
++    const a = await fetch(`${base}/todos`)
++    assert.strictEqual(a.status, 200)
++    assert.strictEqual(a.headers.get('x-ratelimit-remaining'), '0')
++    await a.text()
++    const b = await fetch(`${base}/todos`)
++    assert.strictEqual(b.status, 429)
++    assert.deepStrictEqual(await b.json(), { error: 'rate limited', retryAfter: 2 })
++    assert.strictEqual(b.headers.get('retry-after'), '2')
++    assert.strictEqual(b.headers.get('x-ratelimit-remaining'), '0')
++  })
++})
++
++test('AC-3: continuous refill, ceil retryAfter, refill capped at capacity', () => {
++  let t = 0
++  const l = createRateLimiter({ capacity: 2, refillPerSec: 1, now: () => t })
++  l.take('a'); l.take('a')
++  t = 1500
++  assert.deepStrictEqual(l.take('a'), { allowed: true, remaining: 0 })
++  assert.deepStrictEqual(l.take('a'), { allowed: false, remaining: 0, retryAfter: 1 })
++  t = 60000
++  assert.deepStrictEqual(l.take('a'), { allowed: true, remaining: 1 })
++})
++
++test('AC-4: unknown paths spend a token: 404 then 429', async () => {
++  await withServer({ rateLimit: { capacity: 1, refillPerSec: 1, now: () => 0 } }, async (base) => {
++    const a = await fetch(`${base}/nope`)
++    assert.strictEqual(a.status, 404)
++    assert.strictEqual(a.headers.get('x-ratelimit-remaining'), '0')
++    await a.text()
++    const b = await fetch(`${base}/todos`)
++    assert.strictEqual(b.status, 429)
++    await b.text()
++  })
++})
++
++test('AC-5: buckets are per IP; X-Forwarded-For is ignored', async () => {
++  const l = createRateLimiter({ capacity: 1, refillPerSec: 1, now: () => 0 })
++  assert.strictEqual(l.take('1.1.1.1').allowed, true)
++  assert.strictEqual(l.take('2.2.2.2').allowed, true)
++  await withServer({ rateLimit: { capacity: 1, refillPerSec: 1, now: () => 0 } }, async (base) => {
++    await (await fetch(`${base}/`)).text()
++    const r = await fetch(`${base}/`, { headers: { 'X-Forwarded-For': '9.9.9.9' } })
++    assert.strictEqual(r.status, 429)
++    await r.text()
++  })
++})
++
++test('AC-6: idle buckets are evicted at 600000 ms, not before', () => {
++  let t = 0
++  const l = createRateLimiter({ capacity: 1, refillPerSec: 1, now: () => t })
++  l.take('1.1.1.1')
++  t = 599999
++  l.take('2.2.2.2')
++  assert.strictEqual(l.size(), 2)
++  t = 600000
++  l.take('3.3.3.3')
++  assert.strictEqual(l.size(), 2)
++})
++
++test('AC-7: /health is exempt and carries no remaining header', async () => {
++  await withServer({ rateLimit: { capacity: 1, refillPerSec: 1, now: () => 0 } }, async (base) => {
++    await (await fetch(`${base}/`)).text()
++    for (let i = 0; i < 5; i++) {
++      const r = await fetch(`${base}/health`)
++      assert.strictEqual(r.status, 200)
++      assert.strictEqual(r.headers.get('x-ratelimit-remaining'), null)
++      await r.text()
++    }
++    const r = await fetch(`${base}/`)
++    assert.strictEqual(r.status, 429)
++    await r.text()
++  })
++})
++
++test('AC-8: without rateLimit nothing is limited and no header is sent', async () => {
++  await withServer(undefined, async (base) => {
++    for (let i = 0; i < 20; i++) {
++      const r = await fetch(`${base}/`)
++      assert.strictEqual(r.status, 200)
++      assert.strictEqual(r.headers.get('x-ratelimit-remaining'), null)
++      assert.deepStrictEqual(await r.json(), { ok: true })
++    }
++  })
++})
++
++test('AC-9: invalid config throws TypeError at createApp', () => {
++  assert.throws(() => createApp({ rateLimit: { capacity: 0, refillPerSec: 1 } }),
++    { name: 'TypeError', message: 'rateLimit.capacity must be a positive integer' })
++  assert.throws(() => createApp({ rateLimit: { capacity: 5, refillPerSec: 0 } }),
++    { name: 'TypeError', message: 'rateLimit.refillPerSec must be a positive number' })
++})

@@ -107,8 +107,8 @@ function open(state, ctx) {
     const dst = path.join(wt, s.rel)
     st.writeText(dst, fs.readFileSync(s.abs, 'utf8'))
     st.writeStatus(dst, 'done')
-  }
-  st.writeStatus(s.abs, 'implementing')
+  } else st.writeStatus(s.abs, 'implementing') // in place: COMMIT writes done into the build commit
+  // A worktree run never touches the main checkout's copy: its sidecar is the in-flight state.
   const mb = git.raw(['merge-base', cfg.trunk, 'HEAD'], wt)
   return go(state, 'BUILD', {
     spec: s.rel, worktree: path.relative(ctx.root, wt) || '.', branch: why ? cur : specBranch,
@@ -153,25 +153,12 @@ function commit(state, ctx) {
   return go(state, 'MERGE')
 }
 
-// The root copy of the spec carries only our status write; drop it so the merge can bring the
-// branch copy in (mergeBack refuses a dirty root, and an untracked copy would block the merge).
-function releaseRootSpec(state, main) {
-  const p = path.join(main, state.spec)
-  const cur = st.readText(p)
-  const theirs = git.raw(['show', `${state.branch}:${state.spec.split(path.sep).join('/')}`], main)
-  const norm = (t) => t.replace(/\r\n/g, '\n').replace(/^status:.*$/m, 'status:')
-  if (cur == null || theirs.status !== 0 || norm(cur) !== norm(theirs.stdout)) return
-  if (git.raw(['ls-files', '--error-unmatch', '--', state.spec], main).status === 0) git.sh(['checkout', 'HEAD', '--', state.spec], main)
-  else fs.rmSync(p)
-}
-
 function merge(state, ctx) {
   const cfg = cfgOf(ctx)
   if (state.branch === cfg.trunk) return go(state, 'FINISH') // in place on trunk: nothing to merge
   const main = mainRoot(ctx.root)
   const on = git.currentBranch(main)
   if (on !== cfg.trunk) refuse(`${main} is on ${on}, not ${cfg.trunk} — check out ${cfg.trunk} there, then re-run`)
-  releaseRootSpec(state, main)
   const title = st.readSpec(specIn(state, ctx)).title
   const r = git.mergeBack(main, state.branch, cfg.mergeStrategy, { message: `merge(${specInfo(ctx).id}): ${title}` })
   if (r.conflicts.length) return go(state, 'CONFLICTS', { conflicts: r.conflicts })
@@ -247,12 +234,17 @@ function builderBrief(state, ctx, kind) {
   return out.join('\n')
 }
 
-// The builder may list these in its summary; the reviewer decides whether they block.
+// The builder may list these in its summary; the reviewer decides whether they block. The spec
+// is listed only when its text (not its status line) differs from base.
 function outsidePlan(state, ctx, spec) {
   const planned = new Set(spec.filePlan.map((r) => r.path))
   const own = state.spec.split(path.sep).join('/')
   const run = own.replace(/\.md$/, '.run/')
-  return git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planned.has(f) && f !== own && !f.startsWith(run))
+  const norm = (t) => t.replace(/\r\n/g, '\n').replace(/^status:.*$/m, 'status:')
+  const was = git.raw(['show', `${state.base}:${own}`], wtOf(state, ctx))
+  const edited = was.status === 0 && norm(was.stdout) !== norm(st.readText(specIn(state, ctx), ''))
+  const out = git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planned.has(f) && f !== own && !f.startsWith(run))
+  return edited ? [...out, `${own} (spec text edited)`] : out
 }
 
 function reviewerBrief(state, ctx) {

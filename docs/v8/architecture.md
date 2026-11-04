@@ -95,7 +95,7 @@ per file; writes are atomic (tmp + rename).
 
 | Step | Driver does | Session does | `--mark` |
 |---|---|---|---|
-| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), runs setupCommand, writes state | nothing | (auto) |
+| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
 | BUILD | prints the builder brief: spec path, Intent block, File Plan, test command, "write failing tests first, then code, run `testCommand` until green" | dispatches ONE `builder` agent (seat from config; Opus on attempt 2) in the worktree | `built` |
 | GATE | runs `testCommand` in the worktree itself; green-run cache by tree hash (`lib/host.js`) | nothing | (auto) → REVIEW or REPAIR |
 | REPAIR | prints failure tail; cap 2, then ESCALATE | dispatches builder with the failure | `repaired` → GATE |
@@ -261,11 +261,15 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   `spec/<stem>`, or when `isLane(root)` (fanout lane). Each case prints a `📌 Auto-picked in place —`
   line in the BUILD brief. Otherwise OPEN makes `.claude/worktrees/spec-<stem>` on `spec/<stem>` from
   trunk. `setupCommand` runs in a new worktree and in a lane.
-- **Spec status.** OPEN writes `implementing` to the root copy. With a worktree, the branch copy is
-  synced from root and set to `done` at OPEN, so the gated tree is the tree that merges and the trunk
-  gate after an unchanged merge is a cache hit. Before `mergeBack`, the root copy is reset to HEAD
-  (if tracked) or deleted (if untracked), but only when it matches the branch copy apart from the
-  status line. In place (not a lane), `done` is written at COMMIT.
+- **Spec status.** A worktree run never writes to the main checkout: the run sidecar is the
+  in-flight state, and `status.js` shows 🔶 implementing when a spec has a sidecar or a
+  `.claude/worktrees/spec-<stem>` worktree (frontmatter only says `done`). The branch copy is
+  synced from root and set to `done` at OPEN, so the gated tree is the tree that merges and the
+  trunk gate after an unchanged merge is a cache hit; spec text edited in the branch (a FIX
+  round's AC correction) merges with it. In place, OPEN writes `implementing` in the single
+  checkout and (not a lane) COMMIT writes `done` into the build commit, so MERGE never meets a
+  dirty tree. The REVIEW brief's `Files changed outside the File Plan` lists
+  `<spec> (spec text edited)` when the spec differs from base beyond its status line.
 - **Lane mode** follows the fanout notes above. `lane` is read once at OPEN and kept in the run
   state. A non-lane run marks its own worktree (or the root, in place) for `block-worker-git.sh`
   only while a builder or reviewer is out (BUILD, REPAIR, FIX, REVIEW); every save syncs it. The

@@ -5,7 +5,7 @@
 It turns an idea into merged code. `/spec:plan` writes and locks a spec with the user
 (`draft → hardened`). `/spec:run`, or `/spec:fanout` for several, has one builder write it
 test-first in a worktree, gates on the host's `testCommand`, has a fresh reviewer read the diff
-against the spec's Intent, and merges (`implementing → done`). New projects start with
+against the spec's Intent, and merges. New projects start with
 `/spec:genesis`, existing repos with `/spec:init`. Scripts do the mechanics; you supply judgment.
 
 ## Files
@@ -37,9 +37,9 @@ its remedy. Every command ends with one report rendered by `lib/report.js`.
 ## When to ask
 
 Only before anything irreversible (production promote, deleting unmerged work, destructive
-git), for a yes on an Intent that changes architecture or behaviour, or when a step says to.
-Use AskUserQuestion, recommended option first. Otherwise decide; print
-`📌 Auto-picked <choice> — <reason> (veto anytime)`. A lane never asks: its driver writes the
+git), for a yes on an `architecture: yes` Intent (asked once, at `plan.js lock --confirmed`;
+never at run), or when a step says to. Use AskUserQuestion, recommended option first. Otherwise
+decide; print `📌 Auto-picked <choice> — <reason> (veto anytime)`. A lane never asks: its driver writes the
 question to `.claude/pending-question.json` for the orchestrator to relay.
 
 ## Glossary

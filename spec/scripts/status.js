@@ -2,7 +2,7 @@
 // status.js — the four-part status block: roadmap, next (+ parallel lanes), questions, verdict.
 const fs = require('fs')
 const path = require('path')
-const { readQueue, readSpec, readConfig, readJson } = require('./lib/state')
+const { readQueue, readSpec, readConfig, readJson, runPath } = require('./lib/state')
 const { pasteLine, pending, reconcile } = require('./queue')
 
 const ls = (d) => { try { return fs.readdirSync(d) } catch { return [] } }
@@ -22,14 +22,19 @@ function allSpecs(root) {
   return out
 }
 
+// In flight = a run sidecar beside the spec or a lane worktree for it; frontmatter only says done.
+const inFlight = (root, rel) => fs.existsSync(runPath(path.join(root, rel)))
+  || fs.existsSync(path.join(root, '.claude', 'worktrees', 'spec-' + path.basename(rel, '.md')))
+
 function roadmap(root, specs) {
   return ls(path.join(root, 'docs', 'roadmap')).filter((f) => /^\d+[a-z]?-.*\.md$/.test(f) && f !== '00-overview.md').sort().map((f) => {
     const nn = f.split('-')[0]
     const text = fs.readFileSync(path.join(root, 'docs', 'roadmap', f), 'utf8')
     const title = ((/^# +(.+)$/m.exec(text) || [])[1] || f).replace(/^\d+[a-z]?\s*[—–-]\s*/, '')
-    const sts = specs.filter((s) => String(s.spec.frontmatter.brief) === nn).map((s) => s.spec.frontmatter.status)
+    const mine = specs.filter((s) => String(s.spec.frontmatter.brief) === nn)
     const state = /^>\s*Superseded by/m.test(text) ? 'superseded'
-      : sts.includes('done') ? 'done' : sts.includes('implementing') ? 'implementing' : 'open'
+      : mine.some((s) => s.spec.frontmatter.status === 'done') ? 'done'
+        : mine.some((s) => inFlight(root, s.path)) ? 'implementing' : 'open'
     return { brief: nn, title, state }
   })
 }

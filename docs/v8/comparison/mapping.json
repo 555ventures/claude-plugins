@@ -1,0 +1,14 @@
+{
+ "04-rate-limiting": {
+  "B": "v7",
+  "A": "v8"
+ },
+ "05-todo-persistence": {
+  "A": "v7",
+  "B": "v8"
+ },
+ "06-api-keys": {
+  "A": "v7",
+  "B": "v8"
+ }
+}

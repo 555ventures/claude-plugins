@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-11-03
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
-- Deciders: JJ + session (specs/20261103/10-a-change-is-sized-by-its-files.md)
+- Deciders: JJ + session (specs/20261103/13-a-change-is-sized-by-its-files.md)
 
 ## Context
 
@@ -94,7 +94,7 @@ Not decided here: the run cache (run-cache spec, same day).
 ## Applies to
 
 None: no roadmap brief carries these decisions — this repo's briefs are all done or retired.
-Carried by specs/20261103/10-a-change-is-sized-by-its-files.md. Amends core § Pipeline Entry,
+Carried by specs/20261103/13-a-change-is-sized-by-its-files.md. Amends core § Pipeline Entry,
 § Decomposition and § Tiers; `spec/templates/grounding-contract.md` § Test expiry and § Test
 tiers; specs/20261101/07's "once per review legs iteration and never at close" for
 `slowTestCommand` is superseded by D5, as is specs/20260912/15's "close-time expiry is

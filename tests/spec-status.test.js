@@ -559,7 +559,7 @@ test('--next marks a runner-up serial on a shared brief or a brief dependency pa
   assert.match(reports.parallel_reason, /brief 03 depends on 02/)
 })
 
-test('--next makes no parallel claim when a spec has no brief stamp', () => {
+test('--next makes no parallel claim (AC-20261103-06-5) when a spec has no brief stamp', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -1249,7 +1249,7 @@ const LANE_SPECS = {
 
 // Brief 32 carries 03-x and 06-y (shared brief), brief 33 carries 04-z (independent); 06-y's branch
 // is checked out in a linked worktree. A git repo, because the mode reads `git worktree list`.
-function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null } = {}) {
+function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null, config = null, baseSpecs = LANE_SPECS } = {}) {
   const dir = fs.realpathSync(tmpdir('spec-status-lanes'))
   const git = gitRepo(dir)
   fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
@@ -1258,10 +1258,17 @@ function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null } = {}) {
   for (const [file, name] of [['31-base.md', 'Base'], ['32-fan.md', 'Fan'], ['33-solo.md', 'Solo']]) {
     fs.writeFileSync(path.join(dir, 'docs/roadmap', file), '# ' + file.slice(0, 2) + ' — ' + name + '\n' + LANE_BRIEF)
   }
-  for (const [file, fm] of Object.entries({ ...LANE_SPECS, ...extraSpecs })) {
+  for (const [file, val] of Object.entries({ ...baseSpecs, ...extraSpecs })) {
     const p = path.join(dir, 'specs', file)
     fs.mkdirSync(path.dirname(p), { recursive: true })
-    fs.writeFileSync(p, '---\n' + fm + '\n---\n\n# spec\n')
+    // val is the plain frontmatter string or { fm, body }, like host().
+    const fm = typeof val === 'string' ? val : val.fm
+    const body = typeof val === 'string' ? '# spec\n' : (val.body || '# spec\n')
+    fs.writeFileSync(p, '---\n' + fm + '\n---\n\n' + body)
+  }
+  if (config) {
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+    fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config, null, 2) + '\n')
   }
   if (queue) fs.writeFileSync(path.join(dir, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 107, items: queue }))
   if (ledgerSpec) writeRedLedger(dir, ledgerSpec)
@@ -1349,4 +1356,99 @@ test('AC-20261102-03-19: --next --json, --json and the bare dashboard keep their
   const bare = runNode(SCRIPT, ['--root', h.dir])
   assert.strictEqual(bare.status, 0, bare.stderr)
   assert.match(bare.stdout, /🎯 Next/, 'the bare dashboard still prints its Next block')
+})
+
+// specs/20261103/06-the-fan-out-drains-the-queue.md D1/D2: parallelism between two entries is one
+// derivation — briefed pairs by brief, any pair with a briefless side by File Plan overlap outside
+// the exempt set; fixes[] carries after.
+
+const adhoc = (rows) => ({ fm: 'date: 2026-07-01\nstatus: hardened\nbrief: n/a', body: rows === null ? '# spec\n' : planBody(rows) })
+const writeCfg = (dir, obj) => {
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(obj))
+}
+const nextOf = (dir) => JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout).next
+
+test('AC-20261103-06-1: --next --json marks a briefless runner-up parallel true when its File Plan shares only the default-exempt README.md with the top pick, entry keys unchanged', () => {
+  const dir = host({ specs: {
+    '20260701/01-a.md': adhoc(['src/a.js', 'tests/a.test.js', 'README.md']),
+    '20260701/02-b.md': adhoc(['src/b.js', 'tests/b.test.js', 'README.md']),
+  } })
+  const n = nextOf(dir)
+  assert.strictEqual(n[1].parallel, true, 'disjoint File Plans outside the exempt set must read parallel, or a repo of ad-hoc specs never gets a second lane')
+  assert.strictEqual(n[1].parallel_reason, null, 'a parallel pair carries no reason, or the dashboard prints a serial branch under a lane')
+  assert.strictEqual(n[0].parallel, null, 'the top pick has nothing to be parallel with, or the annotation leaks onto the head')
+  assert.deepStrictEqual(Object.keys(n[1]).sort(), ['action', 'blockers', 'brief', 'note', 'parallel', 'parallel_reason', 'path', 'status'],
+    'the --next --json entry key set is frozen API, or external consumers break')
+})
+
+test('AC-20261103-06-2: --next --json serializes a briefless pair on File Plan overlap minus the pipelineRules file, and a policy.fanout.overlapExempt override changes the shared set', () => {
+  const dir = host({ specs: {
+    '20260701/01-a.md': adhoc(['src/a.js', 'src/shared.js', 'lib/x.js', 'lib/y.js', '.claude/rules/pipe.md', 'tests/a.test.js']),
+    '20260701/02-b.md': adhoc(['src/a.js', 'src/shared.js', 'lib/x.js', 'lib/y.js', '.claude/rules/pipe.md']),
+  } })
+  writeCfg(dir, { pipelineRules: '.claude/rules/pipe.md' })
+  let b = nextOf(dir)[1]
+  assert.strictEqual(b.parallel, false, 'real shared paths must serialize the pair, or two lanes collide at merge-back')
+  assert.strictEqual(b.parallel_reason, 'File Plan overlap: src/a.js, src/shared.js (+2 more)',
+    'the reason names the first two shared paths in the top pick\'s order and the count beyond them, with the rules file exempt')
+  writeCfg(dir, { pipelineRules: '.claude/rules/pipe.md', policy: { fanout: { overlapExempt: ['lib/**', 'src/shared.js'] } } })
+  b = nextOf(dir)[1]
+  assert.strictEqual(b.parallel_reason, 'File Plan overlap: src/a.js',
+    'a host overlapExempt list must replace the default exempt set, or a host cannot name its own ceremony paths')
+})
+
+test('AC-20261103-06-3: --next --json marks a brief n/a runner-up with a disjoint File Plan parallel true beside a briefed top pick, and leaves one with no File Plan null', () => {
+  const dir = host({
+    briefs: PARALLEL_BRIEFS,
+    specs: {
+      '20260701/01-auth-core.md': 'date: 2026-07-01\nstatus: done\nbrief: 01',
+      '20260710/01-billing.md': { fm: 'date: 2026-07-10\nstatus: hardened\nbrief: 02', body: planBody(['src/billing.js']) },
+      '20260710/05-adhoc.md': adhoc(['docs/x.md']),
+      '20260710/06-bare.md': adhoc(null),
+    },
+  })
+  const by = Object.fromEntries(nextOf(dir).map(e => [e.path, e]))
+  assert.strictEqual(by['specs/20260710/05-adhoc.md'].parallel, true, 'a briefless spec with a disjoint plan beside a briefed top pick must be parallel, or the annotation still gates on the top pick\'s brief')
+  assert.strictEqual(by['specs/20260710/06-bare.md'].parallel, null, 'a spec with no File Plan makes no claim, or the dashboard guesses from an empty table')
+})
+
+test('AC-20261103-06-4: --lanes --json admits the disjoint briefless specs, serializes the one overlapping an admitted lane with the overlap reason, and the dashboard 🔶 line still names README.md', () => {
+  const specs = {
+    '20261102/08-a.md': adhoc(['src/a.js', 'README.md']),
+    '20261102/09-b.md': adhoc(['src/b.js', 'src/shared.js', 'README.md']),
+    '20261102/10-c.md': adhoc(['src/c.js', 'src/shared.js']),
+  }
+  const h = lanesHost({ baseSpecs: {}, extraSpecs: specs })
+  const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepStrictEqual(out.lanes.map(l => l.path), ['specs/20261102/08-a.md', 'specs/20261102/09-b.md'],
+    'disjoint briefless specs must be lanes, or a repo of ad-hoc specs has one lane: ' + r.stdout)
+  assert.deepStrictEqual(out.serialized, [{ path: 'specs/20261102/10-c.md', brief: null, reason: 'File Plan overlap: src/shared.js' }],
+    'the spec overlapping an admitted lane must be held back with the overlap reason: ' + r.stdout)
+  assert.deepStrictEqual(Object.keys(out.lanes[0]).sort(), ['action', 'branch', 'brief', 'note', 'path', 'status', 'worktree'], 'lane keys are frozen, or the driver reads a missing field')
+  assert.deepStrictEqual(Object.keys(out).sort(), ['fixes', 'lanes', 'serialized'], 'top-level keys are frozen, or a consumer reads an unpinned shape')
+  const bare = runNode(SCRIPT, ['--root', h.dir])
+  assert.match(bare.stdout, /🔶[^\n]*README\.md/, 'the heads-up reports raw overlap including exempt paths, or the real merge-back conflict goes unannounced: ' + bare.stdout)
+})
+
+test('AC-20261103-06-6: --lanes --json fixes entries carry exactly action, path, note, queue_id, after, with the after-spec path for a queued item and null otherwise', () => {
+  const h = lanesHost({
+    extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
+    ledgerSpec: 'specs/20261102/01-base.md',
+    queue: [
+      { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
+      { id: 'q108', kind: 'prompt', lane: 'fix', payload: 'repair the import', after: { spec: 'specs/20261102/03-x.md' }, added: '2026-11-02T10:03:00Z' },
+    ],
+  })
+  const out = JSON.parse(runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json']).stdout)
+  assert.strictEqual(out.fixes.length, 3, 'two queued fixes and one CI escape must all be listed: ' + JSON.stringify(out.fixes))
+  for (const f of out.fixes) {
+    assert.deepStrictEqual(Object.keys(f).sort(), ['action', 'after', 'note', 'path', 'queue_id'], 'every fixes entry carries the after key, or the driver must open the queue file itself')
+  }
+  const by = (id) => out.fixes.find(f => f.queue_id === id)
+  assert.strictEqual(by('q107').after, null, 'a queued fix with no after is null, or the driver admits it behind a lane it never waited on')
+  assert.strictEqual(by('q108').after, 'specs/20261102/03-x.md', 'a queued fix names its after-spec path, or born fixes cannot join the batch')
+  assert.strictEqual(by(null).after, null, 'a CI escape has no after, or it is admitted as a born fix')
 })

@@ -190,6 +190,14 @@ main root. (specs/20261102/02)
 worktree-isolated sub-agents on the `lanes` seat, no standing sheet — the host's `policy.stops` answers the predictable stops and `--ask <key>` relays one for a
 run; a lane's parked build, spent repair round or `stop` answer lands as a recorded `laneExit`,
 serialized merge through the review driver's MERGE step with the gate re-run on main after each. (specs/20261102/03)
+A bare run derives the batch (the queue's startable specs in order up to the first
+self-surface spec per `policy.fanout.selfSurfaces`, critical spec sharing a § Risk Tiers file with an
+unmerged lane, blocked entry or planning item), prints it as one `📌 Auto-picked batch` line
+(`--batch <ids|all>` is the veto, four lanes run at once), re-queries `spec-status --lanes --json`
+after every green merge, green repair and lane end to dispatch waiting members and the fixes the
+batch's own lanes queued after a member, and reports when the batch is done; the next bare run starts
+the next batch. A pending question, then a merge-ready lane, outrank a new dispatch; a red main
+outranks both. (specs/20261103/06-the-fan-out-drains-the-queue.md)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

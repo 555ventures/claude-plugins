@@ -32,4 +32,10 @@ overrides). `list` prints an age column and flags `📎 cites done <spec>`, `⏳
 duplicate pairs and the two fate commands, read-only — the session proposes one fate per item
 and asks per item. (specs/20261013/02-queue-hygiene.md)
 
-`--lanes --json` is a third machine mode beside `--next --json` and `--json`: `{lanes, serialized, fixes}` — the admitted `/spec:run` lanes with their `spec/<stem>` branch and the linked worktree holding it (or null), the entries held back with their reason, and the `/spec:fix` escapes and queued fixes with their queue id. Refused outside the main worktree. Consumed by `/spec:fanout`'s driver; the two older shapes are unchanged. (specs/20261102/03-one-session-runs-the-lanes.md)
+`--lanes --json` is a third machine mode beside `--next --json` and `--json`: `{lanes, serialized, fixes}` — the admitted `/spec:run` lanes with their `spec/<stem>` branch and the linked worktree holding it (or null), the entries held back with their reason, and the `/spec:fix` escapes and queued fixes with their queue id. Refused outside the main worktree. Consumed by `/spec:fanout`'s driver; the two older shapes are unchanged. (specs/20261102/03-one-session-runs-the-lanes.md) Parallelism between two
+entries is one derivation, `pairSerialReason`: briefed pairs by brief (shared brief, dependency
+path); any pair with a briefless side by File Plan — disjoint plans are parallel, overlapping ones
+serialize with `File Plan overlap: <paths>`, where the host's `policy.fanout.overlapExempt` globs and
+its pipeline rules file never count; a side with no File Plan rows makes no claim. The 🔶 heads-up
+keeps reporting raw overlap. `fixes[]` carries `after`, the queued item's after-spec path or null.
+(specs/20261103/06-the-fan-out-drains-the-queue.md)

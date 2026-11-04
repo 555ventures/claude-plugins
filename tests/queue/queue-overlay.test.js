@@ -410,7 +410,7 @@ test('--all renders every open-work row on exactly one line: a long prose queue 
 // The reason branch under "after that" repeats verbatim for every briefless entry; saying
 // "no brief — parallelism unknown" three times in a row doubles the section height and adds
 // nothing on the second repeat.
-test('--all collapses a run of identical after-that reasons onto one shared branch line', () => {
+test('--all collapses a run of identical after-that reasons onto one shared branch line (AC-20261103-06-5)', () => {
   const dir = host({
     specs: {
       '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',

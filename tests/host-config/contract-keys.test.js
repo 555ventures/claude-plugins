@@ -11,7 +11,17 @@ const { read, runBash, section, phrase, ROOT } = require('../helpers')
 // specs/20261103/04-predictable-stops-become-host-policy.md D2: AC-20261103-04-2 — the contract's § Policy
 // carries the stops block, its enums, and this repo's contractHash is restamped over it.
 
-test('AC-20261101-07-1: the contract carries ## Test tiers (optional) after Test expiry, names slowTestCommand there and in the optional key run, and its hash moved', () => {
+test('AC-20261101-07-1 / AC-20261103-06-8: the contract carries ## Test tiers (optional) after Test expiry, names slowTestCommand there and in the optional key run, carries the fanout block with both lists and enums in § Policy, and its hash moved and equals the config stamp', () => {
+  const pol = section('spec/templates/grounding-contract.md', /^## Policy/, /^## (?!Policy)/)
+  const json = pol.slice(pol.indexOf('```json'), pol.indexOf('```', pol.indexOf('```json') + 7))
+  assert.match(json, /"fanout"\s*:\s*\{/, 'the § Policy JSON block must carry a fanout object, or hosts never learn the block exists')
+  for (const k of ['selfSurfaces', 'overlapExempt']) {
+    assert.match(json, new RegExp('"' + k + '"\\s*:\\s*\\['), 'the fanout block must carry ' + k + ', or init writes a different default than the drivers read')
+    assert.match(pol, phrase('`fanout.' + k + '`'), 'the Enums paragraph must name fanout.' + k + ', or a host cannot tell what shape the list takes')
+  }
+  const stamp = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8')).contractHash
+  assert.strictEqual(stamp, runBash('bin/spec-paths', ['contract-hash']).stdout.trim(),
+    'the config contractHash must equal spec-paths contract-hash, or /spec:doctor flags this repo as stale')
   const src = read('spec/templates/grounding-contract.md')
   const expiry = src.indexOf('## Test expiry (required)')
   const tiers = src.indexOf('## Test tiers (optional)')

@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical           # spec/scripts/spec-status.js changes what --next --json / --lanes --json derive; spec/templates/grounding-contract.md gains policy.fanout (§ Risk Tiers: both are triggers)
 area: pipeline
 breaking: false
 depends_on: [specs/20261103/04-predictable-stops-become-host-policy.md]
 brief: n/a
 open_markers: 0
+diff_base: 7558f3425a15a62b80bd4d5fa97e6eb87e85ceb1
 ---
 
 # The fan-out drains the queue
@@ -55,6 +56,9 @@ join the same build; the bootstrap rule — never upgrade the runner inside the 
 | D10 | Queue-side origin, trigger and batch fields for born work are deferred to spec 20261103/08 (`depends_on` this spec), queued as q27; until it lands, D5's `after.spec` rule is the admission test and nothing here reads an origin field. `[no-ac: deferral — q27 carries the work]` | The parent asked for the queue-side fields as their own spec; the conservative rule is correct without them and strictly widens when they arrive. |
 | D11 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` naming the derived batch, the File Plan parallel rule with its exempt paths, `policy.fanout`, born fixes and the retired `--lanes` flag. `[no-ac: plugin-bump.js --check in the gate is the oracle]` | Pipeline rules § Planning version-bump discipline. |
 | D12 | Existing fan-out pins are re-hosted, never weakened: AC-20261102-03-5 (PLAN now tables the derived batch — `06-y` waiting beside `03-x`/`04-z` — and prints the 📌 line), AC-20261102-03-7's `--lanes` case (now the refusal), `--override-serial` case (no `--lanes 4`) and `--include-fixes` case (run lanes `L1`–`L3`), AC-20261102-03-18 (planned with `--spec`) are rewritten in place in `tests/fanout/fanout-driver.test.js`; `tests/fanout/fixture.js` gains the opts and exports the fixture row names. `[no-ac: test-maintenance rows; each pin is named in the File Plan]` | The default changed; the invariant each pin guards did not. |
+| D13 | Build-time ruling (📌 auto-picked, A7's if-false arm): AC-20261103-06-10's first case uses opts `selfSurface` and `draft`, so the entry after the self-surface head is `08-p` (`/spec:plan`, ranked after hardened) and the pin reads `stops before 08-p (self-surface runs alone)`; with `03-x` done, `08-k` (`depends_on` `03-x`) is unblocked and sorts ahead of `08-s` by path, so the locked example could never hold (AC-20261103-06-10) | The promise — a self-surface head is the whole batch, boundary before the next entry — is unchanged; only the worked example's arithmetic was wrong. |
+| D14 | Build-time ruling (📌 auto-picked, D1 verbatim): the exempt set is exactly the `overlapExempt` globs plus the declared `pipelineRules` path — no implicit `.claude/rules/**`; AC-20261103-06-2's second case keeps `pipelineRules` beside the `policy.fanout` block, the only reading under which its worked reason `File Plan overlap: src/a.js` holds (AC-20261103-06-2) | A Decision names the exempt set; a second, unnamed exemption would widen it silently. |
+| D15 | Build-time ruling (📌 auto-picked, D4 (c) and the Goal's "a dependency the batch cannot meet"): in the derived batch walk an unblocked entry that `--lanes --json` serializes with `brief <N> depends on <M>` is a boundary with reason `blocked: <that reason>`, never a `waiting` member — the re-hosted AC-20261102-03-7 `--override-serial` pin requires such a spec never be tabled (AC-20261103-06-12) | Keeps the pinned invariant that a dependent-brief spec never enters a lane on an unfinished dependency, and ends the batch where a person would look. |
 
 ## File Plan
 
@@ -212,9 +216,9 @@ too; the dashboard's 🔶 line for the two lanes still names `README.md`.
   `batch === { members: [S03, S06, S04], stopBefore: { path: 'specs/20261102/08-s.md', reason: 'touches
   pipeline self-surface spec/scripts/fanout-driver.js' }, by: 'derived' }` → writes
   tests/fanout/fanout-driver.test.js
-- **AC-20261103-06-10**: WHEN the fixture has opts `selfSurface` and `blocked` and `03-x`, `06-y`,
+- **AC-20261103-06-10**: WHEN the fixture has opts `selfSurface` and `draft` (D13) and `03-x`, `06-y`,
   `04-z` are done on main so `08-s` heads the queue THE SYSTEM SHALL table `08-s` alone as L1 and print
-  `📌 Auto-picked batch: 08-s — stops before 08-k (self-surface runs alone) (veto: --batch <ids|all>)`,
+  `📌 Auto-picked batch: 08-s — stops before 08-p (self-surface runs alone) (veto: --batch <ids|all>)`,
   and WHEN only opt `selfSurface` is set under the same done specs THE SYSTEM SHALL print `📌 Auto-picked
   batch: 08-s — the whole queue (veto: --batch <ids|all>)` → writes tests/fanout/fanout-driver.test.js
 - **AC-20261103-06-11**: WHEN the fixture has opt `critical` (rules file § Risk Tiers naming
@@ -371,6 +375,17 @@ keeps), `tests/genesis/tournament.fixtures.js` (`shared brief` in prose about br
 `tests/review/*`, `tests/build/*`, `tests/frontmatter/*`, `tests/ceiling/*`, `tests/init/*`) read a
 policy block that only gains a defaulted key and host no briefless spec with a File Plan beside
 another, so D1 and D3 change nothing they observe; the build's whole-suite check adjudicates.
+
+### Advisory debt (review rv_cc2f0c80d2e1)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/tests/consistency/contract-stamp.test.js:1 — File Plan row `tests/consistency/contract-stamp.test.js | MODIFY | AC-20261103-06-8 (reuses the contractHash restamp pin, retagged in its title)` was never executed: the file is untouched in the range and carries no AC-20261103-06-8 tag. AC-8 is still covered via contract-keys.test.js (ac-matrix green), so this is plan/implementation drift, not a coverage gap.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/spec/scripts/spec-status.js:701 — `pairSerialReason(e, top)` (annotation loop) and `pairSerialReason(e, clash)` (laneAdmission) order the shared paths by the runner-up's File Plan rows (D1: `a`'s row order, a = first argument), while AC-20261103-06-2's parenthetical says the reason lists paths 'in `01-a.md`'s order' (the top pick). The AC fixture gives both specs identical row order, so the test cannot discriminate.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/spec/scripts/fanout-driver.js:283 — Cold walk (maintainer, bare run): when the first queue entry is itself a boundary (a `/spec:plan` item or a blocked entry heads the queue), `deriveBatch` returns zero members and `plan()` prints `no startable lanes — nothing to fan out` without the boundary reason; the D6 'run it attended' bullet is only emitted at REPORT, which a zero-member plan never reaches, and no state is written.
+- a3 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/tests/fanout/fixture.js:462 — `tests/fanout/fixture.js` `h.plan()` now silently prefixes `--spec 03-x --spec 04-z` whenever the caller passes no `--spec`/`--batch`, so five pre-existing pins (AC-20261102-03-6, -8, -9, -10 and the fixMergedHost/mergeReadyHost helpers) that previously certified the bare-run path now certify `--spec` mode without their test names or comments saying so.
+
+Build departures (folded from the deviations sidecar, one-offs): the AC-10 worked example's
+arithmetic was wrong once `03-x` is done (`08-k` unblocks and sorts ahead of `08-s`), fixed by D13;
+an implicit `.claude/rules/**` exemption a worker added beyond D1 was removed, D14; a dependent-brief
+entry ends the derived batch rather than waiting in it, D15.
 
 ## Canonical Delta
 

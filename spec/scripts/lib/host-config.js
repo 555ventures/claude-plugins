@@ -156,6 +156,17 @@ const POLICY_DEFAULTS = Object.freeze({
     rejectWithEvidence: 'accept',
   }),
   riskTiers: Object.freeze([]),
+  fanout: Object.freeze({
+    selfSurfaces: Object.freeze([
+      'spec/scripts/fanout-driver.js', 'spec/scripts/spec-build-driver.js', 'spec/scripts/spec-review-driver.js',
+      'spec/scripts/pending-question.js', 'spec/scripts/merge-back.sh', 'spec/scripts/lib/**',
+      'spec/scripts/*-gate.*', 'spec/hooks/**', 'spec/bin/**',
+    ]),
+    overlapExempt: Object.freeze([
+      'README.md', '**/.claude-plugin/plugin.json', '.claude-plugin/marketplace.json',
+      'spec/doctrine/core.md', 'spec/doctrine/design.md',
+    ]),
+  }),
 })
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -165,9 +176,9 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 // validatePolicy reports it, this does not second-guess it.
 function mergePolicy(raw) {
   const block = isObj(raw) ? raw : {}
-  const out = { models: {}, stops: {} }
+  const out = { models: {}, stops: {}, fanout: {} }
   for (const k of Object.keys(POLICY_DEFAULTS)) {
-    if (k === 'models' || k === 'stops') continue
+    if (k === 'models' || k === 'stops' || k === 'fanout') continue
     out[k] = k in block ? block[k] : (Array.isArray(POLICY_DEFAULTS[k]) ? [...POLICY_DEFAULTS[k]] : POLICY_DEFAULTS[k])
   }
   const m = isObj(block.models) ? block.models : {}
@@ -176,6 +187,8 @@ function mergePolicy(raw) {
   }
   const st = isObj(block.stops) ? block.stops : {}
   for (const k of Object.keys(POLICY_DEFAULTS.stops)) out.stops[k] = k in st ? st[k] : POLICY_DEFAULTS.stops[k]
+  const fo = isObj(block.fanout) ? block.fanout : {}
+  for (const k of Object.keys(POLICY_DEFAULTS.fanout)) out.fanout[k] = k in fo ? fo[k] : [...POLICY_DEFAULTS.fanout[k]]
   return out
 }
 
@@ -210,6 +223,12 @@ function validatePolicy(block) {
       for (const s of Object.keys(v)) {
         if (!STOP_ENUMS[s]) { found.push('unknown key stops.' + s); continue }
         if (!STOP_ENUMS[s].includes(v[s])) found.push('stops.' + s + ': expected one of ' + STOP_ENUMS[s].join('|'))
+      }
+    } else if (k === 'fanout') {
+      if (!isObj(v)) { found.push('fanout: expected an object'); continue }
+      for (const f of Object.keys(v)) {
+        if (!(f in POLICY_DEFAULTS.fanout)) { found.push('unknown key fanout.' + f); continue }
+        if (!Array.isArray(v[f]) || !v[f].every((e) => typeof e === 'string' && e.trim() !== '')) found.push('fanout.' + f + ': expected an array of non-empty strings')
       }
     } else if (k === 'models') {
       if (!isObj(v)) { found.push('models: expected an object'); continue }

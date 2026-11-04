@@ -48,6 +48,24 @@ test('AC-20261029-08-1: validatePolicy returns one finding per defect naming the
   assert.deepStrictEqual(validatePolicy({}), [], 'an empty partial block is valid, or every host is refused at generate')
 })
 
+// specs/20261103/06-the-fan-out-drains-the-queue.md D3: the policy.fanout block.
+test('AC-20261103-06-7: policy(root) defaults fanout.selfSurfaces and fanout.overlapExempt, merges a partial fanout block key by key, and validatePolicy reports a bad list and an unknown key exactly', () => {
+  const { policy, validatePolicy } = lib()
+  const bare = tmpdir('policy-fanout-bare')
+  writeConfig(bare, {})
+  const d = policy(bare).fanout
+  assert.ok(d && d.selfSurfaces.includes('spec/scripts/fanout-driver.js'), 'the default selfSurfaces must name the driver, or a batch never stops before a spec rewriting the runner: ' + JSON.stringify(d))
+  assert.ok(d.overlapExempt.includes('**/.claude-plugin/plugin.json'), 'the default overlapExempt must name plugin.json, or every spec serializes on its own version bump')
+  const part = tmpdir('policy-fanout-part')
+  writeConfig(part, { policy: { fanout: { overlapExempt: ['docs/**'] } } })
+  const p = policy(part).fanout
+  assert.deepStrictEqual(p.overlapExempt, ['docs/**'], 'a set list must win over its default, or a host cannot name its own ceremony paths')
+  assert.ok(p.selfSurfaces.includes('spec/scripts/fanout-driver.js'), 'an unset list must keep its default, or a partial fanout block drops the other list')
+  assert.deepStrictEqual(validatePolicy({ fanout: { selfSurfaces: 'x', other: 1 } }),
+    ['fanout.selfSurfaces: expected an array of non-empty strings', 'unknown key fanout.other'],
+    'a bad list and an unknown key must each yield exactly one finding naming the key, or an invalid hand-edit passes silently')
+})
+
 test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement table rows for workers, reviewer and disposer', () => {
   const { POLICY_DEFAULTS } = lib()
   assert.ok(POLICY_DEFAULTS && POLICY_DEFAULTS.models, 'host-config.js must export POLICY_DEFAULTS with a models block')

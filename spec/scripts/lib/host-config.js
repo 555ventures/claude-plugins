@@ -152,7 +152,7 @@ const POLICY_DEFAULTS = Object.freeze({
     buildEscalate: 'derived',
     reviewEscalate: 'queue',
     redFindings: 'remove-mention',
-    prototypeClose: 'ask',
+    prototypeClose: 'delete',
     rejectWithEvidence: 'accept',
   }),
   riskTiers: Object.freeze([]),

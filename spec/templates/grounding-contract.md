@@ -258,7 +258,7 @@ JSON is the default block:
     "buildEscalate": "derived",
     "reviewEscalate": "queue",
     "redFindings": "remove-mention",
-    "prototypeClose": "ask",
+    "prototypeClose": "delete",
     "rejectWithEvidence": "accept"
   },
   "fanout": {
@@ -297,8 +297,11 @@ policy stops.reviewEscalate: queue (veto anytime)`; `stops.redFindings` `remove-
 critical-tier unsanctioned green removes the AC-ID mention, printing `📌 Auto-picked remove the AC-ID
 mention — host policy stops.redFindings: remove-mention (veto anytime)`; `stops.prototypeClose`
 `keep` or `delete` → the MERGE step closes an unmerged prototype that way, printing `📌 Auto-picked
-<Keep it for now|Delete it> — host policy stops.prototypeClose: <value> (veto anytime)`, while `ask`
-(the default) asks, deleting unmerged work being the one unrecoverable pick. `stops.rejectWithEvidence` `accept` → `--mark dispositions` accepts a disposer `reject` whose `repro` names the command it ran and the output it observed, printing `📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)`, while a `waive` and a repro-less `reject` are asked whatever the value. Any `stops` key set to
+<Keep it for now|Delete it> — host policy stops.prototypeClose: <value> (veto anytime)` and the
+other `--prototype` value as the veto; `delete` (the default) also prints the branch tip's restore
+command — the contract, pictures and tests already live under `design/prototypes/<stem>/` — while
+`ask` asks. `stops.reviewEscalate` `queue` also answers a review STOPPED whose repair round is spent,
+printing `📌 Auto-picked queue /spec:fix — host policy stops.reviewEscalate: queue (veto anytime)`. `stops.rejectWithEvidence` `accept` → `--mark dispositions` accepts a disposer `reject` whose `repro` names the command it ran and the output it observed, printing `📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)`, while a `waive` and a repro-less `reject` are asked whatever the value. Any `stops` key set to
 `ask` brings its question back; `/spec:fanout --ask <key>` brings it back for one fan-out.
 `fanout.selfSurfaces` → a spec touching one of these paths ends a fan-out batch and runs alone;
 `fanout.overlapExempt` → an exempt path never serializes two briefless specs.

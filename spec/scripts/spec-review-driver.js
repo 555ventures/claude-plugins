@@ -2190,8 +2190,9 @@ function gotchasCapLine() {
 // The prototype the closing spec would close at merge: the spec carries `prototype: <stem>`, the
 // prototype's status.json exists without marks.closed, every citing spec is done (read from the
 // build worktree — the closing spec is `done` there, not yet on main), and proto/<stem> exists.
-// Returns { stem, n } with n = commits on proto/<stem> the target does not hold, else null. A
-// missing branch returns null so finishMerge keeps its "still open" warning path.
+// Returns { stem, n, tip } with n = commits on proto/<stem> the target does not hold and tip the
+// branch's commit (the restore point a delete prints), else null. A missing branch returns null
+// so finishMerge keeps its "still open" warning path.
 function prototypeAtRisk(target) {
   const stem = fmVal('prototype')
   if (!stem) return null
@@ -2203,7 +2204,8 @@ function prototypeAtRisk(target) {
   const r = runChild('git', ['-C', mainRoot, 'rev-list', '--count', target + '..proto/' + stem],
     { encoding: 'utf8' }, 'git rev-list --count')
   if (r.status !== 0) return null
-  return { stem, n: Number(r.stdout.trim()) }
+  const tip = runChild('git', ['-C', mainRoot, 'rev-parse', 'proto/' + stem], { encoding: 'utf8' }, 'git rev-parse').stdout.trim()
+  return { stem, n: Number(r.stdout.trim()), tip }
 }
 
 let protoClose = null // set by handleMergeStrategy; read by finishMerge
@@ -2239,8 +2241,9 @@ function handleMergeStrategy() {
     die('--mark merge-strategy needs --prototype delete|keep — proto/' + atRisk.stem + ' carries ' +
       atRisk.n + ' unmerged commits')
   }
-  protoClose = atRisk ? { stem: atRisk.stem, n: atRisk.n, decision: atRisk.n > 0 ? protoAnswer : null } : null
-  if (protoClose) { marks.prototypeClose = { unmerged: protoClose.n, decision: protoClose.decision }; saveSidecar() }
+  protoClose = atRisk ? { stem: atRisk.stem, n: atRisk.n, tip: atRisk.tip, decision: atRisk.n > 0 ? protoAnswer : null } : null
+  // the tip is the restore point a delete prints; the sidecar keeps it past this process.
+  if (protoClose) { marks.prototypeClose = { unmerged: protoClose.n, decision: protoClose.decision, ...(protoClose.tip ? { tip: protoClose.tip } : {}) }; saveSidecar() }
 
   // Re-entrancy (rv_6825fa48c98d). The recorded
   // deadlock — a retry after a landed merge re-ran merge-back.sh merge and died on
@@ -2581,7 +2584,8 @@ function finishMerge(mainRootDir, source, wt) {
           'prototype-driver.js --mark closed')
         if (closeR.status === 0) {
           doneNote = 'prototype ' + protoStem + ' closed — database, worktree and proto/' + protoStem +
-            ' gone\n' + doneNote
+            ' gone' + (protoClose && protoClose.stem === protoStem && protoClose.n > 0 && protoClose.tip
+            ? '; restore the branch: git branch proto/' + protoStem + ' ' + protoClose.tip : '') + '\n' + doneNote
         } else {
           const first = ((closeR.stderr || closeR.stdout || '').trim().split('\n')[0]) || 'exit ' + closeR.status
           doneNote = '⚠️ prototype ' + protoStem + ' still open: ' + first + ' — run: node ' + driverBin +
@@ -2880,11 +2884,12 @@ const STEPS = {
       ? `\nThe durable stopped-ledger location could not be made ignored at the main root — add ` +
         `this line to its .gitignore to enable durable hard-stop evidence: ${STOPPED_LEDGER}\n`
       : ''
-    const rrPick = (marks.repairRounds || 0) < REPAIR_ROUND_CAP
-      ? pickOnce('repairRound', { repair: 'run one in-session repair round' }) : null
-    if ((marks.repairRounds || 0) >= REPAIR_ROUND_CAP) {
-      setLaneExit('review stopped, repair round spent', `${specRel}: review stopped, repair round spent`)
-    }
+    const spent = (marks.repairRounds || 0) >= REPAIR_ROUND_CAP
+    const rrPick = !spent ? pickOnce('repairRound', { repair: 'run one in-session repair round' }) : null
+    if (spent) setLaneExit('review stopped, repair round spent', `${specRel}: review stopped, repair round spent`)
+    // The spent round's exit is the same lane-ending choice ESCALATE makes, so the same stop answers it.
+    const spentPick = spent ? pickOnce('reviewEscalate', { queue: 'queue /spec:fix' }) : null
+    const spentQueueAdd = `node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top --origin ${specRel} --stage review --trigger red-leg`
     const repairBody = `fix the failing leg(s) above through the review fix seat ` +
       `(the host's agentMap; ${policy(repoRoot).models.workers.model} at effort: ${policy(repoRoot).models.workers.effort}), commit, then the mark re-runs legs at this iteration; green continues to REVIEWER, ` +
       `red lands here again with the round spent\n` +
@@ -2894,7 +2899,7 @@ const STEPS = {
       `\nmanifest: ${manifestPathFor(marks.stoppedIteration || currentN)}\noutputs: ${outDirFor(marks.stoppedIteration || currentN)}\n` +
       `A GATE_RED ledger line has been appended to ${marks.stoppedLedgerPath}.\n` + remedy +
       (rrPick ? rrPick.line + '\n' + repairBody
-        : pq.isDelegated(repoRoot) && (marks.repairRounds || 0) < REPAIR_ROUND_CAP
+        : pq.isDelegated(repoRoot) && !spent
         ? pq.stopLine(repoRoot, 'review', {
           kind: 'repair-round', state: 'STOPPED', spec: specRel,
           stopKey: repairStopKey(),
@@ -2911,9 +2916,14 @@ const STEPS = {
             ],
           }],
         }, marks) + '\n'
-      : (marks.repairRounds || 0) >= REPAIR_ROUND_CAP
+      : spentPick
+        ? `repair round spent (${REPAIR_ROUND_CAP} of ${REPAIR_ROUND_CAP})\n${spentPick.line}\n` +
+          `${spentQueueAdd}\nthis review ends\n` +
+          `To answer differently:\n` +
+          `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n`
+      : spent
         ? `repair round spent (${REPAIR_ROUND_CAP} of ${REPAIR_ROUND_CAP}) \u2014 two exits:\n` +
-          `  queue /spec:fix \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top --origin ${specRel} --stage review --trigger red-leg\n` +
+          `  queue /spec:fix \u2014 ${spentQueueAdd}\n` +
           `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n`
         : `Ask ONE AskUserQuestion \u2014 options, consequences in each description:\n` +
           `  run one in-session repair round (Recommended) \u2014 fix the failing leg(s) above through the review fix seat ` +
@@ -3129,7 +3139,11 @@ const STEPS = {
     let protoText = ''
     const pPick = risk && risk.n > 0 ? pickOnce('prototypeClose', { delete: 'Delete it', keep: 'Keep it for now' }) : null
     if (pPick) {
-      protoText = `prototype ${risk.stem}: ${risk.n} unmerged commits on proto/${risk.stem}\n${pPick.line}\n\n`
+      protoText = `prototype ${risk.stem}: ${risk.n} unmerged commits on proto/${risk.stem}\n${pPick.line}\n` +
+        (pPick.value === 'delete'
+          ? `its contract, pictures and tests stay under design/prototypes/${risk.stem}/; restore the branch after the merge with: git branch proto/${risk.stem} ${risk.tip}\n` +
+            `To keep it instead: pass --prototype keep on the mark below\n\n`
+          : `To delete it instead: pass --prototype delete on the mark below\n\n`)
     } else if (risk) {
       protoText = `prototype ${risk.stem}: ${risk.n} unmerged commits on proto/${risk.stem}` +
         (risk.n === 0 ? ' — the close proceeds with the merge (notify only)\n\n'

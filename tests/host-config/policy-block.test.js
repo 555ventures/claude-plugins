@@ -81,7 +81,7 @@ test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement
   assert.deepStrictEqual(POLICY_DEFAULTS.models.disposer, row('Disposer'), 'disposer default drifted from the doctrine table')
 })
 
-const STOP_DEFAULTS = { repairRound: 'repair', buildEscalate: 'derived', reviewEscalate: 'queue', redFindings: 'remove-mention', prototypeClose: 'ask', rejectWithEvidence: 'accept' }
+const STOP_DEFAULTS = { repairRound: 'repair', buildEscalate: 'derived', reviewEscalate: 'queue', redFindings: 'remove-mention', prototypeClose: 'delete', rejectWithEvidence: 'accept' }
 
 test('AC-20261103-04-1 / AC-20261103-09-1: policy(root) returns the six stops defaults for a config without a block and merges a partial stops block key by key', () => {
   const { policy } = lib()

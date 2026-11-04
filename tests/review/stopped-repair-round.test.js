@@ -202,3 +202,25 @@ test('AC-20261103-08-13: the ESCALATE step prints the queue line ending --lane f
   assert.ok(step.includes('--lane plan --origin ' + rel + ' --stage review --trigger gap'),
     'the re-plan line must carry its origin flags or the re-plan item is born without provenance: ' + step)
 })
+
+// fix q30: the spent repair round's exit is answered by stops.reviewEscalate, the same stop ESCALATE reads.
+test('fix q30: the STOPPED step with the repair round spent on a host leaving stops.reviewEscalate at its queue default prints the Auto-picked queue line, the queue add and the abandon veto, and no two-exit choice', () => {
+  const { host } = redGateHost('stopped-rr-spent-pick', ASK_REPAIR)
+  run(host.root, host.spec, '--mark', 'repair-round')
+  const step = run(host.root, host.spec).stdout
+  const rel = specRelOf(host)
+  assert.ok(step.includes('📌 Auto-picked queue /spec:fix — host policy stops.reviewEscalate: queue (veto anytime)'),
+    'without the printed pick the session is left choosing an exit the host policy already answered: ' + step)
+  assert.ok(step.includes('add "' + rel + ': review stopped, repair round spent" --lane fix --top'),
+    'the picked exit must print the queue add it chose, or the spent review is never queued: ' + step)
+  assert.match(step, /To answer differently:\n\s+abandon the review/, 'the abandon exit must stay printed as the veto: ' + step)
+  assert.doesNotMatch(step, /two exits/, 'a host that answered the stop must not be handed the two-exit choice: ' + step)
+})
+
+test('fix q30: the STOPPED step with the repair round spent on a host with stops.reviewEscalate ask prints the two exits and no Auto-picked queue line', () => {
+  const { host } = redGateHost('stopped-rr-spent-ask', { repairRound: 'ask', reviewEscalate: 'ask' })
+  run(host.root, host.spec, '--mark', 'repair-round')
+  const step = run(host.root, host.spec).stdout
+  assert.match(step, /repair round spent \(1 of 1\) — two exits/, 'ask must bring the two-exit choice back: ' + step)
+  assert.doesNotMatch(step, /Auto-picked queue \/spec:fix/, 'ask must not auto-pick the queue exit: ' + step)
+})

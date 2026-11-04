@@ -5,7 +5,8 @@
 
 const fs = require('fs')
 const path = require('path')
-const { makeDriver, refuse } = require('./lib/driver')
+const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
+const git = require('./lib/git')
 const S = require('./lib/state')
 const host = require('./lib/host')
 const report = require('./lib/report')
@@ -143,7 +144,10 @@ const steps = {
   'profile-written': (s, f, ctx) => {
     const d = S.readJson(descPath(ctx.root))
     const cur = S.readJson(S.configPath(ctx.root), {})
-    S.writeConfig(ctx.root, { ...cur, testCommand: d.testCommand, setupCommand: d.setupCommand, trunk: cur.trunk || S.readConfig(ctx.root).trunk })
+    // A fresh repo's trunk is whatever branch it was born on (git's default may be master).
+    const born = git.raw(['rev-parse', '--abbrev-ref', 'HEAD'], ctx.root)
+    const trunk = cur.trunk || (born.status === 0 && born.stdout.trim() !== 'HEAD' ? born.stdout.trim() : S.readConfig(ctx.root).trunk)
+    S.writeConfig(ctx.root, { ...cur, testCommand: d.testCommand, setupCommand: d.setupCommand, trunk })
     const bs = briefs(ctx.root)
     s.phase = 'GROUNDED'
     s.report = report.render({
@@ -169,9 +173,25 @@ function load(ctx) {
   return s
 }
 
-const main = makeDriver({
+const driver = makeDriver({
   name: 'genesis', load, derive: bind(derive), steps,
   save: (s, ctx) => S.writeGenesis(ctx.root, s),
 })
+
+// `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
+function main(argv = process.argv.slice(2)) {
+  try {
+    const a = parseArgv(argv)
+    const out = [a.pos.join(' '), '--root', a.root].filter(Boolean)
+    if (a.mark) out.push('--mark', a.mark)
+    if (a.state) out.push('--state')
+    if (a.json) out.push('--json')
+    for (const [k, v] of Object.entries(a.flags)) out.push('--' + k, ...(v === true ? [] : [v]))
+    return driver(out)
+  } catch (e) {
+    writeOut(2, `genesis: ${e.message}\n`)
+    return typeof e.exit === 'number' ? e.exit : 1
+  }
+}
 if (require.main === module) process.exitCode = main()
 module.exports = { main }

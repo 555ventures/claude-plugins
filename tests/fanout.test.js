@@ -173,3 +173,45 @@ test('explicit spec paths limit the plan; the mark line carries them', () => {
   assert.strictEqual(m.status, 0, m.stderr)
   assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma')], 'the printed mark line plans the same lanes')
 })
+
+test('a lane that ended PARKED or AMENDED is dismissed on return, reported as parked, and not re-planned', () => {
+  const h = host()
+  dispatchTwo(h)
+  const alpha = path.join(h.wt('01-alpha'), specPath('01-alpha'))
+  st.writeStatus(alpha, 'draft')
+  st.writeRun(alpha, { step: 'AMENDED', spec: specPath('01-alpha') })
+  h.ok('--mark', 'returned', '--lane', '1')
+  const lane = st.readFanout(h.dir).batch[0]
+  assert.deepStrictEqual([lane.status, lane.ended], ['dismissed', 'AMENDED'], 'returned dismisses the ended lane')
+  assert.strictEqual(st.readSpec(alpha).frontmatter.status, 'draft', 'the spec is left as the lane set it')
+  assert.ok(!pending.isLane(h.wt('01-alpha')), 'the lane marker comes off')
+  const beta = path.join(h.wt('02-beta'), specPath('02-beta'))
+  st.writeRun(beta, { step: 'PARKED', spec: specPath('02-beta') })
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'REPORT')
+  const rep = h.ok().stdout
+  assert.match(rep, /2 parked/)
+  assert.match(rep, /parked 01-alpha — its lane ended AMENDED/)
+  assert.match(rep, /parked 02-beta — its lane ended PARKED/)
+  assert.ok(fs.existsSync(h.wt('01-alpha')) && fs.existsSync(h.wt('02-beta')), 'both worktrees are kept')
+  h.ok('--mark', 'reported')
+  const plan = JSON.parse(h.run('--json').stdout)
+  assert.match(plan.body, /01-alpha\.md waits — its lane ended AMENDED/, 'an ended lane is not planned again')
+  h.ok('--mark', 'planned')
+  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma')], 'the freed File Plan lets gamma run')
+})
+
+test('explicit @-prefixed paths and lane prompts with spaces in the worktree path', () => {
+  const base = tmpdir('fan sp')
+  const h = host()
+  const j = JSON.parse(h.ok('@' + specPath('02-beta'), '--json').stdout)
+  assert.match(j.body, /lane 1: specs\/20261104\/02-beta\.md/, 'status prints /spec:run @<spec>; fanout takes the same form')
+  const prompt = /prompt: ("[^\n]+")/
+  fs.renameSync(h.dir, path.join(base, 'my host'))
+  const dir = path.join(base, 'my host')
+  const r = runNode('scripts/fanout.js', [specPath('02-beta'), '--root', dir, '--mark', 'planned'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const disp = runNode('scripts/fanout.js', ['--root', dir]).stdout
+  const p = JSON.parse(prompt.exec(disp)[1])
+  assert.strictEqual(p, `/spec:run ${specPath('02-beta')} --root '${path.join(dir, '.claude/worktrees/spec-02-beta')}'`, 'the worktree path is quoted in the lane prompt')
+})

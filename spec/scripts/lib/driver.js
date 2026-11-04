@@ -32,6 +32,9 @@ class Refusal extends Error {
 
 const refuse = (message, exit = 2) => { throw new Refusal(message, exit) }
 
+// Shell-quotes a word for a printed command line; plain paths stay as they are.
+const shq = (w) => (/^[\w@%+=:,./-]+$/.test(String(w)) ? String(w) : "'" + String(w).replace(/'/g, "'\\''") + "'")
+
 function die(msg, code = 1) {
   writeOut(2, msg.endsWith('\n') ? msg : msg + '\n')
   process.exit(code)
@@ -61,8 +64,8 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
   const MAX_AUTO = 50
 
   function markLine(ctx, mark) {
-    const arg = ctx.arg ? ' ' + ctx.arg : ''
-    return `node ${scriptPath}${arg} --root ${ctx.root} --mark ${mark}`
+    const arg = ctx.arg ? ' ' + shq(ctx.arg) : ''
+    return `node ${shq(scriptPath)}${arg} --root ${shq(ctx.root)} --mark ${mark}`
   }
 
   // Run auto steps until one needs the session (or the machine ends).
@@ -122,4 +125,4 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
   }
 }
 
-module.exports = { makeDriver, parseArgv, refuse, Refusal, die, writeOut }
+module.exports = { makeDriver, parseArgv, refuse, Refusal, die, writeOut, shq }

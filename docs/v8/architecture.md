@@ -267,9 +267,13 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   (if tracked) or deleted (if untracked), but only when it matches the branch copy apart from the
   status line. In place (not a lane), `done` is written at COMMIT.
 - **Lane mode** follows the fanout notes above. `lane` is read once at OPEN and kept in the run
-  state, because a non-lane run also marks its own worktree (or the root, in place) for
-  `block-worker-git.sh`. The marker comes off at DONE, park and amend, and only when run.js set
-  it. A lane's park/amend keeps its sidecar at `PARKED`/`AMENDED`. A lane at ESCALATE with an
+  state. A non-lane run marks its own worktree (or the root, in place) for `block-worker-git.sh`
+  only while a builder or reviewer is out (BUILD, REPAIR, FIX, REVIEW); every save syncs it. The
+  marker's content names its owner (`fanout` | `run`) and only a `fanout` marker makes a lane, so
+  a stale run marker never turns the next run into one. MERGE, TRUNK_GATE and FINISH are separate
+  saved auto steps. `reviewed` refuses a severity other than blocking/advisory and a `fix` verdict
+  with nothing blocking; any blocking finding means FIX. A fanout lane that returns PARKED or
+  AMENDED is dismissed (`ended` kept) and PLAN skips it while its worktree stays. A lane's park/amend keeps its sidecar at `PARKED`/`AMENDED`. A lane at ESCALATE with an
   answered pending doc applies the answer as an auto step.
 - **Attempts.** `attempts = {repair, fix}`. The builder attempt is `1 + repair + fix`, plus 1 for
   REPAIR/FIX briefs. Attempt 2 and up, or `escalate retry`, uses opus. Retry clears both counters

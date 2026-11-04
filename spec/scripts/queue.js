@@ -61,7 +61,7 @@ function main(argv) {
   }
   const root = path.resolve(flags.root || process.cwd())
   const cmd = pos[0] || 'next'
-  const arg = pos.slice(1).join(' ')
+  let arg = pos.slice(1).join(' ')
   const q = reconcile(root, readQueue(root))
   const out = (text, json) => console.log(flags.json ? JSON.stringify(json ?? text) : text)
   const fail = (msg, code = 1) => { console.error('queue: ' + msg); return code }
@@ -77,6 +77,10 @@ function main(argv) {
     console.log([...rows, `— ${done} done`].join('\n'))
   } else if (cmd === 'add') {
     if (!arg) return fail('add needs a payload', 2)
+    // `@specs/x.md`, `./specs/x.md` and an absolute path inside root are one spec: store it root-relative.
+    const file = path.resolve(root, arg.replace(/^@/, ''))
+    const relp = path.relative(root, file).split(path.sep).join('/')
+    if (/\.md$/.test(arg) && !relp.startsWith('..') && fs.existsSync(file)) arg = relp
     if (q.items.some((i) => !i.done && i.payload === arg)) return fail(`duplicate payload already queued: ${arg}`, 2)
     q.seq += 1
     const it = { id: 'q' + q.seq, kind: kindOf(arg), payload: arg, added: new Date().toISOString() }

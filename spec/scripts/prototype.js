@@ -176,15 +176,22 @@ function serve(a) {
   if (!STEM_RE.test(String(stem)) || !Number.isInteger(port)) refuse('usage: serve --stem <stem> --port <n> [--root <dir>]')
   const root = a.root
   const reply = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
+  // Only a page served from this machine may write pins: any other site the user has open could
+  // otherwise POST notes that later become contract sentences and spec criteria.
+  const local = (o) => { try { return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(o).hostname) } catch { return false } }
   const server = http.createServer((req, res) => {
-    res.setHeader('access-control-allow-origin', '*')
+    const o = req.headers.origin
+    if (o !== undefined && !local(o)) return reply(res, 403, { error: 'pins are accepted only from a page on this machine' })
+    if (o !== undefined) { res.setHeader('access-control-allow-origin', o); res.setHeader('vary', 'origin') }
     res.setHeader('access-control-allow-headers', 'content-type')
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
     if (req.method === 'GET' && req.url === '/pins') return reply(res, 200, state.readProto(root, stem).pins || [])
     if (req.method !== 'POST' || req.url !== '/pin') return reply(res, 404, { error: 'POST /pin or GET /pins' })
     let raw = ''
-    req.on('data', (c) => { raw += c; if (raw.length > 1e6) req.destroy() })
+    // Over 1 MB: answer 413 once and drain the rest without keeping it.
+    req.on('data', (c) => { if (raw === null) return; raw += c; if (raw.length > 1e6) { raw = null; reply(res, 413, { error: 'body over 1 MB' }) } })
     req.on('end', () => {
+      if (raw === null) return
       let body
       try { body = JSON.parse(raw) } catch { return reply(res, 400, { error: 'body is not JSON' }) }
       const list = body && body.pins

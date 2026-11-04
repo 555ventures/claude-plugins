@@ -80,3 +80,18 @@ test('a spec item whose spec is done counts as done, and the next write records 
   const stored = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items
   assert.ok(stored.find((i) => i.payload === 'specs/20261104/01-a.md').done, 'the done timestamp is written back')
 })
+
+test('add stores @-prefixed, ./ and absolute spec paths root-relative, as a spec item', () => {
+  const dir = tmpdir('q-norm')
+  gitRepo(dir)
+  const f = 'specs/20261104/01-x.md'
+  fs.mkdirSync(path.join(dir, 'specs/20261104'), { recursive: true })
+  fs.writeFileSync(path.join(dir, f), '---\nstatus: hardened\n---\n# X\n')
+  const add = (p) => runNode('scripts/queue.js', ['add', p, '--root', dir])
+  const r = add('@' + f)
+  assert.strictEqual(r.status, 0, r.stderr)
+  const item = require('../spec/scripts/lib/state').readQueue(dir).items[0]
+  assert.deepStrictEqual([item.kind, item.payload], ['spec', f])
+  assert.strictEqual(add('./' + f).status, 2, './ form is the same spec: a duplicate')
+  assert.strictEqual(add(path.join(dir, f)).status, 2, 'the absolute form is the same spec: a duplicate')
+})

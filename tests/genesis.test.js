@@ -86,3 +86,17 @@ test('genesis refuses a first run without an idea', () => {
   const g = setup()
   assert.strictEqual(g.run().status, 2)
 })
+
+test('genesis takes unquoted idea words as one idea and records the repo branch as trunk', () => {
+  const dir = tmpdir('gen-master')
+  gitRepo(dir)
+  require('child_process').execFileSync('git', ['-C', dir, 'branch', '-m', 'master'])
+  const r = runNode('scripts/genesis.js', ['clinic', 'booking', 'for', 'clinics', '--root', dir])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(S.readGenesis(dir).idea, 'clinic booking for clinics', '$ARGUMENTS arrives as separate words')
+  S.writeGenesis(dir, { ...S.readGenesis(dir), phase: 'HANDOFF' })
+  fs.mkdirSync(path.join(dir, '.claude/genesis'), { recursive: true })
+  fs.writeFileSync(path.join(dir, '.claude/genesis/stack-descriptor.json'), JSON.stringify({ testCommand: 'true', setupCommand: 'true' }))
+  assert.strictEqual(runNode('scripts/genesis.js', ['--root', dir, '--mark', 'profile-written']).status, 0)
+  assert.strictEqual(S.readJson(S.configPath(dir)).trunk, 'master', 'a repo born on master gets trunk master, not the main default')
+})

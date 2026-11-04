@@ -21,6 +21,6 @@ to the printed path:
   "summary": "one sentence", "evidence": "quote or output"}], "verdict": "fix"}
 ```
 
-`blocking` means an unmet criterion, wrong behaviour, a security issue or excluded scope;
-anything else is `advisory`. The verdict is `fix` if anything blocks, else `clean`. Reply
+`severity` is exactly `blocking` or `advisory` (any other value is refused). `blocking` means an
+unmet criterion, wrong behaviour, a security issue or excluded scope; anything else is `advisory`. The verdict is `fix` if anything blocks, else `clean`. Reply
 with the path and the verdict.

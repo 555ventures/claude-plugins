@@ -11,7 +11,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { makeDriver, refuse } = require('./lib/driver')
+const { makeDriver, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state')
 const host = require('./lib/host')
 const git = require('./lib/git')
@@ -23,6 +23,9 @@ const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2
 const FIX_CAP = 1
 const CHOICES = ['retry', 'park', 'amend']
+const SEVERITIES = ['blocking', 'advisory']
+// Only while a builder or reviewer is out is the checkout marked for block-worker-git.sh.
+const AGENT_STEPS = ['BUILD', 'REPAIR', 'FIX', 'REVIEW']
 let inPlaceFlag = false
 
 // ---- paths ---------------------------------------------------------------------------------
@@ -55,8 +58,16 @@ function load(ctx) {
   return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel }
 }
 
+// A fanout lane's marker belongs to fanout; otherwise the marker is on exactly while an agent is out.
+function syncMarker(state, ctx) {
+  if (state.lane || !state.worktree) return
+  const want = !state.ended && AGENT_STEPS.includes(state.step)
+  if (want) { pending.markLane(wtOf(state, ctx), 'run'); state.marked = true } else if (state.marked) { pending.unmarkLane(wtOf(state, ctx)); state.marked = false }
+}
+
 function save(state, ctx) {
   const abs = specInfo(ctx).abs
+  syncMarker(state, ctx)
   if (state.ended) st.clearRun(abs); else st.writeRun(abs, state)
 }
 
@@ -74,7 +85,7 @@ function open(state, ctx) {
   if (!cfg.testCommand) refuse('no testCommand in .claude/spec.config.json — run /spec:init')
   const specBranch = `spec/${s.stem}`
   const cur = git.currentBranch(ctx.root)
-  const lane = pending.isLane(ctx.root)
+  const lane = pending.isFanoutLane(ctx.root)
   const why = lane ? 'fanout lane — this session sits in the lane worktree'
     : inPlaceFlag ? '--in-place'
     : cfg.worktreePerSpec === false ? 'host policy worktreePerSpec: false'
@@ -99,11 +110,9 @@ function open(state, ctx) {
   }
   st.writeStatus(s.abs, 'implementing')
   const mb = git.raw(['merge-base', cfg.trunk, 'HEAD'], wt)
-  const marked = !pending.isLane(wt)
-  if (marked) pending.markLane(wt)
   return go(state, 'BUILD', {
     spec: s.rel, worktree: path.relative(ctx.root, wt) || '.', branch: why ? cur : specBranch,
-    base: mb.status === 0 ? mb.stdout.trim() : git.headSha(wt), inPlace: !!why, lane, marked,
+    base: mb.status === 0 ? mb.stdout.trim() : git.headSha(wt), inPlace: !!why, lane, marked: false,
     pin: why ? `📌 Auto-picked in place — ${why}` : null,
     attempts: { repair: 0, fix: 0 }, opus: false, gate: null, review: null,
   })
@@ -127,13 +136,16 @@ function gateStep(state, ctx) {
   state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, output_tail: tail }
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   st.writeText(runFile(ctx, 'diff.patch'), git.diff(state.base, wt) + '\n')
+  fs.rmSync(runFile(ctx, 'findings.json'), { force: true }) // never re-read an earlier round's findings
   return go(state, 'REVIEW')
 }
 
 function commit(state, ctx) {
   const spec = st.readSpec(specIn(state, ctx))
   if (state.inPlace && !state.lane) st.writeStatus(specIn(state, ctx), 'done')
-  state.commit = git.commitAll(wtOf(state, ctx), `build(${specInfo(ctx).id}): ${spec.title}`)
+  const wt = wtOf(state, ctx)
+  // A re-run after a crash between the commit and the save finds a clean tree: report that commit.
+  state.commit = git.commitAll(wt, `build(${specInfo(ctx).id}): ${spec.title}`) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
   // A lane stops here, committed: fanout writes done, merges in queue order and cleans up.
   if (state.lane) return go(state, 'MERGE_READY', { report: render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: `commit ${state.commit || 'none (nothing changed)'}`, next: 'nothing needs you — fanout merges the lane' }) })
   return go(state, 'MERGE')
@@ -153,7 +165,7 @@ function releaseRootSpec(state, main) {
 
 function merge(state, ctx) {
   const cfg = cfgOf(ctx)
-  if (state.branch === cfg.trunk) return finish(state, ctx) // in place on trunk: nothing to merge
+  if (state.branch === cfg.trunk) return go(state, 'FINISH') // in place on trunk: nothing to merge
   const main = mainRoot(ctx.root)
   const on = git.currentBranch(main)
   if (on !== cfg.trunk) refuse(`${main} is on ${on}, not ${cfg.trunk} — check out ${cfg.trunk} there, then re-run`)
@@ -162,14 +174,14 @@ function merge(state, ctx) {
   const r = git.mergeBack(main, state.branch, cfg.mergeStrategy, { message: `merge(${specInfo(ctx).id}): ${title}` })
   if (r.conflicts.length) return go(state, 'CONFLICTS', { conflicts: r.conflicts })
   if (!r.merged) refuse(`${state.branch} was not merged: ${r.reason}`)
-  state.mergeSha = r.sha
-  return trunkGate(state, ctx, main)
+  // Separate saved steps: a crash after the merge resumes past it, never re-merging a deleted branch.
+  return go(state, 'TRUNK_GATE', { mergeSha: r.sha })
 }
 
-function trunkGate(state, ctx, main) {
-  const g = host.gate(main, cfgOf(ctx))
+function trunkGate(state, ctx) {
+  const g = host.gate(mainRoot(ctx.root), cfgOf(ctx))
   state.trunkGate = { status: g.status === 0 ? 'green' : 'red', cached: g.cached, runId: g.runId, output_tail: g.tail }
-  return finish(state, ctx)
+  return go(state, 'FINISH')
 }
 
 function finish(state, ctx) {
@@ -290,7 +302,7 @@ function derive(state, ctx) {
     case 'BUILD': return { name: 'BUILD', body: builderBrief(state, ctx, 'build'), mark: 'built' }
     case 'GATE': return { name: 'GATE', auto: gateStep }
     case 'REPAIR': return { name: 'REPAIR', body: builderBrief(state, ctx, 'repair'), mark: 'repaired' }
-    case 'REVIEW': return { name: 'REVIEW', body: reviewerBrief(state, ctx), mark: `reviewed --file ${runFile(ctx, 'findings.json')}` }
+    case 'REVIEW': return { name: 'REVIEW', body: reviewerBrief(state, ctx), mark: `reviewed --file ${shq(runFile(ctx, 'findings.json'))}` }
     case 'FIX': return { name: 'FIX', body: builderBrief(state, ctx, 'fix'), mark: 'fixed' }
     case 'ESCALATE': {
       // A lane re-dispatched after fanout recorded the answer continues with it.
@@ -300,6 +312,8 @@ function derive(state, ctx) {
     }
     case 'COMMIT': return { name: 'COMMIT', auto: commit }
     case 'MERGE': return { name: 'MERGE', auto: merge }
+    case 'TRUNK_GATE': return { name: 'TRUNK_GATE', auto: trunkGate }
+    case 'FINISH': return { name: 'FINISH', auto: finish }
     case 'CONFLICTS': return {
       name: 'CONFLICTS', mark: 'conflicts-resolved',
       body: ask(state, ctx, `merging ${state.branch} into ${cfgOf(ctx).trunk} conflicts in ${state.conflicts.join(', ')}. Resolve them?`, [
@@ -328,8 +342,14 @@ const steps = {
   reviewed(state, flags, ctx) {
     if (!flags.file || flags.file === true) refuse('reviewed needs --file <findings json>')
     const doc = st.readJson(path.resolve(ctx.root, flags.file))
-    if (!doc || !Array.isArray(doc.findings)) refuse(`${flags.file} is not findings JSON — expected {"findings": [...], "verdict": "clean|fix"}`)
-    const blocking = doc.findings.filter((f) => f && f.severity === 'blocking')
+    if (!doc || !Array.isArray(doc.findings)) refuse(`${flags.file} is missing or is not findings JSON — expected {"findings": [...], "verdict": "clean|fix"}`)
+    // Any blocking finding means FIX whatever the verdict; an unknown severity or verdict, or a
+    // fix verdict with nothing blocking, is sent back.
+    const bad = doc.findings.filter((f) => !f || typeof f !== 'object' || !SEVERITIES.includes(f.severity))
+    if (bad.length) refuse(`${flags.file}: every finding needs severity ${SEVERITIES.join(' or ')} — got ${bad.map((f) => JSON.stringify(f && f.severity)).join(', ')}; rewrite those findings, then re-mark`)
+    if (doc.verdict !== undefined && !['clean', 'fix'].includes(doc.verdict)) refuse(`${flags.file}: verdict must be clean or fix, got ${JSON.stringify(doc.verdict)}`)
+    const blocking = doc.findings.filter((f) => f.severity === 'blocking')
+    if (doc.verdict === 'fix' && !blocking.length) refuse(`${flags.file}: verdict is fix but no finding is blocking — set severity blocking on the finding(s) that must be fixed, or verdict clean`)
     const verdict = !blocking.length ? 'clean' : state.attempts.fix >= FIX_CAP ? 'escalate' : 'fix'
     state.review = { findings: doc.findings, verdict }
     return go(state, verdict === 'clean' ? 'COMMIT' : verdict === 'fix' ? 'FIX' : 'ESCALATE', { why: 'review' })
@@ -356,8 +376,13 @@ const steps = {
     const main = mainRoot(ctx.root)
     const left = state.conflicts.filter((f) => /^(<{7}|>{7})( |$)/m.test(st.readText(path.join(main, f), '')))
     if (left.length) refuse(`conflict markers remain in ${left.join(', ')} — resolve them, then re-run`)
-    state.mergeSha = git.commitAll(main, `merge(${specInfo(ctx).id}): ${st.readSpec(specIn(state, ctx)).title}`) || git.headSha(main)
-    return trunkGate(state, ctx, main)
+    // Stage only the reported files (`add -A` here would sweep the user's untracked files in).
+    git.sh(['add', '-A', '--', ...state.conflicts], main)
+    const inMerge = git.raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], main).status === 0
+    const staged = git.raw(['diff', '--cached', '--quiet'], main).status !== 0
+    if (inMerge || staged) git.sh(['commit', '-q', '-m', `merge(${specInfo(ctx).id}): ${st.readSpec(specIn(state, ctx)).title}`], main)
+    else if (cfgOf(ctx).mergeStrategy !== 'squash' && git.raw(['merge-base', '--is-ancestor', state.branch, 'HEAD'], main).status !== 0) refuse(`no merge of ${state.branch} is in progress in ${main} and it is not merged (aborted?) — merge it there, then re-mark`)
+    return go(state, 'TRUNK_GATE', { mergeSha: git.headSha(main) })
   },
 }
 

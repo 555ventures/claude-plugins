@@ -3,7 +3,7 @@
 // and of the lane marker <git-dir>/spec-lane-open. A lane (worktree sub-agent) never asks the user;
 // it writes the question here, prints PENDING_QUESTION, and exits 0. The parent answers and resumes.
 // No CLI. Exports: writePending, readPending, answerPending, consumePending, stopLine, isLane,
-// markLane, unmarkLane. An unknown answer label throws {exit: 2}.
+// isFanoutLane, laneOwner, markLane, unmarkLane. An unknown answer label throws {exit: 2}.
 
 const fs = require('fs')
 const path = require('path')
@@ -21,12 +21,17 @@ function gitDir(root) {
 
 const markerPath = (root) => { const d = gitDir(root); return d ? path.join(d, MARKER) : null }
 const isLane = (root) => { const p = markerPath(root); return !!(p && fs.existsSync(p)) }
-function markLane(root) {
+// The marker's content names who set it: 'fanout' for a lane worktree, 'run' for run.js's own
+// marker while a builder or reviewer is out. Only a fanout marker makes a checkout a lane, so a
+// stale run marker left by a crash never turns the next /spec:run into a lane.
+function markLane(root, owner = 'fanout') {
   const p = markerPath(root)
   if (!p) throw Object.assign(new Error(`${root} is not inside a git repository`), { exit: 2 })
-  fs.writeFileSync(p, '')
+  fs.writeFileSync(p, owner)
   return p
 }
+const laneOwner = (root) => { const p = markerPath(root); try { return fs.readFileSync(p, 'utf8').trim() || 'fanout' } catch { return null } }
+const isFanoutLane = (root) => laneOwner(root) === 'fanout'
 const unmarkLane = (root) => { const p = markerPath(root); if (p) fs.rmSync(p, { force: true }) }
 
 function save(root, doc) {
@@ -75,4 +80,4 @@ function consumePending(root) {
 
 const stopLine = (root) => `${PENDING} — ${pendingPath(root)}; the lane stops here and the parent session relays it`
 
-module.exports = { PENDING, pendingPath, writePending, readPending, answerPending, consumePending, stopLine, isLane, markLane, unmarkLane }
+module.exports = { PENDING, pendingPath, writePending, readPending, answerPending, consumePending, stopLine, isLane, isFanoutLane, laneOwner, markLane, unmarkLane }

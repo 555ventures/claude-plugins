@@ -5,8 +5,8 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { execFileSync } = require('child_process')
-const { tmpdir, gitRepo, runBash } = require('./helpers')
+const { execFileSync, spawnSync } = require('child_process')
+const { tmpdir, gitRepo, runBash, SPEC } = require('./helpers')
 
 const hook = (script, payload) => runBash('scripts/' + script, [], { input: typeof payload === 'string' ? payload : JSON.stringify(payload) })
 
@@ -70,4 +70,24 @@ test('block-cross-worktree-writes keeps writes inside the current worktree', () 
   assert.strictEqual(w(dir, path.join(dir, '.git/worktrees/spec-o/spec-lane-open')).status, 2, 'planting a marker in another tree\'s git dir is blocked')
   assert.strictEqual(w(dir, path.join(outside, 'x.txt')).status, 0, 'a write outside any repo is allowed')
   assert.strictEqual(hook('block-cross-worktree-writes.sh', '[]').status, 0, 'a parse error fails open')
+})
+
+test('block-worker-git parses quotes, spaces, chains and nested shells', () => {
+  const base = tmpdir('wgit sp')
+  const dir = path.join(base, 'main repo')
+  gitRepo(dir)
+  const wt = path.join(dir, '.claude/worktrees/spec-a b')
+  execFileSync('git', ['-C', dir, 'worktree', 'add', '-q', '-b', 'ab', wt])
+  const gd = execFileSync('git', ['-C', wt, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim()
+  fs.writeFileSync(path.join(gd, 'spec-lane-open'), 'fanout')
+  const p = (command) => hook('block-worker-git.sh', { cwd: dir, tool_input: { command } }).status
+  for (const c of [`cd "${wt}" && git commit -m "it's done"`, `git -C '${wt}' commit -m x`, `cd "${wt}"\ngit push`,
+    `bash -c "cd '${wt}' && git reset --hard"`, `cd ${wt.replace(/ /g, '\\ ')}; git --no-pager checkout -b x`, `(cd "${wt}" && git merge x)`]) {
+    assert.strictEqual(p(c), 2, `${JSON.stringify(c)} must be blocked`)
+  }
+  for (const c of [`cd "${wt}" && git status`, `cd "${wt}" && echo "git commit"`, `git -C "${wt}" log -1`, 'git commit -m x']) {
+    assert.strictEqual(p(c), 0, `${JSON.stringify(c)} is allowed`)
+  }
+  const noNode = spawnSync('/bin/bash', [path.join(SPEC, 'scripts/block-worker-git.sh')], { input: JSON.stringify({ cwd: wt, tool_input: { command: 'git commit' } }), env: { PATH: '/nonexistent' }, encoding: 'utf8' })
+  assert.strictEqual(noNode.status, 0, 'no node on PATH fails open')
 })

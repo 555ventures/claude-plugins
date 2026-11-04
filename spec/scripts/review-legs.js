@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 'use strict'
 // review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path>
-//   [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>]
+//   [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>] [--tree <40-hex>]
 //
-// Owner: specs/20260820/06-typed-evidence-manifest.md
+// Owner: specs/20260820/06-typed-evidence-manifest.md; the run cache and at-risk reuse:
+// specs/20261103/12-one-suite-run-per-tree.md
 //
 // Runs every deterministic review leg, appends one JSONL row per leg to --manifest (the evidence
 // manifest verdict.js derives from), and prints a red/green summary. The leg scripts
@@ -21,6 +22,8 @@
 //                  {"unavailable":"sha-unseen","branch":…,"branchConclusion":…} — sha-unseen is
 //                  always exit 0, even when the branch is red
 //   at-risk        {"files":N,"testsExecuted":N|{"unavailable":…}} | {"unavailable":"no-test-command"}
+//                  | {"files":N,"testsExecuted":N,"reused":"suite"} — no spawn, when this iteration's suite
+//                  row is exit 0 with a numeric testsExecuted and testCommand has no {file}
 //                  | {"malformed":{…}} — exit FORCED to 1 when files>0 and testsExecuted is 0 or
 //                  {"unavailable":"pattern-no-match"}; "no-format-declared" never forces
 //   suite          typed like gate, "reused":"gate"? — wave 1b, bare testCommand, every scope;
@@ -43,6 +46,13 @@
 // appended through appendRow carry `scope` ("full"|"fix-delta") as their last key; rows
 // ac-matrix.js and promise-sweep.js append themselves carry none.
 //
+// --tree <40-hex> (the driver passes lib/run-cache.js's cacheTree) arms the run cache for the gate and
+// suite legs, resolved in this order: a --reuse-from prior green row (reusedFrom: <basename>), else a
+// cache hit for the resolved command over that tree (the recorded observation stamped
+// reusedFrom: "cache:<tree7>", no spawn, no gate-output.txt/suite-output.txt), else a spawn — and
+// every green spawned gate/suite row with a numeric testsExecuted is recorded under its command.
+// Absent --tree, the cache is neither read nor written; a malformed value exits 2.
+//
 // Before wave 1, env-preflight.js --root <root> runs as a hard precondition: its exit 1 (a
 // declared testEnv var unset) exits 2 here with its lines re-emitted on stderr, before any row.
 //
@@ -51,7 +61,7 @@
 //
 // Exit codes: 0 = every blocking leg (gate/suite/smoke/ci) green — findings legs may still have
 // findings for disposition · 1 = a blocking leg is red (review hard-stops pre-reviewer) ·
-// 2 = usage error or precondition failure (unreadable config/spec, scope-reconcile exit 2, or
+// 2 = usage error or precondition failure (unreadable config/spec, malformed --tree, scope-reconcile exit 2, or
 // env-preflight.js exit 1 — an unprovisioned declared testEnv var)
 
 const fs = require('fs')
@@ -63,12 +73,13 @@ const { runAsync, withFiles } = require('./lib/host-run')
 const { computeTestsExecuted, computeSkips, isUnobserved } = require('./lib/count-observation')
 const { extractSection, parseAcBullets, parseDisposition } = require('./lib/spec-sections')
 const { fmMap } = require('./lib/frontmatter')
+const runCache = require('./lib/run-cache')
 
 function usage() {
-  console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>]')
+  console.error('usage: review-legs.js --root <dir> --spec <path> --base <ref> --manifest <path> [--skips <file>] [--fix-delta] [--out-dir <dir>] [--reuse-from <manifest>] [--tree <40-hex>]')
 }
 
-let root = null, spec = null, base = null, manifest = null, skips = null, fixDelta = false, outDir = null, reuseFrom = null
+let root = null, spec = null, base = null, manifest = null, skips = null, fixDelta = false, outDir = null, reuseFrom = null, tree = null
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -80,9 +91,14 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--fix-delta') fixDelta = true
   else if (a === '--out-dir') outDir = argv[++i]
   else if (a === '--reuse-from') reuseFrom = argv[++i]
+  else if (a === '--tree') tree = argv[++i]
   else { console.error('review-legs: unknown argument ' + a); usage(); process.exit(2) }
 }
 if (!root || !spec || !base || !manifest) { usage(); process.exit(2) }
+if (tree !== null && !/^[0-9a-f]{40}$/.test(tree || '')) {
+  console.error('review-legs.js: --tree must be a 40-hex tree sha — pass the review driver\'s cacheTree, or drop the flag to run uncached')
+  process.exit(2)
+}
 root = path.resolve(root)
 // REUSABLE: the legs that run host tests, boot the app or sweep the tree (see header).
 const REUSABLE = ['gate', 'suite', 'at-risk', 'patterns', 'smoke']
@@ -156,6 +172,31 @@ function appendReused(r) {
   fs.appendFileSync(manifest, JSON.stringify(row) + '\n')
 }
 
+// A cache hit for `cmd` over --tree appended as the recorded observation stamped with its provenance.
+function cachedEntry(cmd) {
+  if (!tree || !cmd) return null
+  const e = runCache.lookup(root, cmd, tree)
+  return e && e.observed && typeof e.observed.testsExecuted === 'number' ? e : null
+}
+function appendCached(leg, e) {
+  timings[leg] = 0
+  const row = { leg, exit: 0, observed: { ...e.observed, reusedFrom: 'cache:' + tree.slice(0, 7) }, scope: fixDelta ? 'fix-delta' : 'full' }
+  rows.push(row)
+  fs.appendFileSync(manifest, JSON.stringify(row) + '\n')
+}
+function recordRun(cmd, exit, observed) {
+  if (!tree || !cmd) return
+  const { reusedFrom, reused, ...clean } = observed || {}
+  runCache.record(root, cmd, tree, { exit, observed: clean })
+}
+
+// This iteration's suite row is green with a numeric count and testCommand has no {file}.
+function suiteReusable() {
+  const sr = rows.find(r => r.leg === 'suite')
+  return !!(sr && sr.exit === 0 && sr.observed && typeof sr.observed.testsExecuted === 'number' &&
+    config.testCommand && !config.testCommand.includes('{file}'))
+}
+
 function patternsScope(files) {
   const raw = [...new Set(files.map(f => (f.includes('/') ? path.posix.dirname(f) : f)))].sort()
   return raw.filter(d => !raw.some(o => o !== d && d.startsWith(o + '/')))
@@ -212,8 +253,11 @@ async function main() {
 
   const resolved = resolveGate(specText, config)
   const reusedGate = reusableRow('gate')
+  const cachedGate = reusedGate ? null : cachedEntry(resolved.gate)
   if (reusedGate) {
     appendReused(reusedGate)
+  } else if (cachedGate) {
+    appendCached('gate', cachedGate)
   } else if (resolved.gate) {
     wave1.push(sh(resolved.gate).then(r => {
       fs.writeFileSync(gateOutPath, r.out + r.err)
@@ -224,6 +268,7 @@ async function main() {
       // runners that print a zero-skip line still match the declared pattern with count 0.
       const observed = { ...computeSkips(output, skipPat), testsExecuted: computeTestsExecuted(output, countPat) }
       appendRow('gate', r.code, observed, r)
+      recordRun(resolved.gate, r.code, observed)
     }))
   } else {
     // the whole-row unavailable alternative — no gate command could be resolved at all — is
@@ -253,8 +298,11 @@ async function main() {
   // ---- wave 1b: suite, ALONE — every scope including --fix-delta; never concurrent with
   // another leg that runs host tests.
   const reusedSuite = reusableRow('suite')
+  const cachedSuite = reusedSuite ? null : cachedEntry(config.testCommand)
   if (reusedSuite) {
     appendReused(reusedSuite)
+  } else if (cachedSuite) {
+    appendCached('suite', cachedSuite)
   } else if (!config.testCommand) {
     // the whole-row unavailable alternative — testCommand is a contract-required config key,
     // so its absence is a broken host, never a silent skip.
@@ -264,7 +312,9 @@ async function main() {
     // the gate ran the whole suite over this tree and observed an executed count — copy its
     // evidence, spawn nothing.
     const g = rows.find(r => r.leg === 'gate')
-    appendRow('suite', isUnobserved(g.observed.testsExecuted) ? 1 : g.exit, { ...g.observed, reused: 'gate' })
+    const gateExit = isUnobserved(g.observed.testsExecuted) ? 1 : g.exit
+    appendRow('suite', gateExit, { ...g.observed, reused: 'gate' })
+    recordRun(config.testCommand, gateExit, g.observed)
   } else if (config.testCommand.includes('{file}')) {
     // a per-file {file} command has no bare whole-suite form — running it unsubstituted would
     // hand the runner a literal placeholder; the gate leg is the whole-suite observation.
@@ -280,7 +330,9 @@ async function main() {
     // exit FORCED to 1 when a declared testCountPattern observes 0 tests or never matches on an
     // exit-0 run.
     const exit = isUnobserved(testsExecuted) ? 1 : sr.code
-    appendRow('suite', exit, { ...computeSkips(output, skipPat), testsExecuted }, sr)
+    const suiteObserved = { ...computeSkips(output, skipPat), testsExecuted }
+    appendRow('suite', exit, suiteObserved, sr)
+    recordRun(config.testCommand, exit, suiteObserved)
   }
 
   // ---- wave 2 (parallel): at-risk + patterns (post-gate; both need reconcile's output) ----
@@ -328,6 +380,10 @@ async function main() {
         fs.writeFileSync(atRiskPath, `malformed atRisk entries (expected {file, refs}):\n${JSON.stringify(malformed, null, 2)}\n`)
         wroteAtRisk = true
         appendRow('at-risk', 1, { malformed: { entries: malformed.length, of: atRisk.length } })
+      } else if (suiteReusable()) {
+        // a bare testCommand run over this tree executed every at-risk file already.
+        const sr = rows.find(r => r.leg === 'suite')
+        appendRow('at-risk', 0, { files: atRisk.length, testsExecuted: sr.observed.testsExecuted, reused: 'suite' })
       } else {
         const atRiskFiles = atRisk.map(a => a.file)
         const atRiskCmd = withFiles(config.testCommand, atRiskFiles)

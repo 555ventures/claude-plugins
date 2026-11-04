@@ -4,6 +4,8 @@
 // Owner: specs/20260830/02-close-gate-rerun.md.
 //
 // resolveGate(specText, config) -> { gate: string } | { gate: null, reason: string }
+//   - {testFiles} -> the exact File Plan test files, each quote()d and space-joined, in File Plan order
+//     (no directory or glob widening; fixtures dropped) — specs/20261103/12-one-suite-run-per-tree.md D4
 //   - config.gateCommand without {testDirs}/{scopeDirs} returns { gate: config.gateCommand } as-is
 //   - {testDirs} -> space-joined quoted globs derived from the spec's File Plan test rows (glob
 //     form — `node --test <dir>` does not run files on Node 26)
@@ -40,7 +42,7 @@ const { parseFilePlan, parseFilePlanRows, isTestsRow } = require('./file-plan')
 
 function resolveGate(specText, config) {
   let gate = config.gateCommand
-  if (!/\{testDirs\}|\{scopeDirs\}/.test(gate)) return { gate }
+  if (!/\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(gate)) return { gate }
   const rows = parseFilePlanRows(specText)
   const layerTests = rows
     .filter(r => isTestsRow(r)).flatMap(r => r.paths)
@@ -56,14 +58,14 @@ function resolveGate(specText, config) {
 }
 
 function gateRunsSuite(rawGate, resolvedGate, testCommand) {
-  if (typeof rawGate !== 'string' || /\{testDirs\}|\{scopeDirs\}/.test(rawGate)) return false
+  if (typeof rawGate !== 'string' || /\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(rawGate)) return false
   if (typeof resolvedGate !== 'string') return false
   if (typeof testCommand !== 'string' || !testCommand.trim()) return false
   return resolvedGate.split('&&').some(seg => seg.trim() === testCommand.trim())
 }
 
 function resolveGateForFiles(gate, testFiles) {
-  if (!/\{testDirs\}|\{scopeDirs\}/.test(gate)) return gate
+  if (!/\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(gate)) return gate
   const globs = new Set()
   for (const f of testFiles) {
     const dir = path.dirname(f)
@@ -72,7 +74,8 @@ function resolveGateForFiles(gate, testFiles) {
     globs.add(quote(`${dir === '.' ? '' : dir + '/'}${suffix}`))
   }
   const dirsStr = [...globs].join(' ')
-  return gate.replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].map(quote).join(' '))
+  const filesStr = [...new Set(testFiles.filter(f => !/(^|\/)fixtures\//.test(f)))].map(quote).join(' ')
+  return gate.replace(/\{testFiles\}/g, filesStr).replace(/\{testDirs\}/g, dirsStr).replace(/\{scopeDirs\}/g, [...new Set(testFiles.map(f => path.dirname(f)))].map(quote).join(' '))
 }
 
 module.exports = { resolveGate, resolveGateForFiles, gateRunsSuite }

@@ -9,7 +9,7 @@ only when the contract genuinely changes, and never edit it for wording alone.
 
 ## Required config keys (`.claude/spec.config.json`)
 
-`generatedBy`, `contractHash`, `gateCommand`, `testCommand`, `setupCommand`,
+`generatedBy`, `contractHash`, `gateCommand` (appended-path placeholders `{testDirs}`/`{scopeDirs}`, or `{testFiles}` for the File Plan's exact test files), `testCommand`, `setupCommand`,
 `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`),
 `pipelineRules`, `runtime` (see § Runtime verification). Optional: `driftScript`, `routing`,
 `postGateCommand` (a shell string the build driver chains after a green scoped gate at
@@ -245,6 +245,7 @@ JSON is the default block:
   "directLaneToMain": true,
   "mergeStrategy": "derived",
   "testExpiry": "classify",
+  "closeSuite": "auto",
   "ledgerCommitted": true,
   "reviewService": "terminal",
   "models": {
@@ -269,7 +270,7 @@ JSON is the default block:
 ```
 
 Enums: `mergeStrategy` `derived | merge-commit | ff-only | squash | rebase-ff`; `testExpiry`
-`classify | off`; `reviewService` `terminal | hosted`; `models.<seat>.model`
+`classify | off`; `closeSuite` `always | auto`; `reviewService` `terminal | hosted`; `models.<seat>.model`
 `fable | opus | sonnet | haiku`; `models.<seat>.effort` `low | medium | high | xhigh | max`;
 `riskTiers` an array of non-empty strings; `stops.repairRound` `repair | ask`; `stops.buildEscalate`
 `derived | ask`; `stops.reviewEscalate` `queue | ask`; `stops.redFindings` `remove-mention | ask`;
@@ -304,7 +305,7 @@ command — the contract, pictures and tests already live under `design/prototyp
 printing `📌 Auto-picked queue /spec:fix — host policy stops.reviewEscalate: queue (veto anytime)`. `stops.rejectWithEvidence` `accept` → `--mark dispositions` accepts a disposer `reject` whose `repro` names the command it ran and the output it observed, printing `📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)`, while a `waive` and a repro-less `reject` are asked whatever the value. Any `stops` key set to
 `ask` brings its question back; `/spec:fanout --ask <key>` brings it back for one fan-out.
 `fanout.selfSurfaces` → a spec touching one of these paths ends a fan-out batch and runs alone;
-`fanout.overlapExempt` → an exempt path never serializes two briefless specs.
+`fanout.overlapExempt` → an exempt path never serializes two briefless specs. `closeSuite` `auto` → the close-time whole-suite run is skipped when the close delta against the judged tree is overlay-only, no test file references an overlay path, and the judged tree's suite is green in the run cache, printing `close-time suite: skipped — close delta is overlay-only and no test reads it (policy.closeSuite: auto)`; `always` → the close-time suite runs whenever `gateRunsSuite` does not already cover it.
 
 **Absent or partial block = the defaults above, key by key** — a host that predates the block
 changes nothing. Validated by `validatePolicy` in `host-config.js`; read through `policy(root)`.

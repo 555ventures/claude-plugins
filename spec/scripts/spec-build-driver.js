@@ -36,9 +36,12 @@
 // A `baseline`-layer File Plan row (a screenshot baseline, a golden file) is no tests-layer row and
 // no wave owns it; `--mark integrated` refuses while one is missing.
 //
-// The optional `postGateCommand` config key is chained into the ONE gate child after the scoped
-// gate (`<gate> && echo '== postGateCommand' && <post>`); `{testCommand}` inside it substitutes the
-// config's testCommand. The optional `orchestratorOnly` key (array of path globs) keeps matching
+// The optional `postGateCommand` config key runs as a SECOND gate child after a green scoped gate
+// (the driver writes the `== postGateCommand` marker line between them); `{testCommand}` inside it
+// substitutes the config's testCommand. Each child is looked up in lib/run-cache.js by its own
+// command over the cache tree and a hit writes `== reused cache:<tree7> <cmd>` instead of spawning;
+// marks.gateRuns[k] is {exit, log, tree: <40-hex cacheTree>, cached: ['gate'|'postGate'…]} and the
+// DONE ledger row's gate block carries the last run's tree and cached (specs/20261103/12). The optional `orchestratorOnly` key (array of path globs) keeps matching
 // File Plan paths out of every worker's file list.
 //
 // The DONE row records `via: "loop"` (set once at sidecar creation) and `model` (lib/session-stamp.js
@@ -78,6 +81,8 @@ const pq = require('./pending-question.js')
 const { fmValue } = require('./lib/frontmatter')
 const { readConfig, readPipelineRules, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
+const runCache = require('./lib/run-cache')
+const { computeTestsExecuted, computeSkips } = require('./lib/count-observation')
 const { parseFilePlanRows, isTestsRow } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 // model is derived at row-write time (never once at
@@ -485,33 +490,66 @@ function runGate() {
       ' — add File Plan test rows or a gateCommand, then re-run this driver')
   }
   stageCreatedFilePlanPaths()
-  // The postGateCommand rides this SAME bash -c child, so the repair bookkeeping sees exactly one
-  // gate run per round; && short-circuits on a red scoped gate.
+  // The scoped gate and the postGateCommand run as TWO children in sequence (a red first child
+  // skips the second), each keyed in the run cache by its own resolved command over the cache tree.
   const postGate = resolvePostGate()
-  const gateCommand = postGate !== null
-    ? resolved.gate + " && echo '== postGateCommand' && " + postGate
-    : resolved.gate
   const k = (marks.gateRuns || []).length + 1
   fs.mkdirSync(sidecarDir, { recursive: true })
   const logPath = path.join(sidecarDir, 'gate-' + k + '.log')
-  // The gate's stdout+stderr go straight to the log fd, never through a Node pipe: a full gate can
-  // exceed spawnSync's maxBuffer and get SIGTERM-killed mid-run. Readers follow `gateRuns[k].log`.
-  let fd
   try {
-    fd = fs.openSync(logPath, 'w')
+    fs.writeFileSync(logPath, '')
   } catch (e) {
     die('could not open gate log ' + logPath + ' for writing (' + e.message + ') — check the ' +
       'sidecar directory is writable and re-run')
   }
-  let r
+  let tree
   try {
-    r = runHost(gateCommand, { cwd: repoRoot, stdio: ['ignore', fd, fd] },
-      'gate (' + gateCommand + ')')
-  } finally {
-    try { fs.closeSync(fd) } catch (e) { /* already closed */ }
+    tree = runCache.cacheTree(repoRoot, [path.relative(repoRoot, sidecarDir)])
+  } catch (e) {
+    die(e.message + ' — fix the repo state, then re-run this mark')
+  }
+  const caps = hostConfig.capabilities || {}
+  const cached = []
+  // One child: a cache hit writes the provenance line instead of spawning; a spawn's stdout+stderr
+  // go straight to the log fd, never through a Node pipe (a full gate can exceed spawnSync's
+  // maxBuffer), and a green one is recorded from its own log slice.
+  const runPart = (name, cmd) => {
+    const hit = runCache.lookup(repoRoot, cmd, tree)
+    if (hit && hit.observed && typeof hit.observed.testsExecuted === 'number') {
+      fs.appendFileSync(logPath, '== reused cache:' + tree.slice(0, 7) + ' ' + cmd + '\n')
+      cached.push(name)
+      return 0
+    }
+    const start = fs.statSync(logPath).size
+    let fd
+    try {
+      fd = fs.openSync(logPath, 'a')
+    } catch (e) {
+      die('could not open gate log ' + logPath + ' for writing (' + e.message + ') — check the ' +
+        'sidecar directory is writable and re-run')
+    }
+    let child
+    try {
+      child = runHost(cmd, { cwd: repoRoot, stdio: ['ignore', fd, fd] }, 'gate (' + cmd + ')')
+    } finally {
+      try { fs.closeSync(fd) } catch (e) { /* already closed */ }
+    }
+    if (child.status === 0) {
+      const slice = fs.readFileSync(logPath).subarray(start).toString('utf8')
+      runCache.record(repoRoot, cmd, tree, {
+        exit: 0,
+        observed: { ...computeSkips(slice, caps.skipReportPattern), testsExecuted: computeTestsExecuted(slice, caps.testCountPattern) },
+      })
+    }
+    return child.status
+  }
+  const r = { status: runPart('gate', resolved.gate) }
+  if (r.status === 0 && postGate !== null) {
+    fs.appendFileSync(logPath, '== postGateCommand\n')
+    r.status = runPart('postGate', postGate)
   }
   marks.gateRuns = marks.gateRuns || []
-  marks.gateRuns.push({ exit: r.status, log: logPath })
+  marks.gateRuns.push({ exit: r.status, log: logPath, tree, cached })
   if (r.status === 124) recordIncident('test-watchdog-trip', 124, 'gate run ' + k)
   saveSidecar()
 }
@@ -1014,7 +1052,10 @@ function handleCommitted() {
     diff: { files: diffFiles, loc: diffLoc },
     // postGate records whether a non-empty postGateCommand was declared at row-write time —
     // the only way to later compare review-time GATE_RED rates for builds with the knob on vs off.
-    gate: { finalRounds: (marks.gateRuns || []).length, postGate: resolvePostGate() !== null },
+    gate: {
+      finalRounds: (marks.gateRuns || []).length, postGate: resolvePostGate() !== null,
+      tree: ((marks.gateRuns || []).at(-1) || {}).tree, cached: ((marks.gateRuns || []).at(-1) || {}).cached,
+    },
     deviations: countDeviations(),
     redCheck: marks.redCheck || 'none',
     workers,

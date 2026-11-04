@@ -62,6 +62,10 @@ rules that replaced it:
   their real target stays inside the scanned root, symlinked directories are walked cycle-safe.
 - **The gate resolves `{testDirs}` to the glob form** (`node --test 'tests/<scope>/*.test.js'`)
   — a bare directory runs nothing on Node 26.
+- **`{testFiles}` names the File Plan's exact test files.** The placeholder resolves to the
+  quoted, space-joined test files (fixtures dropped), never a directory glob; `{testDirs}` stays
+  for runners that take globs. This repo's gate uses `{testFiles}`.
+  (specs/20261103/12-one-suite-run-per-tree.md)
 - **The product-stage exemption is narrow.** `question-style-gate.js` suppresses a `derive`
   verdict inside a live genesis/mocks run only for a question naming a coverage key or
   `assumption(s)`; every other in-run `derive` is still advised (specs/20261029/06 D9).

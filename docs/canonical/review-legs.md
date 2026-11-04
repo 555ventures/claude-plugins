@@ -128,3 +128,16 @@ green rows for `gate`, `suite`, `at-risk`, `patterns` and `smoke` with `observed
 naming the manifest; red rows and every other leg run for real. A leg red before and green over
 the same tree is printed and recorded as flaky. A changed tree re-runs everything.
 (specs/20261101/06-a-rerun-re-runs-only-what-went-red.md)
+
+## One suite run per tree
+
+A green gate, suite or post-gate run is recorded once per (resolved command string, tree sha
+with the pipeline's own write paths excluded, declared `testEnv` names) in
+`<git common dir>/spec-run-cache`, shared by every worktree of the repo; a red run, or a green
+one with no count from the host's declared `testCountPattern`, is never recorded.
+`review-legs.js` consults it with `--tree` after the `--reuse-from` path and appends a hit as
+the prior row with `observed.reusedFrom: 'cache:<tree7>'`. The at-risk leg appends
+`reused: 'suite'` with no spawn when this iteration's suite row is green with a count and
+`testCommand` has no `{file}`. The build driver records each part of its gate round, the
+fan-out driver consults it for the post-merge gate, and the review driver's close-time gate
+consults it with the close tree. (specs/20261103/12-one-suite-run-per-tree.md)

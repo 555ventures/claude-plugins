@@ -157,7 +157,7 @@ test('AC-20260820-06-5 (companion, retag of AC-20260820-03-11): review-legs.js a
 // isolated from the new leg's own: the at-risk row's forced-red exit must come from at-risk's
 // own captured count alone, never leak from (or be masked by) the suite row's state.
 
-function makeAtRiskHost({ testCountPattern, recorderBody, recorderExitCode }) {
+function makeAtRiskHost({ testCountPattern, recorderBody, recorderExitCode, bareSuite = false }) {
   const dir = tmpdir('legs-verdict-pair-atrisk')
   const g = gitRepo(dir)
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
@@ -169,7 +169,9 @@ function makeAtRiskHost({ testCountPattern, recorderBody, recorderExitCode }) {
   if (testCountPattern) capabilities.testCountPattern = testCountPattern
   fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
     gateCommand: 'node --test {testDirs}',
-    testCommand: `node ${JSON.stringify(path.join(dir, 'bin/recorder.js'))}`,
+    // specs/20261103/12-one-suite-run-per-tree.md D14: {file} leaves no bare suite run, so the suite row
+    // is file-placeholder (never green-with-count) and the at-risk contradiction branches still spawn.
+    testCommand: `node ${JSON.stringify(path.join(dir, 'bin/recorder.js'))}${bareSuite ? '' : ' {file}'}`,
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities,
   }))
@@ -228,9 +230,9 @@ test('AC-20260820-06-6 (also AC-20260903-02-16, SHALL CONTINUE TO): a synthetic 
       'AC-20260903-02-16: the bare (suite) invocation of the identical recorder must print "ℹ tests 3" and stay ' +
       'green — the at-risk leg\'s own forced-red contradiction (files>0, testsExecuted 0) must never leak onto ' +
       `the suite row, whose own captured count is genuinely nonzero: ${JSON.stringify(suiteRow)}`)
-    assert.deepStrictEqual(suiteRow, { leg: 'suite', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 3 }, scope: 'full' },
-      'AC-20260903-02-16: when a suite row is present, its shape must be exactly this — a mismatch means the ' +
-      `bare invocation's output or typing drifted: ${JSON.stringify(suiteRow)}`)
+    assert.deepStrictEqual(suiteRow, { leg: 'suite', exit: 0, observed: { unavailable: 'file-placeholder' }, scope: 'full' },
+      'AC-20260903-02-16: a {file} testCommand has no bare run, so the suite row must be the typed file-placeholder ' +
+      `unavailability — a mismatch means the suite leg ran or typed itself differently: ${JSON.stringify(suiteRow)}`)
   }
 
   const workflow = path.join(dir, 'workflow.json')
@@ -412,6 +414,7 @@ test('AC-20260907-03-8 (SHALL CONTINUE TO): a synthetic host declaring testCount
     // Identical output regardless of argv — both the at-risk (with args) and the suite (bare)
     // invocations of this recorder observe the same non-zero executed count.
     recorderBody: 'process.stdout.write("ℹ tests 3\\n")\nprocess.exit(0)\n',
+    bareSuite: true,
   })
   const { r, manifest } = runLegsAtRisk(dir, base)
   const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
@@ -419,7 +422,12 @@ test('AC-20260907-03-8 (SHALL CONTINUE TO): a synthetic host declaring testCount
   const suiteRow = rows.find(x => x.leg === 'suite')
   assert.ok(atRiskRow && suiteRow,
     'review-legs.js must append both an "at-risk" and a "suite" manifest row for this host: ' + r.stdout + r.stderr)
-  assert.deepStrictEqual(atRiskRow,
+  // specs/20261103/12-one-suite-run-per-tree.md D6/D14: over this bare green counted suite the at-risk
+  // row is either spawned ({files,testsExecuted}) or the suite's observation stamped reused:'suite'.
+  const { reused, ...atRiskObserved } = atRiskRow.observed
+  assert.strictEqual(reused, 'suite',
+    'a green counted bare suite must stand in for the at-risk run, or every review spawns the suite twice: ' + JSON.stringify(atRiskRow))
+  assert.deepStrictEqual({ ...atRiskRow, observed: atRiskObserved },
     { leg: 'at-risk', exit: 0, observed: { files: 1, testsExecuted: 3 }, scope: 'full' },
     'AC-20260907-03-8: an observed non-zero executed count must never be forced red by the widened predicate ' +
     `— {"unavailable":"pattern-no-match"} is not what was captured here, a real count of 3 was: ${JSON.stringify(atRiskRow)}`)
@@ -427,6 +435,29 @@ test('AC-20260907-03-8 (SHALL CONTINUE TO): a synthetic host declaring testCount
     { leg: 'suite', exit: 0, observed: { skips: { unavailable: 'no-format-declared' }, testsExecuted: 3 }, scope: 'full' },
     'AC-20260907-03-8: the identical extension on the suite leg must likewise never redden an observed ' +
     `non-zero count: ${JSON.stringify(suiteRow)}`)
+})
+
+test('a suite-reused at-risk row (reused:"suite") fed to verdict.js --ledger pools no leg finding and keeps the verdict out of GATE_RED', () => {
+  // specs/20261103/12-one-suite-run-per-tree.md D6/D14: the reused shape is a green non-blocking row.
+  const { dir, base } = makeVerdictCapableAtRiskHost({
+    testCountPattern: 'ℹ tests (\\d+)',
+    recorderBody: 'process.stdout.write("ℹ tests 3\\n")\nprocess.exit(0)\n',
+  })
+  const manifest = path.join(tmpdir('legs-verdict-pair-reused-out'), 'manifest.jsonl')
+  const r = runNode('scripts/review-legs.js', ['--root', dir, '--spec', 'specs/20260820/99-verdict-test.md',
+    '--base', base, '--manifest', manifest])
+  const rows = fs.readFileSync(manifest, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
+  const atRiskRow = rows.find(x => x.leg === 'at-risk')
+  assert.strictEqual(atRiskRow && atRiskRow.exit, 0,
+    'a green counted suite must leave a green at-risk row, spawned or reused: ' + JSON.stringify(atRiskRow) + r.stdout + r.stderr)
+  const workflow = path.join(dir, 'workflow.json')
+  fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0, reviewerCount: 1, scope: 'full' }))
+  const v = runNode('scripts/verdict.js', ['--manifest', manifest, '--workflow', workflow, '--ledger', '--retain', dir])
+  const ledgerRow = JSON.parse(v.stdout.trim().split('\n')[1])
+  assert.notStrictEqual(ledgerRow.verdict, 'GATE_RED',
+    'a green at-risk row (reused or spawned) must never turn the verdict red: ' + JSON.stringify(ledgerRow))
+  assert.strictEqual(ledgerRow.findings.legFindings, 0,
+    'a green at-risk row must pool no leg finding, or every reused review pages the reviewer for nothing: ' + JSON.stringify(ledgerRow.findings))
 })
 
 // D2 (AC-20260902-05-2): end-to-end, the whole point of the manifest-derived scope — a real

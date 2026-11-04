@@ -1,8 +1,8 @@
 {
   "generatedBy": "spec@7.268.0",
-  "contractHash": "28d42b13e99b",
+  "contractHash": "3c4c3e22e6c0",
   "trunk": "main",
-  "gateCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js {testDirs}",
+  "gateCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js {testFiles}",
   "testCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js --test-reporter=spec --test-reporter-destination=stdout",
   "postGateCommand": "{testCommand}",
   "setupCommand": "npm install",
@@ -39,5 +39,8 @@
   },
   "pipelineRules": ".claude/rules/spec-pipeline.md",
   "enforcementManifest": ".claude/rules/enforcement.json",
-  "rulesEnforcementHash": "f333e8050707"
+  "rulesEnforcementHash": "f333e8050707",
+  "policy": {
+    "closeSuite": "always"
+  }
 }

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: standard           # caller-fixed at plan time (see D0); the host's § Risk Tiers names review-legs.js and grounding-contract.md — the build upgrades on mid-build evidence per core § Tiers
 area: gate-integrity
 breaking: false
@@ -8,6 +8,7 @@ depends_on: [specs/20261101/06-a-rerun-re-runs-only-what-went-red.md, specs/2026
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 0f1e8700fb0e365ea07e144caec143e22864a59d
 ---
 
 # One suite run per tree
@@ -60,6 +61,8 @@ of widening to their directories.
 | D11 | `spec/entrypoints.json` adds `spec/scripts/spec-review-driver.js` under `spec/scripts/scope-reconcile.js`'s entry points (D8's probe call). `[no-ac: tests/consistency/entrypoints.test.js is the standing guard]` | A new caller without a manifest row reddens the gate. |
 | D12 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/`. |
 | D13 | Header comments: `run-cache.js` opens with usage, owner (this spec), what it does not do (decide a verdict, cache a red, read env values) and `Exit codes: n/a`; `review-legs.js` names `--tree`, the `cache:<tree7>` provenance and the at-risk `reused:'suite'` shape in its row table; the build driver names `gateRuns[k].tree/cached`; the review driver names `cacheTree` and `closeSuite`. `[no-ac: script header prose; the behaviour is pinned by AC-20261103-12-12 and AC-20261103-12-6]` | The header is the script's contract. |
+| D15 | 📌 Auto-picked (build, blocked-return ruling): every record site observes `testsExecuted` through the host's declared `capabilities.testCountPattern` only — no default pattern; an undeclared or `none` pattern is a count-less green and is never recorded (D1). Fixtures whose ACs expect a recorded run declare `testCountPattern` themselves; AC-23's "writes the entry" is asserted for the close tree's key, since the legs iteration legitimately records its own gate under the judged tree. `[no-ac: tightens D1; exercised by AC-20261103-12-3, AC-20261103-12-20, AC-20261103-12-23, AC-20261103-12-24]` | A default pattern would invent a count for hosts that never declared one — the exact laundering D1 refuses. |
+| D16 | The installed plugin's gate-resolve does not know `{testFiles}`, so this spec's own build and review run on the repo's `spec/scripts/*` drivers, and D4's config switch ships as written `[asked: user picked "Switch now, use the repo's own scripts" — the merge is followed by pushing this version and updating the installed copy, since other lanes and the fan-out's post-merge gate fail on `{testFiles}` until then]`. `[no-ac: build-time routing ruling]` | The spec ships whole; the cross-lane cost is an operator step at merge, not a code change. |
 | D14 | Colliding pins enter the File Plan as fixes, never weakened: `tests/review/review-legs-at-risk-argv.test.js` keeps its spawn premise by declaring a `{file}` `testCommand` in its fixture (D6 then spawns); `tests/review/legs-verdict-pair.test.js` adds the `reused:'suite'` at-risk shape to its verdict pairs and keeps its contradiction pairs on fixtures whose suite is not green-with-count. `[no-ac: fixture currency; exercised by AC-20261103-12-16 and AC-20261103-12-17]` | A pin on "at-risk spawned while the suite was green" is the exact behaviour D6 retires. |
 
 ## File Plan
@@ -267,6 +270,25 @@ suite is red or count-less, so D6's spawn branch is the one they already take; t
 suite` hit in `review-driver-close-refusals.test.js` pins the refused-rerun message on the
 always-run path, which D8 leaves byte-identical; `gateCommand\` yourself` has no test pin. The
 `executes` hits on the drivers and review-legs are priced by A5 with its remedy.
+
+### Advisory debt (review rv_7db25fed8b8f)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a5feb616853ed4cb1/tests/review/legs-verdict-pair.test.js:233 — tests/review/legs-verdict-pair.test.js AC-20260820-06-6 / AC-20260903-02-16 (SHALL CONTINUE TO) now runs its fixture with a `{file}` testCommand (D14), so the suite row is `{unavailable:'file-placeholder'}` and the pin's original subject — a suite row with a GENUINE nonzero count beside a forced-red at-risk row — is no longer exercised; the retained assert message still says the bare suite must print "ℹ tests 3", now untrue of the fixture.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a5feb616853ed4cb1/specs/20261103/12-one-suite-run-per-tree.md:171 — Spec § Behavior and § Rationale state 'this repo's `{testFiles}` gate prints no `ℹ tests` line, so its gate row is never recorded and the scoped gate re-runs at review'; the executed review shows the gate row was recorded by the build and reused.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a5feb616853ed4cb1/spec/scripts/fanout-driver.js:460 — fanout-driver.js runGate swallows any cacheTree() failure and silently falls through to an uncached spawn with no message, whereas the build and review drivers die naming the remedy.
+
+Build departures (folded from the deviations sidecar at close): AC-21 and AC-22 pin the
+always-run path D8 leaves byte-identical, so they were green on the pre-image; only AC-20 and
+AC-23 were red. AC-22 puts the overlay path in the File Plan's own `tests/foo.test.js`, since a
+separate reader file is out-of-plan and trips reconcile. AC-20 asserts the close reached
+`state: DONE` rather than reading `marks.closed`, because the driver removes the review sidecar
+at DONE; AC-23 is two tests (miss writes the close tree's key; hit pre-seeds it through
+`record()`), since a second `--mark closed` is impossible once the sidecar is gone. D15: the
+first scripts pass added a default `ℹ tests (\d+)` count pattern for hosts declaring none — removed;
+the fixtures declare the pattern. The close-suite Canonical Delta bullet landed in
+`docs/canonical/review-close.md` beside "Cost is accepted by contract", where that bullet
+actually lives. The executed review showed this repo's `{testFiles}` gate does print a count
+(node:test's default reporter), so its gate row is recorded and reused — the Behavior paragraph's
+"never recorded" was pessimistic.
 
 ## Canonical Delta
 

@@ -44,20 +44,6 @@ function scan(tokenRes) {
   return { hits, owners }
 }
 
-test('AC-20261024-04-1: no whole-line comment under spec/scripts or spec/bin carries a spec-path or AC-ID token outside its single Owner line', () => {
-  assert.ok(scriptFiles().length > 30, 'the scan found too few script files, so a zero-hit result would prove nothing about the tree')
-  const { hits } = scan([SPEC_PATH, AC_ID])
-  assert.deepStrictEqual(hits.slice(0, 15), [],
-    hits.length + ' script comment lines still cite a spec path or AC-ID, so the code keeps carrying its own changelog; first offenders shown')
-})
-
-test('AC-20261024-04-2: no whole-line comment carries a D/R/A decision-id token outside Owner lines, and no file has more than one Owner line', () => {
-  const { hits, owners } = scan([DECISION_ID])
-  assert.deepStrictEqual(hits.slice(0, 15), [],
-    hits.length + ' script comment lines still cite a decision id, so the code keeps carrying its own changelog; first offenders shown')
-  assert.deepStrictEqual(owners, [],
-    'files with more than one Owner line leave the cold reader with competing pointers to design history: ' + owners.join(', '))
-})
 
 test('AC-20261024-04-3: comment-narration --code-identical certifies the sweep commit against its parent, so the sweep changed comments only', () => {
   // The certificate is a property of the one sweep commit, never of whatever the working tree
@@ -84,22 +70,6 @@ test('AC-20261024-04-3: comment-narration --code-identical certifies the sweep c
   }
 })
 
-test('AC-20261024-04-4: no test cites the five orphaned AC-IDs and the three prose-size test files are gone', () => {
-  // Built by concatenation so this file never spells the literals it forbids elsewhere.
-  const ids = [['20261008', '01', '3'], ['20261008', '01', '4'], ['20260908', '06', '1'], ['20260908', '06', '2'], ['20260823', '06', '4']]
-    .map(([d, n, k]) => 'AC-' + d + '-' + n + '-' + k)
-  const self = path.join(__dirname, 'no-citation-comments.test.js')
-  const offenders = []
-  for (const f of walk(path.join(ROOT, 'tests'), []).filter((p) => p.endsWith('.js') && p !== self)) {
-    const src = fs.readFileSync(f, 'utf8')
-    for (const id of ids) if (new RegExp(id + '(?!\\d)').test(src)) offenders.push(path.relative(ROOT, f) + ' cites ' + id)
-  }
-  assert.deepStrictEqual(offenders, [],
-    'tests still cite criteria whose pinned prose-size tests retired, so the retirement is incomplete: ' + offenders.join('; '))
-  for (const rel of ['tests/consistency/doctrine-budget.test.js', 'tests/consistency/doctrine-headings.test.js', 'tests/prose-debt/doctrine-pins.test.js']) {
-    assert.ok(!fs.existsSync(path.join(ROOT, rel)), rel + ' still exists, so doctrine line budgets and heading lists are still pinned as prose')
-  }
-})
 
 test('AC-20261024-04-6: ac-drift (which scans every done spec) exits 0 once every orphaned criterion carries a retired tag naming this spec', () => {
   const r = runNode('scripts/ac-drift.js', ['--root', ROOT])

@@ -5,9 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { ROOT, tmpdir, runNode, runBash } = require('../helpers')
 
-// specs/20260823/06-prose-debt-pruning.md: the host rules' § Gotchas section
-// accreted 23 entries in 23 days with nothing pruning them — two of them citing removed
-// machinery (`suite-baseline.js`, `.claude/suite-baseline.json`). `prose-cap.js` converts
+// specs/20260823/06-prose-debt-pruning.md: `prose-cap.js` converts
 // "should we prune?" into arithmetic: a hard entry cap on
 // one named markdown section, checked by count alone (D1/D2). AC-20260823-06-3 below is the
 // standing enforcement — it runs the script against THIS repo's real rules file and is

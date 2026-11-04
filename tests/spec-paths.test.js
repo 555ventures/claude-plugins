@@ -8,91 +8,8 @@ const { execFileSync } = require('node:child_process')
 const BIN = path.join(SPEC, 'bin/spec-paths')
 const run = (...a) => execFileSync('bash', [BIN, ...a], { encoding: 'utf8' })
 
-// specs/20260805/01-review-scope-reconciliation.md File Plan (spec/bin/spec-paths row): the new
-// scope-reconcile.js script needs a spec-paths key like every other bundled script — a missing
-// key breaks the command that resolves it silently (§ Risk Tiers, spec-paths).
+// Every bundled script needs a spec-paths key — a wrong key breaks its caller silently (§ Risk Tiers, spec-paths).
 
-// AC-20260805-03: specs/20260805/03-done-unobserved-observation.md's File Plan adds
-// spec/scripts/observe-ci.js to the bundle — like every other bundled script it needs a
-// spec-paths key, or /spec:status and /spec:review's D7 observe-ci invocation resolve nothing
-// (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently").
-
-// AC-20260817-07-15: specs/20260817/07-promise-sweep-leg.md D5 adds spec/scripts/promise-sweep.js
-// to the bundle (the Decisions-carrier leg run at plan lock and in every review scope) — like
-// every other bundled script it needs a spec-paths key, or plan.md's Lock checklist invocation
-// and review-legs.js's own resolution find nothing.
-
-// AC-20260819-02-10: specs/20260819/02-mutation-replay.md D14 added the two replay keys to the
-// bundle; specs/20261024/05-replay-retired.md D1 retires them. This
-// was a recurrence of the known spec-paths additive-collision class (specs/20260814/01-ac-matrix-script.md):
-// the key list below is updated in place, never a parallel exhaustive pin.
-
-// AC-20260821-01-11: specs/20260821/01-red-check.md D11 adds spec/scripts/red-check.js to the
-// bundle (build.md's Phase 1 invocation, D8) — like every other bundled script it needs a
-// spec-paths key, or build.md's `node "$(spec-paths red-check)"` line resolves nothing (same
-// additive-collision class as AC-20260819-02-10 above).
-
-// specs/20260820/07-review-driver.md File Plan (spec/bin/spec-paths row): the new
-// spec-review-driver.js script needs a spec-paths key like every other bundled script — a
-// missing key breaks /spec:review's driver invocation silently (§ Risk Tiers, spec-paths).
-// This row carries no AC — it is a key-resolution addition following the pattern above.
-
-// AC-20260822-02-13: specs/20260822/02-init-generation-script.md D11 adds spec/scripts/init-gen.js
-// to the bundle (spec/commands/init.md's sole invocation of the new generate/probe script) — like
-// every other bundled script it needs a spec-paths key, or init.md resolves nothing (same
-// additive-collision class as AC-20260819-02-10 above; pre-image: `spec-paths init-gen` exits 1
-// on the unknown key).
-
-// AC-20260823-01-16: specs/20260823/01-release-legs.md D1/D10 adds spec/scripts/release-legs.js
-// to the bundle (a new `release-legs` key) and retires `feedback-template` (its consumer,
-// /intake, died in v7) — like every other bundled-script addition it needs a spec-paths key or
-// release.md's stage/append/record invocations resolve nothing, and like every other retired
-// key it must fail loudly rather than keep quietly resolving a deleted template (same
-// additive-collision class as AC-20260819-02-10 above, and the first that also retires a key).
-
-// specs/20260823/08-derived-session-queue.md D12 (spec/bin/spec-paths row): the new
-// spec-queue.js script needs a spec-paths key like every other bundled script — a missing key
-// breaks /spec:queue's invocation silently (the D8 SessionStart hook and its `hello` delegation
-// were removed) (§ Risk Tiers, spec-paths). D12 marks this row [no-ac]: it is enforced fail-closed by
-// this existing suite guard (and by tests/consistency/{plugin-version,entrypoints,red-fixture-
-// coverage}.test.js), so it carries no AC-ID of its own (same additive-collision class as
-// AC-20260819-02-10 above).
-
-// specs/20260824/05-design-doctrine-cut.md D5: dc-extract.js and fidelity-check.js (and their
-// spec-paths keys) are deleted with the source-grep fidelity gate they served — a still-
-// resolving key here would mean the retirement never actually landed. `dc-extract` is removed
-// from this exhaustive resolve-all pin (the refusal itself is pinned behaviorally by
-// AC-20260824-05-4 in tests/consistency/design-doctrine.test.js); `fidelity-check` was never a
-// member of this list.
-
-// specs/20260825/04-genesis-driver.md D13 (spec/bin/spec-paths row): `genesis-driver` joins the
-// list below for the same fail-closed reason — /spec:genesis resolves the driver it loops on
-// through this key, and a missing key strands the one greenfield entry point silently.
-//
-// specs/20260825/03-genesis-currency-executed.md D9 (spec/bin/spec-paths row): the new
-// registry-check.js script needs a spec-paths key like every other bundled script — a missing key
-// breaks all three genesis commands' D7 menu step (`node "$(spec-paths registry-check)" --menu
-// <file> --write`) silently (§ Risk Tiers, spec-paths). This row carries no AC of its own — like
-// the spec-review-driver.js and spec-queue.js additions above, it is enforced fail-closed by this
-// existing suite guard: the key list below is updated in place, never a parallel exhaustive pin.
-
-// AC-20260901-01-16: specs/20260901/01-build-driver.md D10 adds spec/scripts/spec-build-driver.js
-// to the bundle (a new `build-driver` key) — like every other bundled script it needs a
-// spec-paths key, or /spec:build's driver invocation resolves nothing (§ Risk Tiers, spec-paths:
-// "a wrong key breaks commands silently"; same additive-collision class as AC-20260819-02-10
-// above).
-
-// AC-20260901-07-15: specs/20260901/07-escape-class-contract.md D10 adds spec/scripts/escape-row.js
-// to the bundle (a new `escape-row` key) — like every other bundled script it needs a spec-paths
-// key, or the commit command's `node "$(spec-paths escape-row)" --append` invocation resolves
-// nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands silently"; same
-// additive-collision class as AC-20260819-02-10 above).
-
-// AC-20260926-03-8: specs/20260926/03-gates-per-workspace.md D1/D7 adds
-// spec/scripts/workspace-scan.js to the bundle (a new `workspace-scan` key) — like every other
-// bundled script it needs a spec-paths key, or /spec:enforce's Phase 1 `workspace-scan --root .
-// --json` invocation resolves nothing (§ Risk Tiers, spec-paths: "a wrong key breaks commands
-// silently"; same additive-collision class as AC-20260819-02-10 above).
 test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/workspace-scan.js, an existing file', () => {
   const fs = require('node:fs')
   const workspaceScanPath = run('workspace-scan').trim()
@@ -203,7 +120,7 @@ test('AC-20260904-02-12: spec-paths worktree-include resolves to spec/scripts/wo
   const worktreeIncludePath = run('worktree-include').trim()
   assert.strictEqual(worktreeIncludePath, path.join(SPEC, 'scripts/worktree-include.sh'),
     'D5: `spec-paths worktree-include` must resolve to spec/scripts/worktree-include.sh — a wrong or ' +
-    'missing key breaks replay.js\'s owner resolution and any manual invocation silently (§ Risk Tiers, ' +
+    'missing key breaks every caller that resolves it silently (§ Risk Tiers, ' +
     'spec-paths: "a wrong key breaks commands silently")')
   assert.ok(fs.existsSync(worktreeIncludePath),
     'the resolved worktree-include.sh path must actually exist on disk: ' + worktreeIncludePath)
@@ -320,7 +237,7 @@ test('shared-for: every mapped section name still exists as a core.md or design.
 // in place): `sketch` joins the fail-open group below (its SECTIONS arm is deleted) and drops
 // out of the strict-subset loop that used to check it; the 12 remaining scoped commands' section
 // lists are unchanged from the pre-image.
-test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
+test('shared-for: scoped output carries its sections (AC-20260926-01-6; AC-20260914-02-15: genesis keeps Host Grounding, Design Canon and Design Authoring Contracts) and is smaller than the full doc, and the retired stage/sketch keys fall open to it (incl. AC-20260823-01-19: release keeps Release Stage/Runtime Verification and drops Feedback Loop; AC-20260912-03-13: design, build and review print the fail-open whole doctrine)', () => {
   const full = run('shared-for', 'no-such-command')
   for (const cmd of ['plan', 'release', 'enforce', 'doctor', 'queue', 'fix']) {
     const out = run('shared-for', cmd)
@@ -353,9 +270,9 @@ test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is s
   }
   // specs/20260827/02-genesis-explore-state.md D10: the retired explore command's own
   // shared-for entry is deleted and `genesis` gains Design Canon instead (the driver runs the
-  // taste funnel end-to-end from the entry point). Retargeted to `genesis` in place, tagged
-  // AC-20260827-02-8, never weakened — a call scoped to the retired command falls back to the
-  // FULL doctrine (AC-20260827-02-8's own test in genesis-doctrine.test.js pins that).
+  // taste funnel end-to-end from the entry point).
+  assert.match(run('shared-for', 'genesis'), /## Host Grounding/,
+    'AC-20260825-01-6: /spec:genesis must be served § Host Grounding — shared-for silently drops an unmatched section, so the greenfield interview would run without it')
   assert.match(run('shared-for', 'genesis'), /## Design Canon/,
     'AC-20260827-02-8/D10: /spec:genesis must now be served § Design Canon directly — its absence means the entry point lost the doctrine governing the taste funnel it now runs end-to-end')
   // specs/20260827/03-genesis-design-state.md D7: the design lock's own command is deleted too
@@ -392,57 +309,6 @@ test('shared-for: scoped output carries its sections (AC-20260926-01-6) and is s
     // text updated in place, the assertion itself unchanged (this test only checks the section
     // is served, never the render's own literal shape).
     'D12: /spec:queue must be served § Console Output Style — the list\'s numbered-pending render and its ⏳ gate marker must follow the shared narration doctrine')
-})
-
-test('AC-20260819-02-10 / AC-20261024-05-3: spec-paths replay and spec-paths of the retired corpus key exit non-zero with a usage line that names neither key', () => {
-  const { spawnSync } = require('node:child_process')
-  const retiredKeys = ['replay', ['replay', 'corpus'].join('-')]
-  for (const key of retiredKeys) {
-    const r = spawnSync('bash', [BIN, key], { encoding: 'utf8' })
-    assert.notStrictEqual(r.status, 0,
-      '`spec-paths ' + key + '` must exit non-zero like any unknown key — a zero exit (or a printed path) means the retired key still resolves and the command surface it served is not gone: ' + r.stdout + r.stderr)
-    assert.match(r.stderr, /^usage: spec-paths /m,
-      '`spec-paths ' + key + '` must print the usage line to stderr so the caller learns the key is unknown: ' + r.stderr)
-    assert.doesNotMatch(r.stderr, new RegExp('(^|[|\\[ ])(' + retiredKeys.join('|') + ')($|[|\\] ])'),
-      'the usage line must not name either retired replay key — a documented key that resolves nothing misleads the next reader: ' + r.stderr)
-  }
-})
-
-// AC-20260824-02-1: specs/20260824/02-design-stage-on-render-gate.md D2 retires
-// spec/scripts/spec-design-driver.js, spec/workflows/wf-design.js, and
-// spec/scripts/skeletons-check.js along with their tests — the driver's 561 lines sequenced
-// extract/skeleton/workflow/iterate artifacts, all retired once the design stage runs on the
-// render gate (D1). Like AC-20260823-01-16's `feedback-template` retirement, a spec-paths
-// key that still resolves after its script is deleted "breaks commands silently" (§ Risk Tiers,
-// spec-paths) in the other direction: a caller would get a path to a file that is not there.
-// Both halves are pinned together — the keys must refuse, and the files must be gone.
-test('AC-20260824-02-1: spec-paths design-driver, wf-design, and skeletons-check are refused now that D2 retires the keys, and their scripts no longer exist on disk', () => {
-  const fs = require('node:fs')
-  for (const key of ['design-driver', 'wf-design', 'skeletons-check']) {
-    let threw = false
-    let output = ''
-    try {
-      run(key)
-    } catch (e) {
-      threw = true
-      output = String(e.stdout || '') + String(e.stderr || '')
-    }
-    assert.ok(threw,
-      'D2: `spec-paths ' + key + '` must exit non-zero now that the key is retired (its script ' +
-      'is deleted) — a still-resolving key means a caller gets a path to a file that no longer ' +
-      'exists instead of a discoverable error')
-    assert.match(output, /usage: spec-paths/,
-      '`spec-paths ' + key + '` must print the usage line on refusal, the same way any other ' +
-      'unknown key does: ' + output)
-  }
-
-  for (const rel of ['scripts/spec-design-driver.js', 'workflows/wf-design.js', 'scripts/skeletons-check.js']) {
-    const p = path.join(SPEC, rel)
-    assert.ok(!fs.existsSync(p),
-      'D2: ' + rel + ' must be deleted with the design-driver state machine it belonged to — its ' +
-      'continued presence means the retired mechanism is still reachable even though its ' +
-      'spec-paths key is gone: ' + p)
-  }
 })
 
 test('AC-20260821-01-11: spec-paths red-check resolves to spec/scripts/red-check.js, an existing path', () => {
@@ -517,52 +383,6 @@ test('AC-20260902-07-15: spec-paths mocks-driver resolves to spec/scripts/mocks-
   assert.ok(fs.existsSync(mocksDriverPath), 'the resolved mocks-driver.js path must actually exist on disk: ' + mocksDriverPath)
 })
 
-// specs/20260902/07-mocks-command-driver.md D16, AC-20260902-07-15: the mocks command's own
-// shared-for scope — core sections (Host Grounding, Model Placement, Decisions, Question Style,
-// Console Output Style, MCP Policy) plus the design sections (Design Canon, Design Atlas), never
-// the render gate doctrine (mocks authors screens, it never binds a spec against them).
-// AC-20260905-04-1: the hub's own resolution pin — the retired key must behave exactly like any
-// other unknown key: exit 1, the generic usage line on stderr, and that usage line must itself
-// list no retired key.
-test('AC-20260905-04-1: spec-paths design-hub exits 1 with the generic usage line on stderr, which names no "design-hub" key', () => {
-  const { spawnSync } = require('node:child_process')
-  const r = spawnSync('bash', [BIN, 'design-hub'], { encoding: 'utf8' })
-  assert.strictEqual(r.status, 1, 'a retired key must exit 1 exactly like any other unrecognized key: ' + JSON.stringify(r))
-  assert.strictEqual(r.stdout, '', 'a refused key must print nothing on stdout — a caller resolving a path must never read a real-looking value for a deleted script: ' + JSON.stringify(r.stdout))
-  assert.match(r.stderr, /^usage: spec-paths /, 'the refusal must print the generic usage line on stderr: ' + JSON.stringify(r.stderr))
-  assert.doesNotMatch(r.stderr, /design-hub/, 'the usage line must not list "design-hub" among the valid keys — the hub script and its key are both gone: ' + JSON.stringify(r.stderr))
-})
-
-// specs/20260914/03-the-html-atlas-is-retired.md D2/AC-20260914-03-1: the eight retired keys
-// (design-atlas, components-check, and the six render-* / design-ac-reconcile keys spec
-// 20260914/02 D14 already dropped) must each behave exactly like design-hub above — exit 1, the
-// generic usage line on stderr, naming none of the eight. design-atlas and components-check
-// still resolve to real paths today (TDD red); the other six are already refused by the
-// pre-image script (D14 landed first), so this pin also proves the sweep does not regress them.
-test('AC-20260914-03-1: spec-paths design-atlas, components-check, render-gate, render-capture, render-compare, render-inventory, render-rules, and design-ac-reconcile all exit 1 with the generic usage line on stderr, and that usage line names none of the eight retired keys', () => {
-  const { spawnSync } = require('node:child_process')
-  const RETIRED_KEYS = ['design-atlas', 'components-check', 'render-gate', 'render-capture',
-    'render-compare', 'render-inventory', 'render-rules', 'design-ac-reconcile']
-  for (const key of RETIRED_KEYS) {
-    const r = spawnSync('bash', [BIN, key], { encoding: 'utf8' })
-    assert.strictEqual(r.status, 1,
-      `D1/D2: \`spec-paths ${key}\` must exit 1 now that the eight retired keys are gone — a ` +
-      `still-resolving key means the script that key names is still reachable: ${JSON.stringify(r)}`)
-    assert.strictEqual(r.stdout, '',
-      `D2: a refused key must print nothing on stdout — a caller resolving a path must never ` +
-      `read a real-looking value for a deleted script: ${JSON.stringify(r.stdout)}`)
-    assert.match(r.stderr, /^usage: spec-paths /,
-      `D2: the refusal must print the generic usage line on stderr, exactly like any other ` +
-      `unrecognized key: ${JSON.stringify(r.stderr)}`)
-  }
-  const { stderr } = spawnSync('bash', [BIN, 'no-such-key-xyz'], { encoding: 'utf8' })
-  for (const key of RETIRED_KEYS) {
-    assert.doesNotMatch(stderr, new RegExp('(^|[|[])' + key + '($|[|\\]])'),
-      `D2: the usage line must not list "${key}" among the valid keys — the script and its key ` +
-      `are both gone: ${JSON.stringify(stderr)}`)
-  }
-})
-
 // specs/20260914/01-the-mock-contract-and-the-driver.md D14, AC-20260914-01-18: `/spec:mocks`
 // no longer builds or reads the HTML atlas (the mock app is its own product), so `shared-for
 // mocks` drops § Design Atlas from the section set the old AC-20260902-07-15 pin asserted —
@@ -632,23 +452,6 @@ test('shared-for: every scoped command serves § Session Execution (AC-20260926-
   for (const cmd of cmds) {
     assert.match(run('shared-for', cmd), /## Session Execution/,
       `/spec:${cmd} must load § Session Execution — without it the session has no edit-don't-rewrite / no-extras / batch-calls contract`)
-  }
-})
-
-test('AC-20260926-01-5: spec-paths shared-for sketch and spec-paths shared-for run + design (the retired design-only-delta key) both fall open exactly like an unknown command — stdout begins with core.md\'s frontmatter and contains § Design Canon', () => {
-  const full = run('shared-for', 'no-such-command')
-  for (const cmd of ['sketch', RUN_DESIGN_KEY]) {
-    const out = run('shared-for', cmd)
-    assert.strictEqual(out, full,
-      'AC-20260926-01-5/D1: `spec-paths shared-for ' + cmd + '` must print byte-identical output to ' +
-      'the unknown-command fallback once its own SECTIONS arm is deleted — got ' + out.length +
-      ' bytes vs the fallback\'s ' + full.length)
-    assert.match(out, /^---\n/,
-      'AC-20260926-01-5: the fall-open output must begin with core.md\'s frontmatter fence, exactly ' +
-      'like the unknown-command case')
-    assert.match(out, /## Design Canon/,
-      'AC-20260926-01-5: the fall-open output must still contain § Design Canon (design.md is cat\'d ' +
-      'in full behind core.md in the fallback arm)')
   }
 })
 

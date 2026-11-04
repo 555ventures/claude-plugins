@@ -52,28 +52,6 @@ const SDK_SCOPE = '@anthropic-ai'
 const SDK_NAME = 'claude-agent-sdk'
 const SDK_SPECIFIER = SDK_SCOPE + '/' + SDK_NAME
 
-test('AC-20260820-01-3: no tracked file outside specs/** references the ' + SDK_SPECIFIER + ' package', () => {
-  const hits = gitGrepFiles(SDK_SPECIFIER)
-  const live = hits.filter((f) => !f.startsWith('specs/'))
-  assert.deepStrictEqual(live, [],
-    'a tracked reference to ' + SDK_SPECIFIER + ' outside specs/** means the dead daemon\'s ' +
-    'dependency has resurfaced — or a fresh one was silently added — now that D4 has deleted ' +
-    'every carve-out that used to sanction it: every non-history hit is a re-import the ' +
-    'dependency-free invariant exists to prevent: ' + JSON.stringify(live))
-})
-
-test('AC-20260820-01-4: the repo root contains no autopilot directory', () => {
-  const tracked = execFileSync('git', ['-C', ROOT, 'ls-files', '--', 'autopilot'], { encoding: 'utf8' })
-    .split('\n').filter(Boolean)
-  assert.deepStrictEqual(tracked, [],
-    'a tracked path under autopilot/ means the daemon was archived rather than deleted — D1 ' +
-    'explicitly rejects moving it to attic/, since git history is the intended archive and an ' +
-    'in-repo copy keeps every SDK carve-out alive: ' + JSON.stringify(tracked))
-  assert.strictEqual(fs.existsSync(path.join(ROOT, 'autopilot')), false,
-    'an autopilot/ directory is still present at the repo root — listing the root must show it ' +
-    'gone entirely (not merely untracked, e.g. a stray autopilot/node_modules leftover), or a ' +
-    'dead copy keeps inviting resurrection')
-})
 
 test('no AC (generalization of D4, ruled in by JJ 2026-08-20 after a consultation brief): no tracked source declares or imports any non-builtin package', () => {
   // `git ls-files` reports the INDEX, which can name a path a same-run deletion has already

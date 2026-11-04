@@ -70,12 +70,7 @@ const sp = (status, extra) => 'date: 2026-07-10\nstatus: ' + status + (extra ? '
 // AC-20260805-01-7 (sanctioned pin exception, green pre-change): --json output must stay
 // byte-identical after parseFilePlan/splitPlanCell move into spec/scripts/lib/file-plan.js —
 // the lib extraction is invisible at the CLI.
-// AC-20260805-03-7 / AC-20260807-01-11 (sanctioned pin exception, green pre-change): every test
-// in this file already exercises a host with no `.claude/spec-runs.jsonl` (the `host()` fixture
-// never writes one) — status/--next/--brief derivation must stay unchanged when the ledger is
-// absent, across observe-ci.js's spec 03 introduction AND spec 20260807/01's D2/D3 slim
-// (identified by name per specs/20260807/01-observation-red-alarm.md's File Plan, not line
-// number — this is the test the AC retags).
+// AC-20260805-03-7 / AC-20260807-01-11: status derivation holds with no .claude/spec-runs.jsonl.
 test('derives unplanned / in-flight / done per doctor check 14', () => {
   const dir = host({
     briefs: BRIEFS,
@@ -869,43 +864,6 @@ test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, bri
   const orphans = out.anomalies.filter(a => a.kind === 'orphan-stamp')
   assert.strictEqual(orphans.length, 1, 'only the genuine dangling stamp (brief: 07) remains')
   assert.match(orphans[0].detail, /04-typo\.md/)
-})
-
-// D1: the anomaly fold and ⚠️ Anomalies section are deleted from the default render — exactly
-// four blocks (Roadmap, Next, up to three decide lines, one footer).
-test('AC-20260903-05-1 / AC-20260903-05-3: default render is Roadmap then Next then the footer, with no anomaly section anywhere', () => {
-  const dir = host({
-    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
-    specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 01' },
-    overviewRow: '| 01 | auth | P0 | — | ✅ done |',
-  })
-  const r = runNode(SCRIPT, ['--root', dir])
-  assert.strictEqual(r.status, 0, r.stderr)
-  const lines = r.stdout.split('\n')
-  const idxNext = lines.findIndex((l) => l.includes('🎯 Next'))
-  assert.ok(lines.findIndex((l) => l.includes('🗺️ Roadmap')) < idxNext, 'D1: Roadmap must render before Next: ' + r.stdout)
-  assert.doesNotMatch(r.stdout, /[Aa]nomal/, 'D1: no ⚠️ Anomalies section or anomaly-count language in the default render')
-  const nonEmpty = lines.filter((l) => l.trim() !== '')
-  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing else open · 1 hygiene finding (/spec:doctor)',
-    'D4: the footer is the LAST line — zero-wait clause reworded to "nothing else open"')
-})
-
-// D1/D3: the old anomaly-fold (a ⚠️ tag trailing the spec's own Next line) is deleted — D1's
-// own list of forbidden default-render content names "no ⚠️ tags on Next lines" explicitly.
-test('AC-20260903-05-1: a hygiene anomaly never tags the Next line and never prints a bracketed line by default', () => {
-  const dir = host({
-    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
-    specs: { '20260701/01-x.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 07' },
-  })
-  const r = runNode(SCRIPT, ['--root', dir])
-  assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /^\/spec:run @specs\/20260701\/01-x\.md$/m,
-    'D1: the Next line must be exactly the bare command — no trailing ⚠️ tag, even though the spec carries an orphan-stamp finding')
-  assert.doesNotMatch(r.stdout, /⚠️/, 'D1: no ⚠️ glyph anywhere in the default render when the only anomaly is hygiene-kind (no decide anomaly exists on this host)')
-  assert.doesNotMatch(r.stdout, /\[orphan-stamp\]/, 'D1: no bracketed hygiene line in the default render')
-  const nonEmpty = r.stdout.split('\n').filter((l) => l.trim() !== '')
-  assert.strictEqual(nonEmpty[nonEmpty.length - 1], '🟢 next is ready · nothing else open · 1 hygiene finding (/spec:doctor)',
-    'D4: the orphan-stamp is folded into the footer\'s hygiene clause — zero-wait clause reworded to "nothing else open"')
 })
 
 // AC-20260909-08-8 (sanctioned green pre-change, D5): these five frozen surfaces are byte-for-

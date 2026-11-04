@@ -242,12 +242,6 @@ test('AC-20260810-09-5: spec-paths citations-check prints the checker script\'s 
     'check 20 silently: got "' + printed + '" (stderr: ' + (r.stderr || '') + ')')
 })
 
-test('AC-20260810-09-5: doctor.md documents a numbered advisory check invoking citations-check (check 15 after the v7 renumber)', () => {
-  const doctor = read('spec/commands/doctor.md')
-  assert.match(doctor, /15\.\s*\*\*[^*]*\*\*[\s\S]{0,400}citations-check/,
-    'doctor.md must contain a numbered check that names citations-check — without it a ' +
-    'fresh /spec:doctor run never invokes the checker at all')
-})
 
 // ---------------------------------------------------------------------------
 // AC-20260810-09-6

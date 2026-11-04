@@ -33,20 +33,6 @@ test('AC-20260814-02-4: branch-for prints spec/<stem> for a spec path, and exits
     'the usage error must name the subcommand so the remedy is discoverable: ' + r2.stderr)
 })
 
-test('AC-20260814-02-5: enter-worktree.md and doctor.md check 11 derive the build branch by invoking branch-for, not by restating the spec/<stem> rule freehand', () => {
-  const enterWorktree = read('git/commands/enter-worktree.md')
-  const doctorMd = read('spec/commands/doctor.md')
-
-  assert.match(enterWorktree, /branch-for/,
-    'enter-worktree.md step 1 must derive {source} via `{mergeBack} branch-for {spec path}` ' +
-    '(D2) — a free-standing restatement of "spec/<slug>" duplicates the rule this script now owns')
-
-  const check11 = doctorMd.match(/11\.\s+\*\*[^*]*\*\*[\s\S]*?(?=\n12\.\s+\*\*)/)
-  assert.ok(check11, 'doctor.md must still have a numbered check 11 — without it the stale-branch sub-check is gone')
-  assert.match(check11[0], /branch-for/,
-    'doctor.md check 11 must derive the build branch via `branch-for` (D2) — a free-standing ' +
-    '"derived as spec/<stem>" restatement duplicates the rule the script now owns: ' + check11[0])
-})
 
 test('flag with missing value dies instead of hanging', () => {
   const res = runBash(SCRIPT, ['cleanup', '--source'], { timeout: 5000 })

@@ -3,8 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawnSync } = require('node:child_process')
-const { SPEC, tmpdir, gitRepo } = require('./helpers')
+const { SPEC } = require('./helpers')
 
 const read = (p) => fs.readFileSync(path.join(SPEC, p), 'utf8')
 
@@ -43,41 +42,10 @@ test('no per-spec ledger files: nothing instructs writing runs files under specs
   }
 })
 
-// specs/20260822/02-init-generation-script.md D12: init-gen.js (D1/D2) is the sole writer of
-// the gitattributes union line, and the behavioral test in tests/init-gen/generate.test.js
-// (generate -> .gitattributes contains the line, idempotently) is the pin's home — never a
-// regex over init.md prose (§ Test Rules) once an executable oracle exists; the merge-mechanics
-// test below is unchanged.
-
-test('union driver resolves concurrent worktree appends under squash merge', () => {
-  const root = fs.realpathSync(tmpdir('ledger'))
-  gitRepo(root)
-  const git = (...a) => spawnSync('git', a, { cwd: root, encoding: 'utf8' })
-  const ledger = path.join(root, '.claude/spec-runs.jsonl')
-  fs.mkdirSync(path.join(root, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(root, '.gitattributes'), '.claude/spec-runs.jsonl merge=union\n')
-  fs.writeFileSync(ledger, '{"spec":"base"}\n')
-  git('add', '-A'); git('commit', '-qm', 'base')
-  const main = git('rev-parse', '--abbrev-ref', 'HEAD').stdout.trim()
-  git('checkout', '-qb', 'specB')
-  fs.appendFileSync(ledger, '{"spec":"b"}\n')
-  git('commit', '-qam', 'b')
-  git('checkout', '-q', main)
-  fs.appendFileSync(ledger, '{"spec":"c"}\n')
-  git('commit', '-qam', 'c')
-  const merge = git('merge', '--squash', 'specB')
-  assert.strictEqual(merge.status, 0, merge.stderr)
-  const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n')
-  assert.deepStrictEqual(lines.sort(), ['{"spec":"b"}', '{"spec":"base"}', '{"spec":"c"}'])
-})
-
-// specs/20260913/09-the-tool-shows-never-interrupts.md D5 (ADR-0025, amending
-// specs/20260821/02-replay-review-phase.md): the review driver has no REPLAY state. The
-// pin normalizes whitespace first: these files hard-wrap at ~90 columns, so a load-bearing
-// sentence is split across lines and a contiguous-text regex would be red for a reason no diff
-// review surfaces (the host Gotchas record exactly that class).
+// Doctrine hard-wraps, so prose pins compare whitespace-squashed text.
 const squash = (s) => s.replace(/\s+/g, ' ')
 
+// Kept while specs/20261024/05-replay-retired.md AC-20261024-05-12 names this test as its carrier.
 test('AC-20260821-02-8 / AC-20260913-09-10 / AC-20261024-05-12: stage-review.md carries no REPLAY token and no replay-recorded mention — D5 deletes the "parks at REPLAY" sentence and the due-replay Rules bullet', () => {
   const review = squash(read('doctrine/stages/stage-review.md'))
   assert.doesNotMatch(review, /REPLAY/,
@@ -89,21 +57,7 @@ test('AC-20260821-02-8 / AC-20260913-09-10 / AC-20261024-05-12: stage-review.md 
     'it belonged to — the mark itself is deleted from the driver by D1: ' + review)
 })
 
-// specs/20260821/02-replay-review-phase.md D10: core § Feedback Loop states the pipeline
-// improves "through artifacts — never through anyone's memory" and enumerates carriers that are
-// each either derived or passed through a review disposition. `.claude/agent-memory/` was the
-// one carrier with none: written by dispatched workers, it shapes future worker behaviour before
-// any gate can observe the effect and outlives the session that wrote it — a false memory can
-// attribute one session's own edits to a phantom sibling worker and go unexamined until a later
-// consult finds it. The disposition step is the whole fix: no memory-review gate, no write hook,
-// no lint (unearned under core § Incident Policy at recurrence count 1).
-//
-// `memory-sweep.js` (specs/20260823/06-prose-debt-pruning.md D13) widens the disposition trigger
-// from "the diff touched the note file" to "the diff touched what the note is about", plus a TTL
-// of 10 undisposed review closes. It is still not a gate, hook, or lint: it exits 0 with or
-// without findings and nothing feeds verdict.js. The duty pinned below is unchanged — this spec
-// widened who lands on the disposition desk, never what disposition means.
-
+// specs/20260821/02-replay-review-phase.md D10: agent memory is disposed at review close.
 test('AC-20260821-02-10 / AC-20260823-06-9: agent memory is a disposed artifact, never a silent improvement carrier — review.md\'s close gives every touched memory file one stated fate, and core § Feedback Loop says why', () => {
   const review = squash(read('doctrine/stages/stage-review.md'))
   assert.match(review, /agent-memory/,

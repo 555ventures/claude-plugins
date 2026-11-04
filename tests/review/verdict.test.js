@@ -595,8 +595,8 @@ test('AC-20260816-01-12 / AC-20260820-03-12 / AC-20260820-06-13 (retag: tags the
   const r = runNode(SCRIPT, ['--manifest', manifest, '--workflow', workflow])
   assert.match(r.stdout.split('\n')[0], /^CLEAN/,
     'a gate leg that went green by sanctioned-baseline subtraction is still exit:0 — derive()/legIsRed reads ' +
-    'only the exit code, never the observed object\'s fields, so a review that closed via suite-baseline.js ' +
-    '--gate must still reach a CLEAN-family verdict, not be misread as red because its observed object names ' +
+    'only the exit code, never the observed object\'s fields, so a review that closed on a ' +
+    'baselined gate must still reach a CLEAN-family verdict, not be misread as red because its observed object names ' +
     '21 sanctioned reds: ' + r.stdout + ' / ' + r.stderr)
   assert.strictEqual(r.status, 0, 'a CLEAN-family word here must exit 0: ' + r.stderr)
 

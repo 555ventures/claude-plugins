@@ -9,34 +9,6 @@ const { section, phrase } = require('../helpers')
 const RETIRED = ['regexes over prose', 'regex pin', 'regex-pin', 'by regex']
 const whole = (rel) => section(rel, /^/, /$(?!)/)
 
-test('AC-20261101-04-3: no surface that states the pin rule carries the retired blanket-ban phrases, and core keeps its Incident Policy pointer', () => {
-  const surfaces = [
-    ['spec/doctrine/core.md', section('spec/doctrine/core.md', /^## Doctrine Authoring$/, /^## /)],
-    ['.claude/rules/spec-pipeline.md', section('.claude/rules/spec-pipeline.md', /^## Test Rules$/, /^## /)],
-    ...['.claude/rules/conventions/tests.md', '.claude/agents/plugin-tests.md', '.claude/agents/doctrine-author.md',
-      '.claude/skills/spec-verify/SKILL.md', '.claude/commands/doctrine-review.md', 'README.md',
-      'docs/canonical/doctrine-governance.md'].map((f) => [f, whole(f)]),
-  ]
-  for (const [name, text] of surfaces) {
-    for (const lit of RETIRED) {
-      assert.doesNotMatch(text, phrase(lit, 'i'), name + ' still carries "' + lit + '" — the blanket ban contradicts the narrowed rule in core § Doctrine Authoring')
-    }
-  }
-  assert.match(surfaces[0][1], phrase('§ Incident Policy'), 'core § Doctrine Authoring must point a rule that matters at a script')
-})
-
-test('AC-20261101-04-4: plugin-tests.md and conventions/tests.md name the prose-pin and exec exemplars, and plugin-tests.md names section and phrase', () => {
-  const agent = whole('.claude/agents/plugin-tests.md')
-  const conv = whole('.claude/rules/conventions/tests.md')
-  for (const [name, text] of [['plugin-tests.md', agent], ['conventions/tests.md', conv]]) {
-    assert.ok(text.includes('tests/consistency/dead-stops.test.js'), name + ' must name the prose-pin exemplar, or authors copy the wording-pin file')
-    assert.ok(text.includes('tests/merge-back.test.js'), name + ' must keep the exec-a-script exemplar')
-  }
-  const constraints = section('.claude/agents/plugin-tests.md', /^## Critical Constraints$/, /^## /)
-  assert.match(constraints, /\bsection\b/, 'the mode bullet must name section from tests/helpers.js')
-  assert.match(constraints, /\bphrase\b/, 'the mode bullet must name phrase from tests/helpers.js')
-  assert.ok(!agent.includes('tests/doctrine-review.test.js'), 'plugin-tests.md must stop prescribing the wording-pin file as exemplar')
-})
 
 // specs/20261102/02-a-delegated-driver-stops-on-disk.md D6/D7/D8 — the delegated-stop contract is
 // named once in core, and the command surfaces that depend on it keep their references.
@@ -107,4 +79,14 @@ test('fanout.md (AC-20261103-06-24) names the driver key, the three flags and no
   for (const sec of ['Host Grounding', 'Pipeline Entry', 'State Machine', 'Model Placement', 'Decisions', 'Delegated Stops', 'Question Style', 'Console Output Style', 'On-Disk Handoff', 'Session Execution']) {
     assert.ok(line.includes(sec), 'the fanout section list must serve ' + sec + ', or the session never reads it')
   }
+})
+
+// Heading and chain references moved from the retired-wording suites; each is cited elsewhere in spec/.
+test('AC-20260926-01-8 / AC-20261008-01-6 / AC-20260930-01-7 / AC-20260914-02-14: design.md keeps Design Canon, Design Authoring Contracts and Workflows Encode Shape, genesis.md keeps Genesis: Brief State, and the genesis command names the mocks-genesis-enforce chain', () => {
+  for (const heading of [/^## Design Canon\b/, /^## Design Authoring Contracts\b/, /^## Workflows Encode Shape, Not Judgment\b/]) {
+    section('spec/doctrine/design.md', heading, /^## /)
+  }
+  section('spec/doctrine/genesis.md', /^## Genesis: Brief State$/, /^## /)
+  assert.match(whole('spec/commands/genesis.md'), phrase('/spec:mocks → /spec:genesis → /spec:enforce'),
+    'the genesis command must name the chain, or a visual archetype starts genesis without its mocks')
 })

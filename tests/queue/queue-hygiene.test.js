@@ -184,15 +184,6 @@ test('AC-20261013-02-7: spec-queue groom on one fresh ungated prompt citing no s
     'D4: a clean queue must print only the one-line verdict, never empty bucket headers: ' + r.stdout + r.stderr)
 })
 
-test('AC-20261013-02-8: the queue command doctrine names groom in its argument-hint and subcommand list, says never tick in Render, and stays within 55 lines', () => {
-  const file = path.join(__dirname, '../../spec/commands/queue.md')
-  assert.ok(fs.existsSync(file), 'spec/commands/queue.md must exist')
-  const src = read('spec/commands/queue.md')
-  const hint = /^argument-hint:.*$/m.exec(src)
-  assert.ok(hint && /groom/.test(hint[0]), 'D5: the frontmatter argument-hint must list groom, or the session never learns the subcommand exists: ' + (hint && hint[0]))
-  assert.match(src, /^- `groom`/m, 'D5: the subcommand list needs a groom line: ' + src)
-  assert.ok(src.split('\n').length - (src.endsWith('\n') ? 1 : 0) <= 55, 'D5: the file must stay at or under the 55-line read-load ceiling: ' + src.split('\n').length)
-})
 
 test('groom proposes from agent evidence: one haiku checker per flagged item, flagged presumed done, keep needs the missing piece quoted', () => {
   const src = read('spec/commands/queue.md')

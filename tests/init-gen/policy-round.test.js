@@ -107,25 +107,6 @@ function sectionAfter(src, startIdx, level) {
   return m ? rest.slice(0, m.index) : rest
 }
 
-test('AC-20261029-08-3: init.md Phase 3 carries exactly two policy-round headings naming their keys, eight (Recommended) options, the 📌 line, and the dismissed-round exception', () => {
-  const init = read(INIT_REL)
-  const heads = [...init.matchAll(/^(#{2,6})\s+.*Policy round [12].*$/gm)]
-  assert.strictEqual(heads.length, 2, 'init.md must carry exactly the headings Policy round 1 and Policy round 2, or the interview has no policy rounds: ' + heads.length)
-  const [h1, h2] = heads
-  assert.match(h1[0], /Policy round 1/, 'round 1 heading must come first')
-  assert.match(h2[0], /Policy round 2/, 'round 2 heading must come second')
-  const round1 = init.slice(h1.index, h2.index)
-  const round2 = sectionAfter(init, h2.index, h2[1].length)
-  for (const k of ['worktreePerSpec', 'directLaneToMain', 'mergeStrategy', 'testExpiry']) {
-    assert.ok(round1.includes(k), 'round 1 must name ' + k + ', or its answer has no key to land in')
-  }
-  for (const k of ['ledgerCommitted', 'reviewService', 'models', 'riskTiers']) {
-    assert.ok(round2.includes(k), 'round 2 must name ' + k + ', or its answer has no key to land in')
-  }
-  const recommended = (round1 + round2).split('(Recommended)').length - 1
-  assert.strictEqual(recommended, 8, 'eight questions each carry one recommended-first option; found ' + recommended)
-  assert.ok(init.includes(PIN), 'init.md must print the exact policy-defaults line for a dismissed round, or the veto is invisible')
-})
 
 test('AC-20261029-08-4: generate without a policy block writes POLICY_DEFAULTS, prints the 📌 line and adds no ledger ignore line', () => {
   const { POLICY_DEFAULTS } = require('../../spec/scripts/lib/host-config')
@@ -205,21 +186,3 @@ test('AC-20261029-08-5: init.md Phase 5 runs --dry-run before its AskUserQuestio
   assert.ok(phase.includes('Confirm before writing:'), 'the question text must be the printed anchor line')
 })
 
-test('AC-20261029-08-6: init.md Phase 1.5 opens with the substrate AskUserQuestion before the Health endpoint bullet', () => {
-  const init = read(INIT_REL)
-  const at = init.indexOf('## Phase 1.5')
-  const phase = init.slice(at, init.indexOf('## Phase 2'))
-  const health = phase.indexOf('Health endpoint')
-  assert.ok(at !== -1 && health !== -1, 'Phase 1.5 must exist with its Health endpoint bullet')
-  const head = phase.slice(0, health)
-  assert.ok(head.includes('AskUserQuestion'), 'the question must open the phase, or substrate is created before the owner answers')
-  assert.ok(head.includes('Create them (Recommended)') && head.includes('Declare them inert instead'), 'both options must be stated before the first item')
-})
-
-test('AC-20261029-08-8: doctor.md carries exactly one check 24 titled Policy block naming policy-check and --json', () => {
-  const doctor = read('spec/commands/doctor.md')
-  assert.strictEqual((doctor.match(/^24\./gm) || []).length, 1, 'exactly one check may be numbered 24')
-  const m = doctor.match(/^24\.\s+\*\*Policy block\*\*[\s\S]*?(?=\n\d+\.\s|\n## )/m)
-  assert.ok(m, 'check 24 must be titled Policy block, or the drift is never reported')
-  assert.ok(m[0].includes('policy-check') && m[0].includes('--json'), 'check 24 must run policy-check with --json: ' + m[0])
-})

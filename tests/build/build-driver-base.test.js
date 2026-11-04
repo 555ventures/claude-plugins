@@ -13,8 +13,7 @@ const { specBody, makeHost, run, stateOf, toRedAttribution } = require('./build-
 // components the design stage legitimately committed), and in the quiet direction it produces an
 // empty or wrong range that every diff-scoped consumer reports green on.
 //
-// Deliberately NOT covered here: the review driver's own non-degenerate-range invariant and
-// replay.js's ancestor-of-parent check — different predicates, different files, their own tests.
+// The review driver's non-degenerate-range invariant is pinned in its own tests.
 
 // The recorded field scenario, reproduced exactly: a build branch cut from main, a design stage
 // that commits a real component onto it, and /git:enter-worktree's `build_base: main` sitting in

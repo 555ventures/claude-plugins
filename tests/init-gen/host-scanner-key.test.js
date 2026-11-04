@@ -98,18 +98,3 @@ test('AC-20261101-01-13: generate allows the scanner command in settings.json so
     'without the allow entry every scanner run prompts and a headless build stalls: ' + JSON.stringify(settings.permissions))
 })
 
-test('AC-20261101-01-14: doctor check 6 names testCaseScanner and --scanner-check, and init names config.testCaseScanner in Phase 4 and scripts/spec-test-cases.sh', () => {
-  for (const f of ['spec/commands/doctor.md', 'spec/commands/init.md']) {
-    assert.ok(fs.existsSync(path.join(ROOT, f)), f + ' must exist for the doctrine pin to read it')
-  }
-  const doctor = read('spec/commands/doctor.md')
-  const start = doctor.indexOf('6. **Scripts & commands**')
-  const end = doctor.indexOf('6b. **Activation', start)
-  const check6 = doctor.slice(start, end)
-  assert.match(check6, /testCaseScanner/, 'doctor check 6 must name testCaseScanner or scanner drift is never reported')
-  assert.match(check6, /--scanner-check/, 'doctor check 6 must name the --scanner-check proof or the key has no deterministic probe')
-  const init = read('spec/commands/init.md')
-  const p4 = init.slice(init.indexOf('## Phase 4'), init.indexOf('## Phase 5'))
-  assert.match(p4, /config\.testCaseScanner/, 'init Phase 4 must tell the author to record config.testCaseScanner')
-  assert.match(init, /scripts\/spec-test-cases\.sh/, 'init must name the multi-line scanner script path or hosts invent their own')
-})

@@ -27,11 +27,7 @@ const { tmpdir, runNode } = require('../helpers')
 // specs/20260906/01-ac-drift-doctor-check.md D2 (AC-20260906-01-10): the local
 // `APPLIES_FROM` constant lifts to `lib/spec-sections.js` as the exported `V7_APPLIES_FROM`,
 // shared with the new `ac-drift.js`. promise-sweep.js's not-applicable behaviour stays
-// byte-unchanged (a SHALL CONTINUE TO pin, retagging AC-20260820-03-7 below). AC-10's two NEW
-// promises — the `V7_APPLIES_FROM` export equality and the `--applies-from` unknown-flag refusal —
-// are pinned in tests/consistency/retired-flags.test.js: this file is green-expected on the
-// pre-image (its only own-spec AC is a SHALL CONTINUE TO pin) and a red assertion here is a
-// broken-pin finding under red-check.js.
+// byte-unchanged (a SHALL CONTINUE TO pin, retagging AC-20260820-03-7 below).
 //
 // specs/20260820/06-typed-evidence-manifest.md D1/D9 (brief 16's second move): every
 // manifest row's `observed` field becomes a typed JSON object — promise-sweep's counted row

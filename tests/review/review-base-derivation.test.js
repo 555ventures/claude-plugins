@@ -5,24 +5,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260901/01 review (rv_3dfefa4d3d9f): a review judged an EMPTY range and every
-// diff-scoped leg reported zero and green — at-risk files:0/testsExecuted:0, reconcile listing all
-// 27 planned files "unrealized", the reviewer handed nothing to review. Two independent defects
-// combined:
-//
-//   1. resolveBase() preferred `build_base` (conventionally the moving ref `main`) over
-//      `diff_base` (a 40-hex pin). /spec:build stamps the pin; /git:enter-worktree writes the ref,
-//      with no ordering guard between the two writers — so a worktree entered AFTER a build layered
-//      `build_base: main` on top of a correct pin. By review time `main` carried the build's own
-//      commits and `main...HEAD` was empty. replay.js:374 had already inverted this order for
-//      exactly this reason; the fix never came back to the producer.
-//   2. Nothing anywhere asserted the judged range was non-degenerate. verdict.js validated sha
-//      SHAPE only, so ledger row rv_31224a17550e recorded base === head and no leg, verdict pass,
-//      or ledger append objected.
-//
-// Precedence alone only fixes the failure already seen; the invariant is what holds when the next
-// base-derivation mistake is something nobody predicted. Both are tested here against the real
-// binary, one fixture, via `--state` (base derivation is top-level, so `--state` executes it).
+// specs/20260901/01: resolveBase() prefers the diff_base pin over the moving build_base ref, and
+// the judged range must be non-degenerate. Both run against the real driver via `--state`.
 
 const DRIVER = 'scripts/spec-review-driver.js'
 

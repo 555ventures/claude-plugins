@@ -3,11 +3,11 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { ROOT, read, tmpdir, runNode, runBash, gitRepo } = require('../helpers')
+const { ROOT, read, tmpdir, runNode, gitRepo } = require('../helpers')
 
 // specs/20261025/01-the-commit-writes-the-escape-row.md: /git:commit step 3 writes the escape
-// row itself (D1, D2, D9), /spec:escape and its pointers retire (D5), the generated Gotchas
-// header names the review close as the only writer (D8). Doctrine prose is pinned by literal.
+// row itself (D1, D2, D9); the generated Gotchas header names the review close as the only
+// writer (D8).
 
 const COMMIT = 'git/commands/commit.md'
 const squash = (s) => s.replace(/\s+/g, ' ').trim()
@@ -21,27 +21,12 @@ function step3() {
   return src.slice(at, next === -1 ? undefined : next)
 }
 
-test('AC-20261025-01-4: commit.md step 3 appends one escape row through spec-paths escape-row --append, asks only the class question, and never names the retired command or the six dropped fields', () => {
+test('AC-20261025-01-4: commit.md step 3 appends one escape row through spec-paths escape-row --append, asks only the class question', () => {
   const s3 = step3()
   const flat = squash(s3)
   assert.match(flat, /spec-paths escape-row\)?"?\s+--append/, 'step 3 must call escape-row.js --append through spec-paths, or the commit never writes the row')
   const asks = flat.match(/AskUserQuestion/g) || []
   assert.strictEqual(asks.length, 1, 'step 3 must mention AskUserQuestion exactly once (the class question) — more is the old yes/no offer returning: ' + asks.length)
-  for (const banned of ['Escape of', '/spec:escape', 'foundBy', 'severity', 'killedMatch', 'softMatch', 'preventedBy', 'unclassedReason']) {
-    assert.ok(!s3.includes(banned), 'step 3 must not contain "' + banned + '" — a retired offer or field the writer no longer produces')
-  }
-})
-
-test('AC-20261031-01-5: commit.md step 3 takes spec and reviewRunId from pick, passes --primary, states sha as HEAD, and keeps the fix row only when landed is empty', () => {
-  const s3 = step3()
-  assert.match(squash(s3), /`?spec`? and `?reviewRunId`?[^.]*\bpick\b/, 'step 3 must name pick as the source of spec and reviewRunId, or the prose keeps its own competing selection rule')
-  assert.match(s3, /--primary/, 'step 3 must pass --primary for the file the root cause names, or every version-bumping fix picks the newest spec')
-  assert.ok(!/reviewTs/.test(s3), 'step 3 must not name reviewTs — the script owns the ordering, and a second prose rule drifts')
-  assert.ok(!/\blatest\b/.test(s3), 'step 3 must not state a "latest" ordering rule of its own — the script owns it')
-  assert.match(s3, /sha[^\n]*HEAD/, 'step 3 must state sha is HEAD, or the row cannot link to the fixing commit')
-  const lines = s3.split('\n')
-  const fixIdx = lines.map((l, i) => (l.includes('"fix"') ? i : -1)).filter(i => i >= 0)
-  assert.ok(fixIdx.length > 0, 'step 3 must still describe the stage:"fix" row')
 })
 
 test('AC-20261031-01-6: commit.md step 3 records the stage:"fix" row with the refusal line when escape-row.js exits 3', () => {
@@ -50,27 +35,13 @@ test('AC-20261031-01-6: commit.md step 3 records the stage:"fix" row with the re
   assert.ok(flat.includes('📌 escape row refused — fix row recorded (veto anytime)'), 'step 3 must carry the exact refusal line, or the owner cannot see the fallback happened')
 })
 
-test('AC-20261025-01-6: the escape command file is gone, entrypoints lists commit.md for escape-row.js and no escape.md, and spec-paths shared-for escape falls open like an unknown command', () => {
-  assert.ok(!fs.existsSync(path.join(ROOT, 'spec/commands/escape.md')), 'spec/commands/escape.md must be deleted or a second entry point to the same row survives')
-  const raw = read('spec/entrypoints.json')
-  assert.ok(!raw.includes('spec/commands/escape.md'), 'entrypoints.json must hold zero escape.md entries — each is a dangling pointer')
-  const manifest = JSON.parse(raw)
+test('AC-20261025-01-6: entrypoints lists commit.md as the entry point of escape-row.js', () => {
+  const manifest = JSON.parse(read('spec/entrypoints.json'))
   const entry = manifest['spec/scripts/escape-row.js']
   assert.ok(entry && entry.entryPoints.includes('git/commands/commit.md'), 'escape-row.js must list git/commands/commit.md as its entry point or the entrypoints conformance test reports it orphaned: ' + JSON.stringify(entry))
-  const r = runBash('bin/spec-paths', ['shared-for', 'escape'])
-  const unknown = runBash('bin/spec-paths', ['shared-for', 'never-defined-key'])
-  assert.strictEqual(r.status, 0, 'spec-paths shared-for escape must exit 0 like any retired key — a non-zero exit means a bespoke retired arm was added: ' + r.stderr)
-  assert.strictEqual(r.stdout, unknown.stdout, 'shared-for escape must print the exact fail-open whole-doctrine output an unknown key gets — a scoped or different output means the deleted command\'s arm survives as dead config')
 })
 
-test('AC-20261025-01-7: the spec plugin description and README never name the retired command', () => {
-  const desc = JSON.parse(read('spec/.claude-plugin/plugin.json')).description
-  assert.ok(!desc.includes('/spec:escape'), 'plugin.json description must name /spec:fix where it named the retired command, or the lifecycle sentence points nowhere')
-  const readme = read('README.md')
-  assert.ok(!readme.includes('/spec:escape'), 'README must not mention the retired command')
-})
-
-test('AC-20261025-01-10: init-gen.js renders a Gotchas header naming the review close as the only writer and never the retired command', () => {
+test('AC-20261025-01-10: init-gen.js renders a Gotchas header naming the review close as the only writer', () => {
   const dir = tmpdir('escape-row-init-gen')
   gitRepo(dir)
   const profile = {
@@ -105,18 +76,8 @@ test('AC-20261025-01-10: init-gen.js renders a Gotchas header naming the review 
   assert.strictEqual(r.status, 0, 'setup: generate must succeed for the header to be inspected: ' + r.stderr)
   const rules = squash(fs.readFileSync(path.join(dir, '.claude/rules/spec-pipeline.md'), 'utf8'))
   assert.ok(rules.includes("Writers: the review stage's close step only."), 'the Gotchas header must name the review close as the only writer, or hosts keep a writer that no longer exists')
-  assert.ok(!rules.includes('/spec:escape'), 'the generated rules file must not name the retired command')
 })
 
-test('AC-20261025-01-12: none of core.md, fix.md and stage-review.md name the retired command', () => {
-  const core = read('spec/doctrine/core.md')
-  assert.ok(!core.includes('/spec:escape'), 'core.md must not name the retired command')
-  const fix = read('spec/commands/fix.md')
-  assert.ok(!fix.includes('/spec:escape'), 'fix.md must not name the retired command')
-  const review = read('spec/doctrine/stages/stage-review.md')
-  assert.match(review, /\/spec:fix/, 'stage-review.md must name /spec:fix as the remedy for a done spec with no closeRunId')
-  assert.ok(!review.includes('/spec:escape'), 'stage-review.md must not name the retired command')
-})
 
 // specs/20261101/11-a-direction-flip-leaves-a-row.md D3: Step 3b runs the supersession scan on every commit.
 test('AC-20261101-11-11: commit.md carries a Step 3b that runs supersession-rows --commit HEAD when the ledger exists, asks nothing, and never blocks the commit on a non-zero exit', () => {

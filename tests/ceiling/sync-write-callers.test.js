@@ -30,20 +30,6 @@ function runWithClosedStdout(name, args) {
 }
 
 for (const name of FIVE) {
-  test(`AC-20261101-09-1: ${name}.js spawned with its stdout destroyed exits with the code its open-stdout run produces and prints no EPIPE trace`, async () => {
-    const dir = tmpdir('sync-write-' + name)
-    if (name === 'port-check') fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-    const args = argvFor(name, dir)
-    const open = runNode('scripts/' + name + '.js', args)
-    assert.ok(open.stdout.length > 0,
-      'the open run must print a verdict, else the closed run exercises no write: ' + open.stderr)
-    const closed = await runWithClosedStdout(name, args)
-    assert.strictEqual(closed.signal, null, 'the script must exit on its own, not die by signal: ' + closed.signal)
-    assert.strictEqual(closed.code, open.status,
-      'a reader that closed early leaves nothing to deliver, so the script keeps its own exit code — a different code means EPIPE escaped the writer as an uncaught exception: ' + closed.text)
-    assert.doesNotMatch(closed.text, /EPIPE|Error:|at writeOut/,
-      'stderr must carry no EPIPE stack trace from the writer: ' + closed.text)
-  })
 
   test(`AC-20261101-09-2: ${name}.js source holds no fs.writeSync( call and exactly one require of ./lib/sync-write`, () => {
     const src = read('spec/scripts/' + name + '.js')

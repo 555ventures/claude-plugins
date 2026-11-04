@@ -6,31 +6,9 @@ const path = require('node:path')
 const { tmpdir, SPEC, gitRepo } = require('./helpers')
 const { spawnSync, execFileSync } = require('node:child_process')
 
-// specs/20260820/02-replay-scratch-write-access.md: the first live replay-command
-// run's mutation worker was correctly dispatched from a main-anchored session to Edit the
-// scratch worktree replay.js stood up — and this hook blocked it, since the pre-fix decision
-// table had no exception for a same-repo cross-worktree write whose TARGET is a disposable
-// replay scratch tree. The worker tunneled the same write through Bash instead, tripping an
-// Auto-Mode Bypass warning. D1/D2 add a target-marker allow (never a source-side one — a
-// scratch-anchored session writing OUT to the main checkout must stay blocked, D2) scoped to
-// trees carrying the `scratch-worktree` marker replay.js's --setup already plants in the
-// target's PRIVATE git dir. AC-20260820-02-1/-2 below are the new cases; AC-20260820-02-3/-4/-5
-// tag the pre-existing regression pins that prove how little else moved.
-//
-// Amended (review-gate finding, D8): the marker allow above turned out to be
-// forgeable through the hook's own pre-existing fail-open on any path inside a repo's .git
-// (two ordinary Writes could plant a marker and permanently disarm the guard). AC-20260820-02-7
-// through -02-11 pin the fix — a target inside THIS repo's own common git dir is now attributed
-// to its owning worktree and blocked cross-owner, before the old fail-open ever runs — and the
-// narrower D1 marker-allow condition (linked-worktree git dirs only) it depends on.
-//
-// specs/20260826/01-replay-scratch-path-blindness.md D3/D5: the marker itself named
-// the harness (`replay-worktree`), one `ls "$(git rev-parse --git-dir)"` away from inside the
-// tree — closed by renaming it `scratch-worktree` at every reading site, this hook's allow arm
-// included, with no grandfathering of the old name (D3). AC-20260820-02-1's test name/asserts and
-// `markedFixture()` below now use the new name; AC-20260820-02-3/-4/-9 (regression pins on the
-// still-blocked shapes) are retagged AC-20260826-01-7; a new AC-20260826-01-5 test proves the old
-// name grants nothing post-rename.
+// specs/20260820/02-replay-scratch-write-access.md, specs/20260826/01-replay-scratch-path-blindness.md:
+// cross-worktree writes are blocked except into a tree whose private git dir carries the
+// `scratch-worktree` marker; a write inside this repo's common git dir is attributed to its owner.
 
 const HOOK = path.join(SPEC, 'scripts/block-cross-worktree-writes.sh')
 
@@ -47,10 +25,7 @@ function fixture() {
   return { root, wt }
 }
 
-// Builds a second worktree of the same repo and plants the `scratch-worktree` marker (renamed
-// from `replay-worktree` by specs/20260826/01 D3) in its PRIVATE git dir the same way replay.js
-// --setup does (Contracts: `git -C "$probe" rev-parse --git-dir`, absolutized against the
-// worktree dir — never written into the working tree).
+// Builds a second worktree and plants the `scratch-worktree` marker in its PRIVATE git dir.
 function markedFixture() {
   const root = fs.realpathSync(tmpdir('xwt-marked'))
   gitRepo(root)
@@ -139,7 +114,7 @@ test('AC-20260820-02-5: fail-open: outside a repo, different repo, empty payload
   assert.strictEqual(run({ cwd: wt, tool_input: {} }).status, 0)
 })
 
-// Resolves a worktree's PRIVATE git dir the same way the hook and replay.js do:
+// Resolves a worktree's PRIVATE git dir the same way the hook does:
 // `git rev-parse --git-dir`, absolutized against the worktree itself (D8's attribution
 // check and D1's marker-allow both key on this exact value).
 function gitDirOf(dir) {

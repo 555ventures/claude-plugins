@@ -383,11 +383,6 @@ test('AC-20260821-04-6: WHEN an in-place review closes CLEAN and the stopped fil
     'the in-place drain must also leave another spec\'s stopped row byte-for-byte untouched: ' + JSON.stringify({ stoppedAfter }))
 })
 
-test('AC-20260821-04-7: WHEN git check-ignore -q .claude/spec-runs.stopped.jsonl runs at THIS repository\'s root THE SYSTEM exits 0', () => {
-  const r = spawnSync('git', ['-C', path.join(SPEC, '..'), 'check-ignore', '-q', STOPPED_LEDGER_REL], { encoding: 'utf8' })
-  assert.strictEqual(r.status, 0,
-    'this repo\'s own .gitignore must ignore .claude/spec-runs.stopped.jsonl (D7) — without the tracked line, D2\'s self-heal has to fire on every invocation here even though the dogfooding repo is exactly the host that should need zero manual setup: ' + JSON.stringify(r))
-})
 
 test('AC-20260821-04-10: WHEN a worktree hard-stop\'s row has landed durably and the worktree is then force-removed THE SYSTEM still returns the GATE_RED row from readLedgerRows(<mainRoot>)', () => {
   const host = makeWorktreeHost({ name: 'sr-durability-ac10', acId: 'AC-20260820-99-37', gateFails: true, ignoreStopped: true })

@@ -130,26 +130,3 @@ test('AC-20261102-01-16: grammar-check on a host declaring trunk nosuch, failCou
   }
 })
 
-test('AC-20261102-01-17: doctor.md names the grammar-check command under check 1 and capabilities.forge under check 2', () => {
-  const doctor = 'spec/commands/doctor.md'
-  const check1 = section(doctor, /^1\. \*\*Config integrity\*\*/, /^2\. /)
-  assert.match(check1, phrase('init-gen)" grammar-check --root . --json'),
-    'doctor check 1 must run init-gen grammar-check or an undeclared grammar is invisible to the host')
-  const check2 = section(doctor, /^2\. \*\*Contract stamp\*\*/, /^3\. /)
-  assert.match(check2, phrase('capabilities.forge'),
-    'doctor check 2 must name capabilities.forge or the CI-evidence-off nudge never tells the host which key to declare')
-})
-
-test('AC-20261102-01-18: init.md Phase 4 names config.trunk, config.capabilities.forge, config.capabilities.failCountPattern and {file}, and Phase 1 names refs/remotes/origin/HEAD and git remote get-url origin', () => {
-  const init = 'spec/commands/init.md'
-  const p4 = section(init, /^## Phase 4/, /^## Phase 5/)
-  for (const key of ['config.trunk', 'config.capabilities.forge', 'config.capabilities.failCountPattern', '{file}']) {
-    assert.match(p4, phrase(key),
-      'init Phase 4 must tell the session to write ' + key + ' or no host ever declares it')
-  }
-  const p1 = section(init, /^## Phase 1 /, /^## Phase 1\.5/)
-  for (const detect of ['refs/remotes/origin/HEAD', 'git remote get-url origin']) {
-    assert.match(p1, phrase(detect),
-      'init Phase 1 must profile the host with ' + detect + ' or trunk and forge are guessed from a stack name')
-  }
-})

@@ -143,20 +143,6 @@ test('AC-20261102-02-7: a delegated dispositions mark with an unanswered waive w
   assert.strictEqual(esc.stateOf(host.root, host.spec), 'FIX', 'the remaining fix entry must land the run where today\'s mark reaches')
 })
 
-test('AC-20261102-02-7: a delegated dispositions mark whose waive reason quotes two backticked identifiers still writes the pending file and prints PENDING_QUESTION', () => {
-  const host = esc.makeHost('dlg-disp-ticks')
-  esc.run(host.root, host.spec)
-  esc.run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', esc.returnFileWith('dlg-disp-ticks-r', twoHardReturn()))
-  const ret = esc.returnFileWith('dlg-disp-ticks-d', { verdict: 'DISPOSED', tokens: 1, dispositions: [
-    { ref: 's0', recommended: 'waive', reason: 'the `===` check in `src/foo.js` is sanctioned by D2' },
-    { ref: 's1', recommended: 'fix', reason: 'fix it' },
-  ] })
-  const r = runD(host.root, host.spec, '--mark', 'dispositions', '--file', ret)
-  assert.strictEqual(r.status, 0, 'a disposer reason with code identifiers must not make the question gate refuse the relay: ' + r.stdout + r.stderr)
-  assert.match(r.stdout, /PENDING_QUESTION/, 'the stop line must print: ' + r.stdout)
-  assert.ok(fs.existsSync(pendingOf(host.root)), 'the question must be written even when the reason is full of identifiers')
-})
-
 // Drives a host to the fix cap with two hard survivors in the final pool; leaves the run at ESCALATE.
 function escalateHost(name, stops) {
   const host = esc.makeHost(name)

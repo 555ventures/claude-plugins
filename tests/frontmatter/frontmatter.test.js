@@ -7,12 +7,8 @@ const { read, tmpdir, runNode, gitRepo } = require('../helpers')
 
 // specs/20260823/04-review-close-hardening.md D1/D8/D9: spec/scripts/lib/frontmatter.js
 // exports `{ fmBlock, fmValue, fmMap }` (fmValue supersedes the retired fmVal by rename, no
-// alias survives) and accepts full document text, not just a pre-extracted raw block. Per D9,
-// this file does NOT restate specs/20260823/03's scalar-stripping pins (tests/frontmatter.test.js
-// owns those) — it pins only the surface D1/D8 add: full-document entry, fmBlock, fmMap, the
-// driver's exec-level build_base path, and the routing sweep, retagged to AC-20260824-02-6 and
-// scoped to the three scripts specs/20260824/02-design-stage-on-render-gate.md D2 leaves
-// standing after retiring spec-design-driver.js.
+// alias survives) and accepts full document text or a pre-extracted raw block; the
+// specs/20260823/03 scalar-stripping pins sit at the end of this file.
 
 const { fmBlock, fmValue, fmMap } = require('../../spec/scripts/lib/frontmatter')
 
@@ -180,8 +176,7 @@ test('AC-20260823-04-4: WHEN the review driver reads a spec whose build_base: li
     'the commented and comment-free fixtures are otherwise identical (same commit history, same source, same tests) — if build_base resolution genuinely strips the comment the same way, both must derive the SAME state; a divergence here means the two fixtures resolved different bases: control=' + controlState + ' treatment=' + treatmentState)
 })
 
-// ---- AC-20260823-04-10 / AC-20260824-02-6: routing sweep — the surviving scripts route
-// ---- through lib/frontmatter.js (spec-design-driver.js retired by specs/20260824/02 D2) ------
+// AC-20260823-04-10 / AC-20260824-02-6: routing sweep — these scripts read frontmatter through lib/frontmatter.js.
 
 const ROUTED_SCRIPTS = [
   'scripts/spec-review-driver.js',
@@ -232,4 +227,22 @@ test('AC-20260823-04-10 (behavioral companion): WHEN spec-status.js --json reads
     'an unspaced "#" inside area: is content, not a comment (a URL fragment carries this exact ' +
     'shape) — spec-status.js\'s own local frontmatter() strips at ANY "#" today, corrupting this ' +
     'to "notes"; routing through fmMap is the only way this field survives intact: got ' + JSON.stringify(entry.area))
+})
+
+// specs/20260823/03-silent-drop-hardening.md D4: scalar comment-stripping on a raw block.
+test('AC-20260823-03-8 / AC-20260823-04-10: WHEN fmValue reads an unquoted value with an inline comment THE SYSTEM strips whitespace-preceded "#" to line end ("tier: standard   # note" -> "standard"), and returns "" for a key absent from the frontmatter block entirely', () => {
+  assert.strictEqual(fmValue('tier: standard   # note', 'tier'), 'standard',
+    `an unquoted value followed by a whitespace-preceded comment must return only the value with the comment stripped — a surviving "#" here is exactly rv_e83659d49386's mechanism (a comment riding into a value a caller trusts verbatim) — got ${JSON.stringify(fmValue('tier: standard   # note', 'tier'))}`)
+  assert.strictEqual(fmValue('status: implementing', 'tier'), '',
+    `a key absent from the frontmatter block must return "" (the Contract's documented default) — a caller like spec-review-driver.js relies on this to fall back to its own default ("standard") rather than crashing or propagating undefined — got ${JSON.stringify(fmValue('status: implementing', 'tier'))}`)
+})
+
+test('AC-20260823-03-9 / AC-20260823-04-10: WHEN fmValue reads a quoted value THE SYSTEM returns the quoted content and ignores any trailer ("tier: \\"critical\\" # note" -> "critical")', () => {
+  assert.strictEqual(fmValue('tier: "critical" # note', 'tier'), 'critical',
+    `a double-quoted value must return exactly the content up to the matching closing quote, with the trailing comment discarded entirely — the driver-local fmVal this module replaces already mishandled this exact shape (its own quote-detection regex requires the value to END in the quote character, which a trailing comment breaks) — got ${JSON.stringify(fmValue('tier: "critical" # note', 'tier'))}`)
+})
+
+test('AC-20260823-03-10 / AC-20260823-04-10: WHEN a value contains "#" with no preceding whitespace THE SYSTEM SHALL CONTINUE TO return it intact ("source_url: https://x/p?f=A#sec" -> "https://x/p?f=A#sec")', () => {
+  assert.strictEqual(fmValue('source_url: https://x/p?f=A#sec', 'source_url'), 'https://x/p?f=A#sec',
+    `YAML comments require PRECEDING WHITESPACE before "#" — an unspaced "#" inside a value (a URL fragment here) is part of the value, not a comment, and stripping it would corrupt a real URL every time one carries a fragment — got ${JSON.stringify(fmValue('source_url: https://x/p?f=A#sec', 'source_url'))}`)
 })

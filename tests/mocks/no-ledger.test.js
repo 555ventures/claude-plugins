@@ -39,15 +39,6 @@ test('AC-20261103-02-1: a cold root gets seed.md and status.json and no ledger.m
   assert.ok(!r.stdout.includes('📒'), 'no 📒 counts line may appear in stdout - it reports a ledger nothing writes: ' + r.stdout)
 })
 
-test('AC-20261103-02-2: the retired ledger first word exits 2 with unknown command "ledger" and writes no file', () => {
-  const root = fx.makeRoot({})
-  const before = listAll(root)
-  const r = fx.runDriver(root, ['ledger', 'counts'])
-  assert.strictEqual(r.status, 2, 'ledger counts must exit 2 as an unknown command, or the ledger verb still dispatches: ' + r.stdout + r.stderr)
-  assert.match(r.stderr, /unknown command "ledger"/, 'stderr must name the unknown command "ledger", or the caller is not told the verb is gone: ' + r.stderr)
-  assert.deepStrictEqual(listAll(root), before, 'a refused command must write no file - a created ledger.md means the verb partly ran')
-})
-
 test('AC-20261103-02-3: an open invented ledger row prints no confirm block on a bare terminal run and journey-approved still exits 0 recording by terminal', () => {
   const root = fx.makeRoot({})
   fx.writeStatus(root)

@@ -41,31 +41,6 @@ const SPEC_MD = (status, body = '') => `---\nstatus: ${status}\n---\n# Spec\n${b
 // AC-20260912-03-12
 // ---------------------------------------------------------------------------
 
-test('AC-20260912-03-12: spec-state-gate.sh lets a retired stage-command prompt fall through untouched (exit 0, empty stderr) at every spec status, including a spec with open_markers set', () => {
-  const fixtures = [
-    ['draft with open_markers: 2', `---\nstatus: draft\nopen_markers: 2\n---\n# Spec\nbody\n`],
-    ['draft', SPEC_MD('draft')],
-    ['hardened', SPEC_MD('hardened')],
-    ['implementing', SPEC_MD('implementing')],
-    ['done', SPEC_MD('done')],
-    ['hardened with unresolved [NEEDS CLARIFICATION: x]', SPEC_MD('hardened', 'x [NEEDS CLARIFICATION: which tz?] y')],
-  ]
-  for (const name of Object.keys(RETIRED)) {
-    const cmd = RETIRED[name]
-    for (const [label, content] of fixtures) {
-      const r = gate(cmd, content)
-      assert.strictEqual(r.status, 0,
-        'AC-20260912-03-12/D12: /spec:' + name + ' is retired and no longer registered as a ' +
-        'command, so the gate must fall through untouched (exit 0) against a spec at ' + label +
-        ' — a nonzero exit here means the retired arm is still reading spec status: ' + r.stderr)
-      assert.strictEqual(r.stderr, '',
-        'AC-20260912-03-12/D12: a retired-command prompt must produce empty stderr against a ' +
-        'spec at ' + label + ' — any refusal text here means the arm was not actually removed: ' +
-        r.stderr)
-    }
-  }
-})
-
 // ---------------------------------------------------------------------------
 // AC-20260912-03-19 (retagged in place from AC-20260901-10-1 / AC-20260901-10-2, both SHALL
 // CONTINUE TO — D12 touches only the three retired arms, never /spec:run, /spec:plan, or the

@@ -79,6 +79,13 @@ fuller incident write-ups live in each cited spec's history.
   declared test glob still matches a file. No script carries a private extension, glob or manifest
   list. (specs/20261101/02-the-host-declares-its-file-shapes.md D2, D3)
 
+- **`spec/scripts/variant-lint.js` is the one sweep over discriminated fields.** Its `FIELDS` table names each field,
+  its helper module and the files whose same-named field is another record; it fails on any `.<field>` read in a
+  boolean, coalescing or equality position under `spec/scripts/**` outside the helper, printed as
+  `<path>:<line> <class> | <code>` with the sentinel `VARIANT_LINT fields= files= findings=`.
+  `tests/consistency/variant-lint-gate.test.js` runs it against the checkout in every suite run; a later axis is one
+  table entry. (specs/20261103/10-two-missing-briefs-are-not-the-same-brief.md D5, D7)
+
 - **`spec/scripts/workspace-scan.js` is the one derivation of a host's workspaces**
   (`spec-paths workspace-scan --root <dir> [--json] [--depth N]`, default depth 4). Every
   (directory, stack) pair with a package manifest is a workspace row `{root, stack, manifest}`,

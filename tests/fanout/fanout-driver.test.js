@@ -42,7 +42,7 @@ function landLane(h, stem, id) {
 }
 
 test('AC-20261102-03-5 / AC-20261103-04-12: a bare run with no state file prints the PLAN step with the lane table, the parked line and the planned mark, writes every lane planned with policyPicks [] and no standing key, and --state moves from PLAN to DISPATCH at the mark', () => {
-  const h = fanoutHost({ parked: true })
+  const h = fanoutHost({ briefed: true, parked: true })
   const parkedWt = h.startLane('05-p')
   const before = h.run(['--state'])
   assert.strictEqual(before.status, 0, '--state must answer before any file exists: ' + before.stderr)
@@ -98,7 +98,7 @@ test('AC-20261102-03-7: --lanes is refused as an unknown argument that names --b
 })
 
 test('AC-20261102-03-7: --override-serial admits the shared-brief sibling beside the lanes and never a spec whose brief depends on a running one', () => {
-  const h = fanoutHost({ dependent: true })
+  const h = fanoutHost({ briefed: true, dependent: true })
   h.must(['--override-serial'])
   const specs = h.state().lanes.map((l) => l.spec).sort()
   assert.deepStrictEqual(specs, [S03, S04, S06].sort(), 'the override must add 06-y (shared brief 32) and nothing that waits on a brief dependency: ' + specs.join(','))
@@ -131,14 +131,14 @@ test('AC-20261102-03-21: an explicit --spec list tables the startable specs in t
 })
 
 test('AC-20261102-03-21: --override-serial lets an explicitly listed shared-brief spec into the table as planned', () => {
-  const h = fanoutHost()
+  const h = fanoutHost({ briefed: true })
   h.must(['--spec', S06, '--override-serial'])
   const y = h.state().lanes.find((l) => l.spec === S06)
   assert.ok(y && y.state === 'planned', 'the override must admit 06-y when the user listed it: ' + JSON.stringify(h.state().lanes))
 })
 
 test('AC-20261102-03-22: a listed spec on a shared brief waits and is planned when its predecessor merges, and the next bare run dispatches it', () => {
-  const h = fanoutHost()
+  const h = fanoutHost({ briefed: true })
   h.plan(['--spec', S03, '--spec', S06])
   const st = h.state()
   assert.strictEqual(st.lanes[0].state, 'planned', 'L1 = 03-x starts planned')
@@ -158,8 +158,8 @@ test('AC-20261102-03-22: a listed spec on a shared brief waits and is planned wh
   assert.ok(next.stdout.includes(S06), 'the dispatch names 06-y: ' + next.stdout)
 })
 
-test('AC-20261102-03-22: a waiting spec whose predecessor stopped is reported as not started with no lane tabled for the unlisted spec and the run reaches REPORT, AC-20261103-06-17', () => {
-  const h = fanoutHost()
+test('AC-20261102-03-22: a waiting spec whose predecessor stopped is reported as not started with no lane tabled for the unlisted spec and the run reaches REPORT, AC-20261103-06-17, AC-20261103-10-9', () => {
+  const h = fanoutHost({ briefed: true })
   h.plan(['--spec', S03, '--spec', S06])
   h.dispatch('L1', 'lane-one')
   h.must(['--mark', 'returned', '--lane', 'L1', '--stopped', 'worker gone'])
@@ -169,6 +169,41 @@ test('AC-20261102-03-22: a waiting spec whose predecessor stopped is reported as
   const slots = JSON.parse(bytes(h.reportFile))
   assert.ok(slots.bullets.includes(S06 + ': not started — waited on ' + S03 + ', which stopped'),
     'the report must say the waiting spec never started and why: ' + JSON.stringify(slots.bullets))
+})
+
+test('AC-20261103-10-8: on the ad-hoc default fixture a waiting lane whose File Plan overlap named no stopped lane is reported as waited on the overlap and never as waiting on the stopped lane', () => {
+  const h = fanoutHost()
+  h.plan(['--spec', S03, '--spec', S06, '--spec', S04])
+  assert.deepStrictEqual([h.lane('L2').spec, h.lane('L2').state, h.lane('L2').waitingOn], [S06, 'waiting', 'File Plan overlap: src/shared.js'],
+    'the ad-hoc default must table 06-y waiting on the File Plan overlap, or the report test below proves nothing: ' + JSON.stringify(h.state().lanes))
+  h.dispatch('L1', 'lane-one')
+  h.dispatch('L3', 'lane-three')
+  h.must(['--mark', 'returned', '--lane', 'L1', '--stopped', 'worker gone'])
+  landLane(h, '04-z', 'L3')
+  const r = h.must([])
+  assert.ok(r.stdout.includes('## Step: report'), 'with L1 stopped and L3 merged the run must reach REPORT: ' + r.stdout)
+  const bullets = JSON.parse(bytes(h.reportFile)).bullets
+  assert.ok(bullets.includes(S06 + ': not started — waited on File Plan overlap: src/shared.js'),
+    'the bullet must name what the lane really waited on, or the maintainer restarts the wrong spec: ' + JSON.stringify(bullets))
+  assert.ok(!bullets.some((b) => b.includes(', which stopped')),
+    'no bullet may blame the stopped lane for an ad-hoc wait, since two ad-hoc briefs are unknown and never the same brief: ' + JSON.stringify(bullets))
+})
+
+test('AC-20261103-10-17: the fixture writes ad-hoc specs with File Plan rows by default, the briefed opt restores the brief stamps, and dependent without briefed throws', () => {
+  const d = fanoutHost()
+  const x = bytes(path.join(d.root, S03))
+  assert.match(x, /^brief: n\/a$/m, 'the default 03-x must be an ad-hoc spec, or the ad-hoc path is not the default every new test walks: ' + x)
+  assert.ok(x.includes('src/shared.js'), 'the default 03-x must carry the shared File Plan row that keeps the lane topology: ' + x)
+  const lanes = JSON.parse(d.status(['--lanes', '--json']).stdout)
+  assert.deepStrictEqual(lanes.lanes.map((l) => l.path), [S03, S04], 'the default topology must keep 03-x and 04-z as lanes: ' + JSON.stringify(lanes))
+  assert.deepStrictEqual(lanes.serialized, [{ path: S06, brief: null, reason: 'File Plan overlap: src/shared.js' }],
+    '06-y must serialize behind 03-x on the File Plan overlap with a null brief: ' + JSON.stringify(lanes.serialized))
+  const b = fanoutHost({ briefed: true })
+  assert.match(bytes(path.join(b.root, S03)), /^brief: 32$/m, 'briefed: true must write the brief stamp, or the shared-brief tests lose their fixture')
+  const bl = JSON.parse(b.status(['--lanes', '--json']).stdout)
+  assert.strictEqual(bl.serialized[0].reason, 'shared brief 32', 'the briefed fixture must serialize 06-y on the shared brief: ' + JSON.stringify(bl.serialized))
+  assert.throws(() => fanoutHost({ dependent: true }), /dependent needs briefed: true/,
+    'a brief-level dependency on an ad-hoc fixture must be refused, or the opt silently builds nothing it names')
 })
 
 test('AC-20261102-03-8: a bare run on an existing file in DISPATCH re-prints the DISPATCH step, and a bare run on a file still in PLAN re-prints the table unchanged', () => {
@@ -483,7 +518,7 @@ test('q28: --mark returned lands a lane stopped on the laneExit its driver recor
 })
 
 test('AC-20261102-03-17: with the gate red after a merge and another lane pending on a question, the next bare run relays the question instead of printing MERGE_RED, and a merge-ready lane is still refused until gate-repaired, AC-20261103-06-23', () => {
-  const h = fanoutHost()
+  const h = fanoutHost({ briefed: true })
   h.plan(['--override-serial', '--spec', S03, '--spec', S04, '--spec', S06])
   for (const [id, agent] of [['L1', 'lane-one'], ['L2', 'lane-two'], ['L3', 'lane-three']]) h.dispatch(id, agent)
   for (const stem of ['03-x', '04-z', '06-y']) h.startLane(stem)
@@ -592,7 +627,7 @@ const pinLine = (members, tail) => '📌 Auto-picked batch: ' + members + ' — 
 const SELF_REASON = 'touches pipeline self-surface ' + SELF_SURFACE
 
 test('AC-20261103-06-9: a bare run prints the derived batch as one 📌 line before the table, tables the members with the shared-brief one waiting, and records the batch with its boundary', () => {
-  const h = fanoutHost({ selfSurface: true })
+  const h = fanoutHost({ briefed: true, selfSurface: true })
   const r = h.must([])
   const line = pinLine('03-x, 06-y, 04-z', 'stops before 08-s (' + SELF_REASON + ')')
   assert.ok(r.stdout.includes(line), 'the PLAN step must print the batch and its boundary as one vetoable line: ' + r.stdout)
@@ -642,7 +677,7 @@ test('AC-20261103-06-12: a blocked entry ends the batch with its first blocker a
 })
 
 test('AC-20261103-06-13: --batch all tables every unblocked entry with no boundary, --batch <ids> tables exactly those in the order given, and an id matching nothing exits 2', () => {
-  const all = fanoutHost({ selfSurface: true, blocked: true })
+  const all = fanoutHost({ briefed: true, selfSurface: true, blocked: true })
   all.must(['--batch', 'all'])
   assert.deepStrictEqual(all.state().lanes.map((l) => l.spec), [S03, S06, S04, S08S], '--batch all must table every unblocked /spec:run entry and never the blocked one: ' + JSON.stringify(all.state().lanes))
   assert.deepStrictEqual([batchOf(all).stopBefore, batchOf(all).by], [null, 'batch-flag'], '--batch all records no boundary and its own origin: ' + JSON.stringify(all.state().batch))
@@ -772,7 +807,7 @@ test('AC-20261103-08-18: REPORT leads queued with this run\'s births, a plan bir
 const PLAN_REASON = '/spec:plan item heads the queue'
 
 test('AC-20261103-08-21: a queue plan item ends the batch after every startable spec, is named first in REPORT with its origin line, and holds no spec back', () => {
-  const h = fanoutHost({ planItem: true })
+  const h = fanoutHost({ briefed: true, planItem: true })
   const r = h.must([])
   assert.ok(r.stdout.includes(pinLine('03-x, 06-y, 04-z', 'stops before q112 (' + PLAN_REASON + ')')), 'the batch must hold every startable spec and stop before the plan item: ' + r.stdout)
   assert.deepStrictEqual(h.state().lanes.map((l) => [l.id, l.spec, l.state]), [['L1', S03, 'planned'], ['L2', S06, 'waiting'], ['L3', S04, 'planned']], 'a plan item at the head must hold no spec back: ' + JSON.stringify(h.state().lanes))
@@ -794,7 +829,7 @@ test('AC-20261103-08-21: a queue plan item ends the batch after every startable 
 const fixLane = (h, q) => h.state().lanes.find((l) => l.queueId === q)
 
 test('AC-20261103-08-22: a fix naming files runs beside the run lanes it does not overlap and after the one it does, and a fix naming none waits for every lane', () => {
-  const h = fanoutHost({ fixFiles: true })
+  const h = fanoutHost({ briefed: true, fixFiles: true })
   h.must(['--include-fixes'])
   const first = h.must(['--mark', 'planned'])
   assert.deepStrictEqual([fixLane(h, 'q113').files, fixLane(h, 'q113').overlaps], [['src/b.js'], []], 'q113 names a file no open spec plans: ' + JSON.stringify(fixLane(h, 'q113')))
@@ -951,7 +986,7 @@ test('AC-20261103-06-18: REPORT after a derived batch names where the batch stop
 })
 
 test('AC-20261103-06-20: a merge-ready lane is merged before a planned lane is dispatched, and --state says MERGE', () => {
-  const h = fanoutHost()
+  const h = fanoutHost({ briefed: true })
   h.must(['--override-serial'])
   h.must(['--mark', 'planned'])
   const [a, b] = [idOf(h, S03), idOf(h, S04)]

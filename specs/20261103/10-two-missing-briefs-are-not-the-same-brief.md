@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical           # spec/scripts/spec-status.js — the --next/--lanes derivation changes shape internally (§ Risk Tiers: the sole "what's next" derivation; its --json surfaces are frozen); spec/bin/spec-paths gains a key
 area: pipeline
 breaking: false
 depends_on: [specs/20261103/06-the-fan-out-drains-the-queue.md]
 brief: n/a
 open_markers: 0
+diff_base: 3b00a591b1213d3db7a765ebd80274b705011352
 ---
 
 # Two missing briefs are not the same brief
@@ -55,6 +56,7 @@ never waited on.
 | D9 | New `tests/host-run/real-specs-smoke.test.js`, an untagged standing guard: it copies this checkout's `specs/`, `docs/roadmap/`, `.claude/spec.config.json` and the config's `pipelineRules` file into a `gitRepo(tmpdir())` (never the ledger, never the queue file; the real tree is read-only), appends two ad-hoc hardened sentinels `specs/20991231/01-smoke-a.md` (File Plan row `tests/host-run/smoke-a.txt`) and `specs/20991231/02-smoke-b.md` (row `tests/host-run/smoke-b.txt`), then runs `spec-status --next --json` and `--lanes --json` from that root and asserts: exit 0 for both; every spec whose on-disk `status` is `hardened` or `implementing` appears in exactly one of `lanes[]`, `serialized[]` (non-empty `reason`) or the set of `--next` entries with non-empty `blockers`; every `--next` entry's `brief` is `null` or a `/^\d{2}[a-z]?$/` string; both sentinels are in `lanes[]` (the parallel-ok ad-hoc pair); `lanes[0]`'s keys are exactly `action, branch, brief, note, path, status, worktree` and the top-level keys exactly `fixes, lanes, serialized` `[no-ac: standing guard — untagged by design so it runs in every suite run after this spec closes]` `[asked: user pre-decided via independent review 2026-11-03 — the smoke runs in every suite run over this repo's own specs/ tree, read-only]` | `--lanes` refuses a linked worktree (A2), and the real tree's membership changes with every merge — a copy with two sentinels makes the pair claim deterministic while the real specs still drive every bucket. |
 | D10 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"` naming the discriminated brief, `relateBriefs`, `variant-lint` and the ad-hoc fixture default. `[no-ac: plugin-bump.js --check in the gate is the oracle]` | Pipeline rules § Planning version-bump discipline. |
 | D11 | This spec builds on spec 06's post-image: the File Plan rows it shares with spec 06 (`spec-status.js`, `fanout-driver.js`, `tests/spec-status.test.js`, `tests/fanout/fanout-driver.test.js`, `tests/fanout/fixture.js`) are edited after 06 merges — rebase onto 06 after it merges; never build on the pre-image (A1). Spec 08 (also `depends_on` 06) shares `spec-queue.js`, `lib/queue.js`, `spec-status.js`, `fanout-driver.js` and the two fanout test files; whichever of 08 and this spec lands second rebases and re-runs `variant-lint` — any `.brief` site 08 adds is this lint's finding and is routed through D1's helper in the rebase `[no-ac: ordering statement — the dependency and the rebase rule carry no testable surface of their own]` | Two specs editing one derivation must land in series; the lint makes the second landing's obligations mechanical. |
+| D12 | Scope widened at build: `specs/20261102/01-the-host-names-its-runner-grammar.md` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — not a test file] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
 
 ## File Plan
 
@@ -80,6 +82,7 @@ never waited on.
 | tests/consistency/entrypoints.test.js | MODIFY | tests | AC-20261103-10-16 (reuse, retagged in the title) |
 | tests/consistency/variant-lint-gate.test.js | CREATE | tests | untagged standing guard — the gate wiring and one synthetic red (D7) |
 | tests/host-run/real-specs-smoke.test.js | CREATE | tests | untagged standing guard — the real-tree smoke with two sentinels (D9) |
+| specs/20261102/01-the-host-names-its-runner-grammar.md | MODIFY | other | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
 
 ## Contracts
 
@@ -169,7 +172,7 @@ Lint: on this checkout after the build, `node spec/scripts/variant-lint.js --roo
 - **AC-20261103-10-4**: WHEN `--lanes --json` runs on the `lanesHost()` fixture THE SYSTEM SHALL CONTINUE TO print
   `lanes[0]` keys exactly `['action', 'branch', 'brief', 'note', 'path', 'status', 'worktree']`, `lanes[].brief` as
   `'32'` and `'33'`, and `serialized` exactly `[{ path: 'specs/20261102/06-y.md', brief: '32', reason: 'shared brief 32' }]`
-  → reuses tests/spec-status.test.js :: AC-20261102-03-1: --lanes --json prints
+  → reuses tests/spec-status.test.js :: AC-20261102-03-1 / AC-20261103-08-8: --lanes --json prints
 - **AC-20261103-10-5**: WHEN `--json` runs on a host with brief file `02-billing.md`, hardened `specs/20260710/01-b.md`
   (`brief: 02`) and hardened `specs/20260710/02-a.md` (`brief: n/a`) THE SYSTEM SHALL print `briefs` entry `02` with
   `specs` exactly `[{ path: 'specs/20260710/01-b.md', status: 'hardened' }]`, `specs[]` carrying `brief: '02'` and
@@ -319,6 +322,21 @@ Executes-tier hits outside the plan (`tests/ceiling/*`, `tests/frontmatter/*`, `
 `tests/init-gen/*`, `tests/mocks/*`, `tests/commit/*`, `tests/ac-matrix/*`, `tests/host-config/*`,
 `tests/prose-debt/*`) read `spec-status`, `spec-queue` or `spec-paths` output whose external shape D2 and D4 keep
 byte-identical and whose fixtures hold no two ad-hoc specs beside each other; the build's whole-suite check adjudicates.
+
+Build departures (2026-11-03, folded from the deviations sidecar): four more existing `fanoutHost(` calls than D8
+named (spec 06 AC 9 and AC 13, spec 08 AC 21 and AC 22) went red on the ad-hoc flip because pin order follows path
+order for ad-hoc specs, and took `briefed: true` unrewritten. D9's `--lanes --json` top-level key list omitted the
+pre-existing `born` key (spec 08); the smoke pins `born, fixes, lanes, serialized`, byte-identical to the base.
+`variant-lint`'s `files=` counts skipped foreign files and excludes only the helper — AC-13's own fixture demands
+`files=2`, so the AC, not D5's prose, is the oracle. Reuse retags sit at the end of each test title so the done
+specs' prefix-matched `reuses` pointers keep resolving; AC-4's pointer was corrected to the title's real prefix
+(`AC-20261102-03-1 / AC-20261103-08-8: --lanes`). D12: the mechanical trim on main (commit 2b4735a9, no spec)
+deleted the ci-query `--branch` test with `--branch` mode itself, leaving spec 20261102/01 AC 13 uncovered and
+`ac-drift` red on main; this build, the first to gate after the trim, tagged it retired.
+
+### Advisory debt (review rv_b6a6d1f9317b)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac226712ab224e25f/spec/scripts/spec-status.js:879 — The --all 🤷 branch line falls back to the literal reason 'no File Plan rows' whenever an entry reaches the 🤷 branch without a parallelUnknown set (an entry the annotation loop skipped via `continue` — a /spec:fix runner-up, or any entry whose parallel stayed undefined for a reason other than relateBriefs 'unknown'); the fallback can print a File Plan claim the derivation never made.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac226712ab224e25f/tests/spec-status.test.js:601 — Two new asserts in tests/spec-status.test.js carry only the raw stderr as their message with no consequence-of-failure sentence: `assert.strictEqual(rAll.status, 0, rAll.stderr)` (AC-10-3 test) and `assert.strictEqual(r.status, 0, r.stderr)` (AC-10-5 test).
 
 ## Canonical Delta
 

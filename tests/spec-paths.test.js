@@ -52,7 +52,7 @@ test('AC-20260926-03-8: spec-paths workspace-scan resolves to spec/scripts/works
 // bundled keys — `walkthrough` (the one script that talks to the review service) and
 // `walkthrough-contract` / `walkthrough-catalog` (the two plain-JSON files both repositories test
 // against) — folded into this same test, with the usage string naming all three.
-test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20261103-07-7; AC-20260928-01-2; AC-20260929-01-18; AC-20261002-01-15; AC-20261005-06-18; AC-20261016-01-10)', () => {
+test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20261103-10-15; AC-20261103-07-7; AC-20260928-01-2; AC-20260929-01-18; AC-20261002-01-15; AC-20261005-06-18; AC-20261016-01-10)', () => {
   const fs = require('node:fs')
   for (const key of ['root', 'workflows', 'wf-enforce',
     'wf-research', 'merge-back',
@@ -62,7 +62,7 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
     'worktree-include', 'shared', 'shared-genesis', 'shared-mocks', 'template', 'templates', 'contract',
     'design-contract-check', 'design-rules-template', 'workspace-scan',
     'catalog-inventory', 'design-brief-template', 'design-paths-template', 'prototype-driver',
-    'walkthrough', 'walkthrough-contract', 'walkthrough-catalog', 'pictures', 'decision-lint', 'supersession-rows', 'out-of-plan-triage']) {
+    'walkthrough', 'walkthrough-contract', 'walkthrough-catalog', 'pictures', 'decision-lint', 'supersession-rows', 'out-of-plan-triage', 'variant-lint']) {
     const p = run(key).trim()
     assert.ok(fs.existsSync(p), key + ' -> ' + p)
   }
@@ -98,6 +98,12 @@ test('AC-20260926-03-8: every documented key resolves to an existing path (AC-20
     'AC-20261101-11-12: the resolved script must be executable or the commit step cannot invoke it')
   assert.match(usage, /(^|[|\[])supersession-rows($|[|\]])/,
     'AC-20261101-11-12: the usage line must name `supersession-rows` or a session reading it never learns the key exists: ' + usage)
+  // specs/20261103/10-two-missing-briefs-are-not-the-same-brief.md D6: the variant-lint key.
+  const vlPath = run('variant-lint').trim()
+  assert.ok(vlPath.endsWith('scripts/variant-lint.js'),
+    'AC-20261103-10-15: `spec-paths variant-lint` must print a path ending scripts/variant-lint.js — a wrong key sends the suite gate to the wrong script: ' + vlPath)
+  assert.match(usage, /(^|[|\[])variant-lint($|[|\]])/,
+    'AC-20261103-10-15: the usage line must name `variant-lint` or a session reading it never learns the key exists: ' + usage)
   // specs/20261103/07-the-file-decides-not-the-tier.md D5 (AC-20261103-07-7): the out-of-plan-triage key.
   assert.ok(run('out-of-plan-triage').trim().endsWith('scripts/out-of-plan-triage.js'),
     'AC-20261103-07-7: `spec-paths out-of-plan-triage` must print a path ending scripts/out-of-plan-triage.js — a wrong key sends the REPAIR step to the wrong script silently')

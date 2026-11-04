@@ -21,6 +21,10 @@ const RETIRED_DESIGN = '/spec:' + 'design'
 const RETIRED_BUILD = '/spec:' + 'build'
 const RETIRED_REVIEW = '/spec:' + 'review'
 
+// specs/20261103/10-two-missing-briefs-are-not-the-same-brief.md D8: a fixture spec with no opinion
+// about briefs is an ad-hoc spec — `brief: n/a` is appended to any frontmatter lacking a brief line.
+const withBrief = (fm) => (/^brief:/m.test(fm) ? fm : fm + '\nbrief: n/a')
+
 function host({ briefs = {}, specs = {}, overviewRow = null } = {}) {
   const dir = tmpdir('spec-status')
   fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
@@ -35,7 +39,7 @@ function host({ briefs = {}, specs = {}, overviewRow = null } = {}) {
     fs.mkdirSync(path.dirname(p), { recursive: true })
     // val is either the plain frontmatter string (existing call sites) or { fm, body } when a
     // test needs body content (e.g. a File Plan table) below the frontmatter.
-    const fm = typeof val === 'string' ? val : val.fm
+    const fm = withBrief(typeof val === 'string' ? val : val.fm)
     const body = typeof val === 'string' ? '# spec\n' : (val.body || '# spec\n')
     fs.writeFileSync(p, '---\n' + fm + '\n---\n\n' + body)
   }
@@ -539,17 +543,96 @@ test('--next marks a runner-up serial on a shared brief or a brief dependency pa
   assert.match(reports.parallel_reason, /brief 03 depends on 02/)
 })
 
-test('--next makes no parallel claim (AC-20261103-06-5) when a spec has no brief stamp', () => {
+test('--next makes no parallel claim (AC-20261103-06-5, AC-20261103-10-3) when a spec has no brief stamp, and --all names why parallelism is unknown', () => {
   const dir = host({
     briefs: {},
     specs: {
-      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened',
-      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened',
+      '20260710/05-adhoc.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
+      '20260710/06-also.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
     },
   })
-  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
-  assert.strictEqual(j.next[1].parallel, null,
-    'no brief = no declared surfaces to compare — silence beats a guessed parallel-ok')
+  const r = runNode(SCRIPT, ['--root', dir, '--next', '--json'])
+  assert.strictEqual(r.status, 0, '--next --json must derive: ' + r.stderr)
+  const j = JSON.parse(r.stdout)
+  assert.strictEqual(j.next.length, 2, 'both hardened ad-hoc specs must be next entries: ' + r.stdout)
+  for (const e of j.next) {
+    assert.strictEqual(e.brief, null, 'an ad-hoc spec serializes brief null, or the frozen --json shape changed: ' + JSON.stringify(e))
+    assert.strictEqual(e.parallel, null, 'no brief = no declared surfaces to compare — silence beats a guessed parallel-ok: ' + JSON.stringify(e))
+    assert.strictEqual(e.parallel_reason, null, 'the unknown-parallelism reason is internal and must not leak into --json: ' + JSON.stringify(e))
+    assert.deepStrictEqual(Object.keys(e).sort(), ['action', 'blockers', 'brief', 'note', 'parallel', 'parallel_reason', 'path', 'status'],
+      'the --next --json entry key set is frozen for external consumers: ' + JSON.stringify(e))
+  }
+  const rAll = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(rAll.status, 0, rAll.stderr)
+  const unknown = rAll.stdout.split('\n').filter((l) => l.includes('🤷'))
+  assert.deepStrictEqual(unknown.map((l) => l.trim()), ['└─ 🤷 no brief — parallelism unknown (both ad-hoc; no File Plan rows)'],
+    'the --all branch line must print once, naming why parallelism is unknown, or the maintainer cannot tell a missing File Plan from a missing brief: ' + rAll.stdout)
+  assert.match(rAll.stdout, /\/spec:run @specs\/20260710\/06-also\.md\n\s+└─ 🤷/, 'the line sits under the runner-up: ' + rAll.stdout)
+})
+
+test('AC-20261103-10-5: an ad-hoc spec belongs to no roadmap brief and earns no orphan-stamp, while a stamp naming no brief still does', () => {
+  const briefs = { '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' }
+  const dir = host({
+    briefs,
+    specs: {
+      '20260710/01-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-a.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
+    },
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--json'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const out = JSON.parse(r.stdout)
+  const b02 = out.briefs.find((b) => b.num === '02')
+  assert.deepStrictEqual(b02.specs, [{ path: 'specs/20260710/01-b.md', status: 'hardened' }],
+    'brief 02 lists only the spec stamped 02, or an ad-hoc spec is counted into a brief it never named: ' + JSON.stringify(b02))
+  const by = Object.fromEntries(out.specs.map((x) => [x.path, x.brief]))
+  assert.deepStrictEqual([by['specs/20260710/01-b.md'], by['specs/20260710/02-a.md']], ['02', null],
+    'specs[].brief serializes the number or null, or the frozen --json shape changed: ' + JSON.stringify(by))
+  assert.strictEqual(out.anomalies.filter((a) => a.kind === 'orphan-stamp').length, 0, 'an ad-hoc spec must raise no orphan-stamp: ' + JSON.stringify(out.anomalies))
+  const typo = host({
+    briefs,
+    specs: {
+      '20260710/01-b.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+      '20260710/02-a.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 99',
+    },
+  })
+  const orphans = JSON.parse(runNode(SCRIPT, ['--root', typo, '--json']).stdout).anomalies.filter((a) => a.kind === 'orphan-stamp')
+  assert.strictEqual(orphans.length, 1, 'a stamp naming no roadmap brief must still raise exactly one orphan-stamp: ' + JSON.stringify(orphans))
+  assert.match(orphans[0].detail, /02-a\.md/, 'the orphan-stamp names the spec carrying it: ' + JSON.stringify(orphans))
+})
+
+test('AC-20261103-10-7: --next orders a briefed spec before an ad-hoc one at equal rank and two ad-hoc specs by path', () => {
+  const briefs = { '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' }
+  const mixed = host({
+    briefs,
+    specs: {
+      '20260710/03-z.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
+      '20260710/04-y.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02',
+    },
+  })
+  const m = JSON.parse(runNode(SCRIPT, ['--root', mixed, '--next', '--json']).stdout)
+  assert.deepStrictEqual(m.next.map((e) => e.path), ['specs/20260710/04-y.md', 'specs/20260710/03-z.md'],
+    'the briefed spec must rank ahead of the ad-hoc one, or the roadmap order is lost behind an ad-hoc tie: ' + JSON.stringify(m.next))
+  const adhoc = host({
+    briefs,
+    specs: {
+      '20260710/04-y.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
+      '20260710/03-z.md': 'date: 2026-07-10\nstatus: hardened\nbrief: n/a',
+    },
+  })
+  const a = JSON.parse(runNode(SCRIPT, ['--root', adhoc, '--next', '--json']).stdout)
+  assert.deepStrictEqual(a.next.map((e) => e.path), ['specs/20260710/03-z.md', 'specs/20260710/04-y.md'],
+    'two ad-hoc specs tie and fall to path order, or the next pick is not deterministic: ' + JSON.stringify(a.next))
+})
+
+test('AC-20261103-10-18: host() appends brief: n/a to a spec frontmatter lacking a brief line and leaves an existing brief line unchanged', () => {
+  const bare = host({ specs: { '20260710/01-a.md': 'date: 2026-07-10\nstatus: hardened' } })
+  const bareText = fs.readFileSync(path.join(bare, 'specs/20260710/01-a.md'), 'utf8')
+  assert.match(bareText, /^brief: n\/a$/m, 'a fixture with no opinion about briefs must be ad-hoc, or the ad-hoc path is not the default every new test walks: ' + bareText)
+  const stamped = host({ specs: { '20260710/01-a.md': 'date: 2026-07-10\nstatus: hardened\nbrief: 02' } })
+  const stampedText = fs.readFileSync(path.join(stamped, 'specs/20260710/01-a.md'), 'utf8')
+  assert.strictEqual(stampedText.match(/^brief:/gm).length, 1, 'an explicit brief line must not gain a second one: ' + stampedText)
+  assert.match(stampedText, /^brief: 02$/m, 'an explicit brief line must be written unchanged: ' + stampedText)
 })
 
 // The dashboard: the same derivation rendered
@@ -805,7 +888,7 @@ test('AC-20260909-08-2: dashboard omits the solo branch when the pick is the onl
 // and each one earned a bogus orphan-stamp ("no docs/roadmap/n/a-*.md exists"). The spelling
 // is now sanctioned: explicitly briefless, identical to omitting the field, never a pointer.
 
-test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, brief null', () => {
+test('brief: n/a (and none/-) is deliberately briefless — no orphan-stamp, brief null (AC-20261103-10-6)', () => {
   const dir = host({
     briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: {
@@ -1180,7 +1263,7 @@ function lanesHost({ extraSpecs = {}, queue = null, config = null, baseSpecs = L
     const p = path.join(dir, 'specs', file)
     fs.mkdirSync(path.dirname(p), { recursive: true })
     // val is the plain frontmatter string or { fm, body }, like host().
-    const fm = typeof val === 'string' ? val : val.fm
+    const fm = withBrief(typeof val === 'string' ? val : val.fm)
     const body = typeof val === 'string' ? '# spec\n' : (val.body || '# spec\n')
     fs.writeFileSync(p, '---\n' + fm + '\n---\n\n' + body)
   }
@@ -1194,7 +1277,7 @@ function lanesHost({ extraSpecs = {}, queue = null, config = null, baseSpecs = L
   return { dir, wt, git }
 }
 
-test('AC-20261102-03-1 / AC-20261103-08-8: --lanes --json prints the admitted run lanes with branch and worktree, holds back the shared-brief spec with its reason, and resolves a top-ranked spec\'s linked worktree', () => {
+test('AC-20261102-03-1 / AC-20261103-08-8: --lanes --json prints the admitted run lanes with branch and worktree, holds back the shared-brief spec with its reason, and resolves a top-ranked spec\'s linked worktree (AC-20261103-10-4)', () => {
   const h = lanesHost()
   const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
   assert.strictEqual(r.status, 0, '--lanes --json must be a mode of spec-status, or the fan-out has no machine surface for the lanes: ' + r.stderr)

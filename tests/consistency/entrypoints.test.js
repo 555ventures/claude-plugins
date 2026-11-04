@@ -271,7 +271,7 @@ function checkReverseInvocation(root) {
   return [...violations]
 }
 
-test('AC-20260820-04-1: every executable in spec/scripts/*.js|*.sh and spec/workflows/*.js, excluding spec/scripts/lib/, has a spec/entrypoints.json entry', () => {
+test('AC-20260820-04-1: every executable in spec/scripts/*.js|*.sh and spec/workflows/*.js, excluding spec/scripts/lib/, has a spec/entrypoints.json entry (AC-20261103-10-16)', () => {
   const manifestPath = path.join(ROOT, 'spec/entrypoints.json')
   assert.ok(fs.existsSync(manifestPath),
     'spec/entrypoints.json does not exist — D1 requires one central manifest entry per ' +

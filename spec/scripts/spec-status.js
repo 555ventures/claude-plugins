@@ -37,8 +37,8 @@
 // Unblocked runner-up entries are annotated parallel-ok/serial relative to the top pick:
 // spec-level depends_on can never link two unblocked entries (a non-done dep is a blocker),
 // so the check is brief-level — shared brief or a transitive brief dependency path in either
-// direction → serial; distinct unrelated briefs → parallel-ok (separate worktrees); either
-// side briefless → no claim. The dashboard's ⚡ lanes claim MUTUAL parallelism, so admission
+// direction → serial; distinct unrelated briefs → parallel-ok (separate worktrees); an ad-hoc
+// side defers to the File Plan rule. The dashboard's ⚡ lanes claim MUTUAL parallelism, so admission
 // is pairwise-greedy: a parallel-ok runner-up joins only if also unrelated to every lane
 // already admitted (vs-top alone would let two mutually-ordered briefs share the fan-out).
 // Everything else lands under 🕓 with a ⛓️/🤷 branch line giving the derived reason (or the
@@ -83,17 +83,14 @@ const { policy: hostPolicy, readConfig: readHostConfig } = require('./lib/host-c
 const { readLedgerRows, sinceLastRelease } = require('./lib/observation')
 const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems,
-  reconcileMissingBriefs, promptAction, originLine, namedFiles, normBrief,
+  reconcileMissingBriefs, promptAction, originLine, namedFiles,
 } = require('./lib/queue')
+const { parseBrief, relateBriefs, briefNum, briefOrd, normBrief } = require('./lib/brief')
 const { fmMap } = require('./lib/frontmatter')
 
-// Brief ids are NN plus an optional letter suffix (04a, 04b, …); briefOrd sorts 04 < 04a < 04b < 05.
-// `brief: n/a` (also none/-/—) is a deliberately briefless spec, never an orphan stamp.
-const BRIEFLESS = /^(n\/a|none|-|—)$/i
-function briefOrd(num) {
-  const m = num.match(/^(\d+)([a-z]?)$/)
-  return m ? Number(m[1]) + (m[2] ? (m[2].charCodeAt(0) - 96) / 100 : 0) : NaN
-}
+// A spec's `brief:` stamp is parsed once by lib/brief.js into briefed | adhoc (`brief: n/a`, none,
+// -, — and an absent line are ad-hoc, never an orphan stamp); every external --json surface
+// serializes it back with briefNum(). Two briefs are compared only through relateBriefs.
 
 // Default root: the repository toplevel, not the shell's CWD; '.' outside a git repo. --root wins.
 let root = (() => {
@@ -159,7 +156,7 @@ for (const file of walkMd(path.join(root, 'specs'))) {
   allSpecs.push({
     path: path.relative(root, file),
     status: fm.status,
-    brief: fm.brief && !BRIEFLESS.test(fm.brief.trim()) ? normBrief(fm.brief) : null,
+    brief: parseBrief(fm.brief),
     area: fm.area || null,
     date: fm.date || null,
     depends_on: parseList(fm.depends_on),
@@ -196,7 +193,7 @@ if (fs.existsSync(roadmapDir)) {
     const deps = [], depRejects = []
     const items = dep ? dep[1].replace(/\([^)]*\)/g, m => m.replace(/,/g, '\u0000')).split(',').map(s => s.replace(/\u0000/g, ',').replace(/\s+/g, ' ').trim()).filter(Boolean) : []
     for (const item of items) {
-      if (BRIEFLESS.test(item)) continue
+      if (parseBrief(item).kind === 'adhoc') continue
       if (/^(?:brief\s+)?\d{1,2}[A-Za-z]?(?:-[\w-]+)?(?: \([^)]*\))?$/.test(item)) deps.push(normBrief(item.replace(/^brief\s+/, '').replace(/ \(.*$/, '')))
       else depRejects.push(item)
     }
@@ -227,7 +224,7 @@ const ledgerRows = readLedgerRows(root)
 // `superseded` = the "Superseded by" banner with no spec still in flight (live work keeps
 // `in-flight`).
 for (const b of briefs) {
-  b.specs = specs.filter(s => s.brief === b.num)
+  b.specs = specs.filter(s => relateBriefs(s.brief, parseBrief(b.num)).relation === 'same')
   const allDone = b.specs.every(s => DONE(s.status))
   b.status = b.superseded && allDone ? 'superseded'
     : b.specs.length === 0 ? 'unplanned' : allDone ? 'done' : 'in-flight'
@@ -317,7 +314,7 @@ if (queueOverlay.on) {
       const r = isItemReady(it, ctx)
       const blockers = r.ready ? [] : [`after ${r.target} (${r.state})`]
       return {
-        action: promptAction(it), path: null, status: 'queued', brief: null, blockers,
+        action: promptAction(it), path: null, status: 'queued', brief: parseBrief(null), blockers,
         note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i, __queueId: it.id,
         __after: (it.after && it.after.spec) || null,
         __origin: it.origin || null, __trigger: it.trigger || null, __batch: it.batch || null,
@@ -343,8 +340,9 @@ for (const s of specs) {
 
 // Orphan stamps: spec points at a brief file that doesn't exist.
 for (const s of specs) {
-  if (s.brief && !briefByNum.has(s.brief)) {
-    pushAnomaly({ kind: 'orphan-stamp', detail: `${s.path} stamps brief: ${s.brief} but no docs/roadmap/${s.brief}-*.md exists (brief renamed/deleted, or typo)` })
+  if (s.brief.kind === 'briefed' && !briefByNum.has(briefNum(s.brief))) {
+    const n = briefNum(s.brief)
+    pushAnomaly({ kind: 'orphan-stamp', detail: `${s.path} stamps brief: ${n} but no docs/roadmap/${n}-*.md exists (brief renamed/deleted, or typo)` })
   }
 }
 
@@ -375,9 +373,10 @@ for (const b of briefs) {
 // anomaly. A superseded brief is retired, never skipped or "moved".
 const moved = briefs.filter(b => b.status !== 'unplanned' && b.status !== 'superseded')
 if (moved.length) {
-  const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
+  const numOrd = n => briefOrd(parseBrief(n))
+  const maxMoved = moved.reduce((m, b) => numOrd(b.num) > numOrd(m.num) ? b : m).num
   for (const b of briefs) {
-    if (b.status === 'unplanned' && briefOrd(b.num) < briefOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
+    if (b.status === 'unplanned' && numOrd(b.num) < numOrd(maxMoved) && !anomalies.some(a => a.detail.includes(`dependency ${b.num} `))) {
       pushAnomaly({
         kind: 'out-of-order',
         detail: `brief ${b.num} (${b.name}) is unplanned while later brief ${maxMoved} has moved — deliberate reordering or a skip; if it still matters: /spec:plan ${b.file}`,
@@ -452,10 +451,9 @@ function specDep(ref) {
   return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
 }
 
-// The serial reason for two briefed entries, or null when unrelated (= parallel-ok). Shared by
-// the vs-top annotation and pairwise lane admission so the two never disagree.
+// The serial reason for two DIFFERENT briefs (num strings): the roadmap dependency path, or null
+// when unrelated (= parallel-ok). Shared by the vs-top annotation and pairwise lane admission.
 function briefSerialReason(a, b) {
-  if (a === b) return `shared brief ${a}`
   if (briefDepPath(a, b)) return `brief ${a} depends on ${b}`
   if (briefDepPath(b, a)) return `brief ${b} depends on ${a}`
   return null
@@ -482,7 +480,9 @@ function exemptSet() {
   return exemptCache
 }
 function pairSerialReason(a, b) {
-  if (a.brief && b.brief) return briefSerialReason(a.brief, b.brief)
+  const rel = relateBriefs(a.brief, b.brief)
+  if (rel.relation === 'same') return `shared brief ${briefNum(a.brief)}`
+  if (rel.relation === 'different') return briefSerialReason(briefNum(a.brief), briefNum(b.brief))
   const sa = specs.find(x => x.path === a.path), sb = specs.find(x => x.path === b.path)
   if (!sa || !sb || !sa.filePlan.length || !sb.filePlan.length) return undefined
   const ex = exemptSet()
@@ -519,19 +519,19 @@ function deriveNext() {
       const dep = specDep(d)
       if (dep && !DONE(dep.status)) blockers.push(`${dep.path} (${dep.status})`)
     }
-    if (s.status === 'draft' && s.brief && briefByNum.has(s.brief)) {
-      for (const d of briefByNum.get(s.brief).depends_on) {
+    if (s.status === 'draft' && s.brief.kind === 'briefed' && briefByNum.has(briefNum(s.brief))) {
+      for (const d of briefByNum.get(briefNum(s.brief)).depends_on) {
         const dep = briefByNum.get(d)
         if (!dep || !dep.specs.some(x => LANDED(x.status))) blockers.push(`brief ${d} (${dep ? dep.status : 'missing'})`)
       }
     }
     // A queue `after` gate on this spec's (or its brief's) queued position adds one blocker.
     if (queueBlockersBySpec.has(s.path)) blockers.push(queueBlockersBySpec.get(s.path))
-    else if (s.brief && queueBlockersByBrief.has(s.brief)) blockers.push(queueBlockersByBrief.get(s.brief))
+    else if (s.brief.kind === 'briefed' && queueBlockersByBrief.has(briefNum(s.brief))) blockers.push(queueBlockersByBrief.get(briefNum(s.brief)))
     const rank = s.status === 'implementing' ? 0 : s.status === 'hardened' ? 1 : 2
     entries.push({
       action, path: s.path, status: s.status, brief: s.brief, blockers,
-      note: s.status + (s.brief ? ` (brief ${s.brief})` : ''),
+      note: s.status + (s.brief.kind === 'briefed' ? ` (brief ${briefNum(s.brief)})` : ''),
       rank,
     })
   }
@@ -546,14 +546,14 @@ function deriveNext() {
     if (e.queue) return e.__queuePos
     // A queued spec item's own position overrides its brief's queued position.
     if (e.path && queuePosBySpec.has(e.path)) return queuePosBySpec.get(e.path)
-    if (e.brief && queuePosByBrief.has(e.brief)) return queuePosByBrief.get(e.brief)
+    if (e.brief.kind === 'briefed' && queuePosByBrief.has(briefNum(e.brief))) return queuePosByBrief.get(briefNum(e.brief))
     return Infinity
   }
   entries.sort((a, b) =>
     (a.blockers.length ? 1 : 0) - (b.blockers.length ? 1 : 0)
     || queuePos(a) - queuePos(b)
     || a.rank - b.rank
-    || (a.brief ? briefOrd(a.brief) : Infinity) - (b.brief ? briefOrd(b.brief) : Infinity)
+    || briefOrd(a.brief) - briefOrd(b.brief)
     || (a.path || '').localeCompare(b.path || ''))
 
   // Every spec done (or only blocked ones left): the next ready unplanned brief is the pick.
@@ -562,10 +562,10 @@ function deriveNext() {
       const dep = briefByNum.get(d)
       return dep && dep.specs.some(x => LANDED(x.status))
     }))
-    .sort((a, b) => briefOrd(a.num) - briefOrd(b.num))
+    .sort((a, b) => briefOrd(parseBrief(a.num)) - briefOrd(parseBrief(b.num)))
   if (readyBriefs.length && !entries.some(e => !e.blockers.length)) {
     const b = readyBriefs[0]
-    entries.unshift({ action: '/spec:plan', path: b.file, status: 'unplanned', brief: b.num, blockers: [], note: `brief ${b.num} (${b.name}) unplanned, dependencies met`, rank: -1 })
+    entries.unshift({ action: '/spec:plan', path: b.file, status: 'unplanned', brief: parseBrief(b.num), blockers: [], note: `brief ${b.num} (${b.name}) unplanned, dependencies met`, rank: -1 })
   }
 
   // Parallel annotation: each unblocked runner-up vs the top pick. Both need a brief to
@@ -580,7 +580,11 @@ function deriveNext() {
     for (const e of entries.slice(1)) {
       if (e === top || e.blockers.length || e.action === '/spec:fix' || e.queue) continue
       const reason = pairSerialReason(e, top)
-      if (reason === undefined) continue
+      if (reason === undefined) {
+        const rel = relateBriefs(e.brief, top.brief)
+        if (rel.relation === 'unknown') e.parallelUnknown = `${rel.reason}; no File Plan rows`
+        continue
+      }
       if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
     }
@@ -607,8 +611,8 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeLine(1, JSON.stringify({
-      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, __after, __origin, __trigger, __batch, __payload, ...e }) =>
-        e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
+      next: entries.map(({ rank, parallelReason, parallelUnknown, __queuePos, __queueId, __after, __origin, __trigger, __batch, __payload, ...e }) =>
+        e.queue ? { ...e, brief: briefNum(e.brief) } : { ...e, brief: briefNum(e.brief), parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)
   }
@@ -654,10 +658,10 @@ if (lanesMode) {
   const branchFor = p => 'spec/' + path.basename(p).replace(/\.[^.]*$/, '')
   const runLanes = lanes.filter(e => e.action === '/spec:run').map(e => {
     const branch = branchFor(e.path)
-    return { action: e.action, path: e.path, brief: e.brief, status: e.status, note: e.note, branch, worktree: worktreeOf(branch) }
+    return { action: e.action, path: e.path, brief: briefNum(e.brief), status: e.status, note: e.note, branch, worktree: worktreeOf(branch) }
   })
   const serialized = later.filter(e => e.action === '/spec:run' || laneClash.has(e)).map(e => ({
-    path: e.path, brief: e.brief,
+    path: e.path, brief: briefNum(e.brief),
     reason: laneClash.get(e) || e.parallelReason || 'queued behind the top pick',
   }))
   // the repo files a fix's text names, and the open specs whose File Plans name them.
@@ -715,7 +719,7 @@ if (briefFilter) {
 if (json) {
   // `superseded` (the brief-level flag, internal-only per its own comment above) is
   // stripped here alongside `specs: ss` — this dashboard JSON shape is unchanged.
-  writeLine(1, JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
+  writeLine(1, JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs: specs.map(sp => ({ ...sp, brief: briefNum(sp.brief) })), superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
   process.exit(0)
 }
 
@@ -868,7 +872,7 @@ const waitClause = n => `${n} more open`
       // Consecutive entries with the same reason share one branch line.
       const reasonOf = e => e.parallel === false ? `⛓️ ${e.parallelReason}`
         : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
-        : '🤷 no brief — parallelism unknown'
+        : `🤷 no brief — parallelism unknown (${e.parallelUnknown || 'no File Plan rows'})`
       later.forEach((e, i) => {
         emit(e)
         const reason = reasonOf(e)

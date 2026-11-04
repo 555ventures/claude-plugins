@@ -97,7 +97,7 @@ test('AC-20260903-03-2: a top prompt gated with after:{spec} carries a blocker n
     'D2/D3: once the gate target is done, the prompt must become ready and print as line 2 of --next: ' + r2.stdout)
 })
 
-test('AC-20260903-03-3: a queued brief item gated with after:{brief} carries the blocker on its spec entry and unblocks once that brief is fully done', () => {
+test('AC-20260903-03-3 / AC-20261103-10-11: a queued brief item gated with after:{brief} carries the blocker on its spec entry and unblocks once that brief is fully done', () => {
   const dir = host({
     briefs: {
       '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',

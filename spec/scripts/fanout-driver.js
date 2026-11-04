@@ -36,6 +36,7 @@ const { fmValue } = require('./lib/frontmatter')
 const { resolveGate } = require('./lib/gate-resolve')
 const { readLaneExit } = require('./pending-question')
 const { originLine } = require('./lib/queue')
+const { parseBrief, relateBriefs, briefNum } = require('./lib/brief')
 
 const SELF = __filename
 const DIR = __dirname
@@ -325,10 +326,13 @@ function plan() {
   return st
 }
 
+// The state file keeps the --lanes --json string-or-null; parse at read.
+function briefLabel(raw) { return briefNum(parseBrief(raw)) || '—' }
+
 function printPlan(st) {
   const rows = st.lanes.map((l) => {
     const what = l.kind === 'fix' ? `fix ${l.queueId || 'ci-' + l.ci}` : l.spec
-    const tail = l.kind === 'fix' ? '' : `brief ${l.brief || '—'}  `
+    const tail = l.kind === 'fix' ? '' : `brief ${briefLabel(l.brief)}  `
     return `${l.id.padEnd(3)} ${what}  ${tail}${l.branch}${l.state === 'waiting' ? `  (waiting: ${l.waitingOn})` : ''}`
   })
   const b = st.batch
@@ -522,7 +526,7 @@ function printReport(st) {
     if (l.state === 'merged') return `${name}: merged (gate ${l.gate || 'unavailable'})`
     if (l.state === 'done') return `${name}: done`
     if (l.state === 'stopped') return `${name}: stopped — ${l.stoppedReason}`
-    const dep = st.lanes.find((d) => d.state === 'stopped' && d.id !== l.id && d.spec && ((l.kind !== 'fix' && d.brief === l.brief) || String(l.waitingOn).includes(d.spec)))
+    const dep = st.lanes.find((d) => d.state === 'stopped' && d.id !== l.id && d.spec && ((l.kind !== 'fix' && relateBriefs(parseBrief(d.brief), parseBrief(l.brief)).relation === 'same') || String(l.waitingOn).includes(d.spec)))
     return `${name}: not started — waited on ${dep ? `${dep.spec}, which stopped` : l.waitingOn}`
   })
   const clean = !stopped.length && !waiting.length

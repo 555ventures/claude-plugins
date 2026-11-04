@@ -64,6 +64,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readLedgerRows } = require('./lib/observation')
+const { parseBrief, relateBriefs } = require('./lib/brief')
 const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
   dedupeItems, reconcileMissingBriefs,
@@ -346,7 +347,7 @@ function oneLine(text, width) {
 
 function resolveRef(items, ref) {
   let matches = items.filter(i => i.id === ref)
-  if (!matches.length) matches = items.filter(i => i.kind === 'brief' && i.brief === normBrief(ref))
+  if (!matches.length) matches = items.filter(i => i.kind === 'brief' && relateBriefs(parseBrief(i.brief), parseBrief(normBrief(ref))).relation === 'same')
   if (!matches.length) matches = items.filter(i => i.kind === 'spec' && (i.spec === ref || path.basename(i.spec).includes(ref)))
   if (!matches.length) matches = items.filter(i => i.kind === 'prompt' && i.payload.includes(ref))
   if (!matches.length) {
@@ -589,7 +590,7 @@ switch (sub) {
     // A brief or spec is queued at most once, whatever the existing item's doneness. A pending duplicate is
     // named by its `list` position, a done one by its raw item-order position.
     if (kind === 'brief' || kind === 'spec') {
-      const dupIdx = items.findIndex(it => (kind === 'brief' && it.kind === 'brief' && it.brief === briefNum)
+      const dupIdx = items.findIndex(it => (kind === 'brief' && it.kind === 'brief' && relateBriefs(parseBrief(it.brief), parseBrief(briefNum)).relation === 'same')
         || (kind === 'spec' && it.kind === 'spec' && it.spec === specPath))
       if (dupIdx !== -1) {
         const pending = pendingIndices(items, ctx)

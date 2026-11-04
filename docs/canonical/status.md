@@ -47,3 +47,8 @@ fields read as origin unknown. `--lanes --json`'s `fixes[]` carries `origin`, `t
 open specs whose File Plans name them) and `blocker` (the unmet `after` gate's text, null when ready),
 and a fourth top-level key `born` lists every undone item carrying any of the three provenance fields.
 (specs/20261103/08-queue-items-remember-their-origin.md)
+A spec's `brief:` stamp is parsed once by
+`spec/scripts/lib/brief.js` into `{ kind: 'briefed', num }` or `{ kind: 'adhoc' }`; `relateBriefs(a, b)` is the one
+comparison (`same`, `different`, or `unknown` with a printed reason), and every external `--json` surface serializes
+the stamp back to `'NN'` or `null`. The `--all` `🤷` line names the reason parallelism is unknown.
+(specs/20261103/10-two-missing-briefs-are-not-the-same-brief.md)

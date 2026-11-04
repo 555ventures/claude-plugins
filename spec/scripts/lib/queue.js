@@ -14,11 +14,7 @@
 const fs = require('fs')
 const path = require('path')
 
-// Brief ids are NN plus an optional single lowercase letter (04, 04a, 15a, …).
-function normBrief(v) {
-  const m = String(v).trim().match(/^(\d+)([A-Za-z]?)(?:-.*)?$/)
-  return m ? m[1].padStart(2, '0') + m[2].toLowerCase() : String(v).trim()
-}
+const { normBrief, parseBrief } = require('./brief')
 
 // A roadmap brief is superseded when its body opens a blockquote with "Superseded by";
 // "Substantially delivered by" deliberately does NOT match.
@@ -72,7 +68,7 @@ function isItemReady(item, ctx) {
     if (st === null) return { ready: false, target, state: 'missing' }
     return { ready: st === 'done' || st === 'superseded', target, state: st }
   }
-  if (item.after.brief) {
+  if (parseBrief(item.after.brief).kind === 'briefed') {
     const target = `brief ${item.after.brief}`
     const st = ctx.briefStatus(item.after.brief)
     if (st === undefined || st === null) return { ready: false, target, state: 'missing' }

@@ -42,14 +42,15 @@ test('AC-20261103-04-2 / AC-20261103-09-2: the contract § Policy JSON block car
   const pol = section('spec/templates/grounding-contract.md', /^## Policy/, /^## (?!Policy)/)
   const json = pol.slice(pol.indexOf('```json'), pol.indexOf('```', pol.indexOf('```json') + 7))
   assert.match(json, /"stops"\s*:\s*\{/, 'the JSON block must carry a stops object, or hosts never learn the block exists')
-  for (const [k, v] of [['repairRound', 'repair'], ['buildEscalate', 'derived'], ['reviewEscalate', 'queue'], ['redFindings', 'remove-mention'], ['prototypeClose', 'ask'], ['rejectWithEvidence', 'accept']]) {
+  for (const [k, v] of [['repairRound', 'repair'], ['buildEscalate', 'derived'], ['reviewEscalate', 'queue'], ['redFindings', 'remove-mention'], ['prototypeClose', 'delete'], ['rejectWithEvidence', 'accept']]) {
     assert.match(json, new RegExp('"' + k + '"\\s*:\\s*"' + v + '"'), 'the block must carry "' + k + '": "' + v + '", or init writes a different default than the drivers read')
   }
-  assert.match(pol, phrase('`stops.prototypeClose` `ask | keep | delete`'), 'the Enums paragraph must name the prototypeClose enum, or a host cannot tell delete is opt-in')
+  assert.match(pol, phrase('`stops.prototypeClose` `ask | keep | delete`'), 'the Enums paragraph must name the prototypeClose enum, or a host cannot tell keep and ask can replace the delete default')
   assert.match(pol, phrase('`stops.rejectWithEvidence` `accept | ask`'), 'the Enums paragraph must name the rejectWithEvidence enum, or a host cannot tell the repro accept can be turned off')
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8'))
   const expected = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'spec/templates/grounding-contract.md'))).digest('hex').slice(0, 12)
   assert.notStrictEqual(cfg.contractHash, '4a008a392b20', 'the earlier stale stamp must not survive the contract edit, or every host sees no staleness')
+  assert.notStrictEqual(cfg.contractHash, '5167b7839afe', 'the pre-q30 stamp must not survive the prototypeClose default flip, or every host sees no staleness')
   assert.notStrictEqual(cfg.contractHash, 'e3fb765dadad', 'the pre-edit stamp must not survive the contract edit, or every host sees no staleness')
   assert.strictEqual(cfg.contractHash, expected, 'contractHash must equal the edited contract\'s hash, or /spec:doctor flags this repo\'s own grounding as stale')
 })

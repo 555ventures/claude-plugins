@@ -285,3 +285,25 @@ test('AC-20261103-04-11: WHEN the MERGE step runs with 2 unmerged proto commits 
   assert.match(step, /--prototype keep[ \t]*$/m, 'the mark line must arrive pre-filled with the policy value: ' + step)
   assert.doesNotMatch(step, /AskUserQuestion/, 'a host that answered the prototype stop must not be asked it: ' + step)
 })
+
+// fix q30: stops.prototypeClose defaults to delete — the MERGE step prints the pick, the keep veto and
+// the branch tip's restore command, and that command brings the deleted branch back.
+test('fix q30: WHEN the MERGE step runs with 2 unmerged proto commits on a default host THE SYSTEM SHALL print the Auto-picked delete line, the keep veto and a restore command whose sha brings the branch back after the delete', () => {
+  const h = driveToMerge('pickdelete', { prototype: true, protoCommits: 2 })
+  const tip = execFileSync('git', ['-C', h.root, 'rev-parse', PROTO_BRANCH], { encoding: 'utf8' }).trim()
+  const step = run(h.root, h.spec).stdout
+  assert.ok(step.includes('📌 Auto-picked Delete it — host policy stops.prototypeClose: delete (veto anytime)'),
+    'without the printed pick the owner cannot see or veto the delete the default chose: ' + step)
+  assert.ok(step.includes('git branch ' + PROTO_BRANCH + ' ' + tip),
+    'the step must print the restore command with the branch tip, or the deleted commits are unrecoverable by hand: ' + step)
+  assert.ok(step.includes('--prototype keep on the mark below'), 'the keep veto must be printed beside the pick: ' + step)
+  assert.match(step, /--prototype delete[ \t]*$/m, 'the mark line must arrive pre-filled with delete: ' + step)
+  assert.doesNotMatch(step, /AskUserQuestion/, 'the default host must not be asked the prototype stop: ' + step)
+  const merged = run(h.root, h.spec, '--mark', 'merge-strategy', 'ff-only', '--prototype', 'delete')
+  assert.strictEqual(merged.status, 0, 'delete must land the merge: ' + merged.stdout + merged.stderr)
+  assert.ok(merged.stdout.includes('restore the branch: git branch ' + PROTO_BRANCH + ' ' + tip),
+    'the DONE note must repeat the restore command, or the session that deleted it has no record of the tip: ' + merged.stdout)
+  assert.strictEqual(branchList(h.root, 'proto/*'), '', 'delete must remove the proto branch')
+  execFileSync('git', ['-C', h.root, 'branch', PROTO_BRANCH, tip], { encoding: 'utf8' })
+  assert.strictEqual(revCount(h.root), '2', 'the printed restore command must bring back both unmerged commits')
+})

@@ -177,9 +177,11 @@ waives, in every lane — `/spec:fix` included. (specs/20261029/07)
 The predictable stops are answered by the host's `policy.stops` block (`repairRound`, `buildEscalate`,
 `reviewEscalate`, `redFindings`, `prototypeClose`, `rejectWithEvidence`), written with safe defaults at init and shared by solo runs
 and lanes; each pick prints one `📌 Auto-picked <label> — host policy stops.<key>: <value> (veto anytime)` line
-and is listed in the run report; `ask` on a key brings the question back, and deleting a prototype stays a
-question by default. `/spec:fix` no longer asks before committing a dirty tree — `/git:commit`'s own two
+and is listed in the run report; `ask` on a key brings the question back. `/spec:fix` no longer asks before committing a dirty tree — `/git:commit`'s own two
 approvals are the stop. (specs/20261103/04)
+A prototype close deletes by default (`prototypeClose` `delete`: the contract, pictures and tests stay under
+`design/prototypes/<stem>/`; the MERGE step prints the branch tip's restore command and the `--prototype keep` veto),
+and the review's spent-repair-round exit is answered by `reviewEscalate` `queue`. (fix q30)
 In a lane (the private git dir carries the `spec-delegated` marker or the branch is in the fan-out table; sub-agents have no AskUserQuestion) every judgment stop in the
 build and review drivers, `/spec:run` Step 0 and `/spec:fix` writes `.claude/pending-question.json`
 at the lane's repo root and prints `PENDING_QUESTION`; the parent session relays it and records the

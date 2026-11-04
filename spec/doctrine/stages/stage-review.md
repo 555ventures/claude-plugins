@@ -28,7 +28,7 @@ before the ref: `diff_base` → `build_base` → `merge-base HEAD main|master`.
 terminal states the driver's own printed step names in full — remedy and exits included; read
 that text, never guess one. Each is a question, not a dead stop: `STOPPED` runs one in-session
 repair round (`--mark repair-round`, cap 1; a second red is two exits — queue `/spec:fix` /
-abandon) — `policy.stops.repairRound` answers it unless `ask`, the driver printing the 📌 line; and
+abandon, `policy.stops.reviewEscalate` `queue` picking the queue) — `policy.stops.repairRound` answers it unless `ask`, the driver printing the 📌 line; and
 `ESCALATE` lists the open findings, then `policy.stops.reviewEscalate` answers it unless `ask`
 (abandon and queue `/spec:fix`, the 📌 line printed, the disposer route named under it), else ONE
 `AskUserQuestion` (in a child session the driver writes the question instead — core § Delegated Stops)
@@ -103,8 +103,8 @@ When the driver prints `DONE`, report (core § Console Output Style) — printed
   **Prototype question:** when the step prints `prototype <stem>: N unmerged commits on
   proto/<stem>` with N > 0, ask via `AskUserQuestion` before marking — "The prototype has N
   commits that were never merged. Delete the prototype now?" (where `policy.stops.prototypeClose`
-  is `keep` or `delete` the step prints the 📌 line and pre-fills `--prototype`; `ask`, the default,
-  is the question) — **Delete it (Recommended)** (the
+  is `delete`, the default, or `keep`, the step prints the 📌 line, the veto operand and the branch
+  tip's restore command, and pre-fills `--prototype`; `ask` is the question) — **Delete it (Recommended)** (the
   worktree, branch and database go; its contract, pictures and tests stay under the design
   folder) / **Keep it for now** (the worktree and branch stay; close it later by hand with the
   printed command) — and mark `--mark merge-strategy <strategy> --prototype delete|keep`; the

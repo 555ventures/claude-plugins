@@ -1,6 +1,6 @@
 ---
 date: 2026-11-04
-status: hardened
+status: implementing
 tier: standard           # 📌 auto-picked (D0); the host's § Risk Tiers names verdict.js and review-legs.js — every AC carries a literal example so a mid-build upgrade costs nothing
 area: gate-integrity
 breaking: false
@@ -8,6 +8,7 @@ depends_on: [specs/20261103/12-one-suite-run-per-tree.md]
 brief: n/a
 spiked: 2026-11-04
 open_markers: 0
+diff_base: 15a0c61480e37b6a7c817471c055640e8bedb8b8
 ---
 
 # The legs seal the manifest
@@ -52,6 +53,10 @@ prompts telling those agents to re-run a leg only against a scratch copy.
 | D5 | `tests/review/disposer-gate.fixtures.js` gains `appendSealedRow(host, n, row)` — appends the row to `manifest-<n>.jsonl` and writes the file's fresh sha256 into `review-state.json`'s `manifestDigest[String(n)]` — and `makeTwoSurvivorPoolHost` and `tests/review/disposer-gate-refusals.test.js`'s `makeFiveFileReconcileHost` call it in place of their raw `appendFileSync`. Every test that today lands DISPOSITIONS through those fixtures continues to. (AC-20261104-01-9) | The fixtures' job is the pool's shape, not the leg's behaviour; a synthetic row sealed by the fixture is the one sanctioned seam and lives in test code only. |
 | D6 | `spec/agents/reviewer.md` § The evidence standard and `spec/agents/disposer.md` § What you are handed each gain one sentence, and `spec/doctrine/stages/stage-review.md` § Rules gains one bullet, all saying: the manifest is sealed by the legs run — the driver refuses every later mark when its bytes change — so a leg script is re-run only against a copy (`cp <manifest> <scratch>`, then `--manifest <scratch>`), never the live file. `[no-ac: wording — read by review]` | The two agents and the session are the three parties that re-ran legs by hand on 20261103/13; each reads exactly one of these files. |
 | D7 | `spec-review-driver.js`'s header comment describes the seal (one paragraph: `marks.manifestDigest[n]`, the drift refusal, the remedy) and `verdict.js`'s header drops "last-in-file wins" for "one row per leg; a duplicate invalidates the manifest"; `lib/manifest.js` opens with the house header (usage, owner citation `specs/20261104/01-the-legs-seal-the-manifest.md D1`, what it does not do: it never resolves a duplicate, never writes). The retired phrases are checked by AC-20261104-01-13. (AC-20261104-01-13) | A reader that still documents last-wins would be read as sanctioning it. |
+| D5′ | 📌 Auto-picked at build (A6's if-false arm, read against D1): `appendSealedRow(host, n, row)` writes ONE row per leg — when `manifest-<n>.jsonl` already holds a row for `row.leg`, that line is replaced in place; otherwise the row is appended; either way the fresh sha256 is sealed into `manifestDigest[String(n)]`. A fixture that overrides a real leg (`reconcile`, `gate`) therefore yields a valid sealed manifest instead of a D1 duplicate. Every fixture that appended to a sealed manifest — the two D5 names plus `tests/review/escalate-row.fixtures.js` `overrideLeg`, `tests/review/soft-floor.test.js` and `tests/review/review-driver-fix-cycle.test.js` (A6 was false) — routes through it; no assertion changes. (AC-20261104-01-9) | D1 forbids any reader resolving a duplicate, so the fixture seam must not manufacture one; replacing the row keeps the fixture's job (the pool's shape) and leaves D1 whole. Rejected: tolerating synthetic duplicates (re-opens the erasure D1 closes). |
+| D9 | Scope widened at build: `tests/review/escalate-row.fixtures.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names no File Plan path] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
+| D10 | Scope widened at build: `tests/review/soft-floor.test.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names no File Plan path] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
+| D11 | Scope widened at build: `tests/review/review-driver-fix-cycle.test.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names no File Plan path] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
 | D8 | `spec/.claude-plugin/plugin.json` is bumped via `node scripts/plugin-bump.js --bump --plugin spec --changelog "<paragraph>"`; `node scripts/plugin-bump.js --check` in the gate is the oracle. `[no-ac: version bump — plugin-bump-gate is the standing guard]` | Pipeline rules § Planning: every change under a plugin directory bumps that plugin. |
 
 ## File Plan
@@ -72,6 +77,9 @@ prompts telling those agents to re-run a leg only against a scratch copy.
 | tests/review/manifest-seal.test.js | CREATE | tests | AC-20261104-01-6, AC-20261104-01-7, AC-20261104-01-8 |
 | tests/review/disposer-gate.fixtures.js | MODIFY | tests | D5: `appendSealedRow`; `makeTwoSurvivorPoolHost` uses it |
 | tests/review/disposer-gate-refusals.test.js | MODIFY | tests | D5: `makeFiveFileReconcileHost` uses `appendSealedRow`; AC-20261104-01-9 tags the existing pool pin |
+| tests/review/escalate-row.fixtures.js | MODIFY | tests | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
+| tests/review/soft-floor.test.js | MODIFY | tests | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
+| tests/review/review-driver-fix-cycle.test.js | MODIFY | tests | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
 | tests/review/verdict.test.js | MODIFY | tests | AC-20261104-01-5 tags the existing invalid-manifest pin |
 | tests/review/review-driver.test.js | MODIFY | tests | AC-20261104-01-10 tags the existing no-side-effects pin |
 | tests/ac-matrix/ac-matrix.test.js | MODIFY | tests | AC-20261104-01-11 tags the existing oracle-standing pin |

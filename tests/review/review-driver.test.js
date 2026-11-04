@@ -244,7 +244,7 @@ test('AC-20260820-07-5: WHEN --mark dispositions counts exceed the survivor + le
   assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS', 'a refused dispositions mark must leave the state at DISPOSITIONS unchanged')
 })
 
-test('AC-20260820-07-9: WHEN the driver is re-invoked with no mark THE SYSTEM prints the same step again with no side effects — no duplicate manifest rows, no duplicate ledger lines', () => {
+test('AC-20260820-07-9 / AC-20261104-01-10: WHEN the driver is re-invoked with no mark THE SYSTEM prints the same step again with no side effects — no duplicate manifest rows, no duplicate ledger lines', () => {
   const host = makeHost()
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER', 'setup: fixture must reach REVIEWER before exercising re-invocation idempotency')

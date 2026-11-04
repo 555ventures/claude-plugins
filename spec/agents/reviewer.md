@@ -115,6 +115,8 @@ aside, or a "worth a one-line fix" remark. The findings list is the only channel
 disposition step reads; anything outside it is silently lost (measured on replay: a
 verified wrong-flag doc error reported only in prose never reached disposition).
 
+The manifest is sealed by the legs run — the driver refuses every later mark when its bytes change — so re-run a leg script only against a copy (`cp <manifest> <scratch>`, then `--manifest <scratch>`), never the live file.
+
 The same standard binds a **kill**. A claim is dismissed only on executed evidence about the
 input the change weakens — never on equivalence over today's fixtures. A weakened identity
 or boundary check (`===` → `includes`/`startsWith`/`indexOf`, an anchored regex → unanchored,

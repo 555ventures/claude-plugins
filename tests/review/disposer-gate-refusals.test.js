@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir } = require('../helpers')
-const { makeHost, readState, readStateRaw, run, stateOf, toReviewer, returnFileWith, writeStamp, CLEAN_RETURN, ONE_SURVIVOR_RETURN, makeTwoSurvivorPoolHost, validDispositions, disposerReturn } = require('./disposer-gate.fixtures')
+const { makeHost, readState, readStateRaw, run, stateOf, toReviewer, returnFileWith, writeStamp, CLEAN_RETURN, ONE_SURVIVOR_RETURN, makeTwoSurvivorPoolHost, appendSealedRow, validDispositions, disposerReturn } = require('./disposer-gate.fixtures')
 
 // Shard J of the disposer-gate family (disposer-gate-refusals.test.js, split from
 // disposer-gate.test.js by specs/20260903/06-test-suite-critical-path.md D1/D3). Owns
@@ -179,8 +179,7 @@ function makeFiveFileReconcileHost(prefix) {
   run(host.root, host.spec)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
     'setup precondition: the fixture must reach REVIEWER (manifest-1.jsonl written) before the reconcile row can be appended')
-  fs.appendFileSync(path.join(host.sidecar, 'manifest-1.jsonl'),
-    JSON.stringify({ leg: 'reconcile', exit: 3, observed: { outOfPlan: 5, files: ['a', 'b', 'c', 'd', 'e'] } }) + '\n')
+  appendSealedRow(host, 1, { leg: 'reconcile', exit: 3, observed: { outOfPlan: 5, files: ['a', 'b', 'c', 'd', 'e'] } })
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFileWith(prefix + '-return', CLEAN_RETURN))
   assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
     'setup precondition: a red reconcile row must land DISPOSITIONS: ' + JSON.stringify(readState(host.sidecar)))
@@ -191,7 +190,7 @@ const ONE_LEG_WAIVE = () => disposerReturn([
   { ref: 'leg:reconcile', recommended: 'waive', reason: 'D1 sanctions every out-of-plan file' },
 ])
 
-test('disposition-pool unit / AC-20260909-04-12 (SHALL CONTINUE TO, specs/20260909/04-review-soft-floor.md D7 — an explicit count flag remains an optional cross-check that must equal the derived tally when present): WHEN the manifest holds a red reconcile row with outOfPlan:5 and --file holds ONE leg:reconcile waive entry THE SYSTEM refuses --waived 1 (exit 2, stderr names the leg weight, state byte-identical) and accepts --waived 5, recording dispositions.word CLEAN — the count verdict.js derives, never a per-entry tally', () => {
+test('disposition-pool unit / AC-20260909-04-12 / AC-20261104-01-9 (SHALL CONTINUE TO, specs/20260909/04-review-soft-floor.md D7 — an explicit count flag remains an optional cross-check that must equal the derived tally when present): WHEN the manifest holds a red reconcile row with outOfPlan:5 and --file holds ONE leg:reconcile waive entry THE SYSTEM refuses --waived 1 (exit 2, stderr names the leg weight, state byte-identical) and accepts --waived 5, recording dispositions.word CLEAN — the count verdict.js derives, never a per-entry tally', () => {
   const host = makeFiveFileReconcileHost('disposer-unit-five')
   const before = readStateRaw(host.sidecar)
 

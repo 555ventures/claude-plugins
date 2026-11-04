@@ -3,6 +3,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 // disposer-gate family shared fixtures — split from disposer-gate.test.js by
@@ -150,6 +151,24 @@ const TWO_SURVIVOR_RETURN = {
   killed: [], reviewerCount: 1, scope: 'full', tokens: 10,
 }
 
+// Writes one synthetic row to manifest-<n>.jsonl (replacing the line already holding that leg,
+// else appending, so the manifest never carries a duplicate leg) and re-seals it: the file's fresh sha256 is
+// written into review-state.json's manifestDigest[n], so the driver's drift check accepts the
+// fixture's row. The one sanctioned seam for a synthetic evidence row; test code only.
+function appendSealedRow(host, n, row) {
+  const file = path.join(host.sidecar, `manifest-${n}.jsonl`)
+  const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)
+  const at = lines.findIndex(l => { try { return JSON.parse(l).leg === row.leg } catch { return false } })
+  if (at >= 0) lines[at] = JSON.stringify(row)
+  else lines.push(JSON.stringify(row))
+  fs.writeFileSync(file, lines.join('\n') + '\n')
+  const statePath = path.join(host.sidecar, 'review-state.json')
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+  state.manifestDigest = state.manifestDigest || {}
+  state.manifestDigest[String(n)] = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n')
+}
+
 // Builds a host at DISPOSITIONS whose pools are exactly AC-20260901-09-3's shape: two
 // reviewer survivors (s0, s1) plus one failing non-blocking leg row (leg:drift, exit 1) —
 // appended directly onto the driver's own manifest-1.jsonl, mirroring how loop-checkpoint's
@@ -160,8 +179,7 @@ function makeTwoSurvivorPoolHost(prefix, viaArgs = []) {
   run(host.root, host.spec, ...viaArgs)
   assert.strictEqual(stateOf(host.root, host.spec), 'REVIEWER',
     'setup precondition: the fixture must reach REVIEWER (manifest-1.jsonl written) before the drift leg row can be appended')
-  fs.appendFileSync(path.join(host.sidecar, 'manifest-1.jsonl'),
-    JSON.stringify({ leg: 'drift', exit: 1, observed: { note: 'synthetic non-blocking finding' } }) + '\n')
+  appendSealedRow(host, 1, { leg: 'drift', exit: 1, observed: { note: 'synthetic non-blocking finding' } })
   const returnFile = returnFileWith(prefix + '-return', TWO_SURVIVOR_RETURN)
   run(host.root, host.spec, '--mark', 'reviewer-returned', '--file', returnFile)
   assert.strictEqual(stateOf(host.root, host.spec), 'DISPOSITIONS',
@@ -180,4 +198,4 @@ function disposerReturn(dispositions, tokens = 5, verdict = 'DISPOSED') {
   return { verdict, dispositions, tokens }
 }
 
-module.exports = { DRIVER, GREEN_TEST, specBody, makeHost, readState, readStateRaw, lastLedgerRow, run, stateOf, toReviewer, returnFileWith, writeStamp, CLEAN_RETURN, ONE_SURVIVOR_RETURN, TWO_SURVIVOR_RETURN, makeTwoSurvivorPoolHost, validDispositions, disposerReturn }
+module.exports = { appendSealedRow, DRIVER, GREEN_TEST, specBody, makeHost, readState, readStateRaw, lastLedgerRow, run, stateOf, toReviewer, returnFileWith, writeStamp, CLEAN_RETURN, ONE_SURVIVOR_RETURN, TWO_SURVIVOR_RETURN, makeTwoSurvivorPoolHost, validDispositions, disposerReturn }

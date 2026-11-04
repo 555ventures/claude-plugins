@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, runBash, gitRepo } = require('../helpers')
+const { appendSealedRow } = require('./disposer-gate.fixtures')
 
 // escalate-row family shared fixtures — split from escalate-row.test.js by
 // specs/20260903/06-test-suite-critical-path.md D2. Provenance carried over from the pre-image
@@ -124,11 +125,10 @@ function readSidecar(sidecarDir) {
   return JSON.parse(fs.readFileSync(path.join(sidecarDir, 'review-state.json'), 'utf8'))
 }
 
-// Appends a NEW line for `leg` — verdict.js's manifest parser is last-line-wins per leg key
-// (a Map keyed on leg name, populated in file order), so this overrides whatever review-legs.js
-// itself wrote for that leg without touching the rest of the manifest.
+// Replaces the line review-legs.js wrote for `leg` (else appends) and re-seals the manifest, so
+// the manifest keeps one row per leg without touching the rest of it.
 function overrideLeg(manifestPath, leg, exit, observed) {
-  fs.appendFileSync(manifestPath, JSON.stringify({ leg, exit, observed }) + '\n')
+  appendSealedRow({ sidecar: path.dirname(manifestPath) }, Number(path.basename(manifestPath).match(/\d+/)[0]), { leg, exit, observed })
 }
 
 function makeHost(name) {

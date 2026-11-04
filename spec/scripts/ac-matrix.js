@@ -62,6 +62,7 @@ const {
 const { fmValue } = require('./lib/frontmatter')
 const { resolveReference } = require('./lib/scan-test-calls')
 const { writeOut } = require('./lib/driver-io')
+const { readManifest } = require('./lib/manifest')
 
 // Synchronous writer (lib/driver-io.js writeOut, no trailing newline of its own) for --lint's
 // short-circuit exit — see lib/sync-write.js for the pipe truncation it avoids.
@@ -381,28 +382,8 @@ for (const b of wellFormed) {
 
 // ---- manifest read (oracle-leg standing check) — before this script appends its own rows ----
 
-function readManifestRows(p) {
-  let raw = ''
-  try {
-    raw = fs.readFileSync(p, 'utf8')
-  } catch {
-    raw = ''
-  }
-  const rows = new Map()
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    try {
-      const row = JSON.parse(line)
-      if (row.leg) rows.set(row.leg, row)
-    } catch {
-      // malformed manifest lines are ignored here — verdict.js's manifestValid check is the
-      // authority on manifest well-formedness; this script only reads oracle-leg standing.
-    }
-  }
-  return rows
-}
-
-const manifestRows = readManifestRows(manifestPath)
+// Well-formedness is verdict.js's call; this script only reads oracle-leg standing from byLeg.
+const manifestRows = (readManifest(manifestPath) || { byLeg: new Map() }).byLeg
 
 // ---- step 5: coverage matrix (skipped entirely in --has-drift-script mode: host owns it) ----
 

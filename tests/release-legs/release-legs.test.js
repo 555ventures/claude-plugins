@@ -228,7 +228,7 @@ test('AC-20260823-01-7: stage appends exactly ONE ci row with conclusion success
     const ciRows = rows.filter(row => row.leg === 'ci')
     assert.strictEqual(ciRows.length, 1,
       'D4: the ci leg must append exactly ONE row after the poll loop resolves — one row per poll ' +
-      'iteration would corrupt the leg map (verdict.js keeps last-in-file-wins, but a double append ' +
+      'iteration would corrupt the leg map (verdict.js reads one row per leg and a duplicate invalidates the manifest, so a double append ' +
       'is exactly the corruption D4 exists to prevent): ' + JSON.stringify(ciRows) + ' (stage status ' + r.status + ', stderr ' + r.stderr + ')')
     assert.deepStrictEqual(ciRows[0], { leg: 'ci', exit: 0, observed: { conclusion: 'success' } },
       'the single appended row must carry the RESOLVED conclusion (success), not the in-progress ' +
@@ -325,7 +325,7 @@ test('AC-20260908-05-9 (retag of AC-20260823-01-10): append --leg journeys CONTI
     'D7: the appended row\'s exit must be 1 when failed > 0: ' + JSON.stringify(readRows(manifestRed)))
 })
 
-test('AC-20260823-01-11: append refuses a duplicate leg row without appending, and refuses a production --result outside the closed enum naming it', () => {
+test('AC-20260823-01-11 / AC-20261104-01-12: append refuses a duplicate leg row without appending, and refuses a production --result outside the closed enum naming it', () => {
   const dir = fs.realpathSync(tmpdir('rl-ac11'))
   const manifest = path.join(dir, 'dup.jsonl')
   const priorRow = { leg: 'journeys', exit: 0, observed: { walked: 1, failed: 0 } }

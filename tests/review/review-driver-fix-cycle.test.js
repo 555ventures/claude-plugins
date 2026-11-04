@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, gitRepo } = require('../helpers')
 const { GREEN_TEST, specBody, makeHost, run, stateOf, returnFileWith, oneFixReturnFile, CLEAN_RETURN, SURVIVOR_RETURN } = require('./review-driver.fixtures')
+const { appendSealedRow } = require('./disposer-gate.fixtures')
 
 // Shard D of the review-driver family (review-driver-fix-cycle.test.js, split from
 // review-driver.test.js by specs/20260903/06-test-suite-critical-path.md D1/D3). Owns the
@@ -255,9 +256,7 @@ test('AC-20260902-05-8: WHEN --mark dispositions is invoked after a gate overrid
 
   // Hand-edit the manifest to append a "gate" row stamped scope:"fix-delta" — once D1 stamps
   // every other row "full", this single override disagrees with the rest of the manifest.
-  const manifestPath = path.join(host.sidecar, 'manifest-1.jsonl')
-  fs.appendFileSync(manifestPath,
-    JSON.stringify({ leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1 }, scope: 'fix-delta' }) + '\n')
+  appendSealedRow(host, 1, { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1 }, scope: 'fix-delta' })
 
   const stateFile = path.join(host.sidecar, 'review-state.json')
   const stateBefore = fs.readFileSync(stateFile, 'utf8')

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: standard           # caller-fixed at plan time (see D0); the host's § Risk Tiers names review-legs.js and grounding-contract.md — the build upgrades on mid-build evidence per core § Tiers
 area: gate-integrity
 breaking: false
@@ -270,6 +270,25 @@ suite is red or count-less, so D6's spawn branch is the one they already take; t
 suite` hit in `review-driver-close-refusals.test.js` pins the refused-rerun message on the
 always-run path, which D8 leaves byte-identical; `gateCommand\` yourself` has no test pin. The
 `executes` hits on the drivers and review-legs are priced by A5 with its remedy.
+
+### Advisory debt (review rv_7db25fed8b8f)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a5feb616853ed4cb1/tests/review/legs-verdict-pair.test.js:233 — tests/review/legs-verdict-pair.test.js AC-20260820-06-6 / AC-20260903-02-16 (SHALL CONTINUE TO) now runs its fixture with a `{file}` testCommand (D14), so the suite row is `{unavailable:'file-placeholder'}` and the pin's original subject — a suite row with a GENUINE nonzero count beside a forced-red at-risk row — is no longer exercised; the retained assert message still says the bare suite must print "ℹ tests 3", now untrue of the fixture.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a5feb616853ed4cb1/specs/20261103/12-one-suite-run-per-tree.md:171 — Spec § Behavior and § Rationale state 'this repo's `{testFiles}` gate prints no `ℹ tests` line, so its gate row is never recorded and the scoped gate re-runs at review'; the executed review shows the gate row was recorded by the build and reused.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a5feb616853ed4cb1/spec/scripts/fanout-driver.js:460 — fanout-driver.js runGate swallows any cacheTree() failure and silently falls through to an uncached spawn with no message, whereas the build and review drivers die naming the remedy.
+
+Build departures (folded from the deviations sidecar at close): AC-21 and AC-22 pin the
+always-run path D8 leaves byte-identical, so they were green on the pre-image; only AC-20 and
+AC-23 were red. AC-22 puts the overlay path in the File Plan's own `tests/foo.test.js`, since a
+separate reader file is out-of-plan and trips reconcile. AC-20 asserts the close reached
+`state: DONE` rather than reading `marks.closed`, because the driver removes the review sidecar
+at DONE; AC-23 is two tests (miss writes the close tree's key; hit pre-seeds it through
+`record()`), since a second `--mark closed` is impossible once the sidecar is gone. D15: the
+first scripts pass added a default `ℹ tests (\d+)` count pattern for hosts declaring none — removed;
+the fixtures declare the pattern. The close-suite Canonical Delta bullet landed in
+`docs/canonical/review-close.md` beside "Cost is accepted by contract", where that bullet
+actually lives. The executed review showed this repo's `{testFiles}` gate does print a count
+(node:test's default reporter), so its gate row is recorded and reused — the Behavior paragraph's
+"never recorded" was pessimistic.
 
 ## Canonical Delta
 

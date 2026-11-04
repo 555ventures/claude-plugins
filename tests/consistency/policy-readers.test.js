@@ -105,6 +105,19 @@ test('AC-20261103-09-10: disposer § Return contract names repro with command an
   assert.ok(has(section(body('spec/commands/init.md'), /^### Policy round 2/, 3), 'rejectWithEvidence accept'), 'init Policy round 2 must name the rejectWithEvidence default, or init is read as leaving the key unwritten')
 })
 
+// queue item q29 (/spec:fix): fix.md's waive/reject step reads rejectWithEvidence through the one stop query.
+test('fix.md step 4 reads policy.stops.rejectWithEvidence through pending-question stop-policy, prints the review driver\'s 📌 line, and keeps only the user waives', () => {
+  const has = (text, lit) => phrase(lit).test(text)
+  const fix = body('spec/commands/fix.md')
+  const at = fix.search(/^4\. \*\*Fresh review/m)
+  assert.ok(at !== -1, 'fix.md lost step 4, so the waive/reject reader is unpinned')
+  const step = fix.slice(at).split(/^5\. /m)[0]
+  for (const lit of ['policy.stops.rejectWithEvidence', 'stop-policy --root . --key rejectWithEvidence',
+    '📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)', 'only the user waives']) {
+    assert.ok(has(step, lit), 'fix.md step 4 must name ' + lit + ', or /spec:fix asks about a reject the review driver would accept on its repro')
+  }
+})
+
 // specs/20261103/06-the-fan-out-drains-the-queue.md D9: the fanout policy keys have a prose reader.
 test('AC-20261103-06-25: fanout.md names policy.fanout.selfSurfaces and policy.fanout.overlapExempt in its Input or Rules text', () => {
   const fanout = body('spec/commands/fanout.md')

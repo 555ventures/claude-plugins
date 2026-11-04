@@ -244,3 +244,17 @@ test('AC-20261103-04-14: bareRun sets marks.laneExit.reason to the chosen label 
     'a stop answer must be recorded as the lane exit, or the parent returns the lane without a recognised stop: ' + JSON.stringify(marks.laneExit))
   assert.ok(!Number.isNaN(Date.parse(marks.laneExit.at)), 'the lane exit needs an ISO time')
 })
+
+// queue item q29 (/spec:fix): stop-policy is the prose commands' query form of stopPolicy.
+test('stop-policy prints a stops key\'s effective value — the host default, the host\'s own value, ask under the fan-out table — and refuses an unknown key', () => {
+  const val = (root, key) => runNode(SCRIPT, ['stop-policy', '--root', root, '--key', key])
+  const def = val(policyHost('pq-sp-default', {}), 'rejectWithEvidence')
+  assert.strictEqual(def.status + ':' + def.stdout.trim(), '0:accept', 'an unset key must print its default, or /spec:fix asks about a reject the review driver accepts: ' + def.stderr)
+  const own = val(policyHost('pq-sp-ask', { rejectWithEvidence: 'ask' }), 'rejectWithEvidence')
+  assert.strictEqual(own.stdout.trim(), 'ask', 'the host value must win, or a host that wants the question back never gets it')
+  const lane = val(policyHost('pq-sp-lane', { rejectWithEvidence: 'accept' }, { version: 1, lanes: [], ask: ['rejectWithEvidence'] }), 'rejectWithEvidence')
+  assert.strictEqual(lane.stdout.trim(), 'ask', 'the fan-out --ask overlay must apply, or a fix lane auto-accepts what the run asked to relay')
+  const bad = val(policyHost('pq-sp-bad', {}), 'noSuchStop')
+  assert.strictEqual(bad.status, 2, 'an unknown key must exit 2, or a typo in a prose reader reads as a value: ' + bad.stdout)
+  assert.ok(bad.stderr.includes('rejectWithEvidence'), 'the refusal must list the valid keys: ' + bad.stderr)
+})

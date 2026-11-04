@@ -55,7 +55,13 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
    root-cause statement and step 3's approved list in place of a spec, with the line "no File
    Plan or ACs exist — judge the diff against the statement"; the range `git rev-parse HEAD`
    plus the dirty working tree, untracked files included; the root; the config's `pipelineRules`
-   path. A `fix` disposition is applied without a question; `waive`/`reject` go to the user in
+   path. A `fix` disposition is applied without a question. A `reject` this session recommends on
+   an executed repro (the command it actually ran and the output it observed refuting the claim)
+   is accepted without a question when
+   `node "$(spec-paths pending-question)" stop-policy --root . --key rejectWithEvidence` prints
+   `accept` (policy.stops.rejectWithEvidence, the review driver's rule), printing
+   `📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)`
+   with the repro under it. Every other `waive`/`reject` goes to the user in
    ONE `AskUserQuestion` (≤4 per call, the reviewer's claim quoted, the recommended fate first) —
    only the user waives (delegated: write the document the same way with kind `fix-dispositions`, then
    stop; on resume read `show`, apply, `consume`); a `hard` finding never ships undisposed. A `REVIEWER_FAILED` return is re-dispatched once, then reported as unreviewed.

@@ -2,6 +2,7 @@
 'use strict'
 // Usage: pending-question.js write --root <dir> --file <doc.json>
 //        pending-question.js show|dismiss|consume|mark|is-delegated --root <dir>
+//        pending-question.js stop-policy --root <dir> --key <stops key>
 //        pending-question.js answer --root <dir> --id <qid> --label <label> --by user
 // Also a module: isDelegated, markDelegated, pendingPath, writePending, readPending,
 // consumePending, validate, stopPolicy, policyPick, recordLaneExit, clearLaneExit, readLaneExit.
@@ -20,7 +21,9 @@
 //
 // `stopPolicy(root)` / `policyPick(root, key, labelByValue, marks)` are the
 // one reader of the host's policy.stops overlaid by the fan-out table's `ask` list, and the one
-// builder of the printed auto-pick line; a policy pick never writes a pending file.
+// builder of the printed auto-pick line; a policy pick never writes a pending file. `stop-policy`
+// is their query form for prose commands (prints the key's effective value, the overlay applied),
+// so a prose reader of a stop never re-reads the config by hand or misses a fan-out --ask.
 //
 // `recordLaneExit(root, marks, exit)` / `clearLaneExit(root, marks)` / `readLaneExit(root)` are the one
 // writer and reader of a lane's exit: the exit lands on marks.laneExit AND,
@@ -32,7 +35,7 @@
 // NOT relay a question, and never stores state beyond that one file and the marker.
 //
 // Exit codes: 0 done (is-delegated: a lane) · 1 nothing pending (show) / not a lane (is-delegated) · 2 usage, validation, unknown id/label,
-// already pending, not a git repo (mark)
+// already pending, not a git repo (mark), unknown stops key (stop-policy)
 
 const fs = require('fs')
 const crypto = require('crypto')
@@ -278,7 +281,7 @@ function bareRun(root, marks, keepKinds = [], keyFor = () => null) {
 }
 
 function usage(msg) {
-  process.stderr.write(`pending-question: ${msg}\nusage: pending-question.js write|show|answer|dismiss|consume|mark|is-delegated --root <dir> [--file <doc.json>] [--id <qid> --label <label> --by user]\n`)
+  process.stderr.write(`pending-question: ${msg}\nusage: pending-question.js write|show|answer|dismiss|consume|mark|is-delegated|stop-policy --root <dir> [--file <doc.json>] [--id <qid> --label <label> --by user] [--key <stops key>]\n`)
   process.exit(2)
 }
 
@@ -290,7 +293,7 @@ function main() {
     if (!argv[i].startsWith('--') || argv[i + 1] === undefined) usage(`${argv[i]} needs a value`)
     opt[argv[i].slice(2)] = argv[i + 1]
   }
-  if (!['write', 'show', 'answer', 'dismiss', 'consume', 'mark', 'is-delegated'].includes(cmd)) usage(`unknown subcommand ${cmd || '(none)'}`)
+  if (!['write', 'show', 'answer', 'dismiss', 'consume', 'mark', 'is-delegated', 'stop-policy'].includes(cmd)) usage(`unknown subcommand ${cmd || '(none)'}`)
   if (!opt.root) usage('--root needs a directory')
   const root = path.resolve(opt.root)
   const p = pendingPath(root)
@@ -318,6 +321,12 @@ function main() {
     const d = isDelegated(opt.root)
     process.stdout.write((d ? 'true' : 'false') + '\n')
     process.exit(d ? 0 : 1)
+  }
+  if (cmd === 'stop-policy') {
+    const stops = stopPolicy(root)
+    if (!opt.key || !Object.prototype.hasOwnProperty.call(stops, opt.key)) usage(`--key must be one of ${Object.keys(stops).join('|')}`)
+    process.stdout.write(stops[opt.key] + '\n')
+    process.exit(0)
   }
   if (cmd === 'mark') {
     const mp = markDelegated(opt.root)

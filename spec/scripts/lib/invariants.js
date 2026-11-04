@@ -1,12 +1,7 @@
 'use strict'
-// lib/invariants.js — exports `deriveInvariants(root, config)`, the authority for "a script
-// the pipeline itself runs"
-// expire-tests.js's keep-clause needs exactly this set: a hand list of
-// ten scripts once silently dropped `red-check.js`, `ac-matrix.js`, and the build driver,
-// so the set here is DERIVED from the host's real command
-// strings, hook commands, and the pipeline's own four entrypoints every time it is asked for,
-// never stored on disk (a checked-in derived file is the exact ratchet-baseline pattern this repo
-// already retired once).
+// lib/invariants.js — exports `deriveInvariants(root, config)`, the authority for "a script the pipeline
+// itself runs" (expire-tests.js's keep-clause set), DERIVED from the host's real command strings, hook
+// commands and the pipeline's four entrypoints on every call — never a hand list, never stored on disk.
 // Owner: specs/20260911/03-tests-expire-at-close.md.
 //
 // The universe is every code file (lib/file-shapes.js `isCodeFile`) under `root`, outside the skip dirs
@@ -49,9 +44,7 @@ const { walkFiles } = require('./walk-files')
 
 const PIPELINE_ENTRYPOINTS = ['review-legs.js', 'spec-review-driver.js', 'spec-build-driver.js', 'verdict.js']
 
-function relPosix(root, abs) {
-  return path.relative(root, abs).split(path.sep).join('/')
-}
+const { relPosix, readJsonSafe } = require('./util')
 
 // The universe's walk and its skip set live in lib/walk-files.js — the one copy
 // lib/scan-test-calls.js's `listTestFiles` shares, so the two can never disagree about which
@@ -82,13 +75,6 @@ function configCommandStrings(config) {
   return out
 }
 
-function readJsonSafe(p) {
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'))
-  } catch {
-    return null
-  }
-}
 
 function hookCommandStrings(root, allFiles) {
   const out = []

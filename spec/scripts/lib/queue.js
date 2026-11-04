@@ -2,46 +2,26 @@
 // lib/queue.js — the ONE item-doneness/readiness evaluator and the ONE missing-brief
 // placement algorithm for the derived session queue.
 // Owner: specs/20260903/03-pipeline-queue-mechanics.md.
-// Why a shared module: doneness AND readiness must be
-// evaluated identically whether the caller is spec-queue.js (the write path — brief/spec
-// states come from shelling `spec-status --json`) or spec-status.js's own read-only overlay
-// (states come from its in-process derivation) — a second hand-rolled copy of either
-// predicate in either caller is exactly the duplicate-derivation defect class this repo
-// flags as a hard finding. `reconcileMissingBriefs` is shared for the same reason: it runs
-// the identical append-last placement rule twice — for real, with writes, on every
-// spec-queue.js write subcommand, and virtually (never writing) inside spec-status.js's
-// overlay — and a placement computed two different ways would eventually disagree about
-// where an appended item lands.
+// Why a shared module: spec-queue.js (the write path) and spec-status.js's read-only overlay must
+// evaluate doneness, readiness and the append-last placement identically.
 //
-// What this deliberately does NOT do: read or write the queue file itself (both CLI
-// callers own their own file I/O — this module is pure, given-data-in/data-out); shell
-// out to git or to spec-status.js (callers resolve the queue path and brief/spec states
-// themselves); validate CLI `--when`/`--after-*` syntax (spec-queue.js's own add-subcommand
-// parses those flags; this module only evaluates an already-shaped `when`/`after` object);
-// decide seeding (an absent-file "seed everything" is spec-queue.js's own call — this
-// module's reconcile only ever appends missing items into an existing list, real or
-// virtual, it never decides whether to seed from nothing); place items relative to their
-// roadmap Depends-on parent (append-last is the whole rule).
+// What this deliberately does NOT do: read or write the queue file (pure data-in/data-out); shell out
+// to git or spec-status.js; validate CLI `--when`/`--after-*` syntax; decide seeding; or place items
+// relative to their roadmap Depends-on parent (append-last is the whole rule).
 //
 // Exit codes: n/a (library, not an entrypoint).
 
 const fs = require('fs')
 const path = require('path')
 
-// Brief ids are NN plus an optional single lowercase letter (04, 04a, 15a, …) — the exact
-// shape spec-status.js's own normBrief produces. Mirrored here (not re-exported from
-// spec-status.js, which is a CLI entrypoint, not a requirable module) so spec-queue.js's
-// <ref> resolution and payload classification agree with spec-status.js's own id shape
-// without a second, drifting regex.
+// Brief ids are NN plus an optional single lowercase letter (04, 04a, 15a, …).
 function normBrief(v) {
   const m = String(v).trim().match(/^(\d+)([A-Za-z]?)(?:-.*)?$/)
   return m ? m[1].padStart(2, '0') + m[2].toLowerCase() : String(v).trim()
 }
 
-// A roadmap brief file is superseded when its body opens a blockquote
-// with "Superseded by" — the same marker the roadmap overview's "*(superseded by v7)*"
-// annotations describe in prose. "Substantially delivered by" deliberately does NOT match —
-// a delivered brief is done, not exempt from ever being queued.
+// A roadmap brief is superseded when its body opens a blockquote with "Superseded by";
+// "Substantially delivered by" deliberately does NOT match.
 function isSupersededBriefText(text) {
   return /^>\s*\*\*Superseded by\b/m.test(text)
 }
@@ -66,18 +46,11 @@ function evaluateWhen(when, ctx) {
   }
 }
 
-// Item doneness: a `brief` item's doneness is ALWAYS the
-// derived brief state — never a stored flag, with ONE exception: an explicit tick always wins
-// (see isItemDone). A `spec` item's doneness is otherwise ALWAYS the derived
-// spec status — done or superseded — OR the file being absent (retirement precedent: a vanished
-// spec is silence, not a dangling reference). A `prompt` item is done when manually ticked
-// (`ticked` stamped), OR — when it carries a `when` predicate — when that predicate evaluates
-// true; a prompt item with neither is manual-only and stays undone until ticked.
+// Item doneness: a `brief` item is the derived brief state; a `spec` item is done/superseded or its
+// file absent; a `prompt` item is done when ticked or its `when` predicate holds. A tick always wins.
 function isItemDone(item, ctx) {
-  // an explicit tick retires ANY item, whatever its kind — a `brief`/`spec` item whose target
-  // has vanished from the roadmap is otherwise unclearable, because its derived status can
-  // never reach 'done' and `spec-queue` has no remove verb (the queue-orphan hygiene finding
-  // prints `spec-queue done <brief>` as its first remedy, which is only true if a tick wins here)
+  // An explicit tick retires ANY item, whatever its kind — a brief/spec whose target vanished is
+  // otherwise unclearable.
   if (item.ticked) return { done: true, unknownType: false }
   if (item.kind === 'brief') return { done: ctx.briefStatus(item.brief) === 'done', unknownType: false }
   if (item.kind === 'spec') {
@@ -88,13 +61,9 @@ function isItemDone(item, ctx) {
   return { done: false, unknownType: false }
 }
 
-// Readiness is a SECOND predicate, independent of doneness — a done item
-// is never "not ready" (nothing consults isItemReady for a done item; readiness only matters
-// while the item is still undone). An item with no `after` gate is always ready. `target` is
-// "specs/…" for a spec gate, "brief NN" for a brief gate; `state` is the gate target's
-// derived status string, or "missing" when the target cannot be resolved at all (a deleted
-// spec file, an unknown brief number) — a missing target is NEVER ready and NEVER silently
-// releases the item.
+// Readiness is a second predicate, consulted only while an item is undone. No `after` gate -> ready.
+// `target` is "specs/…" or "brief NN"; `state` is the target's derived status, or "missing" — a
+// missing target is NEVER ready.
 function isItemReady(item, ctx) {
   if (!item.after) return { ready: true, target: null, state: null }
   if (item.after.spec) {
@@ -112,11 +81,8 @@ function isItemReady(item, ctx) {
   return { ready: true, target: null, state: null }
 }
 
-// Builds a `ctx` for evaluateWhen/isItemDone/isItemReady from already-read inputs — neither
-// ledger rows nor brief/spec statuses are re-read here; callers pass what they already have
-// (spec-status.js its in-process `ledgerRows`/`briefByNum`/spec list; spec-queue.js its own
-// `readLedgerRows` call and its shelled `spec-status --json` briefs/specs maps) so this
-// module never becomes a second I/O path for either.
+// Builds a `ctx` for evaluateWhen/isItemDone/isItemReady from inputs the caller already read —
+// this module is never a second I/O path.
 //   briefStatus(num) -> 'unplanned'|'in-flight'|'done'|undefined
 //   specStatus(relPath) -> 'draft'|'hardened'|'implementing'|'done'|'superseded'|null (absent)
 function makeCtx({ ledgerRows, briefStatus, specStatus, specRoot }) {
@@ -133,10 +99,8 @@ function makeCtx({ ledgerRows, briefStatus, specStatus, specRoot }) {
   }
 }
 
-// A brief or spec is queued at most once. Collapses duplicate `brief`/`spec`
-// items to their FIRST occurrence, in original order; `prompt` items are never deduped
-// (there is no natural identity to collapse on). Returns a NEW array — `items` is never
-// mutated.
+// Collapses duplicate `brief`/`spec` items to their FIRST occurrence; `prompt` items are never deduped.
+// Returns a NEW array.
 function dedupeItems(items) {
   const seenBrief = new Set()
   const seenSpec = new Set()
@@ -154,13 +118,8 @@ function dedupeItems(items) {
   return out
 }
 
-// The placement rule, run against a full (brief/spec/prompt, in order) item list. For every
-// on-disk brief not already present as a `kind:'brief'` item, APPEND it at the very end, in
-// the order `onDiskBriefs` is given (callers pass roadmap order) — no dependency-aware or
-// letter-suffix-parent insertion (both retired), no stamp. Returns NEW arrays —
-// `items` is never mutated. Each inserted item gets `id: null` — assigning a real,
-// sequential id is the caller's job (a real write bumps the file's `seq`; a virtual/never-
-// persisted caller may leave ids null, since nothing downstream keys off them).
+// Appends every on-disk brief not already queued at the very end, in the given (roadmap) order, with
+// `id: null` — the caller assigns real ids. Returns NEW arrays.
 function reconcileMissingBriefs(items, onDiskBriefs) {
   const present = new Set(items.filter(it => it.kind === 'brief').map(it => it.brief))
   const inserted = []
@@ -221,18 +180,13 @@ function citesDoneSpec(item, ctx) {
   return null
 }
 
-// A free-text item's lane: which command takes it next, recorded by the session that adds it
-// (the one place that knows whether it is a bug, a feature, a screen change or a question) —
-// never guessed from the payload afterwards. One lane per entry command, plus `decide`, which
-// has no command: it waits on the user's yes. Small in-session fixes and other repos' work have
-// no lane on purpose — they never belong in this queue.
+// A free-text item's lane: which command takes it next, recorded by the session that adds it. One lane
+// per entry command, plus `decide` (waits on the user's yes).
 const LANES = { plan: '/spec:plan', prototype: '/spec:prototype', fix: '/spec:fix', decide: null }
 
-// The ONE paste line for a prompt item, shared by `spec-queue next` and spec-status.js's Next
-// block so the two surfaces can never disagree: the lane's command followed by the payload
-// (the payload is the subject only — `add` refuses one that starts with a command). `decide`
-// prints a "needs your yes" lead instead of a command. A lane-less item (added before lanes
-// existed) prints its payload verbatim, exactly as before.
+// The ONE paste line for a prompt item, shared by `spec-queue next` and spec-status.js's Next block:
+// the lane's command then the payload; `decide` prints a "needs your yes" lead; a lane-less item
+// prints its payload verbatim.
 function promptAction(item) {
   if (!item.lane || !Object.prototype.hasOwnProperty.call(LANES, item.lane)) return item.payload
   const command = LANES[item.lane]

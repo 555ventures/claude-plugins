@@ -69,13 +69,7 @@ function productStageRoot(input) {
   return process.env.CLAUDE_PROJECT_DIR || (input && input.cwd) || process.cwd()
 }
 
-function readJsonSafe(p) {
-  try {
-    return JSON.parse(require('node:fs').readFileSync(p, 'utf8'))
-  } catch {
-    return null
-  }
-}
+const { readJsonSafe } = require('./lib/util')
 
 function inProductStage(root) {
   try {
@@ -158,11 +152,8 @@ function judgePrompt(questions) {
   ].join('\n')
 }
 
-// Returns null when there is nothing to say, or an advisory string to hand back to the model
-// alongside an ALLOWED call. Never blocks — see the "why tier 2 never blocks" note above.
-// Fail-open throughout.
-// `input` is the parsed hook JSON, used only to resolve productStageRoot for the derive
-// exemption; `rewrite` verdicts and tier-1 are unaffected by it.
+// Returns null, or an advisory string handed back alongside an ALLOWED call — never blocks, fails open.
+// `input` resolves productStageRoot for the derive exemption only.
 function judge(questions, input) {
   if (process.env.SPEC_QUESTION_JUDGE === 'off') return null
   const bin = process.env.SPEC_QUESTION_JUDGE_BIN || 'claude'
@@ -267,10 +258,8 @@ function main() {
     process.exit(0) // fail-open
   }
   if (!advice) process.exit(0)
-  // Allow the call and carry the judge's verdict to the model as context. `additionalContext`
-  // is the only channel that reaches the model on an allow (exit-0 stderr is debug-log only),
-  // and it is paired with an explicit `permissionDecision: "allow"` because that pairing is the
-  // documented shape; AskUserQuestion has no permission surface for the allow to widen.
+  // Allow the call and carry the judge's verdict as `additionalContext` (the only channel on an allow),
+  // paired with an explicit `permissionDecision: "allow"`.
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {

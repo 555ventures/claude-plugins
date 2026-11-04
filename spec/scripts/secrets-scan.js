@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// secrets-scan.js --root <dir> (--worktree | --paths <file>) [--json]
+// secrets-scan.js --root <dir> --worktree [--json]
 //
 // Owner: specs/20261029/04-the-four-questions-that-did-not-exist.md D1a (AC-20261029-04-1).
 // /git:commit Step 1 runs it beside `git add -A` so a would-be-staged secret becomes a question
@@ -10,8 +10,7 @@
 // whole repository that still exists on disk (the set `git add -A` stages from any directory;
 // deletions skipped, ignored files never listed). --root only locates the repository and anchors
 // the reported paths: hits are relative to --root, so a file outside a sub-directory root reads
-// `../<path>` and `git reset -q -- <path>` run from --root unstages exactly it. --paths scans one
-// --root-relative path per line from <file>.
+// `../<path>` and `git reset -q -- <path>` run from --root unstages exactly it.
 //
 // Closed detector list — no host configuration:
 //   path (basename):  .env, .env.* except .env.example|.env.sample|.env.template; *.pem *.key
@@ -27,8 +26,8 @@
 //
 // stdout (--json): {"hits":[{"path","reason":"path:<pat>"|"content:<pat>","line":N|null}]}
 // stdout (plain):  `<path>  <reason>[:<line>]` per hit; `no secrets found` on none
-// Exit codes: 0 no hits - 1 at least one hit - 2 usage, --root not a work tree, or --paths
-// unreadable (the message on stderr names the remedy)
+// Exit codes: 0 no hits - 1 at least one hit - 2 usage or --root not a work tree (the message on
+// stderr names the remedy)
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
@@ -58,22 +57,21 @@ const ALLOW = 'secrets-scan:allow'
 
 function usage(msg) {
   if (msg) console.error('secrets-scan: ' + msg)
-  console.error('usage: secrets-scan.js --root <dir> (--worktree | --paths <file>) [--json]')
+  console.error('usage: secrets-scan.js --root <dir> --worktree [--json]')
   process.exit(2)
 }
 
-let root = null, paths = null, worktree = false, json = false
+let root = null, worktree = false, json = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--root') root = argv[++i]
-  else if (a === '--paths') paths = argv[++i]
   else if (a === '--worktree') worktree = true
   else if (a === '--json') json = true
   else usage('unknown argument ' + a)
 }
 if (!root) usage('--root is required')
-if (worktree === (paths != null)) usage('give exactly one of --worktree or --paths <file>')
+if (!worktree) usage('--worktree is required')
 root = path.resolve(root)
 
 const inTree = spawnSync('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' })
@@ -83,7 +81,7 @@ if (inTree.status !== 0 || inTree.stdout.trim() !== 'true') {
 }
 
 let files
-if (worktree) {
+{
   const st = spawnSync('git', ['-C', root, 'status', '--porcelain', '-z', '--untracked-files=all'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   if (st.status !== 0) { console.error('secrets-scan: git status failed — run git status in ' + root); process.exit(2) }
   const parts = st.stdout.split('\0').filter(Boolean)
@@ -100,13 +98,6 @@ if (worktree) {
     if (code[0] === 'R' || code[0] === 'C') i++ // rename/copy: the next entry is the source path
     files.push(path.relative(realRoot, path.join(topDir, p)))
   }
-} else {
-  let txt
-  try { txt = fs.readFileSync(paths, 'utf8') } catch {
-    console.error(`secrets-scan: cannot read --paths file ${paths} — pass a readable file of --root-relative paths`)
-    process.exit(2)
-  }
-  files = txt.split('\n').map(s => s.trim()).filter(Boolean)
 }
 
 const hits = []

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// pictures.js [--root <dir>] [--no-send] — sends one round of pictures of the project's real
+// pictures.js [--root <dir>] — sends one round of pictures of the project's real
 // screens: derives the wanted list from the seed's stories, runs the project's own declared
 // picture command, checks the folder it filled, writes the round file and hands it to walkthrough.js.
 //
@@ -16,7 +16,7 @@
 // pixel width with its declared width; any ignore-file edit; any network call of its own — the
 // only way a picture leaves is walkthrough.js, run as a child process, never required.
 //
-// Exit codes: 0 done (round written, and sent unless --no-send) · 2 refused: usage, no-command,
+// Exit codes: 0 done (round written and sent) · 2 refused: usage, no-command,
 // bad-config, no-stories, not-connected, too-many, command-failed, missing-picture, bad-picture,
 // extra-picture, send-failed; an unexpected internal error is script-error, also exit 2.
 
@@ -34,30 +34,25 @@ const WIDTH_MAX = 3840
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const CONTRACT = path.join(__dirname, '..', 'templates', 'walkthrough', 'contract.json')
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
+const { writeOut: writeFd } = require('./lib/sync-write')
 
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeFd(fd, str) {
-  syncWrite(fd, str)
-}
 
 class Refusal extends Error {
   constructor(code, sentence, remedy) { super(sentence); this.code = code; this.remedy = remedy }
   line() { return `pictures: ${this.code} — ${this.message} — remedy: ${this.remedy}\n` }
 }
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./lib/util')
 const listNames = (names) => names.slice(0, 10).join(', ') + (names.length > 10 ? ` (and ${names.length - 10} more)` : '')
 
 function parseArgs(argv) {
-  const opts = { root: process.cwd(), send: true }
+  const opts = { root: process.cwd() }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if (a === '--no-send') opts.send = false
-    else if (a === '--root') {
-      if (i + 1 >= argv.length) throw new Refusal('usage', '--root needs a folder', 'run: pictures.js [--root <dir>] [--no-send]')
+    if (a === '--root') {
+      if (i + 1 >= argv.length) throw new Refusal('usage', '--root needs a folder', 'run: pictures.js [--root <dir>]')
       opts.root = argv[++i]
-    } else throw new Refusal('usage', `unknown argument ${a}`, 'run: pictures.js [--root <dir>] [--no-send]')
+    } else throw new Refusal('usage', `unknown argument ${a}`, 'run: pictures.js [--root <dir>]')
   }
   opts.root = path.resolve(opts.root)
   return opts
@@ -197,8 +192,8 @@ function main(argv) {
   if (!journeys.size) {
     throw new Refusal('no-stories', 'design/mocks/seed.md holds no journey, so there is nothing to take pictures of', 'draw the stories first with /spec:mocks, then run pictures.js again')
   }
-  if (opts.send && !isObj(cfg.walkthrough)) {
-    throw new Refusal('not-connected', 'the config has no walkthrough block, so the round cannot be sent', 'run /spec:connect to connect this project, or run pictures.js with --no-send to only take the pictures')
+  if (!isObj(cfg.walkthrough)) {
+    throw new Refusal('not-connected', 'the config has no walkthrough block, so the round cannot be sent', 'run /spec:connect to connect this project')
   }
   const pairs = pairsOf(journeys)
   const limit = readScreenLimit()
@@ -234,7 +229,6 @@ function main(argv) {
   }
   fs.writeFileSync(roundFile, JSON.stringify(round, null, 2) + '\n')
   writeFd(1, `took ${total} pictures — ${pairs.length} screens at ${block.widths.join(' and ')} wide — ${roundRel}\n`)
-  if (!opts.send) return
 
   const n = send(root, roundRel, roundFile)
   const base = String(cfg.walkthrough.baseUrl || '').replace(/\/+$/, '')

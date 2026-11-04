@@ -1,10 +1,8 @@
 'use strict'
 // lib/ignored-paths.js — getIgnoredPaths(root) → Set<string>, the ONE derivation of a root's
 // git-ignored path set.
-// scope-reconcile.js's at-risk walk, red-check.js's wildcard tests-row expansion,
-// collision-closure.js's literals leg and lib/walk-files.js's shared walk are its consumers — a second private copy of this
-// derivation is the exact class
-// lib/glob-match.js and lib/host-config.js were each extracted to stop.
+// Consumers: scope-reconcile.js's at-risk walk, red-check.js's wildcard tests-row expansion,
+// collision-closure.js's literals leg and lib/walk-files.js.
 // Owner: specs/20260915/01-one-derivation-of-ignored-paths.md.
 //
 // The set is derived only when `git -C <root> rev-parse --show-prefix` exits 0 printing an empty

@@ -6,9 +6,7 @@
 // CLEAN-contradicted-by-escape (with its false-CLEAN rate), a schema-drift census, and
 // escapes-per-CLEAN by via (loop vs. direct vs. unknown).
 //
-// Why: pipeline questions were being answered from whichever repo happened to be open on this
-// machine. A stored repo list rots the moment a checkout moves or a new one clones, so this
-// script re-derives the fleet on every run instead.
+// Why: the fleet is re-derived on every run — a stored repo list rots the moment a checkout moves.
 // Owner: specs/20260820/05-fleet-evidence-reader.md; specs/20261025/02-readers-keep-only-the-surviving-escape-fields.md.
 //
 // What this deliberately does NOT do: it never stores a repo list, a cache, or any derived
@@ -41,22 +39,14 @@ function printUsage(message) {
 
 // ---- arg parsing (hand-rolled, no library) ----------------------------------------------------
 
-// The fleet is the checkouts that sit beside the one this run was invoked from, so the default
-// repos-root is derived from the invoking repository — `git rev-parse --show-toplevel`'s parent —
-// never a hardcoded directory name. A hardcoded `~/Projects` is wrong on any host that spells the
-// directory differently, and wrong SILENTLY where a same-named empty directory happens to exist:
-// discovery finds no repo, every query answers zero, and the run still exits 0 because zero repos
-// is a legitimate derived answer (see Exit codes). `~/Projects` survives only as the fallback for
-// a run started outside any repository, where there is nothing to derive from.
+// The default repos-root is the invoking repository's parent (`git rev-parse --show-toplevel`), never a
+// hardcoded directory: a wrong one answers zero silently. `~/Projects` is only the fallback outside any repo.
 function defaultReposRoot() {
   try {
     const git = (args) => execFileSync('git', ['rev-parse', ...args],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
     const top = git(['--show-toplevel'])
-    // A linked worktree's top level sits inside its main checkout (`<repo>/.claude/worktrees/
-    // <name>`), so its parent holds no checkout at all — the same silent zero as above, on every
-    // run a spec's own worktree starts. The common git dir is shared by every worktree of one
-    // repository, so its parent is the main checkout whichever worktree the run started in.
+    // A linked worktree's parent holds no checkout, so derive from the common git dir's parent instead.
     const common = git(['--git-common-dir'])
     if (common) {
       const commonAbs = fs.realpathSync(path.resolve(process.cwd(), common))
@@ -122,12 +112,8 @@ function discoverRepos(root) {
   return repos
 }
 
-// Ledger glob: .claude/spec-runs*.jsonl — live file plus year archives, spec-status.js's
-// own contract, so a reader blind to archives does not silently lose history.
-// A readdir failure here means ".claude provably exists (discovery's config check already
-// passed) but its listing could not be read" — that is never the same fact as "listed fine,
-// no ledger files present", so it is reported via unreadablePaths rather than folded into an
-// empty file list (the silent-absence lie-risk).
+// Ledger glob: .claude/spec-runs*.jsonl (live + year archives). A readdir failure is reported via
+// unreadablePaths, never folded into an empty file list.
 function ledgerFiles(claudeDir) {
   let names
   try {
@@ -317,10 +303,8 @@ function computeEscapes(reposList) {
   for (const repo of reposList) {
     let repoCount = 0
     for (const r of repo.rawRows) {
-      // core § Incident Policy (materiality): a build row's `incidents` entries (spec-build-driver
-      // `--mark incident --class <id>`) join byClass/classLatest with escape rows, so a class that
-      // only ever costs build time can still reach the guard-earning count. They never count toward
-      // `total` (escape rows only) — `incidents` carries their own fleet-wide count.
+      // A build row's `incidents` entries join byClass/classLatest with escape rows (core § Incident Policy),
+      // but never count toward `total` — `incidents` carries their own count.
       if (r.stage === 'build' && Array.isArray(r.incidents)) {
         for (const inc of r.incidents) {
           if (!inc || typeof inc.class !== 'string' || !inc.class) continue
@@ -358,21 +342,10 @@ function computeEscapes(reposList) {
 }
 
 // ---- query 5: cleanContradicted -------------------------------------------------------------
-// Per repo: CLEAN review-row count; escapes whose reviewRunId equals the runId of a CLEAN
-// review row in the same repo -> contradicted; escapes with reviewRunId null or matching
-// nothing -> escapesUnjoined (counted, never folded into either side).
-//
-// falseCleanRate (contradicted / cleans, null when a repo has no CLEAN rows at all) and the
-// `fleet` roll-up are the DIVISION of the two counts this query already derives, not a ninth
-// question — the reader's fixed question set stays at eight. Why the division belongs
-// here: the per-repo counts were already the catch-rate scoreboard, and every reader was
-// doing the arithmetic by eye. The rate is a FLOOR, never an exact miscalibration figure:
-// escapesUnjoined stays out of the numerator by the rule that an unjoined escape is never
-// folded into either side, so a repo carrying unjoined escapes is at least this miscalibrated
-// and possibly more. Deliberately NOT here: any trend, history, or per-window bucketing of
-// this rate — the fleet carries ~25 contradicted rows in total, so a weekly line moves several
-// points on a single escape, and storing a number between runs would break the stateless
-// contract outright. A trend needs its own spec, and enough rows to survive one escape.
+// Per repo: CLEAN review-row count; escapes whose reviewRunId equals a CLEAN review row's runId in the
+// same repo -> contradicted; reviewRunId null or matching nothing -> escapesUnjoined (neither side).
+// falseCleanRate (contradicted / cleans, null with no CLEAN rows) and the `fleet` roll-up divide those
+// counts. The rate is a FLOOR (unjoined escapes stay out of the numerator). No trend or bucketing here.
 
 function computeCleanContradicted(reposList) {
   const byRepo = []
@@ -404,11 +377,8 @@ function falseCleanRate(contradicted, cleans) {
 }
 
 // ---- query 7: cleanByVia ---------------------------------------------------------------------
-// Per repo and fleet-total, for each via bucket
-// (loop / direct / unknown — review rows carrying no via at all, pre-sibling-02 rows), the same
-// {cleans, contradicted} shape query 5 (computeCleanContradicted) already derives, using the
-// EXACT reviewRunId<->runId join that query uses. This is a sibling function, never a
-// reshape of computeCleanContradicted itself — that query's --json output stays byte-identical.
+// Per repo and fleet-total, per via bucket (loop / direct / unknown), the same {cleans, contradicted}
+// shape and reviewRunId<->runId join as query 5 — a sibling function, so query 5's output is unchanged.
 const VIA_BUCKETS = ['loop', 'direct', 'unknown']
 
 function bucketOf(via) {
@@ -496,13 +466,9 @@ const cleanContradicted = computeCleanContradicted(reposData)
 const cleanByVia = computeCleanByVia(reposData)
 const driftCensus = computeDriftCensus(reposData)
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
+const { writeOut: writeAll } = require('./lib/sync-write')
 // Local to this script: falling off the end with nothing else keeping the event loop alive exits
 // 0 on its own, so neither branch below calls process.exit(0).
-function writeAll(fd, buf) {
-  syncWrite(fd, buf.toString('utf8'))
-}
 
 if (json) {
   writeAll(1, Buffer.from(JSON.stringify({
@@ -510,10 +476,8 @@ if (json) {
   }, null, 2) + '\n'))
 }
 
-// ---- human render : population first, then queries 1-6 numbered, each
-// with a one-line takeaway heading. This reader owns its render like spec-status.js does —
-// never routed through report-render.js. Never a claim of fleet completeness: the population
-// block is scoped to "this machine's checkouts" wording only.
+// ---- human render: population first, then queries 1-6 numbered, each with a one-line takeaway ----
+// Owned here, never routed through report-render.js; the population block claims "this machine's checkouts" only.
 
 function renderPopulation(pop) {
   const lines = [`Fleet population — scoped to this machine's checkouts under ${pop.reposRoot} (scanned: ${pop.scanned})`]
@@ -539,11 +503,8 @@ function renderLegRecency(lr) {
 }
 
 function renderGate08(g) {
-  // Round-half-up on the two integer counts, never on the ratio: scaling a non-dyadic sub-1
-  // ratio by 100 in floating point loses the half (23/40 * 100 === 57.49999999999999, so
-  // Math.round gives 57 where round-half-up demands 58); 23*100/40 === 57.5 exactly, so the
-  // integer arithmetic below is the fix, not a cosmetic reordering. The 4dp selfRepairShare
-  // field stays untouched — this percent is derived independently, only for this render line.
+  // Round-half-up on the two integer counts, never on the ratio: 23/40 * 100 === 57.49999999999999 in
+  // floating point, while 23*100/40 === 57.5 exactly.
   const pct = g.inWindowAuthored === 0 ? 0 : Math.round((g.selfRepairAuthored * 100) / g.inWindowAuthored)
   const lines = [
     `2. Brief-08 gate — cutover ${g.cutover}: hostSpecsCleaned=${g.hostSpecsCleaned} (clause1 ${g.clause1Met ? 'MET' : 'not met'}), selfRepairShare=${pct}% (clause2 ${g.clause2Met ? 'MET' : 'not met'})`,

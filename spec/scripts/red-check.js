@@ -1,41 +1,38 @@
 #!/usr/bin/env node
 'use strict'
-// red-check.js --spec <path> --root <dir> --base <sha-or-ref> [--expect-green <path>]... [--json]
+// red-check.js --spec <path> --root <dir> --base <sha-or-ref> [--json]
 //
 // Owner: specs/20260821/01-red-check.md
 //
-// build.md Phase 0 step 2 (classify every
-// tests-layer file's expected pre-image colour) and Phase 1's red-check paragraph (execute each
-// file, reconcile observed against expected) were hand-run from prose every build — a leg that
-// drifts per session and per model. Worse, the recurring failure class this reconciliation exists
-// to catch — an AC that structurally cannot go red before implementation (a pre-existing generic
-// fallback already rejects it, an absence invariant an inert stub already satisfies, a predicate
-// that IS the deliverable inside a test file) — lived only in a thrice-amended Gotchas paragraph
-// in .claude/rules/spec-pipeline.md, all 16 recorded instances benign. This script IS the
-// reconciliation: it derives each tests-layer File Plan file's expected colour from the spec's AC
-// vocabulary (a `SHALL CONTINUE TO` pin, or a closed-enum `[pre-green: <reason>]` tag — the tag
-// grammar/enum live in lib/spec-sections.js, the single authority — an AC ending `→ rewrites` is
-// never sanctioned, its rewritten test owing a red whatever else the bullet says), executes `{testCommand}`
-// (+ `{typecheckCommand}` when declared; a `{file}` in either is substituted via
-// lib/host-run.js withFiles, else the path is appended) once per file against the untouched pre-image, and
-// reports every mismatch as a named finding. build.md's classification prose and red-check
-// paragraph shrink to this invocation line.
+// Derives each tests-layer File Plan file's expected pre-image colour from the spec's AC
+// vocabulary (a `SHALL CONTINUE TO` pin, or a closed-enum `[pre-green: <reason>]` tag — grammar and
+// enum in lib/spec-sections.js; an AC ending `→ rewrites` is never sanctioned), executes
+// `{testCommand}` (+ `{typecheckCommand}` when declared; `{file}` substituted via lib/host-run.js
+// withFiles, else appended) once per file against the untouched pre-image, and reports every
+// mismatch as a named finding. Carried AC-IDs are full-token matches (acIdOccurs).
+//
+// An `[env: VAR]` tag on EVERY AC a green red-expected file carries (and a file that mentions VAR)
+// downgrades unsanctioned-green to a warning naming each withheld variable; `expected` stays red.
+// A carried AC whose pinShape is 'mixed' gets one hard `mixed-pin` for the file and no colour
+// verdict (the run still executes and is logged). A refused backticked trailing `[pre-green:`
+// tag on a green red-expected file is hard `rejected-trailing-tag` instead of unsanctioned-green.
+//
+// `rewrites`/`reuses` dispositions get one additional TARGETED run per AC when the host declares
+// `testNameFilter` (a fragment carrying `{name}`): `rewrites` observed green is hard
+// `gutted-rewrite`, `reuses` observed red is hard `broken-reuse`. Without the key, or when a
+// reference resolves to other than one pre-image test or is absent from the filtered run's own
+// output, it degrades to the whole-file arms with one warning. `--json` carries `dispositions`.
+//
+// Wildcard tests rows expand through lib/ignored-paths.js (ignored paths pruned, only regular
+// files pushed); a wildcard row that expands to zero files adds one warning with the pruned
+// count. A literal row is never walked and still reports `missing-test-file` when absent.
 //
 // What this deliberately does NOT do: attribute runner OUTPUT to individual tests (output is read
 // only to count executed tests via capabilities.testCountPattern, and to confirm a filtered run
-// selected its title — a crash-red vs assert-red distinction stays orchestrator judgment, per
-// build.md's disposition rules); render a review report or compute a verdict (this is a build-Phase-1 gate, never a
+// selected its title); render a review report or compute a verdict (a build-Phase-1 gate, never a
 // review leg); snapshot or restore the tree (the working tree AT INVOCATION TIME is the
-// pre-image — the purity refusal below exists precisely because no snapshot is taken); validate
-// `[pre-green:]` reasons anywhere but here and in ac-matrix.js (lib/spec-sections.js's
-// `parseAcBullets` returns the raw tag unvalidated by design); or expand a File Plan glob
-// through any matcher but the shared lib/glob-match.js.
-//
-// An `[env: VAR]` tag on EVERY AC a green red-expected file carries downgrades that file's
-// unsanctioned-green finding to a warning naming each withheld variable — the same trust
-// ac-matrix.js already grants the tag for a skipped test. `expected` itself is never flipped to
-// green by the tag, so a genuinely-red env-gated file (the variable provisioned, the suite run)
-// still matches its expected colour instead of reporting as a broken pin.
+// pre-image — hence the purity refusal); validate `[pre-green:]` reasons anywhere but here and in
+// ac-matrix.js; or expand a File Plan glob through any matcher but lib/glob-match.js.
 //
 // Exit codes: 0 = every resolved tests-layer file matches its expected pre-image colour ·
 //             1 = findings emitted (unsanctioned-green | broken-pin | missing-test-file |
@@ -44,59 +41,6 @@
 //                 failure · 2 = usage error, unreadable --spec, no ## Acceptance Criteria section,
 //                 host config declares no testCommand, or a pre-image purity refusal (a non-tests
 //                 File Plan path already differs from --base — tracked or untracked)
-//
-// an AC declaring `rewrites` or
-// `reuses` (lib/spec-sections.js's `parseDisposition`) gets one additional TARGETED run, on top of
-// the whole-file arms above, ONLY when the host config declares `testNameFilter` — a shell-
-// argument fragment carrying `{name}`. A `rewrites` case observed green is hard `gutted-rewrite`;
-// a `reuses` case observed red is hard `broken-reuse`. Absent `testNameFilter`, every rewrites/
-// reuses AC degrades to today's whole-file-only behaviour with exactly one warning naming the
-// key — never one per AC, never a per-test spawn. A reference that resolves to other than exactly
-// one pre-image test, or resolves but is absent from the filtered run's OWN OUTPUT (a pattern
-// matching nothing still exits 0), falls back the same way, WARN naming the file/
-// prefix/cause (`unresolved` | `unselected`) — never a finding on that path alone. `--json` gains
-// a fourth top-level array, `dispositions`, one entry per rewrites/reuses AC.
-//
-// The carried-AC
-// classifier below (content.includes(b.id)) was a bare substring test — a tests-layer file
-// citing only a longer AC-ID that shares a shorter red-expected AC's prefix (AC-...-12 sharing
-// AC-...-1's prefix) phantom-carried the shorter id in too, forcing a false red expectation onto
-// a file that never mentions it (observed: a false unsanctioned-green, the live hit that stopped
-// a build). Fixed by replacing the bare .includes with
-// lib/spec-sections.js's exported acIdOccurs, a full-token occurrence check — the same authority
-// ac-matrix.js's coverage grep also uses.
-//
-// Silent-drop hardening: a carried AC's `[pre-green:]` tag, when it ends the bullet backticked,
-// is refused as a declaration by lib/spec-sections.js's bare-only trailing rule (rv_640c582f4902)
-// — that refusal otherwise misreports as a plain `unsanctioned-green` with no hint the refusal is
-// the actual cause. Loud-when-it-bites, never unconditional: when a red-expected file is observed
-// green AND a carried AC's bullet has a refused trailing tag naming `[pre-green:`, the new hard
-// finding `rejected-trailing-tag` REPLACES `unsanctioned-green` for that file — never both. A
-// carried AC whose refused tag never changes the file's expected colour (e.g. the AC is already
-// sanctioned another way) stays silent.
-//
-// A carried AC whose `pinShape`
-// (lib/spec-sections.js, the one authority also imported by ac-matrix.js and `/spec:plan` lock)
-// is `'mixed'` — a bullet mixing a new `SHALL` promise with a `SHALL CONTINUE TO` regression
-// pin — is never sanctioned: the file gets exactly one hard `mixed-pin` finding naming every mixed
-// AC-ID and the split remedy, no colour classification runs for that file in this pass (no
-// `unsanctioned-green`/`broken-pin`), and the `{testCommand} <file>` run still executes and is
-// logged — only the colour verdict is withheld, never the observation.
-//
-// `walkAll`'s WILDCARD expansion
-// prunes through `lib/ignored-paths.js`'s `getIgnoredPaths` — the one derivation
-// scope-reconcile.js's at-risk walk already used privately, now shared. A directory whose
-// repo-relative path plus `/` is ignored is never descended; a file whose repo-relative path is
-// ignored is never pushed; both increment a pruned-path counter. The existing `.git` name skip
-// runs first and is untouched, as does the entry-type filter: only a path that resolves to a
-// regular file is pushed (a symlink resolved through `statSync`, never descended), and every
-// entry skipped for its type increments the same pruned-path counter. The prune applies to wildcard rows only — a
-// literal (no `*`) tests row is never walked and never tested against the ignored set, so it
-// still resolves, executes, colour-classifies, and still reports `missing-test-file` when absent,
-// even when it names a path inside a git-ignored directory. A wildcard row that expands to
-// zero files pushes exactly one `warnings` entry naming the row and the pruned-path count —
-// cause-agnostic (the row may have matched nothing with or without a prune); no finding, no exit
-// code change, no `--json` key change. A row that resolves >=1 file pushes nothing.
 
 const fs = require('fs')
 const path = require('path')
@@ -115,19 +59,16 @@ const {
 } = require('./lib/spec-sections')
 
 function usage() {
-  console.error('usage: red-check.js --spec <path> --root <dir> --base <sha-or-ref> ' +
-    '[--expect-green <path>]... [--json]')
+  console.error('usage: red-check.js --spec <path> --root <dir> --base <sha-or-ref> [--json]')
 }
 
 let specPath = null, root = null, base = null, jsonOut = false
-const expectGreenPaths = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--spec') specPath = argv[++i]
   else if (a === '--root') root = argv[++i]
   else if (a === '--base') base = argv[++i]
-  else if (a === '--expect-green') expectGreenPaths.push(argv[++i])
   else if (a === '--json') jsonOut = true
   else { usage(); process.exit(2) }
 }
@@ -150,12 +91,6 @@ const bullets = parseAcBullets(acSection)
 const wellFormed = bullets.filter(b => !b.malformed)
 const bulletById = new Map(wellFormed.map(b => [b.id, b]))
 
-// `rejectedTrailingTagDetail` — the `rejected-trailing-tag`
-// remedy-text builder — is imported from lib/spec-sections.js, the one authority, rather than
-// defined here. The first implementation landed a byte-identical local copy in both this file and
-// ac-matrix.js — the exact two-identical-copies shape this change exists to eliminate. See
-// that module's own comment above the function for why it lives beside the refusal predicate
-// it explains; message bytes are unchanged (pinned by the detail assertions).
 
 const filePlanRows = parseFilePlanRows(specText)
 
@@ -169,11 +104,8 @@ if (!config.testCommand) {
 }
 
 // ---- pre-image purity refusal — BEFORE any test file is resolved or executed ----------------
-// Derived as the union of `git diff --name-only <base>` (tracked edits; blind to untracked
-// paths) and untracked paths from `git status --porcelain --untracked-files=all` (fix for
-// that blindness), intersected with the File Plan's NON-tests paths. Tests-layer paths are always
-// exempt — the tests themselves are expected to differ from --base; that is what red-check exists
-// to reconcile.
+// (`git diff --name-only <base>` ∪ untracked paths) ∩ the File Plan's NON-tests paths; tests-layer
+// paths are exempt — differing from --base is what red-check reconciles.
 
 function gitLines(args) {
   try {
@@ -217,10 +149,7 @@ const testsRowEntries = filePlanRows
     return r.paths.map(p => ({ p, isDelete }))
   })
 
-// prunes through the shared
-// `getIgnoredPaths` derivation — a directory whose repo-relative path plus `/` is ignored is
-// never descended, a file whose repo-relative path is ignored is never pushed. `prunedCounter` is
-// a single-field object (not a return value) so the recursive calls can share one running count.
+// Prunes through getIgnoredPaths; `prunedCounter` is a shared one-field object across the recursion.
 function walkAll(dir, rootDir, out = [], ignored, prunedCounter) {
   let entries
   try {
@@ -232,14 +161,9 @@ function walkAll(dir, rootDir, out = [], ignored, prunedCounter) {
     if (e.name === '.git') continue
     const full = path.join(dir, e.name)
     const rel = path.relative(rootDir, full).split(path.sep).join('/')
-    // Only paths that resolve to a regular file are pushed: a socket, FIFO, or symlink to a
-    // directory (a fixture's `node_modules` link) matched by a glob row would throw EISDIR at
-    // readFileSync and kill the run. A symlink is resolved with `statSync` rather than dropped,
-    // so a test file that is itself a link still expands; a link to a directory is skipped and
-    // never descended, because the ignored-path prune keys on the link's own repo-relative path,
-    // not its target, and following one would walk a whole linked `node_modules`. Every skip
-    // increments the pruned counter so the zero-expansion warning's count stays truthful.
-    // A literal tests row is never walked, so a bad literal path still fails loudly there.
+    // Only regular files are pushed (a socket, FIFO or directory link would throw EISDIR at
+    // readFileSync); a symlink is resolved with statSync, never descended. Every skip counts as
+    // pruned so the zero-expansion warning stays truthful.
     if (e.isDirectory()) {
       if (ignored.has(`${rel}/`)) { prunedCounter.count++; continue }
       walkAll(full, rootDir, out, ignored, prunedCounter)
@@ -261,9 +185,6 @@ function walkAll(dir, rootDir, out = [], ignored, prunedCounter) {
   return out
 }
 
-// Declared ahead of the wildcard-expansion loop below so its zero-expansion warning can
-// push directly onto the same array the later per-file loop and output section use — a second,
-// throwaway array here would need merging later for no benefit.
 const warnings = []
 
 const testFiles = new Set()
@@ -284,9 +205,7 @@ for (const { p, isDelete } of testsRowEntries) {
     const dirPrefix = p.endsWith('/') ? p : p + '/'
     const matches = allFilesCache.filter(f => isDirRow ? f.startsWith(dirPrefix) : globMatch(p, f))
     for (const f of matches) testFiles.add(f)
-    // a wildcard row that resolves nothing pushes exactly one warning naming the row and
-    // the walk's pruned-path count — cause-agnostic (the row may have matched nothing with or
-    // without a prune); a row that matched >=1 file pushes nothing.
+    // A wildcard row that resolves nothing pushes one warning with the pruned-path count.
     if (matches.length === 0) {
       warnings.push(`${p}: File Plan tests row expanded to 0 files (${prunedCount} ` +
         `path(s) pruned from the repo walk: git-ignored, or not a regular file)`)
@@ -296,27 +215,10 @@ for (const { p, isDelete } of testsRowEntries) {
   }
 }
 
-// ---- per-AC sanctioning — `SHALL CONTINUE TO` in the bullet's raw text, or a VALID
-// `[pre-green:]` reason (validated here against PRE_GREEN_REASONS; the parser itself does no
-// enum validation) — plus the invalid-pre-green fail-closed classification -------------------
-//
-// Hardened (escape rv_640c582f4902, unanchored-marker-match — the same defect class
-// the review just fixed for [oracle:]/[env:]/[pre-green:], left in place for this sibling
-// marker): a literal `SHALL CONTINUE TO` search over the bullet's whole raw text fails OPEN in
-// both directions. A quoted mention inside a backticked code span (an AC discussing the marker,
-// not declaring one) self-sanctions with no
-// real pin. Conversely a genuine pin hard-wrapped mid-phrase across a continuation line
-// (`…AND SHALL\n  CONTINUE TO require…`, the Gotchas' recorded hard-wrap-blindness hazard) can miss the literal regex
-// entirely and only "pass" by accident when the bullet ALSO happens to quote the phrase
-// elsewhere. `normalizeForPinCheck` fixes both at once: inline code spans are stripped first (a
-// quoted marker is never a declaration), then whitespace runs — including the newline a
-// hard-wrap introduces — collapse to a single space (a wrapped genuine pin still reads as one
-// phrase). The regex then runs on that normalized text, never on `b.raw` directly.
-//
-// `normalizeForPinCheck` is imported from
-// lib/spec-sections.js (the single authority ac-drift.js and this file's own `pinShape` use
-// too) rather than defined locally — a third from-scratch copy of the identical strip-then-collapse
-// pass is the exact duplication this repo's calibration flags.
+// ---- per-AC sanctioning — `SHALL CONTINUE TO` in the bullet's normalized text, or a VALID
+// `[pre-green:]` reason — plus the invalid-pre-green fail-closed classification -------------------
+// normalizeForPinCheck strips inline code spans (a quoted marker is no declaration) and collapses
+// whitespace (a hard-wrapped pin still reads as one phrase); the regex never runs on `b.raw`.
 
 const preGreenValidity = new Map() // AC-ID -> 'valid' | 'invalid' (only set when tagged)
 for (const b of wellFormed) {
@@ -324,13 +226,8 @@ for (const b of wellFormed) {
   preGreenValidity.set(b.id, PRE_GREEN_REASONS.includes(b.preGreen) ? 'valid' : 'invalid')
 }
 
-// A `rewrites` disposition is never sanctioned green, whatever else the bullet says: the per-test
-// arm below expects that rewritten case RED (green = `gutted-rewrite`), so letting a `SHALL
-// CONTINUE TO` pin or a `[pre-green:]` tag flip the whole file to green-expected made a pin whose
-// oracle moves to a new seam unpassable in both colours — red → `broken-pin`, green →
-// `gutted-rewrite` (prax-app 20261103/01, health.test.ts). Pin and disposition are orthogonal:
-// CONTINUE TO says the behaviour outlives the spec, `rewrites` says its test must change and so
-// fails first.
+// A `rewrites` disposition is never sanctioned green, whatever else the bullet says: its per-test
+// arm expects the rewritten case RED, and a green-expected file would be unpassable in both colours.
 function isSanctioned(b) {
   const disposition = parseDisposition(b.raw)
   if (disposition && disposition.kind === 'rewrites') return false
@@ -341,17 +238,9 @@ function isSanctioned(b) {
 const sanctionedById = new Map(wellFormed.map(b => [b.id, isSanctioned(b)]))
 
 // ---- `{testCommand} <file>` (+ `{typecheckCommand} <file>` when declared) — the exit code is the
-// verdict; output is captured only for the executed-test count. NODE_TEST_CONTEXT is scrubbed so a nested `node --test` leg
-// behaves as a fresh top-level runner even when red-check.js itself runs inside one.
-//
-// `relPath` is substituted via `quote` (lib/host-run.js's single-quote helper) for the reason given on runFilteredLeg below —
-// the same substitution defect was found and fixed in `runFilteredLeg` and left standing here,
-// where the value at risk is the FILE PATH rather than the test title: a framework whose route
-// files carry a `$` segment (TanStack file routes, `customers.$memberId.note-role.test.tsx`) had
-// `$memberId` expanded away by bash, so the leg ran against a path that does not exist, exited
-// non-zero, and reported a passing sanctioned-green file as a hard `broken-pin`.
-// maxBuffer: spawnSync's 1 MiB default kills a passing runner that prints more (ENOBUFS, status
-// null → 1), which would report a passing pin as broken.
+// verdict; output is captured only for the executed-test count. NODE_TEST_CONTEXT is scrubbed so a
+// nested `node --test` behaves as a fresh top-level runner. `relPath` is single-quoted via `quote`
+// (a `$` in a route file name must not expand); maxBuffer lifts spawnSync's 1 MiB default.
 const MAX_BUFFER = 16 * 1024 * 1024
 function runLeg(cmd, relPath) {
   const res = hostRun.run(hostRun.withFiles(cmd, [relPath]), { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER })
@@ -365,8 +254,6 @@ if (!patternDeclared) {
   warnings.push('testCountPattern is not declared in the host config — red-check reads exit codes only ' +
     'and cannot see a run that executed no test')
 }
-
-const expectGreenSet = new Set(expectGreenPaths)
 
 const files = []
 const findings = []
@@ -394,10 +281,8 @@ for (const relPath of [...testFiles].sort()) {
     continue
   }
 
-  // A carried AC whose bullet mixes a new
-  // promise with a SHALL CONTINUE TO pin is refused outright — no file colour is guessed while the
-  // bullet is ambiguous. Exactly one hard finding for the whole file, naming every mixed AC-ID; the
-  // run still executes and is logged (Contracts), but no other finding class fires for it.
+  // A mixed carried AC: exactly one hard finding naming every mixed AC-ID, no colour verdict; the
+  // run still executes and is logged.
   const mixedAcs = carriedAcs.filter(id => pinShape(bulletById.get(id).raw) === 'mixed')
   if (mixedAcs.length) {
     findings.push({
@@ -424,18 +309,10 @@ for (const relPath of [...testFiles].sort()) {
     })
   }
 
-  let expected
-  if (expectGreenSet.has(relPath)) {
-    expected = 'green'
-    warnings.push(`--expect-green ${relPath}: flipped to green-expected (orchestrator-derived sanction)`)
-  } else {
-    expected = carriedAcs.every(id => sanctionedById.get(id)) ? 'green' : 'red'
-  }
+  const expected = carriedAcs.every(id => sanctionedById.get(id)) ? 'green' : 'red'
 
-  // Exit 124 is the host's test watchdog (`timeout`) killing a run that never finished — a
-  // pinned CPU, not a failing assertion. It still classifies as red (a hung test is not green),
-  // but it is surfaced by name so the build driver can record the incident on its build row
-  // (core § Incident Policy materiality) instead of the trip vanishing into "observed: red".
+  // Exit 124 (the host's `timeout` watchdog) classifies as red but is surfaced by name so the build
+  // driver can record the incident on its build row.
   const testRun = runLeg(config.testCommand, relPath)
   const testExit = testRun.status
   if (testExit === 124) warnings.push(`watchdog-trip ${relPath} (exit 124) — the test run was killed by the host timeout, not a failing assertion`)
@@ -467,14 +344,8 @@ for (const relPath of [...testFiles].sort()) {
       const b = bulletById.get(id)
       return b && b.trailingRejected && b.trailingRejected.includes('[pre-green:')
     })
-    // The file must MENTION the variable it claims to be gated on. Without this, `[env:
-    // ANY_NAME]` on a vacuous `assert.ok(true)` file would pass the build gate with a warning,
-    // and nothing downstream would contradict it: ac-matrix.js's own `[env:]` sanction lives in
-    // its SKIPPED-test reconciliation, so a test that passes never reaches it. A suite that
-    // genuinely skips on a variable references that variable; a vacuous pin does not, and falls
-    // through to `unsanctioned-green` exactly as before. This is a substring test on purpose —
-    // red-check cannot evaluate the host's skip predicate, only check that the claim is anchored
-    // in the file it is made about.
+    // The file must MENTION the variable it claims to be gated on — a substring anchor, since
+    // red-check cannot evaluate the host's skip predicate.
     const envGatedAcs = carriedAcs.filter((id) => {
       const b = bulletById.get(id)
       return !!(b && b.env && content.includes(b.env))
@@ -488,31 +359,15 @@ for (const relPath of [...testFiles].sort()) {
           `${relPath} is a green expected-red file`),
       })
     } else if (envGatedAcs.length === carriedAcs.length && carriedAcs.length > 0) {
-      // An `[env: VAR]`-tagged AC declares that verifying it depends on a variable this process
-      // does not control. A host whose testCommand withholds that variable makes its suite skip,
-      // so runLeg (exit codes only) reads green from ANY shell: the file's redness is not absent,
-      // it is UNOBSERVABLE, and a hard finding here asserts something the run cannot know.
-      // ac-matrix.js grants this exact tag the same trust at review (`skipped test sanctioned by
-      // [env: VAR]`, a warning), so this is parity with an existing sanction rather than a new
-      // laundering route — and the warning names each withheld variable, so the sanction stays
-      // visible in the run's own output.
-      //
-      // EXPECTED STAYS 'red', deliberately. Flipping the file to green-expected instead would
-      // route a genuinely-red env-gated file — the correct pre-image colour, observed whenever the
-      // variable IS provisioned — into the `broken-pin` arm above and report the desired red as a
-      // hard finding. Suppressing only this arm cannot regress that case: `expected === 'red'`
-      // with a red observation matches, as it already does.
-      //
-      // Requiring EVERY carried AC to be env-tagged is the conservative half: a file mixing a
-      // gated AC with an ungated one still owes a real red for the ungated one, and green there
-      // is a genuine finding.
+      // An `[env: VAR]` AC whose variable this process lacks makes the suite skip, so its redness is
+      // unobservable here: a warning (parity with ac-matrix.js's skip sanction), not a hard finding.
+      // `expected` stays red so a provisioned run's genuine red still matches. EVERY carried AC must
+      // be env-tagged — an ungated sibling still owes a real red.
       warnings.push(`${relPath}: red-expected file passed against the pre-image, sanctioned by ` +
         `[env:] on ${envGatedAcs.map((id) => `${id} (${bulletById.get(id).env})`).join(', ')} — ` +
         `the suite skips when the variable is withheld, so redness is unobservable from this run`)
     } else {
-      // The finding names the ACs that actually owe a red, not every AC the file carries: a
-      // gated sibling is already sanctioned and listing it sends the author looking at the wrong
-      // bullet. The gated ones are named in the detail as sanctioned so the split is legible.
+      // The finding names only the ACs that owe a red; gated siblings are named as sanctioned.
       const owing = ungatedAcs.length ? ungatedAcs : carriedAcs
       const sanctionedNote = envGatedAcs.length
         ? ` — sanctioned by [env:] and not owing a red: ${envGatedAcs.map((id) => `${id} (${bulletById.get(id).env})`).join(', ')}`
@@ -530,9 +385,7 @@ for (const relPath of [...testFiles].sort()) {
   files.push(fileRow)
 }
 
-// ---- per-test verification
-// for rewrites/reuses dispositions — a targeted run ON TOP OF the whole-file arms above, never a
-// replacement for them. `writes` dispositions and undeclared (null) ones are untouched.
+// ---- per-test verification for rewrites/reuses dispositions — on top of the whole-file arms.
 
 // The regex-escaped, anchored title substituted for the host config's `{name}` placeholder —
 // `\ ^ $ . | ? * + ( ) [ ] { }` are the only characters escaped, per the Decision's own list.
@@ -540,19 +393,9 @@ function escapeTitleForRegex(title) {
   return title.replace(/[\\^$.|?*+()[\]{}]/g, '\\$&')
 }
 
-// `{testCommand} {testNameFilter←escaped ^title$} <file>`, appended ahead of the file path
-// (matching the existing `{typecheckCommand} <file>` append form) — output is captured (as in runLeg above) because selection proof needs the run's own stdout to
-// confirm the title was actually selected, not merely infer it from the exit code (Assumptions
-// a pattern matching nothing still exits 0).
-//
-// Hardened (confirmed hard finding, review): the filter/path fragments were substituted via
-// `JSON.stringify`, which produces DOUBLE-quoted shell words — bash still expands `` ` `` (command
-// substitution) and `$` (variable expansion) inside double quotes, so a test title carrying
-// either ran as shell syntax instead of a literal string (a backtick-quoted `touch` in a title
-// created the file it named; 27 of this repo's 1,050 live titles carry a backtick and 6 carry
-// `$`). `testCommand` itself is still `bash -c`-interpreted (it is a host-supplied command
-// string, its own contract) — only the SUBSTITUTED filter/path fragments are now single-quoted
-// via `quote` (lib/host-run.js), which recognises no shell metacharacter at all.
+// `{testCommand} {testNameFilter←escaped ^title$} <file>` — output is captured because selection
+// proof needs the run's own stdout (a pattern matching nothing still exits 0). The substituted
+// filter/path fragments are single-quoted via `quote`, so a backtick or `$` in a title stays literal.
 function runFilteredLeg(cmd, filterTemplate, title, relPath) {
   const pattern = `^${escapeTitleForRegex(title)}$`
   const filterArg = filterTemplate.replace('{name}', pattern)
@@ -628,14 +471,10 @@ if (dispositionCandidates.length) {
 }
 
 // ---- output -------------------------------------------------------------------------------------
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
+const { writeOut: writeAll } = require('./lib/sync-write')
 // Local to this script: process.exitCode is set instead of calling process.exit(), so Node drains
 // stdout naturally before exiting.
 
-function writeAll(fd, buf) {
-  syncWrite(fd, buf.toString('utf8'))
-}
 
 if (jsonOut) {
   writeAll(1, Buffer.from(JSON.stringify({ files, findings, warnings, dispositions }, null, 2) + '\n'))

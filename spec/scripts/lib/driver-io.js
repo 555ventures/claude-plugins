@@ -1,22 +1,10 @@
 'use strict'
-// lib/driver-io.js — the four private I/O helpers spec-review-driver.js and spec-build-driver.js
-// both need, extracted so two drivers never carry two copies.
-// spec-review-driver.js grew runChild (the fail-closed spawnSync
-// wrapper), appendLedger, and a load/save pair for its own <spec>.review/ sidecar; the build
-// driver (this spec) needs the identical shapes for its own <spec>.build/ sidecar and ledger row,
-// plus a synchronous stdout writer neither driver had a shared copy of. A second, paraphrased copy
-// of any of these in the new driver is the exact drift seam ci-query.js was unified over,
-// and lib/gate-resolve.js closed for the two gate resolvers.
+// lib/driver-io.js — the I/O helpers spec-review-driver.js and spec-build-driver.js share: runChild (the
+// fail-closed spawnSync wrapper), appendLedger, the sidecar load/save pair, and writeOut.
 // Owner: specs/20260901/01-build-driver.md.
 //
-// runChild deliberately takes no caller identity (no __filename/specPath) — those lived in
-// spec-review-driver.js's die() remedy text before this extraction, and a shared library cannot
-// name a caller-specific re-run command without threading it through every call site. The `what`
-// label (optional 4th arg) still names WHICH child died; the remedy is the generic "re-run the
-// driver" rather than a copy-pastable command line. Callers that want a sharper remedy print one
-// themselves before calling process.exit in their own code paths — this function's only job is
-// the fail-closed refusal on a genuinely dead child (signal-killed, never spawned, or
-// maxBuffer-overflowed spawnSync, whose `.status` is null).
+// runChild takes no caller identity: the optional 4th arg `what` names WHICH child died and the remedy is
+// the generic "re-run the driver". Fatal only on a genuinely dead child (`.status` null).
 //
 // What this deliberately does NOT do: retry a dead child, classify a non-zero-but-alive exit as
 // anything but the caller's own normal branch (a legitimate red gate, a merge conflict, a
@@ -32,13 +20,8 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const hostRun = require('./host-run')
 
-// spawnSync's `status` is null when
-// the child dies by signal, fails to spawn, or overflows maxBuffer — every caller that reads
-// `.status`/`.code` or trusts `.stdout` without checking either would otherwise tolerate that null
-// silently. This is the ONE place death is handled: every spawnSync call in both drivers routes
-// through here, and only a genuine no-exit-code death is fatal — a legitimate non-zero exit (a
-// red gate, RED_BLOCKING, a merge conflict) still comes back as a normal result for the caller's
-// own branch to read.
+// spawnSync's `status` is null when the child dies by signal, fails to spawn or overflows maxBuffer. This is
+// the ONE place death is handled; a legitimate non-zero exit comes back as a normal result.
 function runChild(cmd, args, opts, what) {
   const r = spawnSync(cmd, args, opts)
   if (r.error || r.status === null) {
@@ -82,12 +65,8 @@ function appendLedger(root, jsonLine) {
   fs.appendFileSync(ledgerPath, jsonLine + '\n')
 }
 
-// object | {} — absent sidecar file reads as {} (a fresh run), same as both drivers' own
-// pre-extraction load. Malformed JSON is NOT swallowed the same way: it dies loudly (exit 2)
-// rather than silently resetting to {}, which would otherwise let a corrupt sidecar quietly restart a run
-// from cold with no trace of why. Neither driver's existing test suite ever wrote unparseable
-// JSON into a sidecar expecting the old silent-reset behavior (checked against both suites before
-// this landed), so this is a strict hardening, not an observed behavior change.
+// object | {} — an absent sidecar reads as {} (a fresh run); malformed JSON dies loudly (exit 2) rather than
+// silently restarting the run from cold.
 function loadSidecar(dir, file) {
   const p = path.join(dir, file)
   let raw

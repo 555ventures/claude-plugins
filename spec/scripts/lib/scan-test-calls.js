@@ -1,15 +1,10 @@
 'use strict'
 // lib/scan-test-calls.js — the one derivation of "a test case".
 // Owner: specs/20260911/02-tests-have-a-ceiling.md.
-// Exports `listTestFiles(root, config)` (host testGlobs-classified files,
-// skipping `.git`, `node_modules`, `fixtures`, `__fixtures__`, `.claude/worktrees`),
-// `scanCalls(src)` (every line-start `test(`/`it(` call in one source string), and
-// `countCases(root, config)` (the two composed), and `resolveReference(root, file, prefix)` (the
-// cases a `→ reuses` pointer names). count-tests.js and ac-drift.js's expiry sweep
-// both import this so the two never disagree about what a test case is. `scanDescribes(src)`
-// finds line-start `describe(` calls with the same walk (expire-tests.js's empty-suite pass). Named away from the
-// `test-*` prefix (the amendment's forcing incident: `node --test`'s default discovery matches
-// `**/test-*.js` anywhere under the root and would execute this library as a test file).
+// Exports `listTestFiles(root, config)` (host testGlobs-classified files), `scanCalls(src)` (every
+// line-start `test(`/`it(` call), `countCases(root, config)`, `resolveReference(root, file, prefix)` and
+// `scanDescribes(src)` — count-tests.js, ac-drift.js and expire-tests.js all import this so they never
+// disagree about what a test case is. Named away from `test-*` so `node --test` never discovers it.
 //
 // A case is a `test(` or `it(` call whose only preceding characters on its own line are
 // whitespace — `describe(` and `t.test(` are never counted (the leading-token check fails: the
@@ -53,9 +48,7 @@ const { readConfig } = require('./host-config')
 const { fileShapes, isTestClassified } = require('./file-shapes')
 const { walkFiles } = require('./walk-files')
 
-// The skip set and the walk that applies it live in lib/walk-files.js — the one copy
-// lib/invariants.js's universe shares, so the two can never disagree about which files exist
-// (they once did: only one of them resolved symlinks).
+// The skip set and its walk live in lib/walk-files.js, shared with lib/invariants.js.
 
 function listTestFiles(root, config) {
   const cfg = config || {}
@@ -106,11 +99,8 @@ function skipTemplate(src, i) {
 // division (`foo() / 2`, `(a + b) / 2` — a bare call or grouping paren is never one of these).
 const CONTROL_KEYWORD_PAREN_RE = /(^|[^A-Za-z0-9_$])(if|while|for|switch|catch)$/
 
-// `sig` collapses every whitespace run to one trailing `' '` (never more — callers only ever
-// append a boundary space once per run) so two identifier-like tokens separated only by
-// whitespace (`true\n  if`) keep a real word boundary; without it they'd read as one run-on word
-// (`trueif`) and a keyword regex anchored on `[^A-Za-z0-9_$]` would never match. Both keyword
-// checks below trim that trailing space before testing.
+// `sig` collapses each whitespace run to one trailing ' ' so `true\n  if` keeps a word boundary;
+// both keyword checks trim it before testing.
 function trailingWord(sig) {
   return sig.replace(/ $/, '')
 }
@@ -125,12 +115,9 @@ const REGEX_OPENING_PUNCT = '(,=:[!&|?{};+-*%<>~^'
 // `throw /re/`, `else /re/.test(x)`, `x in /re/`, `for (x of /re/)`, `return /re/`).
 const REGEX_OPENING_KEYWORD_RE = /(^|[^A-Za-z0-9_$])(return|typeof|case|await|throw|else|in|of)$/
 
-// A `/` opens a regex only in the documented contexts — the trailing significant-
-// character buffer `sig` (a boundary space collapses each whitespace run, never fully dropped)
-// is checked, never a single char, so the `return`/`=>` checks can match a whole token rather
-// than its last letter. `lastCloseWasKeyword` carries whether the most recently closed paren (if
-// `sig` currently ends in `)`) matched CONTROL_KEYWORD_PAREN_RE when it was opened — a bare `)`
-// is otherwise division, never regex.
+// A `/` opens a regex only in the documented contexts, checked against the trailing `sig` buffer so
+// `return`/`=>` match whole tokens. `lastCloseWasKeyword` records whether the last-closed paren opened
+// after a control keyword — a bare `)` is otherwise division.
 function isRegexContext(sig, lastCloseWasKeyword) {
   const word = trailingWord(sig)
   if (!word) return true
@@ -144,10 +131,7 @@ function isRegexContext(sig, lastCloseWasKeyword) {
   return REGEX_OPENING_KEYWORD_RE.test(word)
 }
 
-// The two JSX tag shapes a `.tsx`/`.jsx` test file carries in nearly every render — a closing
-// tag's `</` and a self-closing `/>` — are never a regex opening, whatever `sig` says (`}` and
-// `<` both sit in REGEX_OPENING_PUNCT). Anything else JSX-shaped stays unhandled; expire-tests.js
-// refuses a span this walk cannot bound rather than trusting it.
+// A JSX closing tag's `</` and a self-closing `/>` never open a regex; other JSX stays unhandled.
 function opensRegex(src, i, sig, lastCloseWasKeyword) {
   if (src[i - 1] === '<' || src[i + 1] === '>') return false
   return isRegexContext(sig, lastCloseWasKeyword)
@@ -168,10 +152,8 @@ function skipRegex(src, i) {
   return j
 }
 
-// Finds the index just past the call's OWN closing paren, given the index of its opening `(`.
-// Depth-tracks parens only, skipping every opaque span the same way the top-level scan does —
-// this is what keeps a regex literal holding an escaped `\)` and a bare `"`
-// from corrupting the count.
+// Finds the index just past the call's OWN closing paren, given its opening `(`, skipping every
+// opaque span like the top-level scan does.
 function findCallEnd(src, openParenIdx) {
   let depth = 1
   let pos = openParenIdx + 1
@@ -324,14 +306,8 @@ function scanLineStartCalls(src, names, skipBody) {
       if (/^\s*$/.test(before)) {
         const callEnd = findCallEnd(src, openParen)
         const title = extractTitle(src, openParen)
-        // Only a trailing `;` is
-        // consumed now — the former unconditional trailing-`\n` consumption pushed a span past
-        // its own call's closing paren into the FOLLOWING line, so a call immediately followed by
-        // another (the overwhelmingly common shape, one blank-free line between two test( calls)
-        // reported `end === <next call's start>` instead of strictly less, and the file's last
-        // call (one trailing newline before EOF, equally common) reported `end === src.length`
-        // indistinguishable from a swallowed-rest-of-file span — the exact file-corrupting
-        // deletion this invariant exists to let spec 03 detect.
+        // Only a trailing `;` is consumed, never a trailing newline: `end` stays strictly before the next
+        // call's start, and a file's last call never reports `end === src.length`.
         let end = callEnd
         if (src[end] === ';' && end + 1 < src.length) end++
         calls.push({

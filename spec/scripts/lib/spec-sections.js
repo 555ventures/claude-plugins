@@ -2,110 +2,28 @@
 // lib/spec-sections.js — the sole authority for the AC-ID grammar, `## `/`### ` section
 // extraction, and top-level AC-bullet parsing.
 // Owner: specs/20260817/07-promise-sweep-leg.md
-// Extracted verbatim from ac-matrix.js so promise-sweep.js — a sibling script that also needs
-// the AC-ID grammar and section extraction to enumerate a spec's own `## Decisions` and
-// `## Acceptance Criteria` sections — can reuse them without either duplicating the regex (a
-// second derivation of a load-bearing shape) or requiring ac-matrix.js as a module (a script
-// that parses argv and calls process.exit as a side effect of being required). ac-matrix.js now
-// imports from here; every observed string, finding class, and exit code it produces stays
-// byte-identical (tests/ac-matrix/ac-matrix.test.js is the byte-identity pin).
+// Shared by ac-matrix.js, promise-sweep.js, red-check.js, ac-drift.js and expire-tests.js so none
+// duplicates the grammar or requires a CLI script as a module.
 //
 // What this deliberately does NOT do: parse a spec's `## Decisions` table (promise-sweep.js's
-// row-carrier grammar is its own, with no counterpart here), or read a file — both exports take
-// a string and are pure.
+// row-carrier grammar is its own), validate `[pre-green:]` reasons (consumers validate against the
+// exported PRE_GREEN_REASONS enum and fail closed), or read a file — every export is pure.
 //
-// `parseAcBullets` gains a `preGreen` field: the raw trimmed string inside a sibling `[pre-green: <reason>]` tag, or `null` when untagged —
-// alongside the pre-existing `oracle`/`env` fields. `PRE_GREEN_REASONS` is exported as the SINGLE
-// closed-enum authority (`fallback-rejection` | `absence-invariant` | `predicate-in-test`); this
-// parser does NO enum validation itself — every consumer (ac-matrix.js, red-check.js)
-// validates against the exported enum and fails closed on an out-of-enum reason. The bullet
-// object also now carries `raw` (the bullet's full joined text, continuation lines included) —
-// red-check.js needs it to check for a `SHALL CONTINUE TO` sanctioned-pin phrase, and no existing
-// consumer's shape assertion depended on the object's key set being closed.
+// parseAcBullets returns, per bullet: id, the `oracle`/`env`/`preGreen` tag values (raw, or null),
+// `raw` (full joined text), and `trailingRejected`/`trailingRejectedCause`. A tag is recognised in
+// exactly two positions: (1) the DECLARATION SLOT — between the bold AC token's closing `**` and
+// the requirement's `:`, backticked or bare; (2) TRAILING — the last content of the bullet, BARE
+// only (a backticked trailing tag is a quoted illustration). Each position holds a RUN of sibling
+// tags. A tag anywhere else parses null.
+// `trailingRejected` is set when a backtick-tolerant reading of the end (allowing one final
+// `→ <reference>` suffix) says something different from what parsed — it never changes what
+// parses, it only lets a consumer explain a refusal; `trailingRejectedCause` is
+// 'backticked-at-end' | 'not-at-end'.
 //
-// Hardened after review: the
-// `[oracle:]`/`[env:]`/`[pre-green:]` extraction ran as an unanchored substring search over
-// the bullet's whole raw text, so an AC bullet that merely ILLUSTRATES the tag syntax in its own
-// prose (documentation-by-example, the pattern spec.md/plan.md themselves encourage) self-tagged
-// — two such bullets misparsed as carrying real tags. A tag
-// is now recognised in exactly two positions: (1) the DECLARATION SLOT — directly between the
-// bold AC token's closing `**` and the `:` that opens the requirement text, optionally wrapped in
-// backticks (`spec/templates/spec.md` line 129-130; where all real tags in `specs/` sit today),
-// or (2) TRAILING — the tag is the last non-whitespace content of the bullet's raw text, optionally
-// backticked. A tag appearing mid-prose anywhere else (inside a parenthetical, inside a code span
-// mid-sentence, describing the grammar by example) parses as `null`.
-//
-// Hardened again (same-day regression): the position-anchored regexes above each
-// matched at most ONE tag occupying the slot, so a bullet declaring two SIBLING tags in the same
-// position (`spec/templates/spec.md` lines 90-103 sanction `[env:]` and `[pre-green:]` together —
-// only `[oracle:]` alongside a test mapping is forbidden) silently dropped both:
-// `` `[env: FOO]` `[oracle: gate]`: `` parsed as `{env: null, oracle: null}`. A dropped `[env:]`
-// turns a properly-declared skip into a fabricated hard finding — the exact false-finding class
-// this spec exists to eliminate. Both positions now match a RUN of one or more tag items (each
-// optionally backticked, whitespace-separated) instead of a single tag: `slotRun`/`trailingRun`
-// find the declaration-slot segment (between `**` and the requirement colon) or the trailing run
-// once, then `extractTag` searches within that run for the one named tag. A tag anywhere outside
-// either run still parses `null`.
-//
-// Hardened a third time (escape rv_640c582f4902, unanchored-marker-match): the
-// trailing position still accepted a BACKTICKED tag, so a bullet illustrating the trailing-tag
-// grammar as a worked example (`` … SHALL y `[oracle: gate]` `` — every self-tagging illustration
-// observed in this repo's prose quotes tag grammar inside a code span) still self-tagged there.
-// The trailing position now requires the tag to be BARE (`BARE_TAG_ITEM_SRC`, no surrounding
-// backticks) — the declaration slot is unaffected and keeps accepting backticked-or-bare, since
-// (as of a census of THIS REPO's own `specs/` corpus, not a grammar rule — see the
-// note below) every genuinely-declared tag observed here sat in the declaration slot,
-// and `spec/templates/spec.md`'s own trailing worked example is already bare.
-//
-// The silent-drop incident: the bare-only trailing refusal above is a REFUSAL, not a drop — parsing
-// still had no way to say a trailing tag WAS refused, so a host whose real declarations happen to
-// be backticked got a bare parse-null with no trace of why. `parseAcBullets`
-// now also returns `trailingRejected`: the backtick-tolerant trailing run's text (built from the
-// SAME `TAG_ITEM_SRC` used by `slotRun`, never a re-spelled regex — a second authority here is
-// exactly the fragile spot this hardening exists to avoid) when the bare-only `trailingRun` above
-// refused it, else null. `trailingRejected` does NOT change what parses (the named tag fields
-// stay null on a refused run, the bare-only ban is untouched) — it only lets a consumer detect,
-// by substring-testing the tag name against this one string, that a refusal was the cause of an
-// otherwise-generic finding. This rescopes every "all 8 tags sit in the declaration slot" claim in
-// this file's comments from an implied grammar fact to what it always actually was: a dated
-// census of this repo's own `specs/` corpus — a host corpus
-// demonstrably backticks trailing declarations, so the census was never a rule to build parsing
-// around, only an observation about the fixtures this file happened to be tested against.
-//
-// Widened at build time (supersedes the earlier rationale and predicate formula above): live
-// evidence (review row rv_6825fa48c98d) showed a genuine declaration written just
-// before the bullet's final `→ tests/…` File-Plan reference sits at NEITHER recognized position —
-// the earlier null-test formula (tolerant-run-matched AND bare-run-null) never even looked there, so it
-// neither parsed nor set `trailingRejected`: the same silent-drop class this module exists to
-// close. The refusal predicate is now a SAID-vs-PARSED comparison rather than a null test:
-// `wideTrailingRun` tolerates exactly one final `→ <tail with no second →>` reference suffix after
-// the tolerant tag run (same `TAG_ITEM_SRC`, never a re-spelled regex), and `trailingRejected` is
-// set whenever that wide reading differs from what `trailingRun` actually accepted — this subsumes
-// the narrower formula and additionally catches a backticked tag standing beside an ACCEPTED bare tag at
-// the true end, which the null test missed (both readings then differ, not just "wide non-null").
-// Each bullet also gains `trailingRejectedCause` (`'backticked-at-end' | 'not-at-end' | null`) so
-// `rejectedTrailingTagDetail` (below) never tells a not-at-end host "remove the backticks" — false
-// there, since a bare tag before the arrow still would not parse either. What PARSES stays
-// untouched: `slotRun`/`trailingRun`/`extractTag` keep their exact grammar; only what refusal SAYS
-// widens.
-//
-// Exports
-// `acIdOccurs(text, id)`, a full-token occurrence check — `id` counts as occurring only at a
-// position whose preceding char is absent or outside `[A-Za-z0-9]` AND whose following char is
-// absent or outside `[0-9A-Za-z]`. Two call sites (ac-matrix.js's coverage grep, red-check.js's
-// carried-AC classifier) used a bare `String.includes(id)`, so a well-formed AC whose ID is a
-// PREFIX of another declared AC's ID (`AC-…-1` inside `AC-…-12`) was credited a phantom hit —
-// ac-matrix failed OPEN (a genuinely untested AC read "covered") and red-check failed CLOSED (a
-// sanctioned-green pin read as a false `unsanctioned-green`, the live hit that stopped
-// a build). This is an `indexOf` scan, not a per-call RegExp — the
-// same discipline `promise-sweep.js` already applies inline to Decision-row citations, now given
-// one exported authority instead of a third from-scratch spelling.
+// acIdOccurs(text, id) is a full-token occurrence check (an indexOf scan): `AC-…-1` never counts
+// inside `AC-…-12`.
 
-// The v7 floor date, lifted here from
-// promise-sweep.js's former private `APPLIES_FROM` constant so it and the new ac-drift.js share
-// one literal instead of each carrying its own copy of the date this repo's AC-carrier convention
-// shipped — two copies of a plugin-wide fact is the
-// identical-literal shape this module's own history (see the header notes above) exists to remove.
+// The v7 floor date shared by promise-sweep.js and ac-drift.js.
 const V7_APPLIES_FROM = '20260817'
 
 // The date decision-lint.js starts
@@ -116,50 +34,23 @@ const DECISION_LINT_APPLIES_FROM = '20261016'
 // applying; specs/20261029/05. An earlier-dated spec is exempt from those three only.
 const STRUCTURAL_LINT_APPLIES_FROM = '20261029'
 
-// The disposition-grammar floor:
-// the date this AC bullet's `→ writes|rewrites|reuses` trailing-pointer grammar shipped. Shared
-// with ac-matrix.js's `--lint` gate so the floor is one literal, not a second copy.
+// The disposition-grammar floor (`→ writes|rewrites|reuses`), shared with ac-matrix.js's --lint.
 const DISPOSITION_APPLIES_FROM = '20260911'
 
 // The critical-tier literal-example floor: `ac-matrix --lint`'s `missing-literal` arm applies only to a
 // `tier: critical` spec dated on or after this day.
 const CRITICAL_LINT_APPLIES_FROM = '20261025'
 
-// parseDisposition(bullet) locates the disposition tail by scanning every `→` occurrence
-// in `bullet` (an AC bullet's raw text, or any string ending in the disposition tail)
-// RIGHT-TO-LEFT and taking the FIRST one (i.e. the RIGHTMOST occurrence) whose tail matches
-// DISPOSITION_TAIL_RE. The disposition is the bullet's **trailing** `→`
-// pointer, so the rightmost matching arrow is definitionally the right answer, and it resolves
-// both failure modes a plain single-direction scan hits:
-//   - a title may itself carry quotes, brackets, parentheses or an arrow, so a
-//     `rewrites`/`reuses` reference whose title prefix contains a `→` must carry that arrow into
-//     `prefix` verbatim. A plain `lastIndexOf` alone would stop at the title's own trailing arrow,
-//     whose tail is plain prose with no disposition keyword, find no match, and refuse the whole
-//     bullet as `missing-disposition` (5 live titles carry `→`, confirmed hard finding). Because
-//     this scan keeps walking leftward past non-matching arrows, it falls through the title's
-//     arrow and finds the real (leftmost, in that case) disposition arrow instead.
-//   - a bullet's PROSE may quote an example disposition (e.g. "... declares → reuses x.test.js ::
-//     title ... → writes y.test.js") before its real trailing pointer. A forward (left-to-right)
-//     first-match scan stops at the quoted example — whose tail also satisfies
-//     DISPOSITION_TAIL_RE, since `prefix` is `[\s\S]*` and swallows everything including the real
-//     trailing pointer — and reports the example instead of the trailing pointer (regression: 6 of
-//     this spec's own AC bullets misparsed this way, confirmed hard finding). Scanning
-//     right-to-left instead finds the real trailing pointer FIRST, before ever considering the
-//     earlier quoted example.
-// `::` is the reference separator (a title may carry quotes, brackets, parens or
-// an arrow, but essentially never that pair). Returns null, never throws, on: no `→` at all, or no
-// `→` occurrence's tail matching a disposition keyword (documentation-by-example prose, or a
-// pre-existing arrow-bearing bullet from before this grammar shipped) — a spec's 1,472 arrow-free
-// and (pre-this-decision) prose-tail bullets stay untouched.
+// parseDisposition(bullet): the disposition is the bullet's TRAILING `→` pointer, so scan every
+// `→` right-to-left and take the first whose tail matches DISPOSITION_TAIL_RE — that skips both a
+// title's own arrow and an earlier quoted example disposition. `::` separates the reference.
+// Returns null, never throws, when no `→` tail matches a disposition keyword.
 const DISPOSITION_TAIL_RE = /^(writes|rewrites|reuses)\s+(\S+)(?:\s*::\s*([\s\S]*))?$/
 
 function parseDisposition(bullet) {
   if (typeof bullet !== 'string') return null
-  // Collect every `→` index left-to-right first, then walk the collected list right-to-left —
-  // `lastIndexOf('→', arrowIdx - 1)` looks like the direct way to step backward, but when
-  // arrowIdx is 0 the next call's fromIndex is -1, which String.lastIndexOf clamps back to 0 and
-  // re-finds the SAME index forever (an infinite loop the collected-array approach cannot hit,
-  // since the array shrinks by one real index every iteration).
+  // Collect every `→` index first, then walk right-to-left (a `lastIndexOf` loop re-finds index 0
+  // forever once fromIndex reaches -1).
   const arrowIndices = []
   for (let i = bullet.indexOf('→'); i !== -1; i = bullet.indexOf('→', i + 1)) {
     arrowIndices.push(i)
@@ -205,26 +96,15 @@ const PRE_GREEN_REASONS = [
   'fallback-rejection', 'absence-invariant', 'predicate-in-test',
 ]
 
-// `normalizeForPinCheck` is red-check.js's
-// former local function, lifted here byte-for-byte so red-check.js, ac-drift.js, and this module's
-// own `pinShape` share one strip-then-collapse pass instead of three near-identical copies (the
-// duplication this repo's own calibration flags at three occurrences). It strips inline code spans
-// to a single space first (a quoted marker inside a code span is never a declaration), then
-// collapses every whitespace run — including a hard-wrap's newline — down to one space and trims.
+// normalizeForPinCheck: inline code spans → one space (a quoted marker is no declaration), then
+// every whitespace run (a hard-wrap's newline included) → one space, trimmed.
 function normalizeForPinCheck(raw) {
   return raw.replace(/`[^`]*`/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// `pinShape(raw)` classifies one AC bullet's raw text as `'promise' | 'pin' | 'mixed'` — a
-// three-way read of how many `SHALL` clauses in the (normalized) bullet are `SHALL CONTINUE TO`
-// regression pins versus new-promise `SHALL`s. `promise` when the bullet declares no pin at all
-// (`pins === 0`); `pin` when EVERY `SHALL` in it is part of a `SHALL CONTINUE TO` clause
-// (`shalls === pins`, a `SHALL CONTINUE TO` match also counts one `SHALL`); `mixed` otherwise — at
-// least one pin clause alongside at least one new-promise `SHALL` (including `SHALL NOT`, which is
-// a promise, not a pin) in the same bullet. Deliberately a whole-bullet SHALL count, not a
-// per-clause parser (Rationale: "the SHALL count is the whole rule") — red-check.js,
-// ac-matrix.js's `--lint` mode and full-mode warning, and `/spec:plan` lock all import
-// this one predicate rather than each re-deriving the mixed-bullet classification.
+// pinShape(raw): 'promise' (no SHALL CONTINUE TO), 'pin' (every SHALL is part of a SHALL CONTINUE
+// TO), else 'mixed' — a whole-bullet SHALL count over the normalized text. The one predicate
+// red-check.js, ac-matrix.js and /spec:plan lock import.
 function pinShape(raw) {
   const normalized = normalizeForPinCheck(raw)
   const pins = (normalized.match(/\bSHALL CONTINUE TO\b/g) || []).length
@@ -234,91 +114,46 @@ function pinShape(raw) {
   return 'mixed'
 }
 
-// One `[tagname: value]` item, optionally backtick-wrapped. `[a-z][a-z-]*` covers the three
-// known tag names (oracle, env, pre-green) generically — this exists only to consume a run of
-// tag-shaped items, never to extract a value, so it need not be tied to one tagName.
+// One `[tagname: value]` item, optionally backtick-wrapped — consumes a run, never extracts.
 const TAG_ITEM_SRC = '`?\\[[a-z][a-z-]*:\\s*[^\\]]+\\]`?'
 
-// The BARE variant — same shape, backticks forbidden. Trailing-position only (see trailingRun):
-// every self-tagging illustration observed in this repo's prose quotes the tag grammar inside a
-// code span (documentation-by-example), so a backticked tag at the trailing position is a quote,
-// never a declaration.
+// The BARE variant — trailing position only (a backticked trailing tag is a quote).
 const BARE_TAG_ITEM_SRC = '\\[[a-z][a-z-]*:\\s*[^\\]]+\\]'
 
-// The declaration-slot run — the segment between the bold AC token's closing `**` and the `:`
-// that opens the requirement text on the bullet's first line. May hold zero or more tag items
-// (`spec/templates/spec.md` 90-103 sanctions sibling tags, e.g. `[env:]` + `[pre-green:]`
-// together — only `[oracle:]` alongside a test mapping is forbidden), or null if the first line
-// doesn't have this shape at all. Backticked-or-bare: the declaration slot is never prose, so a
-// backticked tag there is still a real declaration (a census of this repo's own
-// `specs/` corpus found every genuinely-declared tag sitting here — a THIS-REPO observation, not
-// a grammar rule; see the note above the module header).
+// The declaration-slot run — the segment between the bold AC token's closing `**` and the
+// requirement's `:` on the first line; zero or more tag items, backticked or bare; null when the
+// first line lacks that shape.
 function slotRun(firstLine) {
   const re = new RegExp('^- \\*\\*[^*]*\\*\\*\\s*((?:' + TAG_ITEM_SRC + '\\s*)*):')
   const m = firstLine.match(re)
   return m ? m[1] : null
 }
 
-// The trailing run — one or more BARE tag items ending the bullet's full raw text (trailing
-// whitespace ignored), or null if the raw text doesn't end in a bare tag item at all.
-//
-// Hardened (escape rv_640c582f4902, unanchored-marker-match): the trailing position
-// accepted a backticked tag too, so an AC that merely ILLUSTRATES the trailing-tag grammar
-// in its own prose (e.g. `` … SHALL y `[oracle: gate]` `` — a worked example, not a declaration)
-// self-tagged: ac-matrix.js would read the phantom tag as covered-by-declaration or a sanctioned
-// skip, laundering coverage/skips exactly like the oracle/env/pre-green defect this
-// module was hardened against. Requiring the trailing tag to be BARE closes it without touching
-// the declaration slot (spec.md's own trailing example is bare and keeps
-// parsing) or any tag this repo's own corpus census (a this-repo observation, not a
-// grammar rule) found sitting in the declaration slot.
+// The trailing run — one or more BARE tag items ending the bullet's raw text, or null.
 function trailingRun(raw) {
   const re = new RegExp('((?:' + BARE_TAG_ITEM_SRC + '\\s*)+)$')
   const m = raw.replace(/\s+$/, '').match(re)
   return m ? m[1] : null
 }
 
-// The backtick-TOLERANT sibling of trailingRun above, built from the SAME
-// TAG_ITEM_SRC slotRun uses — never a re-spelled regex, the one authority both positions share.
-// Used ONLY to detect a REFUSED trailing declaration for `trailingRejected` below; it never
-// extracts a tag value itself and the bare-only ban it annotates stays completely untouched.
+// Backtick-tolerant sibling of trailingRun (same TAG_ITEM_SRC) — only for detecting a refusal.
 function tolerantTrailingRun(raw) {
   const re = new RegExp('((?:' + TAG_ITEM_SRC + '\\s*)+)$')
   const m = raw.replace(/\s+$/, '').match(re)
   return m ? m[1] : null
 }
 
-// The WIDENED tolerant run — same TAG_ITEM_SRC as tolerantTrailingRun above,
-// additionally tolerating exactly one final `→ <tail containing no second →>` File-Plan-reference
-// suffix, since a genuine declaration written just before that reference (specs/20260823/01
-// the actual shape) sits at neither recognized position under the unwidened
-// reading. The capture is trimmed of trailing whitespace before use — when the arrow branch
-// matches, the last tag item's own trailing `\s*` greedily consumes the separator whitespace
-// before the arrow, and that whitespace would otherwise leak into the said-vs-parsed comparison
-// below. Used ONLY to compute `trailingRejected`/`trailingRejectedCause`; it never extracts a tag
-// value and never changes what PARSES.
+// The widened tolerant run — additionally tolerates one final `→ <tail without a second →>`
+// reference suffix; trimmed before comparison. Only computes trailingRejected/Cause.
 function wideTrailingRun(raw) {
   const re = new RegExp('((?:' + TAG_ITEM_SRC + '\\s*)+)(?:\u2192[^\u2192]*)?$')
   const m = raw.replace(/\s+$/, '').match(re)
   return m ? m[1].replace(/\s+$/, '') : null
 }
 
-// The ONE authority for the `rejected-trailing-tag` remedy text — the first implementation landed a byte-identical copy of
-// this function in both ac-matrix.js and red-check.js, the exact two-identical-copies shape
-// this module exists to eliminate elsewhere. It lives here, beside `tolerantTrailingRun` and
-// `trailingRejected`, because the remedy explains THIS module's own refusal — consumers
-// import it rather than re-deriving the text, matching the "consumers never re-derive" rule for
-// the predicate itself. The per-consumer `underlying` clause (what the refusal turned out to mean
-// for that specific finding — absent coverage, an unsanctioned skip, a green expected-red file)
-// stays a parameter; nothing else about the message differs across callers.
-//
-// `cause` (`'backticked-at-end' | 'not-at-end'`) is now a required third
-// argument, forking the middle sentences. The `backticked-at-end` branch is BYTE-IDENTICAL to
-// the original text above — every existing consumer detail assertion
-// depends on that. The `not-at-end` branch names the true problem instead (the tag sits before the
-// bullet's final `→` reference, not a recognized declaration position) and offers only the
-// move-into-the-declaration-slot remedy — it must NEVER say "remove the backticks", which is false
-// there: a bare tag before the arrow still would not parse either. Both branches keep the shared
-// opening (AC-ID + refused tag text) and the shared closing quote-disclaimer.
+// The one authority for the `rejected-trailing-tag` remedy text; `underlying` is the consumer's
+// own clause. `cause` forks the middle: 'backticked-at-end' says remove the backticks,
+// 'not-at-end' only says move the tag into the declaration slot.
 function rejectedTrailingTagDetail(acId, trailingRejected, cause, underlying) {
   if (cause === 'not-at-end') {
     return `${acId}: trailing tag ${trailingRejected} was refused as a declaration — it sits ` +
@@ -333,11 +168,7 @@ function rejectedTrailingTagDetail(acId, trailingRejected, cause, underlying) {
     `${underlying} still stands and needs its own fix.`
 }
 
-// Extracts one named `[tagName: value]` tag's value, searching the declaration-slot run first
-// and falling through to the trailing run — a slot present but lacking this particular tag must
-// still fall through (siblings occupy the same run; this tag may simply be the OTHER position).
-// Anything outside either run (mid-prose, inside a parenthetical, a code span mid-sentence) is
-// not a declaration and returns null — see the hardening notes above the module header.
+// One named tag's value: the declaration-slot run first, then the trailing run; else null.
 function extractTag(tagName, firstLine, raw) {
   const tagRe = new RegExp('`?\\[' + tagName + ':\\s*([^\\]]+)\\]`?')
   const slot = slotRun(firstLine)
@@ -389,21 +220,14 @@ function parseAcBullets(sectionText) {
     const tokenMatch = linesArr[0].match(/^- \*\*([^*]*)\*\*/)
     const token = tokenMatch ? tokenMatch[1] : ''
     const malformed = !AC_ID_RE.test(token)
-    // Refused iff what was SAID (the widened tolerant reading) differs from what actually
-    // PARSED (the bare-only trailingRun) — both captures trimmed of trailing whitespace before
-    // comparison (wideTrailingRun's arrow branch, and trailingRun's own end-anchored capture,
-    // can each carry trailing separator whitespace). This subsumes the narrower null-test formula
-    // (see the module-header note above) and also catches a backticked tag standing beside an
-    // ACCEPTED bare tag at the true end, which the null test missed.
+    // Refused iff what was SAID (the widened tolerant reading) differs from what PARSED (the
+    // bare-only trailingRun), both trimmed.
     const bareRun = trailingRun(raw)
     const bareTrimmed = bareRun !== null ? bareRun.replace(/\s+$/, '') : null
     const wide = wideTrailingRun(raw)
     const trailingRejected = (wide !== null && wide !== bareTrimmed) ? wide : null
-    // Cause is 'backticked-at-end' when the UNWIDENED end-anchored tolerant run (no arrow
-    // tolerance) matches and equals the wide capture — i.e. the refused run really is the bullet's
-    // true end, just backticked. Any other refusal (the wide reading only matched because of the
-    // arrow-suffix tolerance) is 'not-at-end' — the tag sat before the bullet's final reference,
-    // never a recognized declaration position, so "remove the backticks" would be a false remedy.
+    // 'backticked-at-end' when the unwidened tolerant run equals the wide capture (the refused run
+    // is the true end); otherwise 'not-at-end'.
     let trailingRejectedCause = null
     if (trailingRejected !== null) {
       const unwidened = tolerantTrailingRun(raw)

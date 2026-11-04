@@ -5,31 +5,8 @@
 //
 // Owner: specs/20260823/03-silent-drop-hardening.md.
 //
-// Before this module, spec-review-driver.js
-// and spec-design-driver.js each carried an IDENTICAL local `fmVal` whose `^key:\s*(.+)$` regex
-// captured everything after `key:` to end of line, inline `#` comment included. For `tier:` this
-// only polluted a value compared solely against the literal `critical` — cosmetic until it wasn't:
-// seven live review ledger rows now carry a whole sentence inside `tier`. For `build_base:` the
-// SAME mechanism made an entire comment part of a git ref and broke the review stage's driver outright
-// (`fatal: invalid object name`).
-// Two identical buggy copies is how one regex reached both drivers; this
-// module was the extraction so a third copy was never the next incident — it landed exporting only
-// `fmVal(fmRaw, key)`.
-//
-// The tier field was corrupted across seven ledger rows of one close, so the module was widened:
-// it now closes the
-// remaining two copies (spec-status.js and replay.js each carried a byte-identical private
-// `frontmatter()` kv loop whose `.replace(/\s*#.*$/, '')` stripped at ANY `#`, not just a
-// whitespace-preceded one — corrupting an unspaced value like `source_url:
-// https://x/p#frag`). `fmVal` is renamed to `fmValue`
-// — no alias survives, because a second name for one derivation is the exact drift this module
-// exists to end (tests/frontmatter.test.js's pin moved to the new name in place, never
-// weakened). Two functions are new: `fmBlock(text)` extracts the raw frontmatter interior (what
-// a caller would otherwise hand-derive with its own `/^---\n([\s\S]*?)\n---/` regex before calling
-// fmVal), and `fmMap(text)` derives every top-level key at once (what spec-status.js/replay.js's
-// private kv loops were re-implementing). `fmValue` is additionally widened to accept EITHER full
-// document text (fences, body, and all) or a pre-extracted raw block — every caller can now pass
-// the spec text straight through without deriving the block itself first.
+// fmValue accepts EITHER full document text or a pre-extracted raw block; fmBlock extracts the raw
+// interior; fmMap derives every top-level key at once.
 //
 // Stripping semantics (all three functions, identical): a value quoted with a matching `'` or `"`
 // unwraps verbatim up to the matching closing quote — anything after, including a `#`, is
@@ -47,19 +24,14 @@
 //
 // Exit codes: n/a (library, not an entrypoint).
 
-// The raw frontmatter interior between the leading `---` fences, or '' when absent. Shared by
-// fmValue/fmMap below so a caller passing full document text and a caller passing a pre-extracted
-// block hit the exact same derivation.
+// The raw frontmatter interior between the leading `---` fences, or '' when absent.
 function fmBlock(text) {
   const m = /^---\n([\s\S]*?)\n---/.exec(text)
   return m ? m[1] : ''
 }
 
-// Normalizes `text` to a raw frontmatter block regardless of which shape the caller handed in: if
-// `text` itself opens with the `---` fence, extract the interior (fmBlock's own derivation); the
-// interior of an already-fenced document never itself opens with `---\n` (its lines are
-// `key: value` pairs), so a caller that already extracted the block — every driver, historically —
-// gets that same text back unchanged.
+// Normalizes `text` to a raw block: a fenced document yields its interior; an already-extracted block
+// comes back unchanged.
 function rawBlockOf(text) {
   if (/^---\n/.test(text)) return fmBlock(text)
   return text
@@ -90,10 +62,7 @@ function fmValue(text, key) {
   return stripFrontmatterValue(m[1])
 }
 
-// { key: value } for every top-level `^[A-Za-z_]+:` line, same stripping and same full-text-or-
-// raw-block acceptance as fmValue. Returns {} (never null) when there is no frontmatter — callers
-// (spec-status.js guards on `!fm.status`, replay.js did `frontmatter(x) || {}`) already tolerate
-// this default.
+// { key: value } for every top-level `^[A-Za-z_]+:` line; {} (never null) with no frontmatter.
 function fmMap(text) {
   const block = rawBlockOf(text)
   const map = {}

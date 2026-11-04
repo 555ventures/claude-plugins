@@ -1,28 +1,16 @@
 #!/usr/bin/env node
 'use strict'
-// collision-closure.js --spec <path> [--root <dir>] [--tests <dir>]… [--literal <stem>]… [--json]
+// collision-closure.js --spec <path> [--root <dir>] [--literal <stem>]… [--json]
 //
 // Owner: specs/20260814/05-collision-closure.md.
 //
-// Two plan-time collateral-damage
-// sweeps — find the tests that pin the files a spec is about to change, find the doctrine prose
-// elsewhere that quotes wording a spec is about to retire — have lived as hand-executed prose
-// (a § Gotchas bullet, a /spec:plan sentence) and have missed three times
-// (including a spec-paths key-set pin,
-// which landed out-of-plan and had to be waived at review). This script is the sole derivation
-// of both sweeps, invoked at plan lock: the **paths leg** (always runs) joins every non-tests
-// File Plan path against the test corpus; the **literals leg** (--literal, optional, repeatable)
-// joins planner-supplied stems against the whole repo. Advisory listing only — it never blocks.
+// Two plan-time collateral-damage sweeps, invoked at plan lock: the **paths leg** (always runs) joins
+// every non-tests File Plan path against the test corpus; the **literals leg** (--literal, optional,
+// repeatable) joins planner-supplied stems against the whole repo. Advisory listing only — never blocks.
 //
-// The paths leg matched a File Plan target as
-// a literal substring, but this repo's
-// test helpers spawn scripts by a root-stripped path (`runNode('scripts/foo.js')`, never
-// `spec/scripts/foo.js`) — two out-of-plan genesis test files (7 tests) spawned
-// `scripts/genesis-driver.js` and were invisible to the leg (measured: 88/115 execution edges,
-// 77%). Targets now key on their last two `/`-segments (subsumes a full-path spelling, no
-// host-specific prefix) and runnable targets (`.js`/`.mjs`/`.cjs`/`.sh`, or a sniffed `#!` on an
-// extensionless file) tier their hits `executes` — a call-graph fact, not a proximity guess —
-// alongside the unchanged `likely`/`mentions` proximity tiering for non-runnable (prose) targets.
+// Paths-leg targets key on their last two `/`-segments (test helpers spawn by root-stripped paths), and
+// runnable targets (`.js`/`.mjs`/`.cjs`/`.sh` or a `#!` sniff) tier their hits `executes`, alongside the
+// `likely`/`mentions` proximity tiers for prose targets.
 //
 // What this deliberately does NOT do: gate the lock or any build/review stage (the
 // blocking whole-suite check owns execution adjudication end-to-end); choose
@@ -36,7 +24,7 @@
 // Exit codes:
 //   0 = every hit is already a File Plan row (or there are no hits)
 //   1 = one or more hits are not File Plan rows — ADVISORY listing, never a block
-//   2 = usage / unreadable spec / no File Plan table / no tests-layer rows and no --tests /
+//   2 = usage / unreadable spec / no File Plan table / no tests-layer rows /
 //       a resolved test root that is missing or unreadable
 
 const fs = require('fs')
@@ -65,22 +53,21 @@ function isRunnable(target, base) {    // D2
 }
 
 function usage() {
-  console.error('usage: collision-closure.js --spec <path> [--root <dir>] [--tests <dir>]… [--literal <stem>]… [--json]')
+  console.error('usage: collision-closure.js --spec <path> [--root <dir>] [--literal <stem>]… [--json]')
 }
 
 let specPath = null, root = null
-const testsCli = [], literals = []
+const literals = []
 let jsonOut = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--spec') specPath = argv[++i]
   else if (a === '--root') root = argv[++i]
-  else if (a === '--tests') testsCli.push(argv[++i])
   else if (a === '--literal') literals.push(argv[++i])
   else if (a === '--json') jsonOut = true
   else {
-    console.error(`collision-closure: unknown flag ${a} — ` + 'usage: collision-closure.js --spec <path> [--root <dir>] [--tests <dir>]… [--literal <stem>]… [--json]')
+    console.error(`collision-closure: unknown flag ${a} — ` + 'usage: collision-closure.js --spec <path> [--root <dir>] [--literal <stem>]… [--json]')
     process.exit(2)
   }
 }
@@ -113,16 +100,10 @@ const targets = [...new Set(rows.filter(r => !isTestsRow(r)).flatMap(r => r.path
 
 // ---- test-root derivation --------------------------------------------------------------
 
-let testRoots
-if (testsCli.length) {
-  testRoots = [...new Set(testsCli)]
-} else {
-  testRoots = [...new Set(rows.filter(isTestsRow).flatMap(r => r.paths).map(p => p.split('/')[0]))]
-  if (!testRoots.length) {
-    console.error('collision-closure: no tests-layer File Plan rows and no --tests supplied — ' +
-      "add tests rows to the spec's File Plan, or pass --tests <dir>")
-    process.exit(2)
-  }
+const testRoots = [...new Set(rows.filter(isTestsRow).flatMap(r => r.paths).map(p => p.split('/')[0]))]
+if (!testRoots.length) {
+  console.error("collision-closure: no tests-layer File Plan rows — add tests rows to the spec's File Plan")
+  process.exit(2)
 }
 testRoots.sort()
 
@@ -132,11 +113,11 @@ for (const t of testRoots) {
   try {
     stat = fs.statSync(abs)
   } catch (e) {
-    console.error(`collision-closure: test root ${t} does not exist under --root ${root} — fix the spec's File Plan tests rows, or pass --tests <dir> naming a directory that exists (${e.message})`)
+    console.error(`collision-closure: test root ${t} does not exist under --root ${root} — fix the spec's File Plan tests rows to name a directory that exists (${e.message})`)
     process.exit(2)
   }
   if (!stat.isDirectory()) {
-    console.error(`collision-closure: test root ${t} is not a directory under --root ${root} — pass --tests <dir> naming a directory`)
+    console.error(`collision-closure: test root ${t} is not a directory under --root ${root} — fix the spec's File Plan tests rows to name a directory`)
     process.exit(2)
   }
 }
@@ -166,17 +147,8 @@ function literalPrefix(glob) {
   return i === -1 ? glob : glob.slice(0, i)
 }
 
-// Repo-root walk excluding .git, node_modules, and pipelineOwnedGlobs(root) — pruned at
-// directory level where possible (perf) and re-checked per file (correctness: a glob
-// like `.claude/spec-runs.jsonl` names a single file, not a directory to prune).
-//
-// Ignored-path prune: a git-ignored
-// working copy (`.claude/worktrees/**`, a `*.build/` scratch dir) is a second copy of files this
-// repo already owns, so a literals hit naming one is never a real collateral-damage site. The
-// ignored set is the ONE derivation in `lib/ignored-paths.js` — shared with scope-reconcile.js's
-// at-risk walk and red-check.js's wildcard tests-row expansion, never re-implemented here. That
-// library owns the top-level guard and the empty-set fallback (refusing to filter is safe; an
-// unfiltered walk is byte-identical to the pre-prune behavior).
+// Repo-root walk excluding .git, node_modules, pipelineOwnedGlobs(root) and every git-ignored path
+// (lib/ignored-paths.js) — pruned at directory level and re-checked per file.
 function walkForLiterals(base, ownedGlobs) {
   const dirPrefixes = ownedGlobs.map(literalPrefix).filter(p => p.endsWith('/')).map(p => p.slice(0, -1))
   const ignored = getIgnoredPaths(base)
@@ -252,10 +224,7 @@ if (targets.length) {
       if (!content.includes(entry.key)) continue
       entry.hits.add(f)
       anyPathsHit = true
-      // executes is additive on top of the unchanged likely/mentions proximity computation —
-      // a runnable target's hit that also sits near a deepStrictEqual tiers BOTH executes and
-      // likely (Contracts: "a file... may appear in both executes and likely"); isLikely runs
-      // unconditionally, keyed on the match-key suffix.
+      // executes is additive: a runnable hit near a deepStrictEqual tiers BOTH executes and likely.
       if (entry.runnable) entry.executes.add(f)
       if (isLikely(content, entry.key)) likelyFiles.add(f)
     }
@@ -323,10 +292,7 @@ if (jsonOut) {
       continue
     }
     out.push(`  ${p.target}:`)
-    // executes: first, always; likely: is unconditional (a runnable hit that is also
-    // proximate to a deepStrictEqual prints under both); mentions: is the non-runnable catch-all
-    // only — a runnable target's every hit is already accounted for under executes:, so it never
-    // gets a redundant mentions: bucket.
+    // executes: first; likely: unconditional; mentions: the non-runnable catch-all only.
     const executeHits = [...p.executes].sort()
     const likelyHits = [...p.hits].filter(h => likelyFiles.has(h)).sort()
     const mentionHits = p.runnable ? [] : [...p.hits].filter(h => !likelyFiles.has(h)).sort()

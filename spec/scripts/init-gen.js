@@ -118,28 +118,16 @@ const SELF_VERIFY_LITERAL = '`bun lint`, `bun test:run <your files>`, `bunx tsc 
 // init.md's locked prose. Each entry carries a representative descendant path to probe.
 const IGNORE_ENTRIES = [
   { line: '.claude/worktrees/', sample: '.claude/worktrees/x' },
-  // spec-review-driver.js keeps its re-entry sidecar at specs/<date>/<spec>.review/ for the whole
-  // run (deleted only at DONE) — unignored, a host gate that sweeps the whole tree reds on the
-  // pipeline's own scratch before a reviewer dispatches (a host lint/format gate, e.g. prettier --check).
+  // spec-review-driver.js's re-entry sidecar: unignored, a whole-tree host gate reds on pipeline scratch.
   { line: 'specs/**/*.review/', sample: 'specs/20260101/01-x.review/review-state.json' },
-  // spec-build-driver.js keeps its own re-entry sidecar at
-  // specs/<date>/<spec>.build/ for the build run's whole lifetime (deleted only at DONE) — the
-  // same host-gate mechanism as the .review/ entry above, closed here for build.
+  // spec-build-driver.js's re-entry sidecar — same mechanism as the .review/ entry.
   { line: 'specs/**/*.build/', sample: 'specs/20260101/01-x.build/build-state.json' },
-  // spec-session-stamp.sh writes a per-session scratch
-  // file at .claude/spec-session.json on every /spec: prompt — a per-session file must never ride
-  // a close commit (the same sidecar-scratch class as above). A single bare file, not a directory glob, so the
-  // probe is the literal path itself rather than a child-path sample.
+  // spec-session-stamp.sh's per-session file; a bare file, so the probe is the literal path.
   { line: '.claude/spec-session.json', sample: '.claude/spec-session.json' },
 ]
 
-// The same executed probe answers the drift question: an entry added to this list after a host
-// ran /spec:init never reaches that host (init writes .gitignore once), and nothing else audited
-// it — a host initialised before this entry existed surfaces its un-ignored session stamp
-// as a spurious out-of-plan reconcile finding. `ignore-check` is the read-only sweep
-// /spec:doctor runs (doctor.md check 12); `--fix` is ensureGitignore itself.
-// `policy.ledgerCommitted: false` (read from the host's config, so generate — which writes the
-// config before the gitignore — and ignore-check agree) adds the two ledger rows.
+// `ignore-check` is the read-only drift sweep /spec:doctor runs (check 12); `--fix` is ensureGitignore.
+// `policy.ledgerCommitted: false` (read from the host config) adds the two ledger rows.
 const LEDGER_IGNORE_ENTRIES = [
   { line: '.claude/spec-runs.jsonl', sample: '.claude/spec-runs.jsonl' },
   { line: '.claude/spec-runs/', sample: '.claude/spec-runs/x' },
@@ -285,11 +273,8 @@ if (sub === 'probe') {
   process.exit(0)
 }
 
-// Executes `<cmd> <generated nonexistent path>` in the host root. exit 0 means the runner
-// vacuously "passed" against a path that matches nothing (the at-risk escape's class);
-// exit != 0 means it fails loud, which is the safe/expected shape. A spawn failure (runner not
-// found) reports failsLoud:true too — a runner that can't even be invoked cannot be trusted to
-// pass silently.
+// Executes `<cmd> <nonexistent path>` in the host root: exit 0 means the runner vacuously passes;
+// exit != 0 (or a spawn failure) is the safe, fails-loud shape.
 function patternHasGroup(p) {
   if (typeof p !== 'string') return false
   try { return new RegExp(p + '|').exec('').length - 1 >= 1 } catch { return false }
@@ -302,10 +287,8 @@ function probeTestCommand(cmd, hostRoot) {
   return { failsLoudOnNoMatch: exit !== 0, exit }
 }
 
-// Samples up to `sample` tracked non-test files and shells to scope-reconcile.js's
-// additive --probe-at-risk mode (the sole stem-derivation, reused — never re-implemented here).
-// Best-effort: any failure (no git, no tracked files, scope-reconcile error) omits the field
-// entirely rather than failing the probe (probe never blocks).
+// Samples up to `sample` tracked non-test files through scope-reconcile.js --probe-at-risk;
+// any failure omits the field rather than failing the probe.
 function probeAtRisk(hostRoot, sampleN) {
   try {
     const ls = spawnSync('git', ['-C', hostRoot, 'ls-files'], { encoding: 'utf8' })
@@ -399,9 +382,7 @@ function has(obj, dotted) {
   return cur !== undefined && cur !== null
 }
 
-// The two refusal shapes every optional-array and required-object field share. Kept as
-// named helpers so every caller prints the identical message shape (round-3 ruling: a
-// non-array/non-object is a shape refusal, never an enumeration).
+// The two refusal shapes every optional-array and required-object field share.
 function mustBeArray(field, v) {
   if (!Array.isArray(v)) {
     console.error(`init-gen: profile field "${field}" must be an array — fix the profile JSON per the Contracts profile schema in specs/20260822/02-init-generation-script.md before running generate again`)
@@ -432,18 +413,14 @@ function validateProfile(p) {
     'probeOutcomes.testCommand', 'probeOutcomes.atRisk',
   ]
   for (const field of required) if (!has(p, field)) fieldMissing(field)
-  // extraAllow/extraDeny are optional (the `|| []` default in mergeSettings stands when
-  // absent) — but a *present* non-array silently spreads per character (a string) or throws
-  // "is not iterable" (a number/object) inside mergeSettings, so a present value gets the same
-  // shape check as a required array, before generate ever reaches the merge.
+  // extraAllow/extraDeny are optional, but a present non-array would spread per character or throw
+  // inside mergeSettings — so a present value gets the required-array shape check.
   if (p.settings) {
     for (const f of ['extraAllow', 'extraDeny']) {
       if (p.settings[f] !== undefined && p.settings[f] !== null) mustBeArray(`settings.${f}`, p.settings[f])
     }
   }
-  // `'k' in v` throws a bare TypeError for any primitive `v` (42, "x", ...) — a plain-object
-  // guard ahead of each `in`-operator loop turns that crash into the same named exit-2 refusal
-  // the missing-field case already uses.
+  // A plain-object guard ahead of each `in` loop turns a primitive's TypeError into the named exit-2 refusal.
   if (p.config && p.config.testCaseScanner !== undefined &&
       (typeof p.config.testCaseScanner !== 'string' || !p.config.testCaseScanner.trim())) {
     console.error('init-gen: profile field "config.testCaseScanner" must be a non-empty shell command string — fix the profile JSON or drop the key (the built-in JavaScript walker then reads every test file) before running generate again')
@@ -464,9 +441,7 @@ function validateProfile(p) {
       if (!(s in p.rules.sections)) fieldMissing(`rules.sections["${s}"]`)
     }
   }
-  // conventionRules needs an explicit shape check too (an unchecked dereference at ~332/350
-  // with no validation, uncaught TypeError at exit 1); now every field the script iterates with
-  // for-of gets an explicit array-shape check with a matched remedy.
+  // conventionRules gets the same explicit array-shape check as every field iterated with for-of.
   for (const field of ['rules.paths', 'conventionRules', 'agents', 'patternSweeps', 'manifestExtras']) {
     const v = field.split('.').reduce((o, k) => o && o[k], p)
     mustBeArray(field, v)
@@ -795,16 +770,8 @@ function computeContractHash() {
 
 // ---- main generate flow -----------------------------------------------------------------------
 
-// settings.json is always merge-preserved, never rebuilt — so an unreadable, unparseable, or
-// non-object existing file makes the merge impossible rather than emptyable. Read, parsed, and
-// shape-checked once, here, pre-flight, before any target is written (both modes: --refresh's
-// overwrite semantics apply only to script-owned targets, and settings.json is explicitly not
-// one). The merge computation itself moved OFF this pre-flight block and into the
-// try boundary below, as its first statement — still ahead of buildFileTargets and every write,
-// so no settings-derived throw can follow a write; a value that parses as valid JSON but isn't a
-// usable object (`null`, a top-level array) is still caught right here by the shape check below,
-// and any other residual throw inside mergeSettings is now caught by that same boundary as
-// exit 4, never a bare Node crash.
+// settings.json is always merge-preserved, so an unreadable, unparseable or non-object existing file
+// refuses before any target is written; mergeSettings itself runs first inside the exit-4 boundary below.
 const existingSettingsPath = path.join(root, '.claude', 'settings.json')
 let existingSettings = {}
 if (fs.existsSync(existingSettingsPath)) {
@@ -812,9 +779,7 @@ if (fs.existsSync(existingSettingsPath)) {
   try {
     rawSettings = fs.readFileSync(existingSettingsPath, 'utf8')
   } catch (e) {
-    // EISDIR (observed on darwin) is its own remedy — a directory can't be chmod'd into
-    // a file, so the generic permissions message would send the operator down a dead end. Every
-    // other read failure (permissions, ...) keeps the existing chmod remedy verbatim.
+    // EISDIR gets its own remedy — a directory can't be chmod'd into a file.
     if (e.code === 'EISDIR') {
       console.error(`init-gen: existing ${existingSettingsPath} is a directory, not a file — settings.json is always merge-preserved per D5, so generate refuses rather than guess; nothing written. Remove or replace the directory with a JSON file (e.g. \`rm -r ${existingSettingsPath}\`) and re-run generate.`)
       process.exit(2)
@@ -835,16 +800,10 @@ if (fs.existsSync(existingSettingsPath)) {
   }
 }
 
-// Everything below can hit an unforeseen host filesystem state (a confirmed repro:
-// .gitignore is a directory, so ensureGitignore's read throws EISDIR after all targets are
-// written). A pre-flight check can't be written for every such case, so the remainder is boundary-
-// wrapped — any uncaught throw here becomes an unmistakable exit 4, never a collision with the
-// documented 0/1/2/3 verdicts. process.exit() calls inside do not throw, so they pass through.
+// Everything below is boundary-wrapped: an uncaught throw from an unforeseen host filesystem state
+// becomes exit 4, never a collision with the 0/1/2/3 verdicts. process.exit() passes through.
 try {
-  // The merge is computed here, INSIDE the boundary, as its first statement — still
-  // ahead of buildFileTargets and every write (round 2's no-settings-throw-after-a-write ordering
-  // holds), and now also covered by this same exit-4 boundary for the unenumerable residue that
-  // remains (the shape checks keep JSON-representable inputs clear of a throw here).
+  // The merge runs first inside the boundary, ahead of buildFileTargets and every write.
   const merged = mergeSettings(root, existingSettings, profile)
   const fileTargets = buildFileTargets(profile)
   // The host's own walkthrough block is carried verbatim into the config target,

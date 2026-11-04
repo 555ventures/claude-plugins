@@ -2,17 +2,12 @@
 # worktree-include.sh --root <main worktree root> --dest <existing directory>
 #
 # Owner: specs/20260904/02-worktree-include-shared-owner.md
-# The sole owner of "copy the
-# .worktreeinclude-matched, gitignored files from --root into --dest". merge-back.sh's `create`
-# and replay.js's `--setup` both call this instead of each carrying their own copy of the
-# selection+copy pipeline — the duplication this spec closes. It does NOT touch any tracked
-# file, does NOT edit .gitignore/.worktreeinclude/exclude files, and NEVER copies anything under
-# .claude/worktrees/ (even when the manifest itself names that path) — that directory can hold
-# live sibling worktrees a stray copy would corrupt.
+# The sole owner of "copy the .worktreeinclude-matched, gitignored files from --root into --dest"
+# (merge-back.sh's `create` calls it). It does NOT touch any tracked file, edit .gitignore/.worktreeinclude/
+# exclude files, or copy anything under .claude/worktrees/ (live sibling worktrees live there).
 #
-# Selection (unchanged from the inline block this replaces): files that are BOTH gitignored in
-# --root AND matched by --root/.worktreeinclude, excluding anything under .claude/worktrees/. No
-# manifest, or a manifest matching only tracked or absent-on-disk files, is a silent no-op.
+# Selection: files that are BOTH gitignored in --root AND matched by --root/.worktreeinclude, excluding
+# .claude/worktrees/. No manifest, or one matching nothing gitignored, is a silent no-op.
 #
 # Exit codes:
 #   0  copied N >= 0 files (N = 0 when there is no manifest, or the manifest matches nothing

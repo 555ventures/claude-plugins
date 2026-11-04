@@ -4,21 +4,14 @@
 // apart from broken code.
 //
 // Owner: specs/20260815/05-env-preflight.md
-// WHY THIS EXISTS: (runId wf_e4778d03-81b, observed twice) with a suite-gating variable unset, the gate failed at env()
-// parse time, wf-build classified that as implementation breakage, and burned a full repair
-// round it could not possibly win — the code the round would edit was never the code that
-// failed. Hosts declare their gating variables in `.claude/spec.config.json`'s `testEnv` array
-// (`[{"var": "<NAME>", "provision": "<command>"}]`); this script is the one deterministic check
-// against that registry, run twice: build/design Phase 0 (default mode, checks process.env) and
-// doctor 6b (`--rules` mode, checks the registry agrees with the host's § Test Rules prose).
+// WHY THIS EXISTS: an unset suite-gating variable fails the gate at parse time and reads as broken code,
+// burning a repair round. Hosts declare gating variables in the config's `testEnv` array
+// (`[{"var": "<NAME>", "provision": "<command>"}]`); this is the one check against that registry, run at
+// build/design Phase 0 (default mode, process.env) and doctor 6b (`--rules` mode, § Test Rules prose).
 //
-// WHAT THIS DELIBERATELY DOES NOT DO: it never reads spec.config.json privately (all config
-// reads go through lib/host-config.js's readConfigStrict — a private read would trip spec
-// 20260815/01's closure pin); it never infers gating variables from suite code, only from the
-// declared registry; `--rules` mode never touches process.env, and default mode never touches
-// the rules file — the two checks are independent legs of the same registry. It never runs
-// `direnv`, never loads an .envrc, and never edits the environment: the direnv leg (default mode
-// only) compares DIRENV_DIR against --root and names the mismatch, nothing more.
+// WHAT THIS DELIBERATELY DOES NOT DO: read the config privately (lib/host-config.js's readConfigStrict),
+// infer gating variables from suite code, cross the two modes (`--rules` never reads process.env, default
+// mode never reads the rules file), or run direnv / load an .envrc / edit the environment.
 //
 // Usage:
 //   node env-preflight.js --root <dir>                  # default mode: process-env presence
@@ -60,23 +53,10 @@ try {
 }
 
 // ---- direnv scope check (default mode only) --------------------------------------------------
-// The SAME incident class this module exists to stop, through a hole in it: a var that is SET but
-// points somewhere wrong is invisible to a presence check. In a direnv host the gate runs as
-// `bash -c <gateCommand>` with the parent shell's environment, and direnv is a shell hook that
-// never fires for a non-interactive child — so a build in a worktree inherits the MAIN root's
-// `.envrc` and its DB-gated tests hit the shared database instead of the worktree's own. A
-// migration applied to the worktree DB is absent there and the gate fails with a Postgres
-// constraint error that reads exactly like broken application code: a red the gate cannot tell
-// apart from a real one, which is this module's whole reason for existing.
-//
-// Deterministic and narrow: direnv exports DIRENV_DIR as `-<loaded dir>`. An `.envrc` at --root
-// with DIRENV_DIR naming a DIFFERENT directory is a proven mismatch — STOP. An `.envrc` with
-// DIRENV_DIR unset is only a possible one (direnv may simply not be installed or in use) — WARN
-// and continue; refusing there would block every host that keeps an unused .envrc in the tree.
-//
-// WHAT THIS DELIBERATELY DOES NOT DO: it never runs `direnv`, never loads an .envrc, and never
-// edits the environment. Materializing a host's env is the host's job; naming the mismatch before
-// the gate burns a repair round is this script's.
+// A var that is SET but points at the wrong directory is invisible to a presence check: direnv never
+// fires for a non-interactive child, so a worktree build can inherit the MAIN root's `.envrc`.
+// direnv exports DIRENV_DIR as `-<loaded dir>`: an `.envrc` at --root with DIRENV_DIR naming a DIFFERENT
+// directory is a proven mismatch — STOP; DIRENV_DIR unset is only possible — WARN and continue.
 if (!rulesArgGiven && fs.existsSync(path.join(root, '.envrc'))) {
   const rootAbs = fs.realpathSync(root)
   const raw = process.env.DIRENV_DIR

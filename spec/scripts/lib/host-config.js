@@ -1,60 +1,29 @@
 'use strict'
 // lib/host-config.js — the sole reader of the host's `.claude/spec.config.json` for scripts that
-// need one fact out of it. Extracted (a review advisory:
-// ci-query.js and observe-ci.js each grew a byte-identical private readForge block in one diff,
-// while lib/glob-match.js's pipelineOwnedGlobs already carried a third copy of the same
-// read-parse-swallow shape — the identical class this repo already paid down once, on
-// the occasion when scope-reconcile.js and hotspot.js were deduplicated into glob-match.js).
-// Three private readers meant three places for the absent-config contract to drift apart.
+// need one fact out of it.
 // Owner: specs/20260813/10-host-capabilities.md.
 //
-// `readConfig(root)` is the file read; `declaredForge(root)` is the one derivation of the
-// declared forge capability, so the two CI scripts read the same fact the same way rather than
-// each restating the key path.
+// `readConfig(root)` is the file read; `declaredForge(root)` is the one derivation of the declared forge.
 //
 // What `readConfig` deliberately does NOT do: validate the config's shape, apply defaults for
 // any key, or surface read/parse errors. An absent, unreadable, or unparsable config reads as
 // `{}` — every caller degrades to its own documented default (glob-match: baseline globs only;
 // the CI scripts: legacy dynamic `gh` probing), which is the contract each of them already had.
 //
-// `readConfigStrict(root)` is the fail-loud sibling:
-// the divergence across this repo's config readers was always the ERROR POLICY, never the
-// read — strict-flavored consumers (ci-gate-parity.js, a now-retired design-render gate script)
-// structurally could not call `readConfig` and read the file privately instead, which is what recurred the
-// config-read class a day after its second paydown. It throws on absent/unreadable/unparsable
-// and otherwise returns the parsed value VERBATIM — object, array, scalar, or null, with no
-// shape coercion and no non-object throw: every caller's existing guard
-// (`typeof config.gateCommand === 'string'`, `config.design && …`) already owns shape handling,
-// and the verbatim return is what keeps each script's behavior on odd-but-valid JSON identical
-// to before the swap (a non-object throw would have silently rewritten ci-gate-parity's locked
-// exit-0 "inapplicable — no gateCommand" degrade on a scalar config into an exit-2 crash).
+// `readConfigStrict(root)` is the fail-loud sibling: it throws on absent/unreadable/unparsable and
+// otherwise returns the parsed value VERBATIM (object, array, scalar or null) — callers own shape handling.
 //
-// `tests/host-config/config-read.test.js`
-// bans naming the literal filename `spec.config.json` (stem `spec.config`) in executable text
-// anywhere under `spec/scripts/`, with exactly three named exemptions: this file (the sole Node
-// reader), and `smoke.sh`/`spec-state-gate.sh` (read via `jq`; bash cannot `require()` this
-// library). This file is therefore where the literal legitimately lives — every other script
-// routes through the exports below instead of spelling the filename itself. `configPath(root)`
-// (the renamed `configPathFor`) and `configExists(root)` (a presence-only probe) are the two
-// sanctioned routes for the two legitimate reasons a script needs the filename: a
-// presence check and a remedy string (`CONFIG_RELPATH`, for display only, never path-building).
+// tests/host-config/config-read.test.js bans the literal config filename in executable text under
+// spec/scripts/ except here, smoke.sh and spec-state-gate.sh. `configPath(root)`, `configExists(root)` and
+// `CONFIG_RELPATH` (display only) are the sanctioned routes.
 //
-// `POLICY_DEFAULTS`, `policy(root)` and `validatePolicy(block)` are the one declaration, one accessor
-// and one validator of the config's optional `policy` block. `policy` deep-merges a host's partial
-// block over the defaults and drops unknown keys; `validatePolicy` is what `init-gen.js generate` and `policy-check` refuse or report with. Neither
-// writes anything, and no reader of a key lives here (the commands that read them are spec 09's) —
-// except `agentCall(root, seat, subagentType[, {isolation, background}])`, the one writer of a printed `Agent {…}` dispatch:
-// every driver line that dispatches a policy seat is built by it, so none can print without one.
+// `POLICY_DEFAULTS`, `policy(root)` and `validatePolicy(block)` are the one declaration, accessor and
+// validator of the optional `policy` block (deep-merged over defaults, unknown keys dropped). `agentCall(root,
+// seat, subagentType[, {isolation, background}])` is the one writer of a printed `Agent {…}` dispatch.
 //
-// `readPipelineRules(root, cfg)` is the one resolver and reader of the file the config's
-// `pipelineRules` key names. Four scripts (decision-lint, init-gen policy-check, both drivers)
-// each resolved the key privately with their own error policy, and policy-check's
-// `'' + catch-all` read reported a missing key as every risk tier absent from an empty
-// filename. It returns `{ok: true, rel, abs, text}` or `{ok: false, kind, rel, abs, error}`,
-// `kind` being `no-key` (absent, non-string or empty) or `unreadable` (the read threw) — never a
-// throw, never a default path. Each caller maps the kind to its own policy (die, one finding,
-// "(none declared)"); section parsing stays with the caller (lib/spec-sections.js
-// `extractSection`), keeping this library a leaf.
+// `readPipelineRules(root, cfg)` resolves and reads the file `pipelineRules` names: `{ok: true, rel, abs,
+// text}` or `{ok: false, kind: 'no-key'|'unreadable', rel, abs, error}` — never a throw, never a default
+// path. Callers map the kind to their own policy; section parsing stays with them.
 //
 // Exit codes: n/a (library, not an entrypoint).
 
@@ -169,7 +138,7 @@ const POLICY_DEFAULTS = Object.freeze({
   }),
 })
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./util')
 
 // A policy block merged key by key over POLICY_DEFAULTS; unknown keys dropped, `models` merged
 // per seat. Returns a fresh mutable object. A wrongly-typed value is kept as written —

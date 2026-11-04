@@ -1,42 +1,16 @@
 #!/usr/bin/env bash
 # PreToolUse guard: keep Write/Edit/NotebookEdit inside the CURRENT git worktree.
 #
-# Why this exists: a worktree shares the repo object store but has its own working
-# directory. When a tool writes to an absolute path rooted at a DIFFERENT working
-# tree of the same repo — the main checkout, or a sibling/nested worktree — the
-# edit silently lands there and leaves the current worktree's branch clean. That
-# is the "isolated worktree, but the work landed somewhere else" failure.
-#
-# Shipped by the spec plugin (wired in hooks/hooks.json), so it fires for every
-# session in any repo where the plugin is enabled. It is topology-based and
-# fail-open: outside a worktree, or on any git/parse error, it allows the write,
-# so it is inert for ordinary single-checkout work and only bites genuine escapes.
-# This is the mechanical complement to the build stage's worktree isolation and the
-# Worker Contract's git ban — workers run with cwd = their own worktree, so a
-# parallel worker that writes an absolute path into the root checkout is blocked.
+# Why: a tool writing an absolute path rooted at a DIFFERENT working tree of the same repo lands the
+# edit there and leaves the current worktree's branch clean. Shipped by the spec plugin (hooks.json);
+# topology-based and fail-open outside a worktree or on any git/parse error.
 # Owner: specs/20260820/02-replay-scratch-write-access.md.
 #
-# One sanctioned exception: a mutation
-# worker dispatched from a main-anchored session may Edit a disposable scratch worktree
-# stood up for it — a cross-worktree write that is the whole point of that tool, not
-# pollution. The exception: allow when the TARGET tree's PRIVATE git dir (outside the
-# working tree, so a blind reviewer never sees it) carries a `scratch-worktree` marker
-# file, planted by a setup step and gone after teardown / `git worktree remove`. The
-# scratch tree is a sink, never a source: the allow keys on the TARGET only, so a
-# session anchored inside the marker-carrying tree writing OUT to the main checkout
-# still blocks.
-#
-# That marker allow turned out to be forgeable through this hook's own fail-open: a
-# target inside a repo's `.git`-internal paths made `rev-parse --show-toplevel` exit
-# 128 (not inside any working tree), and the old `[ -n "$tgt_top" ] || exit 0` read
-# that as "not our concern" and allowed it — including writes that PLANT a
-# `scratch-worktree` file where none belongs, permanently disarming the guard for
-# that tree. Fixed by attributing any target inside THIS repo's git metadata to its
-# owning tree (main checkout, or the linked tree named by a `worktrees/<name>`
-# segment) and blocking unless that owner is the cwd's own git dir — this runs
-# BEFORE the old tgt_top resolution, so the forging write itself is now blocked. The
-# marker allow is additionally narrowed to git dirs with a `/worktrees/` segment,
-# since a setup step only ever plants into a linked tree.
+# One sanctioned exception: a write into a disposable scratch worktree whose PRIVATE git dir (with a
+# `/worktrees/` segment) carries a `scratch-worktree` marker — keyed on the TARGET only, so a session
+# inside the marked tree writing OUT to the main checkout still blocks. A target inside THIS repo's git
+# metadata is attributed to its owning tree and blocked unless that is the cwd's own, so the marker
+# cannot be planted through the fail-open.
 #
 # Invariant enforced (topology-independent):
 #   - target resolves to the SAME worktree as cwd            -> ALLOW
@@ -47,10 +21,7 @@
 #     dir carries the `scratch-worktree` marker (TARGET only)  -> ALLOW (scratch sink)
 #   - target is in a DIFFERENT repo, or outside any repo      -> ALLOW
 #
-# Correct for every nesting: a worktree spawned from another worktree, or a spec
-# build worker's isolated worktree, each runs with cwd = its OWN worktree (spawned
-# agents inherit the worktree as cwd), so writes there pass and escapes are
-# blocked. Anchor is cwd from the hook payload = the tool call's working directory.
+# Anchor is cwd from the hook payload; spawned agents inherit their own worktree as cwd.
 #
 # Contract: reads PreToolUse JSON on stdin. exit 0 = allow, exit 2 = block.
 # Fail-open: any git/parse failure allows the write (never wedge the session),
@@ -70,11 +41,8 @@ file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.
 # Canonicalize a directory path (resolves symlinks: macOS /tmp -> /private/tmp).
 canon() { (cd "$1" 2>/dev/null && pwd -P); }
 
-# Absolutize a `git rev-parse` result (git-common-dir / git-dir): git prints
-# these relative to the directory rev-parse ran in when the repo was reached
-# via a relative path, so a bare `.git` needs the caller's base dir joined
-# back on before it's meaningful to canon() or compare against another
-# absolutized path. Already-absolute results pass through unchanged.
+# Absolutize a `git rev-parse` result: a relative `.git` is joined to the caller's base dir;
+# absolute results pass through.
 absolutize_gitdir() {
   case "$1" in
     /*) printf '%s\n' "$1" ;;
@@ -101,14 +69,8 @@ while [ ! -d "$probe" ] && [ "$probe" != "/" ]; do
 done
 
 # --- .git-internal targets: attribute to the owning worktree, fail CLOSED cross-owner ---
-# A target inside THIS repo's common git dir never falls through to the fail-open
-# below (that fail-open is the marker-forgery bug, specs/20260820/02): top-level
-# internals belong to the main checkout, `worktrees/<name>/...` to that linked tree.
-# A write whose owner is not the cwd's own private git dir is blocked here, before
-# the old tgt_top resolution ever runs — this closes the plant-then-read forgery at
-# its root instead of trusting whatever marker a prior write left behind. A target
-# under a DIFFERENT repo's `.git` does not match $cur_common and falls through
-# unchanged to the existing fail-open below.
+# Top-level internals belong to the main checkout, `worktrees/<name>/...` to that linked tree; a write
+# whose owner is not the cwd's own private git dir is blocked. Another repo's `.git` falls through.
 probe_canon="$(canon "$probe")" || probe_canon=""
 if [ -n "$probe_canon" ]; then
   case "$probe_canon/" in
@@ -152,19 +114,11 @@ tgt_common="$(canon "$tgt_common_raw")" || exit 0
 [ "$tgt_top" = "$cur_top" ] && exit 0
 
 # --- Scratch-worktree marker allow: TARGET only ---
-# `git rev-parse --git-dir` returns the tree's PRIVATE git dir: a bare relative `.git`
-# from a main checkout, or an absolute `.../.git/worktrees/<name>` from a linked
-# worktree (both observed in the executed spike) — absolutize a relative result
-# against $probe, same as the git-common-dir resolution above. Any failure here (git
-# error, empty result, missing marker) simply falls through to the BLOCK below: this
-# path can only ALLOW, never widen a failure into a block, and it never inspects the
-# cwd side, so a write anchored inside a marked tree and aimed at the main checkout
-# still hits the BLOCK.
+# `git rev-parse --git-dir` is the tree's PRIVATE git dir (relative `.git` absolutized against $probe).
+# Any failure falls through to the BLOCK below; this path can only ALLOW.
 tgt_gitdir_raw="$(git -C "$probe" rev-parse --git-dir 2>/dev/null)" && [ -n "$tgt_gitdir_raw" ] && {
   tgt_gitdir="$(absolutize_gitdir "$tgt_gitdir_raw" "$probe")"
-  # A legitimate setup step refuses to plant into a git dir without a
-  # `worktrees` segment, so a legitimate marker is always a LINKED tree's marker —
-  # a marker sitting at a main checkout's top-level `.git` is never legitimate.
+  # A legitimate marker is always a LINKED tree's (a `worktrees` segment).
   case "$tgt_gitdir" in
     */worktrees/*) [ -f "$tgt_gitdir/scratch-worktree" ] && exit 0 ;;
   esac

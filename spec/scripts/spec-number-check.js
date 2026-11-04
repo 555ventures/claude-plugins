@@ -3,29 +3,12 @@
 // spec-number-check.js --root <dir> [--json] — report every `specs/YYYYMMDD/` directory in which
 // two or more live specs share one `NN[a]-` number prefix.
 //
-// WHY: the `NN` prefix is the AC-ID namespace. Two specs numbered `04-` in one date directory both
-// mint `AC-YYYYMMDD-04-1`, `-2`, … — so ac-matrix.js's coverage grep, which asks only whether an
-// AC-ID token appears anywhere under the test globs, cannot tell whose test it found. Either spec
-// can pass its coverage leg on the other's tests, with a criterion that has no test anywhere. That
-// is a silent fail-open in the one leg whose whole job is to refuse an untested criterion.
+// WHY: the `NN` prefix is the AC-ID namespace. Two specs numbered `04-` in one date directory both mint
+// `AC-YYYYMMDD-04-*`, so ac-matrix.js's coverage grep cannot tell whose test it found. Callers:
+// /spec:plan's lock step (exit 1 refuses the lock) and /spec:doctor check 18.
 //
-// Measured class (2026-09-11, this repo): five occurrences — 20260907/05 and 20260909/03 each
-// renumbered by hand after the fact, and 20260908/01, 20260908/05, 20260911/04 all still colliding
-// on disk, the last a live pair of hardened specs sharing eighteen AC-IDs. Past the third-
-// recurrence bar for a standing guard (core § Incident Policy), which must be a deterministic
-// script with an exit code rather than prose — this is that script. Callers: /spec:plan's lock
-// step (exit 1 refuses the lock — the class occurs there: two parallel plans both took 20261026/03
-// in a host on 2026-10-26 while this ran only from the audit) and /spec:doctor check 18.
-//
-// Scope: a `superseded` spec is excluded on BOTH sides of a pair — it is terminal, its ACs are
-// never re-derived, and the two historical pairs here are each one live spec beside one retired
-// one. A directory whose only duplicate is between two superseded specs is likewise clean. Files
-// outside a `specs/YYYYMMDD/` directory, and files not ending `.md`, are not specs and are skipped;
-// so is any deviations sidecar, which carries no ACs of its own. Both separators are skipped:
-// the build and review drivers write `<spec>.deviations.md` with a DOT, so a hyphen-only skip
-// never matched and read every live build's own sidecar as a second spec with the same number.
-// Any other dotted sidecar (`<spec>.<kind>.md`, e.g. the retired render gate's `.render.md`
-// evidence file still tracked in hosts) is skipped the same way — a spec slug never has a dot.
+// Scope: a `superseded` spec is excluded on BOTH sides of a pair. Files outside `specs/YYYYMMDD/`, files not
+// ending `.md`, and any dotted or hyphenated sidecar (`<spec>.deviations.md`, `<spec>.<kind>.md`) are skipped.
 //
 // Usage: spec-number-check.js --root <dir> [--json]
 // Exit codes:

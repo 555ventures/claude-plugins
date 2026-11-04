@@ -37,7 +37,7 @@ const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const NAME_FALLBACK = /^(?!.*--)[A-Za-z0-9_.-]{1,80}$/
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./util')
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex')
 const rel = (root, file) => path.relative(root, file).split(path.sep).join('/')
@@ -544,5 +544,5 @@ async function mark(c, opts) {
 
 module.exports = {
   Refusal, configFindings, checkConfig, openContext, storedToken, contextFromBlock, probe, hello, gate, readRoundFile, checkRoundFile,
-  push, pullNotes, pullApprovals, reply, mark,
+  push, pullNotes, pullApprovals, reply, mark, roundsDir,
 }

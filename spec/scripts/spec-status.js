@@ -29,18 +29,6 @@
 // (--brief dependency preflight), the review stage's close-out Next pointer (--next), and
 // external `--json` consumers of the frozen --next --json shape.
 //
-// A `done` spec also carries a derived observation sub-state read from `.claude/spec-runs*.jsonl`
-// (live + year archives) `stage:"observe"` rows — written by observe-ci.js, never here. Offline
-// read only (ledger absence = every done spec reports "ok"); the network leg that actually
-// queries CI lives solely in observe-ci.js. Observation is a red alarm, not a certification:
-// the derived state is `n/a`/`ok`/`red` only —
-// `pending` is retired, nothing renders for "ok" (no ⏳, no "unobserved" anywhere). Observation
-// never blocks depends_on satisfaction; a red observation becomes the --next top pick as a full
-// oracle-shaped `/spec:fix` entry and drives the
-// dashboard footer to `🔴 CI is red on {path} — {branch}@{sha} ({url})`
-// — the sole render of the alarm; there is no separate
-// observation section.
-//
 // --next derives the recommended next command per open spec: draft → /spec:plan; hardened and
 // implementing both → /spec:run — the loop derives build and review from disk itself, so this
 // derivation offers exactly one next-command per state (the build and review stages have no
@@ -87,48 +75,27 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeOut(str) {
-  syncWrite(1, str + '\n')
-}
+const { writeLine } = require('./lib/sync-write')
 const { parseFilePlan } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { policy: hostPolicy, readConfig: readHostConfig } = require('./lib/host-config')
-// sinceLastRelease feeds the
-// footer's ignorable done-since-release clause — computed once over the SAME `ledgerRows` this
-// file already reads for the observation sub-state below, never a second ledger read.
-const { readLedgerRows, qualifyingObservation, sinceLastRelease } = require('./lib/observation')
+// sinceLastRelease feeds the footer's ignorable done-since-release clause.
+const { readLedgerRows, sinceLastRelease } = require('./lib/observation')
 const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems,
-  reconcileMissingBriefs, promptAction, originLine, namedFiles,
+  reconcileMissingBriefs, promptAction, originLine, namedFiles, normBrief,
 } = require('./lib/queue')
-// The local frontmatter() kv
-// loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
-// corrupting an unspaced value like `source_url: https://x/p#frag` — the sole shared derivation
-// strips only a whitespace-preceded "#", per YAML unquoted-scalar semantics.
 const { fmMap } = require('./lib/frontmatter')
 
-// Brief ids are NN plus an optional letter suffix — ad-hoc briefs slot between neighbors
-// as 04a, 04b, … Normalize any spelling (4b, 04B, 04b-auth) to the canonical zero-padded
-// lowercase id; briefOrd maps ids to a sortable number where 04 < 04a < 04b < 05.
-function normBrief(v) {
-  const m = String(v).trim().match(/^(\d+)([A-Za-z]?)(?:-.*)?$/)
-  return m ? m[1].padStart(2, '0') + m[2].toLowerCase() : String(v).trim()
-}
-// `brief: n/a` (also none/-/—) is the sanctioned "ad-hoc spec, no roadmap brief" spelling —
-// deliberately briefless, NOT a dangling pointer, so it never earns an orphan-stamp anomaly.
+// Brief ids are NN plus an optional letter suffix (04a, 04b, …); briefOrd sorts 04 < 04a < 04b < 05.
+// `brief: n/a` (also none/-/—) is a deliberately briefless spec, never an orphan stamp.
 const BRIEFLESS = /^(n\/a|none|-|—)$/i
 function briefOrd(num) {
   const m = num.match(/^(\d+)([a-z]?)$/)
   return m ? Number(m[1]) + (m[2] ? (m[2].charCodeAt(0) - 96) / 100 : 0) : NaN
 }
 
-// Default root: the repository toplevel, NOT the shell's CWD — every roadmap brief and spec
-// path below is resolved against it, so a run from a subdirectory would otherwise report an
-// empty roadmap rather than an error. Falls back to '.' outside a git repo (the pre-existing
-// behavior, which the fixture-directory callers that pass no --root rely on). An explicit
-// --root still wins.
+// Default root: the repository toplevel, not the shell's CWD; '.' outside a git repo. --root wins.
 let root = (() => {
   const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' })
   return r.error || r.status !== 0 ? '.' : (r.stdout.trim() || '.')
@@ -160,9 +127,7 @@ if (nextMode && briefFilter) {
   console.error('--next and --brief are mutually exclusive')
   process.exit(2)
 }
-// --all is a render switch only — it is
-// usage-incompatible with --next or --brief, and a no-op combined with --json (the full
-// --json shape is unaffected by --all).
+// --all is a render switch only: incompatible with --next/--brief, a no-op with --json.
 if (allMode && (nextMode || briefFilter)) {
   console.error('usage: --all cannot combine with --next or --brief')
   process.exit(2)
@@ -180,9 +145,6 @@ function walkMd(dir, out = []) {
   return out
 }
 
-// File Plan parsing (parseFilePlan/splitPlanCell) lives in lib/file-plan.js —
-// scope-reconcile.js shares this derivation
-// rather than carrying a second copy that could drift. CLI behavior here is byte-identical.
 
 function parseList(v) {
   if (!v) return []
@@ -207,13 +169,9 @@ for (const file of walkMd(path.join(root, 'specs'))) {
 }
 
 // ---- retirement: status: superseded -----------------------------------------------------------
-// `status: superseded` retires a preserved spec. It is terminal and UNCONDITIONAL: the spec
-// leaves the derivation entirely — no brief membership, no Next entry, no anomaly, ever.
-// Silence is the whole point. A retired spec sitting in the repo for a year must never
-// accumulate report lines, and this derivation must never invent an errand to earn that
-// silence.
-// `superseded_by:` is optional provenance: free-form (spec path, ADR path, prose), carried into
-// --json for whoever wants the trail, never validated and never a gate.
+// Terminal and unconditional: a superseded spec leaves the derivation entirely — no brief
+// membership, no Next entry, no anomaly. `superseded_by:` is free-form provenance carried into
+// --json, never validated.
 const isRetired = s => s.status === 'superseded'
 const retired = allSpecs.filter(isRetired)
 const specs = allSpecs.filter(s => !isRetired(s))
@@ -227,24 +185,14 @@ if (fs.existsSync(roadmapDir)) {
     const m = f.match(/^(\d+[A-Za-z]?)-(.+)\.md$/)
     if (!m || f === '00-overview.md') continue
     const text = fs.readFileSync(path.join(roadmapDir, f), 'utf8')
-    // Header fields ride `·`-separated lines under the H1 and may wrap mid-list, so flatten
-    // the pre-section head to one line before matching — a wrapped `Depends on:` must not
-    // silently drop the dependencies on the continuation line.
+    // Flatten the pre-section head to one line so a wrapped `Depends on:` keeps its continuation.
     const head = text.split(/\n## /)[0].replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ')
-    // Stop at the next header label too, not only at a `·` or end-of-head: flattening puts a
-    // label written on the FOLLOWING line inside the dependency value, where it parses as
-    // neither a brief id nor `none` and surfaces as a permanent unparsed-dependency anomaly.
+    // Stop at the next header label too, so a label on the following line never joins the value.
     const dep = head.match(/Depends on:\s*([^·]*?)\s*(?:·|\s[A-Z][A-Za-z ]*:|$)/)
     const phase = head.match(/Phase:\s*(P\d+)/)
-    // Parse the dependency value item-wise: split on commas, accept an item only if it is
-    // exactly a brief id (NN/NNa, optional "brief" prefix or name suffix) or a sanctioned
-    // "none" spelling. Harvesting digits from the whole line turned a spec reference
-    // (`Depends on: spec 20260804/02 at done`) into permanent phantom brief dependencies —
-    // 20260804 can never exist, and the 02 fragment binds to an unrelated real brief.
-    // Items that parse as neither are kept aside and surfaced as anomalies, never as deps.
-    // A trailing parenthetical note — `16 (the review driver this brief mirrors)` — is the
-    // author's natural spelling and is read as the bare id: the note is ignored, the
-    // dependency binds. Commas inside the note never split the item.
+    // Item-wise: accept only an exact brief id (NN/NNa, optional "brief" prefix, name suffix, or a
+    // trailing parenthetical note) or a "none" spelling; anything else is an anomaly, never a dep.
+    // Commas inside a parenthetical never split the item.
     const deps = [], depRejects = []
     const items = dep ? dep[1].replace(/\([^)]*\)/g, m => m.replace(/,/g, '\u0000')).split(',').map(s => s.replace(/\u0000/g, ',').replace(/\s+/g, ' ').trim()).filter(Boolean) : []
     for (const item of items) {
@@ -259,9 +207,7 @@ if (fs.existsSync(roadmapDir)) {
       phase: phase ? phase[1] : null,
       depends_on: deps,
       dep_rejects: depRejects,
-      // Internal-only (never exposed via --json) — a superseded
-      // roadmap brief (the v7 "*(superseded by v7)*" entries) is excluded from the queue
-      // overlay's virtual reconcile so it never earns a perpetual auto-placement anomaly.
+      // Internal-only: a superseded brief stays out of the queue overlay's virtual reconcile.
       superseded: isSupersededBriefText(text),
     })
   }
@@ -275,35 +221,11 @@ const LANDED = s => s === 'done' || s === 'implementing'
 // this derivation can't reason about — fail closed: flag it, never route it to an action.
 const KNOWN_STATUS = new Set(['draft', 'hardened', 'implementing', 'done'])
 
-// ---- .claude/spec-runs*.jsonl (live + archives) — done-spec observation sub-state --------
-// Offline read only — this is a VIEW; the network leg lives solely in observe-ci.js. Absence of
-// the ledger means every done spec resolves to "ok" (silent — a host that has never run
-// observe-ci has never seen a red run, which renders identically to a host that has and stayed
-// green — both collapse to the same "ok" render by design).
-// readLedgerRows/qualifyingObservation live in lib/observation.js — shared
-// with observe-ci.js instead of a second derivation drifting apart. CLI behavior here is byte-identical.
-function observationFor(rows, specPath) {
-  const row = qualifyingObservation(rows, specPath)
-  return row && row.ci === 'red' ? { state: 'red', row } : { state: 'ok', row: null }
-}
-
 const ledgerRows = readLedgerRows(root)
-// observationRows kept OUT of the spec objects (never leaks into --json specs[] beyond the
-// documented "observation" string field, Contracts) — a side map keyed by spec path instead.
-const observationRows = new Map()
-for (const s of specs) {
-  if (!DONE(s.status)) { s.observation = 'n/a'; continue }
-  const obs = observationFor(ledgerRows, s.path)
-  s.observation = obs.state
-  if (obs.row) observationRows.set(s.path, obs.row)
-}
 
-// Brief status is derived HERE and nowhere else — every consumer (render, --next pick, the
-// anomaly loops, the queue overlay) switches on `status` alone. `superseded` is the retire
-// state for a brief carrying the "Superseded by" banner (lib/queue.js isSupersededBriefText)
-// with no spec still in flight: a retired brief with live work keeps `in-flight` so the work
-// stays visible. The incident this pins: superseded briefs rendered as ⬜ unplanned and could
-// be picked by --next's fallback because two consumers never consulted the side flag.
+// Brief status is derived HERE and nowhere else — every consumer switches on `status` alone.
+// `superseded` = the "Superseded by" banner with no spec still in flight (live work keeps
+// `in-flight`).
 for (const b of briefs) {
   b.specs = specs.filter(s => s.brief === b.num)
   const allDone = b.specs.every(s => DONE(s.status))
@@ -313,9 +235,7 @@ for (const b of briefs) {
 const briefByNum = new Map(briefs.map(b => [b.num, b]))
 
 // ---- read-only session queue overlay -------------------------------------------------------
-// `git -C <root> rev-parse --git-common-dir`/`--git-dir`, resolved against <root> (never
-// --path-format=absolute, git >=2.31-only) — a linked worktree has git-dir != common-dir,
-// which is exactly the suppression signal (no second "am I a worktree" check needed).
+// A linked worktree (git-dir != common-dir, both resolved against <root>) suppresses the overlay.
 function resolveQueueOverlay(rootDir) {
   const common = spawnSync('git', ['-C', rootDir, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' })
   if (common.error || common.status !== 0) return { on: false }
@@ -336,19 +256,15 @@ function resolveQueueOverlay(rootDir) {
 }
 
 const anomalies = []
-// Every anomaly kind classifies once, here — DECIDE
-// kinds are the two whose remedy is a choice only the reader can make; every other kind,
-// including one added here later and never listed in DECIDE, resolves to hygiene by
-// construction rather than silently carrying no audience at all.
+// Every anomaly kind classifies once, here: DECIDE kinds need the reader's choice; every other
+// kind, including future ones, resolves to hygiene.
 const DECIDE_KINDS = new Set(['skipped-brief', 'out-of-order'])
 function pushAnomaly(a) {
   anomalies.push({ ...a, audience: DECIDE_KINDS.has(a.kind) ? 'decide' : 'hygiene' })
 }
 
-// specStatus(relPath) -> the spec's own frontmatter status, including
-// `superseded` (retired specs are filtered OUT of `specs` above but must still resolve here
-// so a queued spec item pointing at a since-superseded spec reads correctly) — null only
-// when the path never resolved to any spec file at all (never existed, or deleted).
+// The spec's own frontmatter status, `superseded` included (a queued spec item may point at a
+// retired spec); null only for a path that never resolved to a spec file.
 const specStatusMap = new Map(allSpecs.map(s => [s.path, s.status]))
 const specStatusFor = p => (specStatusMap.has(p) ? specStatusMap.get(p) : null)
 
@@ -363,11 +279,8 @@ if (queueOverlay.parseError) {
   pushAnomaly({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
 }
 if (queueOverlay.on) {
-  // Virtual reconcile — computed here, never written here (spec-queue.js's own
-  // reconcile is the persisted twin of this exact algorithm, from lib/queue.js): collapse
-  // duplicate brief/spec items to their first occurrence,
-  // then append any on-disk non-done, non-superseded brief absent from the queue LAST, with
-  // no stamp and no anomaly.
+  // Virtual reconcile — computed, never written (spec-queue.js persists the same lib/queue.js
+  // algorithm): dedupe brief/spec items, then append absent on-disk open briefs last.
   const onDiskBriefs = briefs
     .filter(b => b.status !== 'done' && b.status !== 'superseded')
     .map(b => ({ num: b.num }))
@@ -379,18 +292,15 @@ if (queueOverlay.on) {
   reconciled.forEach((it, i) => {
     if (it.kind === 'brief') {
       queuePosByBrief.set(it.brief, i)
-      // A tick retires any item (lib/queue.js isItemDone) — including a brief whose roadmap
-      // file is gone. Flagging a ticked orphan prints a remedy (`spec-queue done <n>`) that has
-      // already been applied, leaving deletion of closed queue memory as the only way to clear it.
+      // A ticked orphan is already retired — flagging it would print an applied remedy.
       if (!briefByNum.has(it.brief) && !it.ticked) {
         pushAnomaly({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${it.brief}, which has no docs/roadmap/${it.brief}-*.md — remove it with \`spec-queue done ${it.brief}\`, reorder it away with \`spec-queue move ${it.brief} <n>\`, or restore the brief file` })
       }
     } else if (it.kind === 'spec') {
       queuePosBySpec.set(it.spec, i)
     }
-    // A gate on a brief item blocks every open spec entry of that brief; a gate on a
-    // spec item blocks that one spec's entry; a gate on a prompt item blocks its own entry
-    // (handled below, in the prompt-entries map).
+    // A gate on a brief item blocks every open spec of that brief; on a spec item, that spec;
+    // a prompt item's gate is handled in the prompt-entries map below.
     if (it.kind === 'brief' || it.kind === 'spec') {
       const r = isItemReady(it, ctx)
       if (!r.ready) {
@@ -424,9 +334,7 @@ if (queueOverlay.on) {
     }))
 }
 
-// Unknown status: frontmatter carries a word outside the lifecycle. Without this, deriveNext's
-// else-branch would recommend the build stage for it. `superseded` never reaches here — retirement
-// filtered it out above — so every hit is a typo or a hand-invented word, which has a real fix.
+// Unknown status: a word outside the lifecycle (a typo or a hand-invented word) — never routed.
 for (const s of specs) {
   if (!KNOWN_STATUS.has(s.status)) {
     pushAnomaly({ kind: 'unknown-status', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${[...KNOWN_STATUS].join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
@@ -440,18 +348,14 @@ for (const s of specs) {
   }
 }
 
-// Unparseable dependency item: prose in the `Depends on:` header (a spec reference, a typo).
-// Ignored for derivation — a spec-level gate belongs in the brief body, not this header —
-// but surfaced so a mistyped brief id doesn't silently vanish from the dependency graph.
+// Unparseable dependency item: ignored for derivation but surfaced so a mistyped id never vanishes.
 for (const b of briefs) {
   for (const r of b.dep_rejects) {
     pushAnomaly({ kind: 'unparsed-dependency', detail: `${b.file} Depends on: item "${r}" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body` })
   }
 }
 
-// Skipped dependency: a brief moved while a declared dependency is still unplanned.
-// skipped-brief is a DECIDE anomaly — the remedy is a
-// choice ("plan it now?"), so it carries line/ask/paste alongside detail.
+// Skipped dependency: a brief moved while a dependency is still unplanned — a DECIDE anomaly.
 for (const b of briefs) {
   if (b.status === 'unplanned' || b.status === 'superseded') continue
   for (const d of b.depends_on) {
@@ -467,10 +371,8 @@ for (const b of briefs) {
   }
 }
 
-// Sequence-order skip: an earlier unplanned brief sitting below any later brief that moved.
-// Also a DECIDE anomaly — the remedy is "still wanted?", a choice, not a fix.
-// A superseded brief is retired, not skipped — it never fires here, nor as a
-// skipped-brief dependency above, nor does it count as "moved".
+// Sequence-order skip: an earlier unplanned brief below a later brief that moved — a DECIDE
+// anomaly. A superseded brief is retired, never skipped or "moved".
 const moved = briefs.filter(b => b.status !== 'unplanned' && b.status !== 'superseded')
 if (moved.length) {
   const maxMoved = moved.reduce((m, b) => briefOrd(b.num) > briefOrd(m.num) ? b : m).num
@@ -511,10 +413,8 @@ if (fs.existsSync(overview)) {
   }
 }
 
-// A contracted,
-// unclosed prototype whose citing specs (frontmatter `prototype: <stem>`, superseded ones aside)
-// are all done is a hygiene anomaly carrying the one close command. Hygiene only — never a Next
-// entry, never a fourth action string.
+// A contracted, unclosed prototype whose citing specs are all done: a hygiene anomaly carrying
+// the one close command.
 {
   const protoRoot = path.join(root, 'design/prototypes')
   let stems = []
@@ -547,16 +447,13 @@ if (fs.existsSync(overview)) {
 
 // ---- --next: recommended next command --------------------------------------------------------
 
-// Resolve a depends_on ref against the LIVE specs. A ref naming a retired spec resolves to
-// nothing, and both callers read nothing as non-blocking — which is the intent: a spec must
-// never block or nag about a dependency that has been retired.
+// Resolve a depends_on ref against the LIVE specs; a retired dependency never blocks.
 function specDep(ref) {
   return specByTail.get(path.basename(ref)) || specs.find(x => x.path === ref || x.path.endsWith('/' + ref))
 }
 
-// Brief-level serial verdict between two briefed entries: the reason string when the pair is
-// provably serial, null when the roadmap declares them unrelated (= parallel-ok). One helper
-// for both the vs-top annotation and pairwise lane admission — the two must never disagree.
+// The serial reason for two briefed entries, or null when unrelated (= parallel-ok). Shared by
+// the vs-top annotation and pairwise lane admission so the two never disagree.
 function briefSerialReason(a, b) {
   if (a === b) return `shared brief ${a}`
   if (briefDepPath(a, b)) return `brief ${a} depends on ${b}`
@@ -628,9 +525,7 @@ function deriveNext() {
         if (!dep || !dep.specs.some(x => LANDED(x.status))) blockers.push(`brief ${d} (${dep ? dep.status : 'missing'})`)
       }
     }
-    // A queue `after` gate on this spec's own queued position, or
-    // on its brief's queued position, adds one more blocker string — reusing the existing
-    // blocked tier rather than a new field.
+    // A queue `after` gate on this spec's (or its brief's) queued position adds one blocker.
     if (queueBlockersBySpec.has(s.path)) blockers.push(queueBlockersBySpec.get(s.path))
     else if (s.brief && queueBlockersByBrief.has(s.brief)) blockers.push(queueBlockersByBrief.get(s.brief))
     const rank = s.status === 'implementing' ? 0 : s.status === 'hardened' ? 1 : 2
@@ -640,34 +535,12 @@ function deriveNext() {
       rank,
     })
   }
-  // A red observation is a dashboard-level alarm — it outranks every build/review/plan
-  // action and every unplanned brief as a full oracle-shaped /spec:fix entry, carrying its
-  // evidence (branch/sha/url) in `note` so the escape session derives from it, never guesses.
-  // blockers:[] (an escape is always actionable) plus parallel:false/parallel_reason:null
-  // (never part of the ⚡ fan-out — it isn't worktree build work) are pinned, not derived.
-  for (const s of specs) {
-    if (s.observation !== 'red') continue
-    const row = observationRows.get(s.path)
-    entries.push({
-      action: '/spec:fix', path: s.path, status: s.status, brief: s.brief, blockers: [],
-      parallel: false, parallelReason: null,
-      note: `CI red on ${row.branch} @${row.sha} — ${row.url}`,
-      rank: -3,
-    })
-  }
-  // Undone prompt queue items surface as their own entries
-  // (no underlying spec — path:null) so they can compete for the top pick like any other
-  // entry, ordered purely by their own queue position (queuePos below).
+  // Undone prompt queue items compete as their own path:null entries, ordered by queue position.
   if (queueOverlay.on) entries.push(...queueUndonePromptEntries)
 
-  // Closest-to-done first (review > build/design > plan), blocked entries last, then brief
-  // order, then path — the first line is THE recommendation. A red-observation escape
-  // (rank -3) keeps supremacy over every queue position — its own sort tier, ahead of queue
-  // position, unconditionally. Queue position (a briefed entry maps to its
-  // queue item's index, real or virtually reconciled above; briefless/unqueued entries sort
-  // after every queued position via Infinity) deliberately overrides the existing
-  // closest-to-done rank, which still breaks ties within one queue position/brief. `queuePos`
-  // degenerates to a constant when the overlay is off, so ordering is byte-identical then.
+  // Unblocked first, then queue position (briefless/unqueued entries after every queued one),
+  // then closest-to-done rank, brief order, path — the first line is THE recommendation. With the
+  // overlay off queuePos is constant.
   function queuePos(e) {
     if (!queueOverlay.on) return 0
     if (e.queue) return e.__queuePos
@@ -678,7 +551,6 @@ function deriveNext() {
   }
   entries.sort((a, b) =>
     (a.blockers.length ? 1 : 0) - (b.blockers.length ? 1 : 0)
-    || (a.rank === -3 ? 0 : 1) - (b.rank === -3 ? 0 : 1)
     || queuePos(a) - queuePos(b)
     || a.rank - b.rank
     || (a.brief ? briefOrd(a.brief) : Infinity) - (b.brief ? briefOrd(b.brief) : Infinity)
@@ -698,11 +570,9 @@ function deriveNext() {
 
   // Parallel annotation: each unblocked runner-up vs the top pick. Both need a brief to
   // make a claim; shared brief = same surfaces, a brief dependency path = declared order.
-  // Escape entries never take part (top or runner-up) — they always sort first (rank -3) when
-  // present, but they carry no worktree-build parallel claim of their own (pinned above) and
-  // must never receive one derived against them either.
-  const top = entries[0] && (entries[0].action === '/spec:fix' || entries[0].queue)
-    ? entries.find(e => e.action !== '/spec:fix' && !e.queue && !e.blockers.length)
+  // A queue prompt entry (brief === null) makes no worktree-build parallelism claim.
+  const top = entries[0] && entries[0].queue
+    ? entries.find(e => !e.queue && !e.blockers.length)
     : entries[0]
   // A queue prompt entry (top.brief === null) makes no worktree-build parallelism claim —
   // same reasoning as the escape exclusion just above.
@@ -726,9 +596,8 @@ function nothingNextLine() {
     : 'nothing next — all specs done, no unplanned briefs'
 }
 
-// --next: the lean terminal view — just the top pick, @-prefixed so it triple-click pastes
-// straight into Claude Code, with none of the full dashboard's other sections. --json gets
-// the full entry list instead.
+// --next: the top pick alone, @-prefixed so it pastes straight into Claude Code; --json gets the
+// full entry list.
 if (nextMode) {
   const entries = deriveNext()
   if (json) {
@@ -737,7 +606,7 @@ if (nextMode) {
     // decoration — it never took part in the parallel-annotation loop above (no brief to
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
-    writeOut(JSON.stringify({
+    writeLine(1, JSON.stringify({
       next: entries.map(({ rank, parallelReason, __queuePos, __queueId, __after, __origin, __trigger, __batch, __payload, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
@@ -753,7 +622,7 @@ if (nextMode) {
     top.blockers.forEach((b, i) =>
       out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`))
   }
-  writeOut(out.join('\n'))
+  writeLine(1, out.join('\n'))
   process.exit(0)
 }
 
@@ -810,7 +679,7 @@ if (lanesMode) {
       files, overlaps: overlapsOf(files), blocker: e.blockers[0] || null,
     }
   })
-  writeOut(JSON.stringify({ lanes: runLanes, serialized, fixes, born: queueBorn }, null, 2))
+  writeLine(1, JSON.stringify({ lanes: runLanes, serialized, fixes, born: queueBorn }, null, 2))
   process.exit(0)
 }
 
@@ -841,23 +710,17 @@ if (briefFilter) {
 }
 
 // ---- the /spec:status dashboard (default render + --all) --------------------------------------
-// Deterministic emoji render of the same derivation, roadmap with per-brief progress bars
-// (consecutive unplanned briefs collapse to one row); the 🎯 Next block carries the next-action
-// lanes (parallel-ok runner-ups drawn as fan-out lanes under the top pick, a 🔶 branch line
-// when two lanes' File Plan tables share a path) in both the default render and --all; --all
-// additionally adds the 🕓/⛔ not-startable-yet sections and the hygiene catalogue. Purely a
-// view — same data as --json, styled here so no renderer re-derives it.
+// A pure view of the same derivation as --json.
 
 if (json) {
   // `superseded` (the brief-level flag, internal-only per its own comment above) is
   // stripped here alongside `specs: ss` — this dashboard JSON shape is unchanged.
-  writeOut(JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
+  writeLine(1, JSON.stringify({ briefs: briefs.map(({ specs: ss, superseded, ...b }) => ({ ...b, specs: ss.map(s => ({ path: s.path, status: s.status })) })), specs, superseded: retired.map(s => ({ path: s.path, superseded_by: s.superseded_by })), anomalies }, null, 2))
   process.exit(0)
 }
 
-// Lane admission (shared by the 🎯 Next block's lane render and --all's 🕓/⛔ sections):
-// pairwise-greedy fan-out over unblocked, non-escape entries — one derivation, every call site,
-// so the lanes drawn in Next and the runner-ups sunk under --all can never disagree.
+// Lane admission: pairwise-greedy over unblocked, non-escape entries — shared by the Next block
+// and --all's sections so they never disagree.
 function laneAdmission(entries) {
   const unblocked = entries.filter(e => !e.blockers.length && e.action !== '/spec:fix' && !e.queue)
   const blocked = entries.filter(e => e.blockers.length)
@@ -880,17 +743,11 @@ const shortBlocker = b => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').r
 const waitClause = n => `${n} more open`
 
 {
-  // The default render is exactly four
-  // blocks — 🗺️ Roadmap, 🎯 Next (the whole lane fan-out), up to three ⚠️ decide lines, one
-  // footer. `--all` lifts the decide cap and inserts 🕓 after that: / ⛔ blocked: under 🎯 Next
-  // plus 🧹 Hygiene before the same footer. No anomaly fold, no ⚠️ Anomalies section, no 📡
-  // block, no headline verdict line survive anywhere.
+  // Default render: 🗺️ Roadmap, 🎯 Next, up to three ⚠️ decide lines, one footer. `--all` lifts the
+  // decide cap and adds 🕓/⛔ under Next plus 🧹 Hygiene before the footer.
   const out = []
   const BRIEF_ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜', superseded: '⛔' }
 
-  // A red observation is a dashboard-level alarm — it decides the footer glyph
-  // outright and is never folded into the ordinary anomaly-driven verdict. "ok" never renders.
-  const doneRed = specs.filter(s => s.observation === 'red')
   const entries = deriveNext()
   const decideAnomalies = anomalies.filter(a => a.audience === 'decide')
   const hygieneAnomalies = anomalies.filter(a => a.audience === 'hygiene')
@@ -902,9 +759,7 @@ const waitClause = n => `${n} more open`
     const rows = []
     for (let i = 0; i < briefs.length; i++) {
       const b = briefs[i]
-      // Runs of same-status briefs with nothing actionable per row (unplanned = no state yet,
-      // done = all specs green, superseded = retired) collapse to one range row — avoiding a
-      // long run of shipped history filling the screen. In-flight briefs never collapse.
+      // Runs of same-status unplanned/done/superseded briefs collapse to one range row.
       let j = i
       const collapsible = b.status === 'unplanned' || b.status === 'done' || b.status === 'superseded'
       while (collapsible && j + 1 < briefs.length && briefs[j + 1].status === b.status) j++
@@ -933,14 +788,8 @@ const waitClause = n => `${n} more open`
     for (const r of rows) out.push(`   ${r.icon} ${r.label.padEnd(lw)}  ${r.phase.padEnd(pw)}  ${r.tail}`)
   }
 
-  // Every open-work row is exactly one line. A queued free-text item's payload runs to
-  // hundreds of words, and a row that wraps across twenty terminal lines has stopped being a
-  // list entry — so a prose row collapses to one line, cut to the terminal width, and leads
-  // with its queue id (`spec-queue show q119` prints the full text). A row that IS a command
-  // stays byte-identical and id-free: it must survive a double-click copy, and its own spec
-  // path is already a valid `spec-queue` <ref>. Width falls back to 100 off a TTY so piped
-  // output stays deterministic. Hoisted above the 🎯 Next block (below) because that block now
-  // renders every command through it too.
+  // Every open-work row is one line: a prose queue row is cut to the terminal width (100 off a
+  // TTY) and led by its queue id; a command row stays byte-identical so it survives a copy.
   const rowWidth = process.stdout.columns || 100
   const idWidth = Math.max(0, ...entries.filter(e => e.__queueId).map(e => e.__queueId.length))
   // a prompt row carries its provenance line directly under it (before any ⏳ branch).
@@ -957,14 +806,9 @@ const waitClause = n => `${n} more open`
     return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…')
   }
 
-  // 🎯 Next: the lane render IS the Next
-  // block now, byte-identical in the default render and under --all — (a) every /spec:fix
-  // entry, one bare command line each; (b) the ⚡ parallel-lanes fan-out (with its 🔶
-  // merge-conflict heads-up) or the single admitted lane's 🚦 solo tag; (c) when neither (a)
-  // nor (b) printed anything and entries exist, the top pick's command plus its ⏳ branch — by
-  // construction a blocked top pick means lanes is empty, so (b) and (c) never
-  // both fire; (d) ✨ nothingNextLine() when there are no entries at all. Every command line
-  // renders through cmd() — the old raw-payload special case for a queue prompt entry is gone.
+  // 🎯 Next, identical in both renders: (a) every /spec:fix entry; (b) the ⚡ parallel-lanes
+  // fan-out with its 🔶 heads-up, or the single lane's 🚦 solo tag; (c) else the top pick plus its
+  // ⏳ branch; (d) ✨ nothingNextLine() with no entries. Every command renders through cmd().
   out.push('', '🎯 Next')
   const { blocked, lanes, laneClash, later } = laneAdmission(entries)
   const escapes = entries.filter(e => e.action === '/spec:fix')
@@ -1018,15 +862,10 @@ const waitClause = n => `${n} more open`
   }
 
   if (allMode) {
-    // `--all` inserts only what the Next block above did NOT already show as startable —
-    // 🕓 after that: (serial/no-claim runner-ups) then ⛔ blocked: — directly after the Next
-    // block's own lines and before the ⚠️ decide lines below. Nothing here re-prints a line the
-    // Next block already carried.
+    // `--all` adds only what Next did not show as startable: 🕓 after that:, then ⛔ blocked:.
     if (later.length) {
       out.push('', '🕓 after that:')
-      // Consecutive entries whose reason is identical share ONE branch line: repeating
-      // "🤷 no brief — parallelism unknown" under every row doubles the section's height
-      // and says nothing new on the second repeat.
+      // Consecutive entries with the same reason share one branch line.
       const reasonOf = e => e.parallel === false ? `⛓️ ${e.parallelReason}`
         : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
         : '🤷 no brief — parallelism unknown'
@@ -1037,9 +876,7 @@ const waitClause = n => `${n} more open`
         if (!next || reasonOf(next) !== reason) out.push(`   └─ ${reason}`)
       })
     }
-    // `blocked` is the same array the branch-(c) top pick came from — filter it back out
-    // here (never in the Next block) so the top pick keeps its position above and the section
-    // is skipped entirely when nothing else survives the filter.
+    // Filter out the branch-(c) top pick already printed above.
     const blockedForAll = topPrintedAsBlocked ? blocked.filter(e => e !== entries[0]) : blocked
     if (blockedForAll.length) {
       out.push('', '⛔ blocked:')
@@ -1051,9 +888,8 @@ const waitClause = n => `${n} more open`
     }
   }
 
-  // ⚠️ Decide lines: `⚠️ {line}` then `   {ask}  {paste}` — capped at three by default in
-  // derivation order (skipped-brief before out-of-order, roadmap order within a kind, already
-  // the anomalies array's own push order); `--all` lifts the cap.
+  // ⚠️ Decide lines: `⚠️ {line}` then `   {ask}  {paste}`, capped at three in derivation order;
+  // `--all` lifts the cap.
   if (shownDecide.length) {
     out.push('')
     for (const a of shownDecide) {
@@ -1068,36 +904,20 @@ const waitClause = n => `${n} more open`
     for (const a of hygieneAnomalies) out.push(`   [${a.kind}] ${a.detail}`)
   }
 
-  // The one-line footer — glyph + one sentence, the LAST line printed. A red observation
-  // outranks every other head (the Next line above is already its /spec:fix entry); else a
-  // blocked top pick names its short blocker; else ready/nothing. Clauses (wait, decide-overflow,
-  // hygiene-count), each only when non-zero, ride after the head in that order — except the wait
-  // clause on the 🟢 line, which prints "nothing else open" at n = 0 rather than being omitted.
-  // The `{m} could run in parallel (--all)`
-  // clause is retired outright — the lanes it counted are already on screen above.
-  // Two more clauses ride AFTER the
-  // hygiene clause, only when non-zero — a done-since-release count (or "never released"
-  // when no CLEAN release row exists). Ignorable by design: the owner asked for a line they
-  // can see, never a state that blocks anything.
+  // The one-line footer — glyph + one sentence, the LAST line printed. A blocked top pick names
+  // its short blocker; else ready/nothing. Clauses ride after the head, each only when non-zero:
+  // wait (the 🟢 line prints "nothing else open" at 0), decide-overflow, hygiene count, then the
+  // done-since-release count ("never released" with no CLEAN release row).
   {
-    // Wait count n excludes escape entries outright, then excludes the top pick
-    // itself — the top pick is entries[0] regardless of whether it is the escape entry, so an
-    // escape top pick subtracts nothing (every non-escape entry is still waiting behind it).
+    // Wait count n excludes escape entries, then the top pick itself unless it is an escape.
     const nonEscape = entries.filter(e => e.action !== '/spec:fix')
     const topIsEscape = entries.length > 0 && entries[0].action === '/spec:fix'
     const n = topIsEscape ? nonEscape.length : (nonEscape.length ? nonEscape.length - 1 : 0)
     const k = decideOverflow
     const h = hygieneAnomalies.length
     let glyph, head
-    if (doneRed.length) {
-      const top = entries[0]
-      const row = observationRows.get(top.path)
-      glyph = '🔴'
-      head = `CI is red on ${top.path} — ${row.branch}@${row.sha} (${row.url})`
-    } else if (!entries.length) {
-      // "Nothing next": unqualified — every entries.length === 0 shape (not just the
-      // blocked-unplanned-brief one) is ⬜, the Next block's ✨ nothingNextLine() message paired
-      // one-to-one with this glyph.
+    if (!entries.length) {
+      // Every entries.length === 0 shape is ⬜, paired with the Next block's ✨ line.
       glyph = '⬜'
       head = 'nothing waits'
     } else if (entries[0].blockers.length) {
@@ -1117,9 +937,7 @@ const waitClause = n => `${n} more open`
     out.push('', `${glyph} ${head}${clauses.map(c => ` · ${c}`).join('')}`)
   }
 
-  // Redraw from the top of the viewport (not a scrollback wipe) so re-invoking the dashboard
-  // never leaves it stranded wherever the cursor last scrolled to — only when stdout is a TTY,
-  // so piped/redirected output stays clean of escape codes.
+  // Redraw from the top of the viewport, only on a TTY so piped output stays escape-free.
   if (process.stdout.isTTY) process.stdout.write('\x1Bc')
   console.log(out.join('\n'))
 }

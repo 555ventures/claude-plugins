@@ -6,20 +6,10 @@
 // Owner: specs/20261024/06-close-tree-equals-judged-tree.md
 // Deliberately does NOT decide the verdict, tune a threshold, or write anything.
 //
-// The judged tree is a working-tree snapshot (tracked edits AND untracked files — an uncommitted
-// fix's brand-new test file must count), never a commit. That same snapshot also swallows files
-// the reviewer's own legs leave behind: a host's build or story output that it never gitignored.
-// The dirty-tree check then forces the session to clean those files before closing, and a plain
-// diff would count every one of them as deleted lines. The rule that separates the two: a
-// path counts only when it is tracked on at
-// least one committed side — the judged commit (`judgedCommit`, the close row's diff.head) or
-// HEAD. A path in neither commit was never part of the reviewed change, so its disappearance is
-// not drift; it is reported under `skipped` so the driver can print what it ignored. A new file
-// a fix adds is in HEAD and counts; a tracked file a fix deletes is in the judged commit and
-// counts; junk the session COMMITTED is in HEAD and counts, which is the check doing its job.
-// One more tracked side: `alsoTracked`, the paths the fix rounds touched (the driver's fix-delta
-// lists). A new file an uncommitted hard fix created is in the snapshot and in neither commit;
-// without this it would be skipped as junk and a close commit could delete reviewed code unseen.
+// The judged tree is a working-tree snapshot (tracked edits AND untracked files), so it also holds junk the
+// reviewer's legs left behind. A path counts only when it is tracked on at least one committed side —
+// `judgedCommit`, HEAD, or `alsoTracked` (the paths the fix rounds touched); a path in none is reported
+// under `skipped`, never counted as drift.
 //
 // opts: { repoRoot, judgedTree (40-hex tree sha), judgedCommit (40-hex commit sha or null),
 //         alsoTracked (repo-relative paths that count even when in neither commit; optional),

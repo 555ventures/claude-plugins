@@ -3,21 +3,11 @@
 // ac-drift.js --root <dir> [--json]
 //
 // Owner: specs/20260906/01-ac-drift-doctor-check.md.
-// WHY: the AC↔test coverage matrix
-// (ac-matrix.js) runs once, at review, against the spec under review; nothing re-derives it after
-// a spec closes, so a later test split, a fix-cap waive, or a retired surface silently leaves a
-// done spec's acceptance criteria with no test citing them. This script re-derives that matrix
-// repo-wide and statelessly: for every spec whose frontmatter `status:` is `done` and whose dated
-// directory is on or after the v7 floor (lib/spec-sections.js's `V7_APPLIES_FROM`), it parses
-// `## Acceptance Criteria` (lib/spec-sections.js's `extractSection`/`parseAcBullets`) and reports
-// two things: a `[retired: <citation>]` tag whose value names no `specs/*.md` or `docs/adr/` path,
-// and a `SHALL CONTINUE TO` pin in a spec dated on or after EXPIRY_APPLIES_FROM that no
-// test-classified file cites (full-token, `acIdOccurs`) and whose own `→ reuses <file> :: <title>`
-// pointer, when it carries one, does not name exactly one case (lib/scan-test-calls.js's
-// resolveReference reads the host's testCaseScanner listing when declared, else the built-in
-// JavaScript walker). Every other criterion of a done spec
-// has expired: its test was allowed to die at close (pins are the opt-in exception, 2026-09-11).
-// `/spec:doctor` runs this as check 17, advisory.
+// WHY: ac-matrix.js runs once, at review; nothing re-derives AC↔test coverage after a spec closes. For every
+// `done` spec dated on or after `V7_APPLIES_FROM`, this reports a `[retired: <citation>]` tag naming no
+// `specs/*.md` or `docs/adr/` path, and a `SHALL CONTINUE TO` pin (spec dated on or after EXPIRY_APPLIES_FROM)
+// that no test-classified file cites and whose `→ reuses <file> :: <title>` pointer, when present, does not
+// name exactly one case. Every other criterion of a done spec has expired. `/spec:doctor` check 17, advisory.
 //
 // What this deliberately does NOT do: write a manifest row, mutate any spec file, verify a
 // `[retired:]` citation's target actually exists (the citation is provenance, not a live link), or
@@ -31,6 +21,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { relPosix: relPosixFrom } = require('./lib/util')
 const { fmValue } = require('./lib/frontmatter')
 const {
   extractSection, parseAcBullets, acIdOccurs, extractTag, V7_APPLIES_FROM, normalizeForPinCheck,
@@ -46,11 +37,7 @@ const USAGE = 'ac-drift.js --root <dir> [--json]'
 // pin without a citing test is drift. Earlier pins were never opt-in and expired retroactively.
 const EXPIRY_APPLIES_FROM = '20260911'
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeOut(fd, str) {
-  syncWrite(fd, str + '\n')
-}
+const { writeLine: writeOut } = require('./lib/sync-write')
 
 function die(code, msg) {
   writeOut(2, 'ac-drift: ' + msg)
@@ -103,7 +90,7 @@ function walk(dir, out) {
     else if (entry.isFile()) out.push(full)
   }
 }
-const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
+const relPosix = (abs) => relPosixFrom(root, abs)
 
 const allFiles = []
 walk(root, allFiles)
@@ -157,13 +144,8 @@ for (const specFile of specFiles) {
 
     if (acIdOccurs(getHaystack(), bullet.id)) continue // covered — never reported
 
-    // The inline backtick-strip/whitespace-
-    // collapse here is lib/spec-sections.js's exported normalizeForPinCheck — the single authority
-    // red-check.js's mixed-pin guard and ac-matrix.js's lint/warning also import, rather than
-    // a third from-scratch copy of the identical pass. Behaviour is unchanged: this predicate still
-    // only asks whether the bullet contains a `SHALL CONTINUE TO` phrase at all, never `pinShape`'s
-    // finer promise/pin/mixed read — a done spec's mixed bullet is history, not a
-    // hygiene finding this script reports.
+    // normalizeForPinCheck is lib/spec-sections.js's; this predicate only asks whether the bullet contains a
+    // `SHALL CONTINUE TO` phrase at all.
     const pinned = /SHALL CONTINUE TO/.test(normalizeForPinCheck(bullet.raw))
 
     const firstLine = bullet.raw.split('\n')[0]
@@ -197,10 +179,8 @@ for (const specFile of specFiles) {
 
 const exitCode = findings.length ? 1 : 0
 
-// --json is a single stdout object and nothing else — no per-row stderr lines, no skipped/summary
-// lines (the human render and --json are two distinct formats, not one payload
-// doubled across streams). The human render below is unchanged: per-row findings on stderr, the
-// summary/sentinel on stdout.
+// --json is a single stdout object and nothing else; the human render puts per-row findings on stderr and
+// the summary/sentinel on stdout.
 if (asJson) {
   writeOut(1, JSON.stringify({ floor: V7_APPLIES_FROM, scanned, criteria, skippedPreFloor, findings }, null, 2))
   process.exit(exitCode)

@@ -3,37 +3,19 @@
 // coverage-scope.js --root <r> [--json]
 //
 // Owner: specs/20260912/15-the-close-stops-deleting-tests.md.
-// WHY: test expiry is a deliberate, human-run
-// sweep (expire-tests.js --all-done --apply) rather than something a close ever applies —
-// expire-tests.js only classifies at close; the deletion happens later, at the operator's own
-// command. That still places an obligation on the host: a check requiring a test
-// carrier per acceptance criterion must scope its carriers to specs that are NOT done (a done spec
-// owes a carrier only for a `SHALL CONTINUE TO` criterion — the plugin's own ac-drift.js applies
-// exactly that rule). A host check that demands a carrier for EVERY AC of a done spec contradicts
-// expiry: after a sweep retires that spec's tests, the check reports its criteria uncovered and
-// goes red, and stays red — no close-time deadlock forces it, but the check is wrong from the sweep
-// onward regardless. The grounding contract's § Test expiry now carries the obligation and
-// /spec:init names it while profiling; this script is that section's conformance probe for a host
-// initialized BEFORE the section existed — /spec:doctor's check 20 runs it.
+// WHY: a host check that demands a test carrier for EVERY AC of a done spec goes red once the expiry
+// sweep retires that spec's tests (a done spec owes a carrier only for a `SHALL CONTINUE TO` criterion).
+// The grounding contract's § Test expiry carries the obligation; this is its conformance probe for hosts
+// initialized before that section existed — /spec:doctor's check 20 runs it.
 //
-// Not a standing guard earned by recurrence (core § Incident Policy): the obligation is a logical
-// consequence of the sweep-deletes-not-close model, true in a host that has never once run the
-// sweep. Its population is finite and shrinking — hosts predating the contract section — so the
-// kill condition is migration-shaped: when no readable host reports a finding across a full major
-// pipeline version, delete the script and the check.
+// Kill condition: when no readable host reports a finding across a full major pipeline version,
+// delete the script and the check.
 //
-// Named `coverage-scope.js`, never `test-*` — `node --test`'s default discovery matches
-// `**/test-*.js` anywhere under the root and would execute this file as a test (the rename
-// incident is spelled out in expire-tests.js's own header).
+// Named `coverage-scope.js`, never `test-*` — `node --test` would discover and execute it.
 //
-// SIGNATURE (deterministic, language-neutral, deliberately narrow): a non-test source file that
-// names an AC-ID — literally (a full `AC-…` id) or as a pattern a scanner matches with
-// (`AC-\d{8}`, `AC-[0-9]{8}`) — AND compares a status against a `done` literal, AND never mentions
-// `SHALL CONTINUE TO`. The pin phrase is the exemption because a check that honors the obligation
-// must name it: that is the only string by which a criterion opts out of expiry. Measured over the
-// nine pipeline hosts on the author's machine (2026-09-12): one hit, the real offender
-// (prax `scripts/check-ac-execution.mjs`, selecting `implementing` OR `done` with no pin clause),
-// zero false positives elsewhere, and the plugin's own expire-tests.js correctly exempt.
+// SIGNATURE (deterministic, deliberately narrow): a non-test source file that names an AC-ID literally or
+// as a scanner pattern (`AC-\d{8}`, `AC-[0-9]{8}`), compares a status against a `done` literal, and never
+// mentions `SHALL CONTINUE TO` — the pin phrase is how a criterion opts out of expiry.
 //
 // What this deliberately does NOT do: read the host's gateCommand, run anything, name a host tool,
 // or judge whether a hit is truly a coverage check — it reports a file to read, at doctor's
@@ -45,6 +27,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { relPosix: relPosixFrom } = require('./lib/util')
 const { readConfig } = require('./lib/host-config')
 const { fileShapes, isCodeFile } = require('./lib/file-shapes')
 const { listTestFiles } = require('./lib/scan-test-calls')
@@ -60,20 +43,15 @@ const SKIP_DIR_NAMES = new Set([
 ])
 const MAX_BYTES = 512 * 1024
 
-// An AC-ID EXTRACTION pattern, never a cited id: `AC-` followed by a digit-class token as a
-// scanner's own regex spells it, or an AC-ID identifier. A file merely citing a full `AC-…` id
-// as its owner citation is the normal shape of every script in the layer and is never a finding —
-// only a file that PARSES acceptance-criterion ids can be the check this scan is looking for.
+// An AC-ID EXTRACTION pattern, never a cited id: only a file that PARSES acceptance-criterion ids can be
+// the check this scan looks for.
 const AC_REFERENCE_RE = /AC-(?:\\{1,2}d|\[0-9\]|%d|\{8\})|\bAC_ID|\bac_?[Ii]d\b/
 // A status compared against a `done` literal, in any of the quoting styles the fleet's languages use.
 const DONE_LITERAL_RE = /["'`]done["'`]/
 const PIN_RE = /SHALL CONTINUE TO/
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
+const { writeLine: writeOut } = require('./lib/sync-write')
 
-function writeOut(fd, str) {
-  syncWrite(fd, str + '\n')
-}
 
 function die(msg) {
   writeOut(2, 'coverage-scope: ' + msg)
@@ -99,7 +77,7 @@ try {
 }
 if (!rootStat || !rootStat.isDirectory()) die('usage: ' + USAGE + ' — --root must name an existing directory')
 
-const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
+const relPosix = (abs) => relPosixFrom(root, abs)
 const shapes = fileShapes(readConfig(root))
 
 function walk(dir, out) {

@@ -5,17 +5,9 @@
 // count-tests.js --root <dir> --scanner-check [--json]
 //
 // Owner: specs/20260911/02-tests-have-a-ceiling.md.
-// Reports a repo's test-case
-// count as a derived number, never a verdict. Delegates entirely to lib/scan-test-calls.js's
-// countCases() (the one scanner, shared with ac-drift.js's expiry sweep) over the host's
-// test-classified files. Prints `tests: <count> cases` (human) or `{"count":N}` (--json).
-// Consumer: review-legs.js's `tests` leg shells out to this script and never re-derives
-// the count itself. Named `count-tests.js`, never `test-*` — `node --test`'s default file
-// discovery matches `**/test-*.js` anywhere under the repo root, so a `test-count.js` this repo
-// ships gets DISCOVERED AND EXECUTED as a test file by the post-gate's path-less `node --test`
-// run, and its own argv handling exiting non-zero under the runner reported as a spurious test
-// failure (the amendment's forcing incident). No executable this repo ships may be named
-// `test-*`.
+// Reports a repo's test-case count as a derived number, never a verdict, via lib/scan-test-calls.js's
+// countCases(). Prints `tests: <count> cases` or `{"count":N}`; review-legs.js's `tests` leg shells out
+// to it. Named `count-tests.js`, never `test-*` — `node --test` would discover and execute it.
 //
 // `--titles [--file <rel>] [--json]`
 // is the one place a spec author finds a `→ reuses`/`→ rewrites` reference string — one line per
@@ -82,10 +74,7 @@ if (!rootStat || !rootStat.isDirectory()) die(2, 'usage: ' + USAGE + ' — --roo
 
 const config = readConfig(root)
 
-// The shortest-unique-within-its-own-file prefix — grown a character at a time until no
-// other case IN THE SAME FILE shares that same-length prefix, then extended forward to the next
-// word boundary (never cut mid-word) and capped at 200 characters (measured: <=80 chars suffices
-// for 1,017 of 1,021 live cases, <=200 for all 1,021).
+// The shortest-unique-within-its-own-file prefix, extended to the next word boundary and capped at 200.
 function shortestUniquePrefix(title, siblingTitles, idx) {
   let len = 1
   while (len < title.length) {

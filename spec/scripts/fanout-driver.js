@@ -48,7 +48,7 @@ const TERMINAL = ['merged', 'stopped', 'done']
 
 const stemOf = (p) => path.basename(p).replace(/\.[^.]*$/, '')
 const real = (p) => { try { return fs.realpathSync(p) } catch (e) { return path.resolve(p) } }
-const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch (e) { return null } }
+const { readJsonSafe: readJson } = require('./lib/util')
 const out = (lines) => writeOut(1, (Array.isArray(lines) ? lines.join('\n') : lines) + '\n')
 
 // ---- argv ------------------------------------------------------------------------------------

@@ -1,45 +1,35 @@
 #!/usr/bin/env node
 'use strict'
-// citations-check.js [--root <dir>] [--verbose] — the § citation checker.
+// citations-check.js [--root <dir>] — the § citation checker.
 // Owner: specs/20260810/09-stale-reference-sweep.md.
 //
-// Six broken `§ Heading` citations accumulated silently in doctrine across one audit cycle because
-// nothing verified that a `§ Name` citation actually names a `## ` heading in the file it
-// points at — `shared-for` filtering just silently drops a mismatched section, so a broken
-// citation reads as valid doctrine forever. This is the enumerator: it scans every citation
-// under spec/commands, spec/doctrine, spec/agents, git/commands and reports every miss.
+// Verifies that every `§ Name` citation names a `## ` heading in the file it points at —
+// `shared-for` filtering silently drops a mismatched section. Scans spec/commands, spec/doctrine,
+// spec/agents and git/commands and reports every miss.
 //
-// Grammar (measured against the live corpus, not assumed): a citation is `§`-anchored with
-// up to TWO words of lookback resolving the target file; hard-wrapped citations are real in
-// this corpus in BOTH directions — a lookback word can sit on the line before the `§`
-// ("...(shared\n§ Design Atlas..."), or the heading name can run onto the line after it
-// ("...(shared §\nDesign Canon;..."). Each `§` is scanned on its own physical line: lookback
-// falls back to the PRIOR line only when this line has nothing before the `§`, and the
-// heading capture extends onto the NEXT line only when this line ends before hitting a
-// terminator — never both directions for the same citation (residual assumption: no citation
-// spans three physical lines). One `§` is therefore found exactly once; no cross-line dedup
-// is needed.
+// Grammar: a citation is `§`-anchored with up to TWO words of lookback resolving the target file.
+// Hard-wraps are handled one line each way: lookback falls back to the PRIOR line only when this
+// line has nothing before the `§`; the heading extends onto the NEXT line only when this line ends
+// before a terminator. Each `§` is found exactly once.
 //
 // Deliberately does NOT check: file-path references without `§` (doctor check 7 owns those),
 // or claims/line-count content (unchecked — the claims registry is retired) — this is `§` citations only.
 //
-// Usage: citations-check.js [--root <dir>] [--verbose]
+// Usage: citations-check.js [--root <dir>]
 // Exit codes: 0 = scan completed (advisory — misses are reported, not a failure) · 2 = usage error
 
 const fs = require('fs')
 const path = require('path')
 
 function usage() {
-  console.error('usage: citations-check.js [--root <dir>] [--verbose]')
+  console.error('usage: citations-check.js [--root <dir>]')
   process.exit(2)
 }
 
 let root = '.'
-let verbose = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root') { root = argv[++i]; if (root === undefined) usage() }
-  else if (argv[i] === '--verbose') verbose = true
   else usage()
 }
 
@@ -99,11 +89,8 @@ function walkAll(dir) {
 walkAll(root)
 
 function resolveMdFile(nameLower, citingDir) {
-  // A lookback token may be a repo-relative PATH, not a bare basename
-  // ("spec/doctrine/mocks.md § Mocks: Page Notes"), and repoIndex is keyed by basename alone.
-  // cleanTok has already stripped surrounding punctuation, so a path token arrives plain:
-  // resolve it against `root` first, then fall back to the basename index — a path that no
-  // longer exists may still name a file that merely moved.
+  // A lookback token may be a repo-relative PATH: resolve it against `root` first, then fall back to the
+  // basename index.
   if (nameLower.includes('/')) {
     const asPath = path.join(root, nameLower)
     if (fs.existsSync(asPath)) return asPath
@@ -139,17 +126,9 @@ function cleanTok(t) {
   return t.replace(/^[^A-Za-z0-9]+/, '').replace(/[^A-Za-z0-9]+$/, '')
 }
 
-// Resolve the file a citation targets from its up-to-two-word lookback. Order: the two-word
-// idioms first (they change meaning as a pair), then each candidate word independently —
-// nearest to `§` first, then the farther one, so a lookback like "adr.md template §" still
-// resolves via its FAR word even though the NEAR word ("template") matches nothing.
-//
-// A truly bare § (no lookback word at all) resolves to the citing file itself. Any OTHER
-// lookback — words present but naming nothing this checker recognizes (prose like "the
-// contract file's §" or "Where §") — is a SKIP, never a match against the citing file: falling
-// through to "match the citing file" for arbitrary prose was a defect
-// (every unresolvable lookback forced a false MISS against whatever file happened to be
-// citing, because most files carry no heading answering random prose).
+// Resolve the target file from the up-to-two-word lookback: two-word idioms first, then each word
+// independently, nearest to `§` first. A truly bare § resolves to the citing file itself; any other
+// lookback that names nothing recognizable is a SKIP, never a match against the citing file.
 function resolveTarget(farWord, nearWord, citingFile, citingDir) {
   const two = farWord && nearWord ? `${farWord.toLowerCase()} ${nearWord.toLowerCase()}` : null
   if (two === 'shared invariants') return { kind: 'match', target: SHARED_PATHS }
@@ -169,10 +148,7 @@ function resolveTarget(farWord, nearWord, citingFile, citingDir) {
   }
   if (sawFilenameToken) return { kind: 'skip', reason: 'named .md file not found on disk' }
 
-  // Bare-basename match checks only the word immediately adjacent to `§` — unlike the
-  // explicit-file loops above, a bare word (no `.md`) is indistinguishable from ordinary
-  // prose, and widening this to the far word too turns any English word that happens to
-  // share a command's name (e.g. "the design direction") into a false resolution.
+  // Bare-basename match checks only the word adjacent to `§` — a far bare word is ordinary prose.
   if (nearWord) {
     const hit = scannedBasenames.get(nearWord.toLowerCase())
     if (hit) return { kind: 'match', target: hit }
@@ -180,13 +156,8 @@ function resolveTarget(farWord, nearWord, citingFile, citingDir) {
 
   if (!nearWord && !farWord) return { kind: 'match', target: citingFile } // bare § → the citing file itself
 
-  // Prose lookback naming no file at all ("authored against § Design Canon"). In this corpus
-  // that overwhelmingly means a section of the citing file itself or of the doctrine family
-  // every command already reads, so the heading is checked against that union — but the
-  // resolution is WEAK: a heading matching nothing there stays a SKIP and never becomes a
-  // MISS. That asymmetry is the whole guard rail. Ordinary English before `§` cannot be told
-  // apart from a real file reference, so a strong resolution here would turn correct doctrine
-  // into false misses; a weak one can only ever add coverage.
+  // Prose lookback naming no file: check the heading against the citing file plus the doctrine family,
+  // but the resolution is WEAK — a heading matching nothing there stays a SKIP, never a MISS.
   return { kind: 'weak', target: [citingFile, ...DOCTRINE_PATHS] }
 }
 
@@ -194,7 +165,6 @@ function resolveTarget(farWord, nearWord, citingFile, citingDir) {
 
 let total = 0, checked = 0, skip = 0, miss = 0
 const missLines = []
-const skipLines = []
 
 for (const file of scannedFiles) {
   const text = fs.readFileSync(file, 'utf8')
@@ -204,10 +174,8 @@ for (const file of scannedFiles) {
     const line = lines[L]
 
     for (let idx = line.indexOf('§'); idx !== -1; idx = line.indexOf('§', idx + 1)) {
-      // Lookback: this line's own text before `§`; fall back one line only when this line
-      // has nothing USABLE before the `§` — markdown decoration alone (`**`, `(`) cleans to
-      // nothing, so the emptiness check runs on the CLEANED tokens, not the raw substring,
-      // or a bold-wrapped citation ("...whose\n**§ Review Checks**...") would never fall back.
+      // Lookback: this line's text before `§`; fall back one line only when the CLEANED tokens are empty
+      // (markdown decoration like `**` cleans to nothing).
       let lookbackSrc = line.slice(0, idx).trimEnd()
       let cleanedWords = lookbackSrc.split(/\s+/).filter(Boolean).map(cleanTok).filter(Boolean)
       if (cleanedWords.length === 0 && L > 0) {
@@ -216,16 +184,9 @@ for (const file of scannedFiles) {
       const nearWord = cleanedWords.length ? cleanedWords[cleanedWords.length - 1] : null
       const farWord = cleanedWords.length > 1 ? cleanedWords[cleanedWords.length - 2] : null
 
-      // Heading: this line's text after `§`; extend onto the next line only when no
-      // terminator was found before this line ran out. `(` and `**` terminate too — a
-      // citation's own trailing annotation ("§ Design Canon (rule checklist)") or bold-close
-      // ("§ Review Checks**") is not part of the heading name being cited.
-      // `:` is deliberately NOT a terminator: this corpus self-namespaces nearly every heading
-      // ("Genesis: ...", "Mocks: ...", "Design ..."), so truncating at the first colon would
-      // verify the namespace prefix alone and leave every sub-heading name unchecked — a
-      // citation naming a section absent from the target file would still count as CHECKED. Prose
-      // that runs a colon on past a real heading name is caught by the `windowText` prefix
-      // check below, the same way an over-run without a colon already is.
+      // Heading: this line's text after `§`, extended onto the next line only when no terminator was found.
+      // `(` and `**` terminate; `:` deliberately does not (headings self-namespace as "Genesis: ..."), and an
+      // over-run past a real heading is caught by the `windowText` prefix check below.
       let afterSrc = line.slice(idx + 1)
       const TERM = /[.,;)(]|—|\*\*/
       let termIdx = afterSrc.replace(/^\s+/, '').search(TERM)
@@ -244,43 +205,25 @@ for (const file of scannedFiles) {
 
       if (resolution.kind === 'skip') {
         skip++
-        skipLines.push(`SKIP ${file}:${lineNo} § ${heading} — ${resolution.reason}`)
         continue
       }
 
-      // Every real `## ` heading in this corpus is Title Case; a citation whose captured
-      // name starts lowercase ("§ mock supremacy") is quoting a bold run-in lead-in, not a
-      // heading — a class that needs a non-`§` reword. Until
-      // that reword lands it is a malformed citation, never a checkable one: SKIP, not MISS.
+      // A lowercase captured name ("§ mock supremacy") quotes a bold run-in lead-in, not a Title-Case
+      // heading: SKIP, not MISS.
       if (heading.length === 0 || !/^[A-Z]/.test(heading)) {
         skip++
-        skipLines.push(`SKIP ${file}:${lineNo} § ${heading || '(empty)'} — citation name is not Title-Case, not a "## " heading reference`)
         continue
       }
 
       checked++
       const targets = Array.isArray(resolution.target) ? resolution.target : [resolution.target]
-      // genesis.md self-namespaces every heading with a "Genesis: " lead (see the match step
-      // below), so a `§ Genesis: ...` citation names genesis.md no matter which file the
-      // two-word lookback happened to land on — a sentence may name a template path and then
-      // cite the doctrine section describing it ("... genesis-brief.md, § Genesis: Discovery
-      // Interview"). Union genesis.md in rather than trusting the nearest `.md` token alone.
+      // A `§ Genesis: ...` citation always names genesis.md, whatever the nearest `.md` token was.
       if (/^Genesis\b/.test(heading) && !targets.includes(GENESIS_PATH)) targets.push(GENESIS_PATH)
       const heads = targets.flatMap(headingsOf)
-      // Untruncated text following `§` (joined across the wrap window, same as `heading`'s
-      // source) — checks the OTHER direction: a heading with no parenthetical whose
-      // name the citation's own sentence over-runs ("§ Risk Tiers makes it universal") still
-      // matches because the real heading is a prefix of the full trailing text, even though
-      // `heading`'s terminator-bounded capture over-ran the actual name. Because `:` does not
-      // terminate the capture, the over-run is compared against the FULL heading too, not just its
-      // namespace-stripped core — "§ Genesis: Discovery Interview names the grammar" reaches
-      // the end of the sentence and only the whole "Genesis: Discovery Interview" is a prefix
-      // of it.
+      // Untruncated text after `§` (across the wrap window): a heading that is a prefix of it still matches
+      // ("§ Risk Tiers makes it universal"), compared against the FULL heading too since `:` never terminates.
       const windowText = stripped.trim().replace(/\s+/g, ' ')
-      // genesis.md self-namespaces every heading with a "Genesis: " lead (there is no
-      // spec/commands/genesis.md to disambiguate against) — the live corpus cites some of
-      // those headings with the prefix and some without, so the prefix is optional on the
-      // heading side of the comparison, never required on the citation side.
+      // genesis.md's "Genesis: " prefix is optional on the heading side, never required on the citation side.
       const matched = heads.some(h => {
         const core = h.replace(/^Genesis:\s*/, '').trim()
         const coreNoParen = core.replace(/\s*\([^)]*\)\s*$/, '').trim()
@@ -295,7 +238,6 @@ for (const file of scannedFiles) {
         if (resolution.kind === 'weak') {
           checked--
           skip++
-          skipLines.push(`SKIP ${file}:${lineNo} § ${heading} — unresolvable file reference`)
           continue
         }
         miss++
@@ -306,6 +248,5 @@ for (const file of scannedFiles) {
 }
 
 for (const l of missLines) console.log(l)
-if (verbose) for (const l of skipLines) console.log(l)
 console.log(`TOTAL=${total} CHECKED=${checked} SKIP=${skip} MISS=${miss}`)
 process.exit(0)

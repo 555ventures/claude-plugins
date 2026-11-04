@@ -8,243 +8,54 @@
 //
 // Owner: specs/20260820/06-typed-evidence-manifest.md
 //
-// Incident (spec review-evidence-manifest): the review stage could print CLEAN with
-// nothing executed — a zero-findings panel return WAS the CLEAN definition, and the "CLEAN
-// requires ..." sentence was prose a model applied, never a value a script computed. This is
-// the sole derivation: per-iteration evidence-manifest rows (one per executed Phase 0 leg) +
-// the wf-review workflow return + disposition counts -> exactly one verdict word, first-match-
-// wins. --profile release runs the same shape against release.md's
-// legs — no --workflow, no dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED.
-// UNVERIFIED also when a required leg is unmeasured (lib/release-unmeasured.js).
-// The --ledger row is additive to review.md/release.md's documented templates: review's
-// runId/smoke/testsSkipped/findings are derived here (smoke and testsSkipped come FROM
-// manifest rows' typed observed fields, never asserted); release's milestone/briefs are
-// orchestrator-supplied identity flags and staging/e2e/journeys/substrate/production/ci are
-// derived from the release legs' typed observed objects.
+// The sole verdict derivation: per-iteration evidence-manifest rows (one per executed leg) + the
+// reviewer workflow return + disposition counts -> exactly one verdict word, first-match-wins.
+// --profile release runs the same shape against the release legs — no --workflow, no
+// dispositions, word restricted to CLEAN|GATE_RED|UNVERIFIED; UNVERIFIED also when a required leg
+// is unmeasured (lib/release-unmeasured.js). --ledger prints one ledger row; its derived fields
+// come from the manifest rows' typed `observed` objects, never asserted.
 //
-// Incident: review.md Phase 0 step 8 documents a
-// pre-panel hard-stop invocation with no --workflow (none exists yet — the manifest alone
-// already reaches GATE_RED), but this script treated --workflow as mandatory outside
-// --profile release and exited 2, forcing every aborted review to hand-craft a stub workflow
-// file. --workflow is now optional on the review profile too: without it, derivation is
-// manifest-only and can reach UNVERIFIED or GATE_RED. A manifest that is green and complete
-// with no --workflow is a usage error (exit 2 naming --workflow as the remedy) — a panel-less
-// CLEAN must stay structurally unreachable. The no-workflow --ledger row is partial: it omits
-// tokens/findings/verify, which only a real workflow return can supply (scope is manifest-
-// derived and present on this row regardless).
+// Manifest: every row's `observed` must be a non-null JSON object — any other shape invalidates
+// the WHOLE manifest -> UNVERIFIED on both profiles. This script copies typed fields and performs
+// no pattern match against any `observed` value. A red non-blocking row contributes its finding
+// count (lib/leg-findings.js countLegFinding, floored at 1) to the same undispositioned pool as
+// the reviewer's hard-severity survivors; a soft survivor never enters the pool. FINDINGS means
+// `fixDispatched > 0`. An exit-0 gate row whose skips observation is the `pattern-no-match` enum
+// also contributes 1 finding (never GATE_RED). A structurally-absent skip observation types
+// `testsSkipped` as `{"unavailable":true}`, never a fabricated zero.
+//
+// Review pass scope (full | fix-delta) is derived from the manifest rows' `scope` carriers, never
+// from the workflow; disagreeing or out-of-enum carriers invalidate the manifest. On UNVERIFIED
+// one stderr line names the cause (`missing required legs: ...` or `manifest invalid: ...`).
+// `suite` and `gate` are REVIEW_BLOCKING; `tests` is required but advisory.
+//
+// --workflow is optional on the review profile (the pre-panel hard stop): without it the
+// derivation is manifest-only, and a green complete manifest is a usage error — a panel-less CLEAN
+// stays unreachable. --require <leg> (repeatable, the one accumulator flag) adds a leg to the
+// active profile's required set, and on --profile release to its blocking set too.
+// --retain <dir> is required on the review profile whenever --ledger and --workflow are both
+// present; it writes <dir>/<runId>.jsonl atomically (manifest legs + the parsed workflow return).
+// --escalated marks a fix-cap escalation row (`escalated: true`, never a new word).
+// --base-sha/--head-sha/--dirty copy the resolved commit range into the row's `diff` object;
+// --via/--model/--checkpoint/--checkpoint-overrides/--sessionTokens add provenance keys. All of
+// these are review-profile only.
 //
 // What this deliberately does NOT do: read git/frontmatter itself (the orchestrator resolves
-// --spec/--tier/--diff-loc/--iteration/--run-id/--milestone/--briefs and passes them in as
-// mechanical flags), decide whether to run a leg, or retry/poll anything — it only reads
-// evidence that already exists. A missing/unparseable release leg omits that row key rather
+// --spec/--tier/--diff-loc/--iteration/--run-id/--milestone/--briefs and passes them in), decide
+// whether to run a leg, or retry/poll anything. A missing release leg omits that row key rather
 // than failing the ledger print — STOP-path rows are partial by nature.
 //
-// The CLEAN-with-qualifier word and the sanctionedReds suffix are
-// retired with the sanctioned-red baseline apparatus — gates are plainly green or red, and a
-// structurally-absent leg observation (a typed `{"unavailable":...}` field, or an `in-progress`
-// status) is recorded in the leg row and the ledger, never a distinct verdict word.
-// `testsSkipped` stays the `{total, sanctioned, unsanctioned}` object (sanctioned = `[env:]`-
-// declared skips).
-//
-// Incident (spec ledger-truth, Fable retainer consult on v7's first full
-// pipeline run): a red findings leg (reconcile/ac-matrix/skip-reconcile/promise-sweep/at-risk)
-// could derive CLEAN with zero reviewer survivors and zero dispositions — the sole verdict
-// arithmetic counted workflow.survivors only, never the deterministic legs that v7 moved
-// findings into. Every red non-blocking manifest row now contributes a finding count read off
-// its typed observed field (floored at 1) to the SAME undispositioned pool as reviewer
-// survivors, the disposition-contradiction guard widens to that pool's sum,
-// ledger leg rows retain `observed` in both profiles so a structurally-absent observation stays
-// distinguishable from a pass, and review rows always carry `runId` — the orchestrator's
-// --run-id verbatim, else `rv_` + 12 lowercase hex generated here — so the escape row has a
-// backlink on every row, not a conditional one.
-//
-// Incident: a release could read CLEAN while the
-// deployed database was missing migrations the milestone shipped, because the migrations check
-// was one prose noun in release.md's manifest — nothing required the row, and pre-deploy timing
-// made a coincidental match indistinguishable from a real one. --require <leg> is repeatable:
-// each occurrence appends <leg> to the active profile's required set and, on --profile release
-// only, its blocking set too (on --profile review a --require'd leg joins required-only, so a
-// mis-wired review invocation derives UNVERIFIED forever rather than silently gating nothing —
-// a safe, loud failure, not an error). Duplicates (repeated flag, or a leg already built into
-// the profile) are de-duplicated; the flag never removes or reorders a profile's built-in legs.
-// This is the one accumulator flag — every other flag here is scalar-overwrite.
-//
-// Incident (spec review-evidence-retention, brief 14): the reviewer was the one
-// pipeline component whose work was argued, not executed-and-retained — the wf-review return
-// lived only in a mktemp file review.md's own Phase 3 hygiene sweep deleted, and the ledger row
-// kept truncated observations and counts, nothing repro-able. --retain <dir> is now REQUIRED on
-// the review profile whenever both --ledger and --workflow are present (absent -> exit 2 naming
-// --retain .claude/spec-runs as the remedy, before any verdict word prints) and writes
-// <dir>/<runId>.jsonl atomically (temp file + rename, single line) — the manifest legs with `observed`
-// verbatim plus the --workflow file's parsed JSON verbatim (survivors/killed with their
-// executed repro evidence intact). A no-workflow --ledger row (the Phase 0 hard-stop)
-// stays retain-optional; passed anyway, the artifact's `reviewer` is null. --retain on
-// --profile release is a usage error — a release row carries no runId and no reviewer
-// return, so accepting the flag would mint an artifact nothing can ever key or read. --retain
-// without --ledger is the same usage error — retention with no row has no runId to key.
-// The stdout/ledger contracts stay byte-unchanged: the
-// artifact write adds no third stdout line and no eighth `findings` key — the retained file is
-// the full-fidelity home, the printed row stays the summary.
-//
-// Incident: a gate
-// row whose skip observation was structurally unparseable silently decayed to
-// `testsSkipped: {total:0,...}` and a CLEAN verdict — a fabricated zero-skip measurement no run
-// ever made, violating the never-assumed-zero rule. `deriveTestsSkipped` types
-// any structurally-absent gate observation (the whole-row unavailable alternative, or the
-// skips-slot's own unavailable alternative) as exactly `{"unavailable":true}`, never the
-// `{total,sanctioned,unsanctioned}` shape (unchanged for a parseable numeric skips-and-todos
-// pair). An exit-0 gate row whose skips observation is the drift enum (a declared pattern that
-// simply did not match, distinct from the host declaring no pattern at all) additionally
-// contributes 1 finding to the leg-findings pool — a narrow, deliberate special case inside
-// `computeLegFindings`, which otherwise skips every blocking leg (gate included) entirely; this
-// does not lift that skip. The sibling declared-none enum (honest standing config, not drift)
-// raises no finding. `legIsRed`/`GATE_RED` derivation stays exit-code-only and untouched —
-// that finding rides the leg-findings pool alone and never derives GATE_RED.
-//
-// Every manifest row's `observed` field is now a typed JSON object, and this script's
-// packed-string parser is deleted, not hardened — it becomes a copier of typed fields, never a
-// second parser of what an emitter already typed. ANY row whose `observed` is not a
-// non-null JSON object (a bare string, a number, null, or an array) makes the WHOLE manifest
-// invalid -> UNVERIFIED, on BOTH profiles — there is no compat window, since a typed-looking or
-// gibberish string observed both silently decayed to a fabricated measurement on the pre-image
-// parser. `countLegFinding` reads each red leg's finding count directly
-// off its own typed field (reconcile's out-of-plan count, ac-matrix's uncovered count,
-// skip-reconcile's skipped count minus its sanctioned count, promise-sweep's orphan count),
-// floored at 1 when the field is absent or non-numeric — every regex-based extraction this file
-// once ran is deleted outright; this script performs no pattern match against ANY
-// `observed` value. The release ledger's e2e/journeys/substrate/ci keys now copy the
-// corresponding leg's `observed` object VERBATIM — a present row always yields a present key,
-// whatever shape its object holds — and production is simply its observed row's `result` field;
-// this script is a pure copier for those keys now, never a second validator of what an emitter
-// should have written (spike C's silent key omission on an unparseable release leg becomes
-// structurally impossible). Free-text fields are bounded at the emitter, never here — an
-// `observed` object is never sliced (slicing a JSON object corrupts it), only a string field
-// inside one.
-//
-// A review that burns its fix loop
-// to the cap was writing zero ledger rows — the driver's only two append points (hard-stop, CLEAN
-// close) never reach the cap refusal. `--escalated` marks a review-profile pass as a fix-cap
-// escalation: the row gains `escalated: true` (never a new verdict word; the escalation fact
-// is a typed row field, the word itself stays whatever the evidence honestly derives). Refused
-// (exit 2, before any manifest/workflow file I/O, same flag-presence-first pattern as the
-// --retain matrix) with `--fixDispatched > 0` (a capped run's dispatched fix never landed;
-// crediting it would fabricate disposition coverage) or with `--profile release` (a release
-// row carries no runId/reviewer return for `escalated` to key). Refused (exit 2, AFTER
-// derivation, no verdict word and no ledger line printed) when the derived word is CLEAN (
-// spike S1 Case B: a red non-blocking leg going green between the dispositions pass and the
-// escalate pass can shrink the recomputed pool enough for recorded waives to cover it; a
-// self-contradictory CLEAN+escalated:true row in the one file that must never wrongly say CLEAN
-// is the worst possible output, so this is a correctness guard, not belt-and-braces).
-//
-// No review row named the code it
-// judged — 0 of 118 rows on record carried a commit range, only `diff.loc`. --base-sha/--head-sha
-// (review profile only) copy the caller's resolved base/HEAD verbatim into the printed row's
-// `diff` object (key order fixed: loc, base, head, dirty — loc omitted with no --diff-loc) and the
-// retained artifact's top-level `diff` (inserted immediately after `dispositions`); --dirty marks
-// uncommitted tracked edits at pass time. Refused (exit 2, arg-parse time, before the manifest is
-// even read, no verdict word or ledger line printed) on a value that is not exactly 40 lowercase
-// hex characters, one flag without the other, --dirty without the pair, or either flag with
-// --profile release (a release row carries no diff at all) — every refusal names the resolution
-// remedy `git rev-parse --verify <ref>^{commit}` (a symbolic or abbreviated ref landing in a
-// durable row is the replay moving-ref defect, rv_387d84a3b424, reintroduced). The 40-hex check is
-// the whole validation — no ancestry, no repo access — so this stays a pure function of its flags.
-//
-// Review rows are ledger-
-// answerable only when they name which command shape produced them. --via <loop|direct> (default
-// "direct" when absent) and --model <id> (default null) are review-profile-only flags; the row
-// gains `via` then `model` immediately after `tier`, before `runId`. --via is enum-checked
-// (anything but loop/direct exits 2, naming --via specifically) because the fleet query (brief 19)
-// reads it; --model is a free string with no enum, since the transcript format that supplies it
-// is internal and version-unstable. Both flags exit 2 with --profile release — a release row
-// carries no runId/reviewer return for either to key.
-//
-// Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word
-// (still printed on stdout line 1) · 2 = usage error, missing/unreadable --manifest or
-// --workflow file, a disposition contradiction (--waived + --rejected + --fixDispatched
-// exceeds the workflow's HARD-severity survivor count PLUS the manifest's leg-finding count —
-// the guard spans both pools, narrowed to hard-only
-// survivors), (review profile, no --workflow) a
-// manifest that derives green/complete — a panel-less CLEAN is undecidable without --workflow
-// and must not print, --retain passed with --profile release (release rows carry no runId
-// to key an artifact by), --retain passed without --ledger (retention with no row has no runId
-// to key), or (review profile, --ledger + --workflow both present) --retain absent (the
-// required-evidence-retention flag; message names --retain .claude/spec-runs as the remedy),
-// --escalated passed with --fixDispatched > 0 (message names "dispatched fix never landed"),
-// --escalated passed with --profile release (message names "drop --escalated"), or --escalated
-// whose derivation reaches CLEAN (message names "derived CLEAN under --escalated" — evidence
-// drift; no verdict word or ledger line is printed), or (checked at arg-parse time before the
-// manifest is read, no verdict word or ledger
-// line printed) a --base-sha/--head-sha value that is not exactly 40 lowercase hex characters, one
-// of the pair passed without the other, --dirty passed without the pair, or either flag passed
-// with --profile release — every one of these names `git rev-parse --verify <ref>^{commit}` as the
-// remedy, or (checked at arg-parse time before the manifest
-// is read, no verdict word or ledger line printed) a --via value other than "loop"/"direct", or
-// either --via or --model passed with --profile release — the message names --via specifically
-// (and --sessionTokens, review-profile only, exits 2 naming --sessionTokens when the value is
-// neither a JSON object nor the literal null — pass a JSON object or null — or when passed with
-// --profile release; when present it is the row's LAST key, when absent the row gains no key)
-// (never the generic unknown-flag usage line) so a caller can tell the two refusals apart, or
-// (checked at arg-parse time before the manifest is read,
-// no verdict word or ledger line printed, message names --checkpoint specifically) a --checkpoint
-// value outside disposer|empty|not-reached, a
-// --checkpoint-overrides passed without --checkpoint disposer or not a non-negative integer, or
-// --checkpoint passed with --profile release
-//
-// `suite` — review-legs.js's whole-
-// bare-testCommand leg, closing the scoped-gate-blind-spot escape class — joins REVIEW_LEGS
-// (required in BOTH scopes, mirroring promise-sweep/ac-matrix, never filtered out on fix-delta
-// like reconcile/at-risk) and REVIEW_BLOCKING (red -> GATE_RED, first-match, same path as a red
-// gate). Built-in membership, not `--require <leg>`: an executed check showed `--require` only
-// widens the review profile's REQUIRED set, so a `--require`d suite would derive HARD_FINDINGS
-// (a dispositionable, waivable word) rather than making CLEAN structurally unreachable while the
-// whole suite is red — the ruling this spec locks.
-//
-// The session-change CHECKPOINT enum (cleared|stamp-appeared|overridden|not-reached) is retired.
-// --checkpoint <disposer|empty|not-reached> and --checkpoint-overrides <N> (a non-negative
-// integer, valid only with --checkpoint disposer; --checkpoint disposer without it defaults to
-// 0) are review-profile-only flags, now valid with --via loop, --via direct, and --via absent
-// alike (the checkpoint is not a loop-only fact — independence is the disposer agent on
-// both entries). The row gains a `checkpoint` key immediately after `verdict` (before
-// `escalated`) — `{"outcome":"disposer","overrides":N}`, `{"outcome":"empty"}`, or
-// `{"outcome":"not-reached"}`. Absent flags leave the row byte-identical to today (no checkpoint
-// key at all). Refused (exit 2, arg-parse time, before the manifest is read, no verdict word or
-// ledger line printed, message names --checkpoint specifically): a --checkpoint value outside the
-// new enum (cleared/stamp-appeared/overridden included), --checkpoint-overrides passed without --checkpoint disposer,
-// --checkpoint-overrides not a non-negative integer, or --checkpoint passed with --profile
-// release (no runId to key).
-//
-// The review-profile pass scope
-// (full vs. fix-delta) is now derived from the manifest's own `scope` carriers — rows
-// review-legs.js stamped — never from `workflow.scope`, a word the reviewer typed that was
-// never told which pass it was in. `deriveScope` reads every effective (last-per-leg) row that
-// carries a `scope` key: an empty carrier set derives "full" (the strictest, and today's only,
-// set); exactly one distinct value in {"full","fix-delta"} derives that value; two disagreeing
-// values, or a lone value outside the enum, invalidate the whole manifest -> UNVERIFIED — this
-// can only come from a hand-edited manifest or a writer bug, never from `--profile release`,
-// which does not read the key at all. On UNVERIFIED, this script now
-// prints exactly one stderr line, `verdict.js: UNVERIFIED — <cause>` — `missing required legs:
-// <a>, <b> (scope <s>)` when the manifest itself is structurally valid but incomplete, or
-// `manifest invalid: <reason>` (an unparseable row, or the scope disagreement/enum cause above)
-// when it is not — stdout and the exit code are untouched. The review ledger row's and the
-// retained artifact's `scope` are this same manifest-derived value, at the key position
-// documented in this spec's Contracts (after `verdict`/`checkpoint`/`escalated`, before
-// `iteration`), present on every review row including the no-`--workflow` hard-stop row, which
-// never saw a reviewer return to read a scope off in the first place.
-//
-// A soft-only reviewer return could reach
-// CLEAN only through fix/waive/reject — a fresh reviewer produces a new soft every pass, and 195
-// ledgered reviews (91 waives vs 60 fixes) spent most of their round-trips legitimising hygiene
-// notes (17 of 21 retained returns with survivors were soft-only). The undispositioned pool
-// narrows to `hardSurvivors = survivors.filter(f => f.severity === 'hard').length` plus
-// legFindings — a survivor of any other severity (soft, medium, or anything else a reviewer
-// writes) never enters the pool and never blocks CLEAN. `FINDINGS` now means exactly one thing,
-// `fixDispatched > 0` — the old FINDINGS-for-undispositioned-softs branch is deleted
-// outright, not merely made unreachable. The `--ledger` row's `findings` object gains an eighth
-// key, `soft` (= `survivors.length - hardSurvivors`), appended LAST so every existing
-// `findings.*` reader stays unchanged; `survived` stays the total survivor count. The
-// disposition-contradiction guard widens against `hardSurvivors + legFindings`, never the whole
-// survivors array — a waive that can only be explained by a soft is a bookkeeping error the
-// old guard would have let pass.
+// Exit codes: 0 = derived CLEAN · 1 = derived other non-CLEAN word (still printed on stdout
+// line 1) · 2 = usage error: a missing/unreadable --manifest or --workflow file; a disposition
+// contradiction (--waived + --rejected + --fixDispatched exceeds hard survivors + leg findings);
+// a green complete manifest with no --workflow; --retain misuse (with --profile release, without
+// --ledger, or absent when --ledger + --workflow are present); --escalated with --fixDispatched > 0,
+// with --profile release, or deriving CLEAN; a --base-sha/--head-sha value that is not 40
+// lowercase hex, one without the other, equal to each other, --dirty without the pair, or either
+// with --profile release (remedy: `git rev-parse --verify <ref>^{commit}`); a --via value other
+// than loop/direct; --checkpoint outside disposer|empty|not-reached, --checkpoint-overrides
+// without --checkpoint disposer or not a non-negative integer; --sessionTokens neither a JSON
+// object nor null; any review-only flag with --profile release. Each refusal names its flag.
 
 const fs = require('fs')
 const path = require('path')
@@ -310,12 +121,7 @@ if (![waived, rejected, fixDispatched].every(Number.isFinite)) {
 }
 
 // ---- --escalated refusal matrix -------------------------------------------------------------
-// Checked purely on flag presence, before the manifest/workflow files are even read — the exact
-// flag-presence-first pattern the --retain matrix below already uses, for the same reason (a
-// misuse fails loudly and immediately rather than after paying for file I/O). The pre-image
-// rejects --escalated as an unknown flag via the generic usage() fallback above, which ALSO exits
-// 2 — every refusal here names the specific rule so a test can never pass vacuously against that
-// fallback (spike S3).
+// Checked on flag presence, before any file is read; every refusal names its specific rule.
 
 if (escalated && fixDispatched > 0) {
   console.error('verdict.js: --escalated with --fixDispatched > 0 — a capped run\'s dispatched fix ' +
@@ -329,12 +135,8 @@ if (escalated && profile === 'release') {
 }
 
 // ---- --via/--model refusal matrix -----------------------------------------------------------
-// Checked purely on flag presence/value, before the manifest/workflow files are even read (ahead
-// of the --retain matrix below, since a via-usage error must be distinguishable from a missing
-// --retain rather than being shadowed by it). --via is enum-checked (the fleet query in sibling
-// 03 reads it); --model is a free string with no enum since the transcript format that supplies
-// it is internal and version-unstable. Every refusal names --via specifically so it can never be
-// confused with the generic unknown-flag usage line.
+// Checked before the --retain matrix so a via-usage error is never shadowed by a missing
+// --retain. --via is enum-checked; --model is a free string.
 if (viaArg !== null && viaArg !== 'loop' && viaArg !== 'direct') {
   console.error(`verdict.js: --via must be "loop" or "direct", got "${viaArg}"`)
   process.exit(2)
@@ -363,14 +165,7 @@ const via = viaArg || 'direct'
 const model = modelArg !== null ? modelArg : null
 
 // ---- --checkpoint/--checkpoint-overrides refusal matrix -----------------------------------
-// -------------------------------------------------------------------------------------------------
-// Checked purely on flag presence/value, before the manifest/workflow files are even read (same
-// flag-presence-first pattern as every other matrix in this file), so a malformed or contextually
-// invalid checkpoint outcome can never reach the ledger. Every refusal names --checkpoint
-// specifically so it is never confused with the generic unknown-flag usage line. The session-
-// change enum (cleared|stamp-appeared|overridden) is retired — independence
-// is now the disposer agent, dispatched on both --via loop and --via direct alike, so --checkpoint
-// is not refused for a non-loop --via.
+// Checked on flag presence/value, before any file is read; valid with any --via value.
 const CHECKPOINT_ENUM = new Set(['disposer', 'empty', 'not-reached'])
 if (checkpointArg !== null && !CHECKPOINT_ENUM.has(checkpointArg)) {
   console.error(`verdict.js: --checkpoint must be one of disposer|empty|not-reached, got "${checkpointArg}"`)
@@ -416,14 +211,8 @@ if (ledger && workflowPath && profile !== 'release' && !retainDir) {
 }
 
 // ---- --base-sha/--head-sha/--dirty refusal matrix -------------------------------------------
-// Checked purely on flag presence/shape, before the manifest/workflow files are even read — the
-// same flag-presence-first pattern as the --escalated/--retain matrices above. A symbolic or
-// abbreviated ref landing in a durable ledger row is the replay moving-ref defect (rv_387d84a3b424)
-// reintroduced, so the 40-hex check is the whole validation: no ancestry, no repo access, a pure
-// function of the flag values themselves. Every branch names `git rev-parse --verify` as the
-// remedy — the release-profile message below extends the Contracts
-// table's illustrative text with that phrase, verbatim as a prefix, to satisfy that requirement
-// (logged as a deviation).
+// The 40-hex check is the whole validation: no ancestry, no repo access. Every branch names
+// `git rev-parse --verify` as the remedy.
 const SHA40_RE = /^[0-9a-f]{40}$/
 if (profile === 'release' && (baseShaArg !== null || headShaArg !== null)) {
   console.error('verdict.js: --base-sha/--head-sha are not valid with --profile release — a ' +
@@ -447,12 +236,8 @@ if (baseShaArg !== null && headShaArg !== null) {
       '— resolve it with git rev-parse --verify <ref>^{commit}')
     process.exit(2)
   }
-  // Degenerate range: base === head means the row would
-  // claim a verdict over an empty diff. The shape check above cannot see this — rv_31224a17550e
-  // recorded base === head with two well-formed shas and passed. spec-review-driver.js refuses the
-  // same condition at base-derivation time; this is the second backstop, guarding the row that
-  // becomes the durable record, so a caller deriving its own range cannot append one either. Still
-  // a pure function of the flag values: no ancestry check, no repo access.
+  // Degenerate range: base === head would claim a verdict over an empty diff. The review driver
+  // refuses this at base derivation too; this guards the durable row.
   if (baseShaArg === headShaArg) {
     console.error('verdict.js: --base-sha and --head-sha are the same commit ' +
       `(${baseShaArg.slice(0, 12)}) — a verdict row cannot describe an empty diff. The base ` +
@@ -473,9 +258,7 @@ try {
 }
 const legRows = new Map()
 let manifestValid = true
-// The first row-parse failure names the cause
-// printed on UNVERIFIED's stderr line below (`invalidCause`) — later failures on the same
-// manifest add nothing a session could act on differently, so only the first is kept.
+// The first row-parse failure is the cause printed on UNVERIFIED's stderr line.
 let invalidCause = null
 let lineNo = 0
 for (const line of manifestRaw.split('\n')) {
@@ -484,10 +267,7 @@ for (const line of manifestRaw.split('\n')) {
   try {
     const row = JSON.parse(line)
     if (!row.leg || typeof row.exit !== 'number') throw new Error('missing leg/exit')
-    // `observed` must be a non-null JSON object — arrays are not objects for this purpose.
-    // ANY other shape (string, number, null, array) makes the WHOLE manifest invalid, never a
-    // silently misread row (spike A: a typed-looking or gibberish string observed both decayed
-    // to a fabricated zero/CLEAN on the pre-image parser).
+    // `observed` must be a non-null, non-array JSON object — any other shape invalidates the whole manifest.
     if (row.observed === null || typeof row.observed !== 'object' || Array.isArray(row.observed)) {
       throw new Error('observed must be a non-null JSON object')
     }
@@ -512,15 +292,11 @@ if (workflowPath) {
 }
 
 const survivors = workflow && Array.isArray(workflow.survivors) ? workflow.survivors : []
-// The undispositioned pool counts hard-severity
-// survivors only — a survivor of any other severity (soft, medium, or anything else a reviewer
-// writes) is advisory and never enters the pool.
+// The undispositioned pool counts hard-severity survivors only.
 const hardSurvivors = survivors.filter((f) => f.severity === 'hard').length
 
 // ---- pass scope: manifest-derived, never workflow.scope ------------------------------------
-// Never consulted on --profile release — a stray scope key on a release
-// leg row must not perturb RELEASE_LEGS derivation, so this whole block is skipped there and
-// `scope` stays null.
+// Skipped on --profile release, where `scope` stays null.
 const SCOPE_ENUM = new Set(['full', 'fix-delta'])
 let scope = null
 if (profile !== 'release') {
@@ -539,24 +315,10 @@ if (profile !== 'release') {
 }
 
 // ---- required/blocking legs per profile ----------------------------------------------------
-//
-// 'at-risk' joins REVIEW_LEGS as a required-but-non-
-// blocking leg — an absent row derives UNVERIFIED (the same fail-closed presence rule below),
-// a red row never derives GATE_RED (it stays out of REVIEW_BLOCKING; the finding is a review
-// disposition, not a gate). Excluded
-// from fix-delta's requiredLegs alongside 'reconcile' — the leg mirrors reconcile's standing
-// exactly (both derive from the changed-set-vs-plan comparison scope skips).
-//
-// 'promise-sweep' joins REVIEW_LEGS the same way —
-// required-but-non-blocking (absent row -> UNVERIFIED, red row -> a disposition finding, never
-// GATE_RED) — but unlike reconcile/at-risk it is required in BOTH scopes: it is excluded from
-// neither scope's requiredLegs filter below, mirroring ac-matrix's standing exactly (the spec
-// text may be amended during a fix pass, and the leg costs milliseconds).
+// 'at-risk' and 'reconcile' are required-but-non-blocking and excluded from fix-delta;
+// 'promise-sweep' is required-but-non-blocking in both scopes.
 
-// 'tests' joins REVIEW_LEGS as a required leg
-// in BOTH scopes (never excluded from fix-delta's filter below — a fix round can add tests) but
-// is deliberately advisory: it is NOT in REVIEW_BLOCKING, so a present row (always exit 0) can
-// never change the derived word and an absent row derives UNVERIFIED like any other required leg.
+// 'tests' is required in both scopes but advisory — never in REVIEW_BLOCKING.
 const REVIEW_LEGS = ['gate', 'suite', 'smoke', 'reconcile', 'ac-matrix', 'skip-reconcile', 'ci', 'at-risk', 'promise-sweep', 'tests']
 const REVIEW_BLOCKING = new Set(['gate', 'suite', 'smoke', 'ci'])
 const RELEASE_LEGS = ['deploy', 'ready', 'e2e', 'journeys', 'substrate', 'production', 'ci']
@@ -585,13 +347,8 @@ function legIsRed(leg) {
   return row.exit !== 0
 }
 
-// ---- leg-findings pool: every red non-blocking manifest row contributes a finding -----------
-// ---- count read off its own typed observed field to the SAME undispositioned pool as reviewer -
-// ---- survivors, floored at 1 (a red row can never contribute 0 — an absent/non-numeric field ---
-// ---- must fail closed, not silently disappear). This reads typed fields directly now: --------
-// ---- no leg's finding count is pattern-matched -----------------------------------------------
-// ---- out of a string any more. The count itself lives in lib/leg-findings.js (countLegFinding), --
-// ---- required above, so the driver's disposition tally weighs a leg ref by the same number. -----
+// ---- leg-findings pool: every red non-blocking row adds its typed finding count (floored at
+// ---- 1, lib/leg-findings.js) to the same undispositioned pool as reviewer survivors.
 
 function computeLegFindings() {
   let total = 0
@@ -599,13 +356,8 @@ function computeLegFindings() {
     if (blockingLegs.has(leg)) continue
     if (legIsRed(leg)) total += countLegFinding(row)
   }
-  // Keyed on the typed enum: gate is a blocking leg and is skipped by
-  // the loop above like every other blocking leg — this is a deliberate, narrow addition, not a
-  // lifting of that skip. An exit-0 gate row whose skips observation is the drift enum
-  // (observed.skips.unavailable === "pattern-no-match") still contributes 1 finding, so a run
-  // whose skip observation went unparseable pages itself instead of decaying silently over five
-  // runs (dead-man's-switch, no cross-run state). The sibling declared-none enum
-  // ("no-format-declared") is honest standing config and must key on nothing here.
+  // A narrow exception to the blocking-leg skip above: an exit-0 gate row whose skips observation
+  // is "pattern-no-match" contributes 1 finding; "no-format-declared" contributes none.
   const gateRow = legRows.get('gate')
   const gateSkips = gateRow && gateRow.observed && gateRow.observed.skips
   if (gateRow && gateRow.exit === 0 && gateSkips && typeof gateSkips === 'object' &&
@@ -623,11 +375,8 @@ const legFindings = computeLegFindings()
 if (workflow && waived + rejected + fixDispatched > hardSurvivors + legFindings) {
   const total = waived + rejected + fixDispatched
   const pool = hardSurvivors + legFindings
-  // The lead clause must be a TRUE inequality for whichever flag actually drove the overflow —
-  // --waived alone is not always the culprit: --rejected/--fixDispatched can trip this guard with
-  // waived at 0, and a --waived-only lead there would print the false "waived 0 > hard pool 0".
-  // The waived-overflow wording is pinned verbatim ("waived 2 > hard pool 1"), so that case keeps its exact
-  // lead; every other trigger gets an honest sum-based lead instead of a fabricated inequality.
+  // The lead clause must be a true inequality for whichever flag drove the overflow; the
+  // waived-overflow wording ("waived 2 > hard pool 1") stays exact.
   const lead = waived > pool
     ? `waived ${waived} > hard pool ${hardSurvivors}`
     : `total ${total} > hard pool ${hardSurvivors}`
@@ -645,9 +394,7 @@ function derive() {
   if (!manifestValid || requiredLegs.some(l => !legRows.has(l))) return 'UNVERIFIED'
   if ([...blockingLegs].some(legIsRed)) return 'GATE_RED'
   if (profile === 'release') {
-    // A required leg that measured nothing (no ci adapter, a commit ci never saw, an
-    // all-inert substrate manifest, a declined production promotion) must not fall through to a
-    // silent CLEAN — GATE_RED (checked above) is the more actionable fact and still outranks this.
+    // A required leg that measured nothing must not fall through to CLEAN; GATE_RED still outranks it.
     if (requiredLegs.some(l => unmeasuredReason(legRows.get(l)))) return 'UNVERIFIED'
     return 'CLEAN'
   }
@@ -661,13 +408,8 @@ function derive() {
 
 const word = derive()
 
-// UNVERIFIED prints exactly one stderr line
-// naming its cause — the word alone gave a caller nothing to act on. `manifestValid` is false
-// only for the two `invalidCause` sources set above (an unparseable row, or the scope
-// disagreement/enum violation); a missing required row comes from `requiredLegs.some` finding an
-// absent row against a structurally-valid manifest, whose scope was therefore derived above; on
-// the release profile a fully-present manifest can still derive UNVERIFIED when a required leg's
-// `unmeasuredReason` is non-null.
+// UNVERIFIED prints one stderr line naming its cause: `manifest invalid` for an unparseable row or
+// scope violation, else the missing required legs (or, on release, the unmeasured reason).
 if (word === 'UNVERIFIED') {
   const missingLegs = requiredLegs.filter(l => !legRows.has(l))
   // unmeasuredReason already carries the leg prefix (e.g. "ci:unavailable:no-adapter").
@@ -683,13 +425,8 @@ if (word === 'UNVERIFIED') {
   console.error('verdict.js: UNVERIFIED — ' + cause)
 }
 
-// Load-bearing guard: a derived CLEAN under
-// --escalated is refused BEFORE anything prints — spike S1 Case B falsified "CLEAN is
-// arithmetically unreachable at --fixDispatched 0": a red non-blocking leg going green between
-// the dispositions pass and this escalate pass shrinks the recomputed pool enough for the
-// recorded waives to cover it. A self-contradictory CLEAN+escalated:true row in the one file that
-// must never wrongly say CLEAN would be the worst possible output, so this checks before the
-// verdict word or the ledger line is ever printed.
+// A derived CLEAN under --escalated is refused before anything prints: a red non-blocking leg
+// going green between passes can shrink the pool enough for recorded waives to cover it.
 if (escalated && word === 'CLEAN') {
   console.error('verdict.js: derived CLEAN under --escalated — evidence drifted since the ' +
     'dispositions pass; re-run dispositions against the current evidence')
@@ -714,9 +451,7 @@ function deriveSmoke(row) {
 
 function deriveTestsSkipped(gateRow, skipReconcileRow) {
   const gateObserved = (gateRow && gateRow.observed) || {}
-  // A structurally-absent observation is typed, never coerced to a fabricated zero — this
-  // check runs BEFORE reading skips/todos as numbers, covering both the whole-row unavailable
-  // alternative (no gate ran at all) and the skips-slot's own unavailable alternative.
+  // A structurally-absent observation is typed, never coerced to zero — checked before reading counts.
   if (gateObserved.unavailable !== undefined) return { unavailable: true }
   const skips = gateObserved.skips
   if (skips && typeof skips === 'object' && skips.unavailable !== undefined) return { unavailable: true }
@@ -727,11 +462,8 @@ function deriveTestsSkipped(gateRow, skipReconcileRow) {
   return { total, sanctioned, unsanctioned: Math.max(0, total - sanctioned) }
 }
 
-// ---- retention artifact: the full-
-// ---- fidelity home for a review run, written atomically (temp file + rename) so a reader never
-// ---- observes a partial file. Never called on the release profile (rejected above).
-//
-// Single-line `.jsonl` — a tracked host path carries no bytes a source formatter rewrites.
+// ---- retention artifact, written atomically (temp file + rename) as one `.jsonl` line.
+// ---- Never called on the release profile.
 
 function writeRetainedArtifact(dir, artifactRunId, data) {
   fs.mkdirSync(dir, { recursive: true })
@@ -743,18 +475,14 @@ function writeRetainedArtifact(dir, artifactRunId, data) {
 }
 
 if (ledger) {
-  // observed is retained VERBATIM (never sliced — a JSON object is never sliced, the
-  // 120-char bound lives on emitters' string fields) in both profiles — a structurally-absent
-  // observation ("unavailable") must stay byte-distinguishable from a real pass forever.
+  // observed is retained verbatim, never sliced.
   const ts = new Date().toISOString()
   const legs = [...legRows.values()].map(({ leg, exit, observed }) => ({ leg, exit, observed }))
   const row = { ts }
   if (specArg) row.spec = specArg
   row.stage = profile === 'release' ? 'release' : 'review'
   if (tier) row.tier = tier
-  // via/model are inserted immediately after tier,
-  // before runId — review profile only (the refusal matrix above makes profile === 'release'
-  // with either flag unreachable, so this never fires on a release row).
+  // via/model go immediately after tier, before runId (review profile only).
   if (profile !== 'release') {
     row.via = via
     row.model = model
@@ -763,18 +491,13 @@ if (ledger) {
   // ("rv_" + 12 lowercase hex via crypto.randomBytes) so the escape row always has a backlink.
   if (profile !== 'release') row.runId = runId || ('rv_' + crypto.randomBytes(6).toString('hex'))
   row.verdict = word
-  // Checkpoint is inserted immediately after verdict,
-  // before escalated — the first seven keys and byte-identity when provenance flags are
-  // absent are untouched, since this key is present ONLY when --checkpoint was passed
-  // (review-profile only; valid with any --via value).
+  // checkpoint goes immediately after verdict, before escalated — present only when passed.
   if (checkpointArg !== null) {
     row.checkpoint = checkpointArg === 'disposer'
       ? { outcome: checkpointArg, overrides: checkpointOverrides === null ? 0 : checkpointOverrides }
       : { outcome: checkpointArg }
   }
-  // The escalation fact is a typed row field, never a second verdict word — `escalated` is
-  // only ever set on the review profile (the refusal above makes profile === 'release'
-  // unreachable here).
+  // escalated is a typed row field, never a second verdict word (review profile only).
   if (escalated) row.escalated = true
   if (profile === 'release') {
     if (milestone) row.milestone = milestone
@@ -784,10 +507,8 @@ if (ledger) {
     }
     const deployRow = legRows.get('deploy'), readyRow = legRows.get('ready')
     if (deployRow && readyRow) row.staging = (deployRow.exit === 0 && readyRow.exit === 0) ? 'pass' : 'fail'
-    // A present leg row copies its observed object into the ledger VERBATIM — a present row
-    // always yields a present key, whatever shape its object holds; a genuinely ABSENT row (never
-    // ran, e.g. a STOP path) omits the key entirely. This script is a copier now, never a second
-    // validator of what an emitter should have written.
+    // A present leg row copies its observed object verbatim; an absent row (a STOP path) omits
+    // the key.
     const e2eRow = legRows.get('e2e')
     if (e2eRow) row.e2e = e2eRow.observed
     const journeysRow = legRows.get('journeys')
@@ -807,9 +528,7 @@ if (ledger) {
     // including a no-workflow hard-stop row, which never carried a scope of its own to read.
     row.scope = scope
     if (iteration !== null) row.iteration = iteration
-    // diff's key order is fixed loc, base, head, dirty — loc is assigned first (when
-    // present) so a subsequent base/head/dirty assignment never reorders it; neither flag set
-    // leaves row.diff unset entirely (byte-identical to today's row).
+    // diff key order is fixed: loc, base, head, dirty; no flags leave row.diff unset.
     let diffObj = null
     if (diffLoc !== null) diffObj = { loc: diffLoc }
     if (baseShaArg !== null && headShaArg !== null) {
@@ -834,9 +553,7 @@ if (ledger) {
         reviewerCount: workflow.reviewerCount,
         legFindings, // D4: the leg-findings pool's count, so a reader can tell CLEAN-because-zero-findings
                      // from CLEAN-because-dispositioned
-        // Eighth key, appended LAST so every
-        // existing findings.* reader (by key, never by count) stays unchanged. survived stays the
-        // total survivor count; soft is the non-hard remainder.
+                     // soft is appended last so every findings.* reader stays unchanged; survived is the total.
         soft: survivors.length - hardSurvivors
       }
       row.verify = workflow.verify
@@ -858,9 +575,7 @@ if (ledger) {
       verdict: word,
       dispositions: { waived, rejected, fixDispatched },
     }
-    // diff is inserted immediately after dispositions, equal to the printed row's diff
-    // object verbatim — but ONLY when the sha pair was passed. diff.loc alone is a ledger-row-only
-    // field (today's shape) and must never be promoted onto the artifact by itself.
+    // diff goes after dispositions, only when the sha pair was passed (diff.loc alone stays row-only).
     if (baseShaArg !== null && headShaArg !== null) artifact.diff = row.diff
     artifact.legs = [...legRows.values()] // verbatim manifest rows — observed UNTRUNCATED (D1)
     artifact.reviewer = workflow // the --workflow file's parsed JSON verbatim, or null (D2)

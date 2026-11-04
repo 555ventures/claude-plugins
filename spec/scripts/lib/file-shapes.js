@@ -34,7 +34,7 @@ const DEFAULT_MANIFESTS = Object.freeze(['package.json', 'package-lock.json', 'n
 
 const KEYS = ['testGlobs', 'codeExtensions', 'manifests']
 const DEFAULTS = { testGlobs: DEFAULT_TEST_GLOBS, codeExtensions: DEFAULT_CODE_EXTENSIONS, manifests: DEFAULT_MANIFESTS }
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./util')
 
 function fileShapes(config) {
   const block = config && isObj(config.fileShapes) ? config.fileShapes : {}

@@ -33,7 +33,7 @@ const TYPES = new Set(['string', 'integer', 'number', 'boolean', 'object', 'arra
 const REF_RE = /^#\/shapes\/(.+)$/
 const MAX_DEPTH = 64
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./util')
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
 const cpLength = (s) => Array.from(s).length
 

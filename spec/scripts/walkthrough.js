@@ -49,11 +49,7 @@ const VERBS = {
   mark: ['round', 'status'],
 }
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeOut(fd, str) {
-  syncWrite(fd, str + '\n')
-}
+const { writeLine: writeOut } = require('./lib/sync-write')
 
 const out = (s) => writeOut(1, s)
 const err = (s) => writeOut(2, s)

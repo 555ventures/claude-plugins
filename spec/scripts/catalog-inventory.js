@@ -7,20 +7,12 @@
 // (spec/scripts/genesis-driver.js runs this as a child, --shadcn threaded from the env
 // GENESIS_SHADCN_COMMAND) and /spec:doctor re-checks with --check when a kit may have drifted.
 //
-// The shadcn project directory is located from the recorded kit path, never assumed to be the
-// root: the kit is the host config's `design.kit`, else `kit` in
-// <root>/.claude/genesis/design-paths.json (genesis writes it before the config's design block
-// exists); from that directory the parents are walked up to and including the root, and the
-// first one holding a components.json is the stack root. No kit recorded → the root alone. A host
-// with no components.json anywhere on that chain is not a shadcn-catalog host: this writes the
-// literal "catalog: none (no components.json)" and exits 0 — unless the catalog already on disk
-// lists components, which is refused (exit 1, naming the chain searched), never overwritten.
-// Otherwise it runs `<shadcn> info --json` (default `npx shadcn@latest`, cwd = the stack root)
-// and, per listed component, fetches its doc page (https/http via the global fetch, 10s timeout;
-// file: read from disk) and copies the "## Composition" section with every heading outside a
-// code fence demoted to "#### ", so only component entries are "### " headings and --check reads
-// back exactly the names it wrote — a fetch failure or an absent section degrades that one
-// component to "composition: unavailable", never blocking the whole run.
+// The shadcn project directory is the first directory holding a components.json, walking up from the
+// recorded kit (config `design.kit`, else `kit` in .claude/genesis/design-paths.json) to the root inclusive.
+// None found: write "catalog: none (no components.json)" and exit 0 — unless the on-disk catalog lists
+// components (refused, exit 1). Otherwise run `<shadcn> info --json` (cwd = the stack root) and copy each
+// component doc page's "## Composition" section, headings demoted to "#### "; a fetch failure degrades
+// that one component to "composition: unavailable".
 //
 // Does NOT: author or edit the catalog by hand (the header line says so), validate a component
 // actually exists in the kit directory (design-contract-check.js's job), or retry a failed

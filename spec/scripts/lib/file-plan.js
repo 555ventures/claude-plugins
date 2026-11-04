@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 'use strict'
-// lib/file-plan.js — the sole parser for a spec's `## File Plan` table. Extracted verbatim
-// from spec-status.js so spec-status.js and
-// scope-reconcile.js share one derivation instead of drifting apart. This module has no CLI
-// of its own — it exports parseFilePlan/splitPlanCell for both consumers.
+// lib/file-plan.js — the sole parser for a spec's `## File Plan` table, shared by spec-status.js,
+// scope-reconcile.js and ac-matrix.js. No CLI of its own.
 // Owner: specs/20260805/01-review-scope-reconciliation.md.
 //
 // What it deliberately does NOT do: validate Action/annotation columns, resolve globs, or
@@ -11,14 +9,8 @@
 //
 // Exit codes: n/a (library, not an entrypoint).
 
-// File Plan tables live in the spec BODY, not frontmatter — the merge-conflict heads-up (⚡
-// lanes annotation in spec-status.js) needs to know which files two parallel specs both intend
-// to touch. Zero rows parsed is the sanctioned no-op, never an error: a missing/malformed
-// section just means "nothing to cross-check" for that spec. Grammar pinned by a 333-spec
-// corpus audit: every real File Plan is a `## File Plan` table with the path in
-// column 1; the only observed variance is compound cells (`a + b`, comma lists, `{a,b}.ext`
-// braces, trailing `(generated)` annotations) at ~1% — split those, and add nothing
-// speculative beyond them.
+// File Plan tables live in the spec BODY. Zero rows parsed is the sanctioned no-op, never an error.
+// Path in column 1; compound cells (`a + b`, comma lists, `{a,b}.ext` braces, trailing `(generated)`) split.
 function splitPlanCell(cell) {
   cell = cell.replace(/\s*\([^)]*\)\s*$/, '').trim()
   const brace = cell.match(/^(.*)\{([^}]+)\}(.*)$/)
@@ -26,20 +18,11 @@ function splitPlanCell(cell) {
   return cell.split(/\s*\+\s*|,\s*/).map(x => x.trim()).filter(Boolean)
 }
 
-// walkFilePlanTables — module-private, shared by parseFilePlan and parseFilePlanRows.
-// Finds the `## File Plan` section (or
-// `###`; section ends at the next heading whose level is <= the File Plan heading's level, so
-// `###` subheadings under a `##` File Plan stay in-section), then walks it table-scoped: a
-// table is a maximal contiguous run of `|`-prefixed lines, and any non-`|` line (blank, prose,
-// a `###` subheading) is a table boundary that resets actionIdx/layerIdx to unbound (-1).
-// Within a table, separator rows (`---` cells) are skipped and never count as the header
-// candidate; ONLY the table's first non-separator row is eligible to bind actionIdx/layerIdx
-// (recognized when its first cell matches `/^(file|path)s?$/i`) — every later row of the same
-// table is a data row even when its first cell matches that regex (a data row whose path cell
-// is literally `file` must not rebind and orphan the rows after it). Returns one entry per
-// data row: `{ cells, actionIdx, layerIdx }`, where the indices are whatever was bound (or not)
-// by that row's own table at the time the row was read — never a later table's binding applied
-// retroactively.
+// walkFilePlanTables — module-private, shared by parseFilePlan and parseFilePlanRows. Finds the
+// `## File Plan` (or `###`) section and walks it table-scoped: a table is a maximal run of `|` lines; any
+// other line resets actionIdx/layerIdx. Only a table's first non-separator row can bind them (first cell
+// matching `/^(file|path)s?$/i`). Returns `{ cells, actionIdx, layerIdx }` per data row, bound by that
+// row's own table.
 function walkFilePlanTables(text) {
   const lines = text.split('\n')
   let start = -1, level = 0
@@ -96,21 +79,9 @@ function parseFilePlan(text) {
   return [...paths]
 }
 
-// parseFilePlanRows — additive extension: exposes
-// the Action/Layer columns that parseFilePlan deliberately discards, without changing
-// parseFilePlan's own return shape or any existing caller. ac-matrix.js needs the Layer column
-// to find a spec's `tests`-layer File Plan rows without a second table walker or a
-// `tests/`-path-prefix heuristic (rejected — breaks on hosts whose test files don't live under
-// `tests/`). Column positions are read from EACH TABLE'S OWN header row (case-insensitive
-// `Action`/`Layer`, any column order), so a table with a different column order still resolves,
-// and a table with no Layer column yields `layer: null` on every row of THAT table (not the
-// whole section) rather than misreading an unrelated column or inheriting a sibling table's
-// binding. Escaped once:
-// a second `| Path | ... |` status table under a `### Landed at design stage` subheading
-// clobbered the section-wide index binding computed after this function's walk, so
-// every row in the section — including the first table's real tests-layer rows — read back
-// `layer: null`; fixed by routing both this function and `parseFilePlan` through the shared,
-// table-scoped `walkFilePlanTables` walker instead of two hand-duplicated section walks.
+// parseFilePlanRows — exposes the Action/Layer columns parseFilePlan discards (ac-matrix.js finds
+// `tests`-layer rows with it). Column positions come from EACH TABLE'S OWN header (case-insensitive, any
+// order); a table with no Layer column yields `layer: null` on its own rows only.
 function parseFilePlanRows(text) {
   const rows = []
   for (const row of walkFilePlanTables(text)) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deterministic boot-smoke leg — the executed-program check behind every review verdict.
 # Boots the host app (config runtime.bootCommand), polls runtime.readyCheck until it passes
-# or times out, then — after readiness (and any --seed run) — sends the declared
+# or times out, then — after readiness — sends the declared
 # runtime.stopSignal and requires a bounded, clean exit before tearing the process group down.
 # No model narrates pass/fail: the exit code and the
 # __SMOKE_*__ sentinel line are the verdict (same lesson as the gate sentinel). This script
@@ -9,10 +9,8 @@
 # would false-pass) and does NOT add a post-stop probe (deferred, see shared.md).
 # Owner: specs/20261005/03-one-port-per-launch.md.
 #
-# Usage: smoke.sh [--config <path>] [--timeout <seconds>] [--seed]
+# Usage: smoke.sh [--config <path>]
 #   --config   path to spec.config.json (default .claude/spec.config.json under CWD)
-#   --timeout  override runtime.readyTimeout (default 120s)
-#   --seed     also run runtime.seedCommand after ready (for behavioral checks; boot-only by default)
 #
 # Exit codes:
 #   0  boot observed ready AND stopped cleanly on stopSignal (__SMOKE_PASS__ … stopped cleanly …)
@@ -38,7 +36,7 @@
 #
 # Port: when runtime.readyCheck references the
 # shell variable PORT, one free port is allocated per run by lib/app-port.js and exported as PORT
-# to bootCommand, every readyCheck run and seedCommand (an inherited PORT is overridden); the pass
+# to bootCommand and every readyCheck run (an inherited PORT is overridden); the pass
 # line gains " | port: <n>". A readyCheck that does not reference PORT allocates and sets nothing.
 #
 # The stale-ready probe: this script used
@@ -55,14 +53,10 @@
 set -u
 
 CONFIG=".claude/spec.config.json"
-TIMEOUT_OVERRIDE=""
-RUN_SEED=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --config)  CONFIG="${2:?--config needs a path}"; shift 2 ;;
-    --timeout) TIMEOUT_OVERRIDE="${2:?--timeout needs seconds}"; shift 2 ;;
-    --seed)    RUN_SEED=1; shift ;;
-    *) echo "usage: smoke.sh [--config <path>] [--timeout <seconds>] [--seed]" >&2; exit 5 ;;
+    *) echo "usage: smoke.sh [--config <path>]" >&2; exit 5 ;;
   esac
 done
 
@@ -87,10 +81,8 @@ fi
 
 BOOT=$(jq -r '.runtime.bootCommand // empty' "$CONFIG")
 READY=$(jq -r '.runtime.readyCheck // empty' "$CONFIG")
-SEED=$(jq -r '.runtime.seedCommand // empty' "$CONFIG")
 STOP_SIGNAL=$(jq -r '.runtime.stopSignal // "SIGTERM"' "$CONFIG")
 TIMEOUT=$(jq -r '.runtime.readyTimeout // 120' "$CONFIG")
-[ -n "$TIMEOUT_OVERRIDE" ] && TIMEOUT="$TIMEOUT_OVERRIDE"
 STOP_TIMEOUT=$(jq -r '.runtime.stopTimeout // 30' "$CONFIG")
 STOP_EXIT_CODES=$(jq -r '(.runtime.stopExitCodes // [0]) | join(" ")' "$CONFIG")
 
@@ -146,13 +138,6 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
     exit 2
   fi
   if bash -c "$READY" >/dev/null 2>&1; then
-    if [ "$RUN_SEED" -eq 1 ] && [ -n "$SEED" ]; then
-      if ! bash -c "$SEED" >>"$LOG" 2>&1; then
-        echo "__SMOKE_FAIL__ seed-failed: app booted ready but seedCommand failed. Last output:"
-        tail -30 "$LOG" | sed 's/^/    /'
-        exit 1
-      fi
-    fi
     # Shutdown observation: the signal was already being sent from the EXIT-trap
     # cleanup below, but by then the leg's verdict was already fixed — claim it here,
     # before the pass line, while the exit status still counts.

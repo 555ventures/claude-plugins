@@ -88,10 +88,10 @@ manifest before stamping.
 
 A spec's tests are classified and deleted at close. At review close the plugin runs
 `expire-tests.js --apply` over every test tagged with the closing spec's own AC-IDs and deletes the
-retirable ones; the deletions ride the close commit. A test outlives its spec in two ways only:
-an `[invariant]`/`[pin]` token in its title, or an AC bullet carrying `SHALL CONTINUE TO` (the
-opt-in permanence marker); a test that cites a ledger escape class or exercises a script the
-pipeline itself runs also stays kept. A non-JavaScript host expires through its `testCaseScanner`
+retirable ones; the deletions ride the close commit. A test outlives its spec by choice in two
+ways only: an `[invariant]`/`[pin]` token in its title or the comment block directly above it, or
+an AC bullet carrying `SHALL CONTINUE TO` (the opt-in permanence marker); a test that cites a
+ledger escape class also stays kept. A non-JavaScript host expires through its `testCaseScanner`
 (§ Required config keys) listing each case with a span. The sweep
 `node "$(spec-paths test-expiry)" --root . --all-done --apply` stays as the catch-up path for tests
 that closed before this version, run deliberately on one host at a time. The host obligation follows:

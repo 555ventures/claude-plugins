@@ -41,6 +41,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { readLedgerRows } = require('../spec/scripts/lib/observation')
 
 const MARKER = 'Changelog (last 3): '
 const ENTRY_SPLIT = /(?=\b\d+\.\d+\.\d+ — )/
@@ -185,20 +186,6 @@ function bump() {
 }
 
 // ---- --shipped ------------------------------------------------------------------------------
-function readLedgerRows() {
-  const dir = path.join(root, '.claude')
-  let files = []
-  try { files = fs.readdirSync(dir).filter((f) => /^spec-runs.*\.jsonl$/.test(f)).sort() } catch { return [] }
-  const rows = []
-  for (const f of files) {
-    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split('\n')) {
-      if (!line.trim()) continue
-      try { rows.push(JSON.parse(line)) } catch { /* a malformed line is /spec:doctor's finding, not this list's */ }
-    }
-  }
-  return rows
-}
-
 function shipped() {
   const name = flag('--plugin')
   if (!name) die('--shipped needs --plugin <name> — remedy: name a plugin from .claude-plugin/marketplace.json')
@@ -207,7 +194,7 @@ function shipped() {
   const last = git('log', '-1', '--format=%H %cI', '--', manifestRel(pl.dir))
   const date = last.code === 0 && last.out ? last.out.split(' ')[1] : null
   const since = date ? Date.parse(date) : -Infinity
-  const rows = readLedgerRows()
+  const rows = readLedgerRows(root)
     .filter((r) => r.stage === 'review' && r.verdict === 'CLEAN' && typeof r.spec === 'string' && Date.parse(r.ts) > since)
     .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts))
   const seen = new Set()

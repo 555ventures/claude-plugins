@@ -15,14 +15,8 @@
 // there is no stamp, no readable transcript, or no assistant line carrying a usage object.
 // Owner: specs/20260901/02-run-provenance.md.
 //
-// Motivation: no review/build row could name which model held
-// the session that produced it — the session model is not in the shell environment,
-// and the transcript is the only other carrier. The transcript format is documented
-// as internal and version-unstable (Claude Code sessions doc), so every failure mode here — an
-// absent stamp, a missing transcript file, an unparseable line, no assistant line at all —
-// degrades to `null`, never a thrown error; a broken review must never be the cost of a format
-// change (four distinct model ids observed across 15 real transcripts on
-// record).
+// The transcript format is internal and version-unstable, so every failure mode here — an absent stamp,
+// a missing transcript, an unparseable line, no assistant line — degrades to `null`, never a throw.
 //
 // What this deliberately does NOT do: write the stamp file (spec-session-stamp.sh's job), read
 // the model at prompt time (the transcript is empty right after /clear — this is read late, at
@@ -76,11 +70,8 @@ function sameDir(a, b) {
   try { return fs.realpathSync(a) === fs.realpathSync(b) } catch { return a === b }
 }
 
-// Freshest stamp across <root> and the repository's main working tree; <root> wins a tie or an
-// unparseable ts, so a non-git root behaves exactly as before. The ts comparison is a plain
-// string compare, correct only because spec-session-stamp.sh always writes the same
-// fixed-width second-resolution UTC shape (date -u +%Y-%m-%dT%H:%M:%SZ) — a hook that
-// changed that shape must change this compare with it.
+// Freshest stamp across <root> and the main working tree; <root> wins a tie or an unparseable ts. A plain
+// string compare is correct because spec-session-stamp.sh always writes `date -u +%Y-%m-%dT%H:%M:%SZ`.
 function readSessionStamp(root) {
   const local = readStampAt(root)
   const main = mainWorktreeRoot(root)

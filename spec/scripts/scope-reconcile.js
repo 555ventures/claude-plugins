@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 'use strict'
-// scope-reconcile.js --base <ref> --spec <path> (--json | --dirs) [--root <dir>] — reconciles
+// scope-reconcile.js --base <ref> --spec <path> --json [--root <dir>] — reconciles
 // the WHOLE changed-file set (committed diff UNION untracked) against a spec's File Plan.
 // --json emits `changed` (every changed path, sorted) and additionally `atRisk`: test files outside
 // the spec's File Plan tests rows whose content references a changed file's path stem.
 //
 // Owner: specs/20260805/01-review-scope-reconciliation.md.
 //
-// The review stage diffed only the File Plan's directories, so an
-// out-of-plan `waitForExit` edit was structurally invisible to review and rode a CLEAN verdict
-// into production. This script inverts the File Plan's role from scope-definer to
-// prediction-under-test: every changed file is seen; the plan's misses (out-of-plan) and
-// overshoots (unrealized) both surface, mechanically, never by reviewer diligence.
+// Every changed file is seen: the plan's misses (out-of-plan) and overshoots (unrealized) both surface
+// mechanically, never by reviewer diligence.
 //
 // What it deliberately does NOT do: resolve `pipelineOwnedPaths` beyond the additive glob list
 // in .claude/spec.config.json, or re-derive the changed set anywhere else — the review stage and
@@ -27,37 +24,18 @@
 // A rename whose old path was planned realizes that plan row — reported once in `renamed`,
 // never as an out-of-plan + unrealized finding pair.
 //
-// File Plan glob rows: a row containing `*`,
-// `?`, or `[` is a pattern, matched via lib/glob-match.js's `globMatch` against concrete changed
-// files — never an exact-string comparison. A changed file matching a glob row is in-plan
-// (never outOfPlan); a glob row matched by >=1 changed file is realized (never unrealized).
-// Realization counts only NON-EXCLUDED changed files (changed minus excludedSet) so a
-// pipeline-owned file overlapping a codegen glob row can't fake that row's realization. Concrete
-// rows keep exact-match semantics untouched.
+// File Plan glob rows (`*`, `?`, `[`) match concrete changed files via lib/glob-match.js's globMatch;
+// realization counts only NON-EXCLUDED changed files. Concrete rows keep exact-match semantics.
 //
 // Exit codes: 0 = outOfPlan empty · 3 = outOfPlan non-empty · 2 = usage error, spec unreadable,
 // spec has no File Plan table, or the git ref/repo is unusable.
 //
-// --probe-at-risk <file> [--test-globs <csv>] --root <dir>:
-// an ADDITIVE, read-only mode for init-gen.js's at-risk-applicability probe — `<file>`
-// is a newline-separated list of repo-relative source paths (init-gen samples up to 20 tracked
-// non-test files). It reuses THIS file's existing `stemsFor` derivation and `walkTestFiles` test-file
-// scan in place (never a second implementation — the sole-derivation rule), fed the caller-supplied
-// sample list instead of a git-diff changed set, and `--test-globs`/the same default array instead of
-// the host config (which does not exist yet at init probe time). Prints `{sampled, testFiles, refs}`
-// and always exits 0 (probe findings are data). This mode is checked BEFORE the --base/--spec/
-// mode requirement below so it never needs a spec or a git ref; it never touches outOfPlan/unrealized/
-// excluded/renamed, and the existing --json/--dirs modes stay byte-identical around it.
+// --probe-at-risk <file> [--test-globs <csv>] --root <dir>: a read-only mode for init-gen.js's probe —
+// `<file>` lists repo-relative source paths; reuses stemsFor and walkTestFiles fed that sample and the
+// default test globs (no host config yet). Prints `{sampled, testFiles, refs}`, always exits 0, and is
+// checked before the --base/--spec requirement.
 //
-// Ignored-path prune (carrying over
-// the earlier contract unchanged in
-// substance): `walkTestFiles` prunes every git-ignored path — a git-ignored working copy
-// (`.claude/worktrees/**`, a `*.build/` scratch dir) is not a real candidate on any host layout,
-// and the four name skips below were never meant to enumerate that class. The ignored set is now
-// the ONE derivation in `lib/ignored-paths.js`, shared with red-check.js's wildcard tests-row
-// expansion — never a second implementation for --probe-at-risk, which reaches the prune through
-// this same walkTestFiles call. That library caches its result per `root` and owns the
-// top-level guard and empty-set fallback; this file no longer carries either.
+// `walkTestFiles` prunes every git-ignored path via lib/ignored-paths.js (shared with red-check.js).
 
 const fs = require('fs')
 const path = require('path')
@@ -69,7 +47,7 @@ const { fileShapes, isTestClassified: shapeIsTest } = require('./lib/file-shapes
 const { getIgnoredPaths } = require('./lib/ignored-paths')
 
 function usage() {
-  console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> (--json | --dirs) | --probe-at-risk <file> [--test-globs <csv>] --root <dir>')
+  console.error('usage: scope-reconcile.js [--root <dir>] --base <ref> --spec <path> --json | --probe-at-risk <file> [--test-globs <csv>] --root <dir>')
 }
 
 let root = '.', base = null, specPath = null, mode = null, probeAtRiskFile = null, testGlobsArg = null
@@ -80,7 +58,6 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--base') base = argv[++i]
   else if (a === '--spec') specPath = argv[++i]
   else if (a === '--json') mode = 'json'
-  else if (a === '--dirs') mode = 'dirs'
   else if (a === '--probe-at-risk') probeAtRiskFile = argv[++i]
   else if (a === '--test-globs') testGlobsArg = argv[++i]
   else { usage(); process.exit(2) }
@@ -99,16 +76,12 @@ if (probeAtRiskFile) {
   if (testGlobsArg) probeShapes.testGlobs = testGlobsArg.split(',').map(s => s.trim()).filter(Boolean)
   const probeIsTestClassified = (p) => shapeIsTest(p, probeShapes)
 
-  // Reuses stemsFor (declared below, a hoisted function — pure over its argument, no TDZ risk
-  // at this call site) exactly as the main derivation does, fed the sample list instead of a
-  // changed-git-diff set.
+  // Reuses stemsFor (a hoisted function) exactly as the main derivation does, fed the sample list.
   const stemSources = sampledFiles
     .filter(p => !probeIsTestClassified(p))
     .map(p => ({ file: p, stems: stemsFor(p) }))
 
-  // Reuses walkTestFiles (declared below) via its injectable classifier param — the probe path
-  // has no host config yet, so it can never use the config-derived isTestClassified the main
-  // path uses further down.
+  // Reuses walkTestFiles with an explicit classifier — the probe path has no host config yet.
   const candidates = []
   walkTestFiles(root, candidates, probeIsTestClassified)
 
@@ -205,24 +178,16 @@ const unrealized = [
 ].sort()
 
 // ---- at-risk derivation ----------------------
-// A Decision that changes what a shared script returns reddens suites the scoped gate never
-// runs, because those suites live outside the spec's own File Plan tests rows (escape
-// wf_e1da0ea6-94c). For each changed file that is neither test-classified
-// (testGlobs), pipeline-owned, nor a rename-from path, derive path stems and substring-scan the
-// repo's test-classified files for them; a hit that is not resolved by the File Plan's
-// tests-layer rows and is not itself in the changed set is at-risk. Additive to outOfPlan/
-// unrealized/excluded/renamed above — never affects the exit code.
+// A changed shared script can redden suites outside the spec's File Plan tests rows. For each changed
+// file that is not test-classified, pipeline-owned or a rename-from path, substring-scan the repo's
+// test files for its path stems; an unplanned, unchanged hit is at-risk. Never affects the exit code.
 
 const shapes = fileShapes(readConfig(root))
 const isTestClassified = (p) => shapeIsTest(p, shapes)
 
 function stemsFor(p) {
-  // Form (a) — the full repo-relative path — is always emitted, even when it is a bare
-  // single-segment basename, so a root-level file stays matchable at all. Forms (b) and
-  // (c) must be able to discriminate: never a bare single-segment basename (no `/`), and never
-  // the empty string (a root dotfile like `.gitignore` strips to '' under the last-extension
-  // regex, and `content.includes('')` is vacuously true for every candidate — the reproduced
-  // defect this guard closes).
+  // Form (a), the full repo-relative path, is always emitted. Forms (b) and (c) are never a bare
+  // single-segment basename and never '' (`content.includes('')` is vacuously true).
   const noExt = p.replace(/\.[^./]+$/, '')
   const stems = [p]
   if (noExt && noExt.includes('/')) stems.push(noExt)
@@ -241,9 +206,8 @@ const filePlanTestsPaths = parseFilePlanRows(specText)
 const isResolvedByTestsRows = (p) =>
   filePlanTestsPaths.some(row => (isGlobRow(row) ? globMatch(toPattern(row), p) : row === p))
 
-// classifyFn defaults to the config-derived isTestClassified above (evaluated only when the
-// argument is omitted, so the --probe-at-risk branch above — which calls this before that const
-// exists — always passes its own classifier explicitly and never touches the default).
+// classifyFn defaults to the config-derived isTestClassified; the --probe-at-risk branch always passes
+// its own classifier.
 function walkTestFiles(dir, out, classifyFn = isTestClassified) {
   const ignored = getIgnoredPaths(root)
   let entries
@@ -287,12 +251,7 @@ const atRisk = [...atRiskMap.entries()]
   .map(([file, refs]) => ({ file, refs }))
   .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0))
 
-if (mode === 'dirs') {
-  const dirs = [...new Set([...changed].map(p => path.posix.dirname(p)))].sort()
-  console.log(dirs.join('\n'))
-} else {
-  // `changed` is the full changed set (sorted) so consumers scope to what the diff touched without
-  // re-deriving it from git (header: no second derivation anywhere) — the patterns leg reads it.
-  console.log(JSON.stringify({ changed: [...changed].sort(), outOfPlan, unrealized, excluded, renamed, atRisk }, null, 2))
-}
+// `changed` is the full changed set (sorted) so consumers scope to what the diff touched without
+// re-deriving it from git (header: no second derivation anywhere) — the patterns leg reads it.
+console.log(JSON.stringify({ changed: [...changed].sort(), outOfPlan, unrealized, excluded, renamed, atRisk }, null, 2))
 process.exit(outOfPlan.length ? 3 : 0)

@@ -1,31 +1,26 @@
 #!/usr/bin/env node
 'use strict'
 // comment-narration.js — usage:
-//   node comment-narration.js --root <dir> [--baseline <file>] [--hosts <csv>] [--people <csv>] [--json]
-//   node comment-narration.js --rules-mode <hostRoot> [--baseline <file>] [--hosts <csv>] [--people <csv>] [--json]
+//   node comment-narration.js --root <dir> [--json]
+//   node comment-narration.js --rules-mode <hostRoot> [--json]
 //   node comment-narration.js --root <dir> --code-identical <ref> [--json]
 //
 // Owner: specs/20260902/01-comment-narration-gate.md D1-D7.
 //
 // Classifies every whole-line comment under the code-group directories, and every prose
-// line under the doctrine-group directories, against six narration classes (date, version,
-// prior, story, host, person); checks each scanned file's finding count against an optional
-// ratchet baseline; and certifies a comment-only diff against a git ref via --code-identical.
+// line under the doctrine-group directories, against four narration classes (date, version,
+// prior, story); and certifies a comment-only diff against a git ref via --code-identical.
 //
 // Deliberately does NOT: treat a trailing // after code, a /* */ block, or a * continuation
-// line as a comment (whole-line only); write, regenerate, or otherwise touch a baseline file
-// (hand-maintained, read-only here); judge which finding to fix — that stays with the sweep
+// line as a comment (whole-line only); judge which finding to fix — that stays with the sweep
 // worker or the session running --code-identical; read a symlink target that resolves
 // outside --root.
 //
 // Exit codes:
-//   0  no findings (baseline given: every scanned file at or under its count) ·
-//      --code-identical: every file identical
-//   1  findings present (baseline given: at least one file over its count) ·
-//      --code-identical: at least one file differs
-//   2  bad invocation: no mode, two modes together, an unreadable --root, an unreadable or
-//      non-object --baseline, or an unresolvable --code-identical ref — stderr names the
-//      remedy
+//   0  no findings · --code-identical: every file identical
+//   1  findings present · --code-identical: at least one file differs
+//   2  bad invocation: no mode, two modes together, an unreadable --root, or an unresolvable
+//      --code-identical ref — stderr names the remedy
 
 const fs = require('fs')
 const path = require('path')
@@ -34,12 +29,8 @@ const { spawnSync } = require('child_process')
 const USAGE = 'usage: node comment-narration.js --root <dir> | --rules-mode <hostRoot> | ' +
   '--root <dir> --code-identical <ref>'
 
-const { writeOut: libWrite } = require('./lib/sync-write')
+const { writeOut: syncWrite } = require('./lib/sync-write')
 
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function syncWrite(fd, str) {
-  libWrite(fd, str)
-}
 function writeOut(str) { syncWrite(1, str.endsWith('\n') ? str : str + '\n') }
 function writeErr(str) { syncWrite(2, str.endsWith('\n') ? str : str + '\n') }
 
@@ -78,24 +69,12 @@ function blankBackticks(line) {
   return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length))
 }
 
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildLiteralRes(csv) {
-  if (!csv) return []
-  return csv.split(',').map((s) => s.trim()).filter(Boolean)
-    .map((s) => new RegExp('\\b' + escapeRegExp(s) + '\\b', 'i'))
-}
-
-function classify(line, hostRes, peopleRes) {
+function classify(line) {
   const classes = []
   if (DATE_RE.test(line) || MONTH_RE.test(line)) classes.push('date')
   if (VERSION_RE.test(blankBackticks(line))) classes.push('version')
   if (PRIOR_RE.test(line)) classes.push('prior')
   if (STORY_RE.test(line)) classes.push('story')
-  if (hostRes.some((re) => re.test(line))) classes.push('host')
-  if (peopleRes.some((re) => re.test(line))) classes.push('person')
   return classes
 }
 
@@ -174,7 +153,7 @@ function collectFiles(root, dirs, opts = {}) {
 
 // ---- scanning ---------------------------------------------------------------
 
-function scanCodeFile(root, rel, findings, hostRes, peopleRes) {
+function scanCodeFile(root, rel, findings) {
   let raw
   try {
     raw = fs.readFileSync(path.join(root, rel), 'utf8')
@@ -185,7 +164,7 @@ function scanCodeFile(root, rel, findings, hostRes, peopleRes) {
   let count = 0
   lines.forEach((line, i) => {
     if (!isCodeCommentLine(line, i === 0)) return
-    const classes = classify(line, hostRes, peopleRes)
+    const classes = classify(line)
     if (classes.length) {
       findings.push({ file: rel, line: i + 1, classes, text: line.trim() })
       count++
@@ -194,7 +173,7 @@ function scanCodeFile(root, rel, findings, hostRes, peopleRes) {
   return count
 }
 
-function scanProseFile(root, rel, findings, hostRes, peopleRes) {
+function scanProseFile(root, rel, findings) {
   let raw
   try {
     raw = fs.readFileSync(path.join(root, rel), 'utf8')
@@ -208,7 +187,7 @@ function scanProseFile(root, rel, findings, hostRes, peopleRes) {
     const t = line.trim()
     if (t.startsWith('```')) { inFence = !inFence; return }
     if (inFence) return
-    const classes = classify(line, hostRes, peopleRes)
+    const classes = classify(line)
     if (classes.length) {
       findings.push({ file: rel, line: i + 1, classes, text: line.trim() })
       count++
@@ -225,20 +204,20 @@ function excludeFixtures(rel) {
   return rel === 'tests/fixtures' || rel.startsWith('tests/fixtures/')
 }
 
-function runPluginScan(root, baseline, hostRes, peopleRes, jsonMode) {
+function runPluginScan(root, jsonMode) {
   if (!isReadableDir(root)) usageError(`--root ${root} is not a readable directory`)
   const codeFiles = collectFiles(root, CODE_DIRS, { excludeRel: excludeFixtures })
   const proseFiles = collectFiles(root, PROSE_DIRS, { filter: (rel) => rel.endsWith('.md') })
 
   const findings = []
   const files = {}
-  for (const rel of codeFiles) files[rel] = scanCodeFile(root, rel, findings, hostRes, peopleRes)
-  for (const rel of proseFiles) files[rel] = scanProseFile(root, rel, findings, hostRes, peopleRes)
+  for (const rel of codeFiles) files[rel] = scanCodeFile(root, rel, findings)
+  for (const rel of proseFiles) files[rel] = scanProseFile(root, rel, findings)
 
-  finishScan('plugin', findings, files, baseline, jsonMode)
+  finishScan('plugin', findings, files, jsonMode)
 }
 
-function runRulesMode(hostRoot, baseline, hostRes, peopleRes, jsonMode) {
+function runRulesMode(hostRoot, jsonMode) {
   const rulesFiles = collectFiles(hostRoot, ['.claude/rules'], { filter: (rel) => rel.endsWith('.md') })
   const agentsFiles = collectFiles(hostRoot, ['.claude/agents'],
     { filter: (rel) => rel.endsWith('.md'), recursive: false })
@@ -246,7 +225,7 @@ function runRulesMode(hostRoot, baseline, hostRes, peopleRes, jsonMode) {
   const findings = []
   const files = {}
   for (const rel of [...rulesFiles, ...agentsFiles]) {
-    files[rel] = scanProseFile(hostRoot, rel, findings, hostRes, peopleRes)
+    files[rel] = scanProseFile(hostRoot, rel, findings)
   }
 
   const efPath = path.join(hostRoot, '.claude/rules/enforcement.json')
@@ -268,29 +247,20 @@ function runRulesMode(hostRoot, baseline, hostRes, peopleRes, jsonMode) {
     entries.forEach((entry, idx) => {
       if (entry && typeof entry.notes === 'string') {
         const pseudo = `.claude/rules/enforcement.json#${entry.id ?? idx}`
-        const classes = classify(entry.notes, hostRes, peopleRes)
+        const classes = classify(entry.notes)
         if (classes.length) findings.push({ file: pseudo, line: idx + 1, classes, text: entry.notes.trim() })
         files[pseudo] = classes.length ? 1 : 0
       }
     })
   }
 
-  finishScan('rules', findings, files, baseline, jsonMode)
+  finishScan('rules', findings, files, jsonMode)
 }
 
-function finishScan(mode, findings, files, baseline, jsonMode) {
+function finishScan(mode, findings, files, jsonMode) {
   findings.sort((a, b) => (a.file === b.file ? a.line - b.line : (a.file < b.file ? -1 : 1)))
   const totalCount = findings.length
   const fileCount = Object.keys(files).length
-
-  const overage = []
-  if (baseline !== null) {
-    for (const [file, count] of Object.entries(files)) {
-      const base = Object.prototype.hasOwnProperty.call(baseline, file) ? baseline[file] : 0
-      if (count > base) overage.push({ file, count, base })
-    }
-    overage.sort((a, b) => (a.file < b.file ? -1 : 1))
-  }
 
   if (jsonMode) {
     writeOut(JSON.stringify({ mode, findings, files, total: totalCount }))
@@ -303,16 +273,7 @@ function finishScan(mode, findings, files, baseline, jsonMode) {
     writeOut(lines.join('\n'))
   }
 
-  if (overage.length) {
-    for (const o of overage) {
-      writeErr(`comment-narration: ${o.file}: ${o.count} findings > baseline ${o.base} — ` +
-        'remove narration, never raise the baseline')
-    }
-    process.exit(1)
-  }
-
-  const exitCode = baseline !== null ? 0 : (totalCount > 0 ? 1 : 0)
-  process.exit(exitCode)
+  process.exit(totalCount > 0 ? 1 : 0)
 }
 
 // ---- oracle --------------------------------------------------------------
@@ -385,9 +346,6 @@ function runOracle(root, ref, jsonMode) {
 let root = null
 let rulesMode = null
 let codeIdentical = null
-let baselinePath = null
-let hostsCsv = ''
-let peopleCsv = ''
 let jsonMode = false
 
 const argv = process.argv.slice(2)
@@ -396,9 +354,6 @@ for (let i = 0; i < argv.length; i++) {
   if (a === '--root') root = argv[++i]
   else if (a === '--rules-mode') rulesMode = argv[++i]
   else if (a === '--code-identical') codeIdentical = argv[++i]
-  else if (a === '--baseline') baselinePath = argv[++i]
-  else if (a === '--hosts') hostsCsv = argv[++i]
-  else if (a === '--people') peopleCsv = argv[++i]
   else if (a === '--json') jsonMode = true
   else usageError(`unrecognized argument "${a}"`)
 }
@@ -407,31 +362,10 @@ if (root !== null && rulesMode !== null) usageError('--root and --rules-mode can
 if (root === null && rulesMode === null) usageError('no mode given: pass --root <dir> or --rules-mode <hostRoot>')
 if (codeIdentical !== null && rulesMode !== null) usageError('--code-identical requires --root, not --rules-mode')
 
-const hostRes = buildLiteralRes(hostsCsv)
-const peopleRes = buildLiteralRes(peopleCsv)
-
-let baseline = null
-if (baselinePath !== null) {
-  let raw
-  try {
-    raw = fs.readFileSync(baselinePath, 'utf8')
-  } catch (e) {
-    usageError(`cannot read --baseline ${baselinePath} (${e.code || e.message})`)
-  }
-  try {
-    baseline = JSON.parse(raw)
-  } catch (e) {
-    usageError(`--baseline ${baselinePath} is not valid JSON (${e.message})`)
-  }
-  if (baseline === null || typeof baseline !== 'object' || Array.isArray(baseline)) {
-    usageError(`--baseline ${baselinePath} must be a JSON object of {"path": count}`)
-  }
-}
-
 if (rulesMode !== null) {
-  runRulesMode(rulesMode, baseline, hostRes, peopleRes, jsonMode)
+  runRulesMode(rulesMode, jsonMode)
 } else if (codeIdentical !== null) {
   runOracle(root, codeIdentical, jsonMode)
 } else {
-  runPluginScan(root, baseline, hostRes, peopleRes, jsonMode)
+  runPluginScan(root, jsonMode)
 }

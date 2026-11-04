@@ -6,17 +6,12 @@
 //
 // Owner: specs/20261002/01-the-wireframe-command-runs-over-the-service.md.
 //
-// WHY: ADR-0029's
-// confirm gate, amended; ADR-0030; ADR-0031's one door to the network. This driver derives
-// SEED -> SCREENS -> APPROVED on every invocation from design/mocks/status.json (schemaVersion 3)
-// plus the seed (`design/mocks/seed.md`, parsed by lib/surfaces.js) and prints the one step that
-// needs the session's judgment. A project whose config carries a `walkthrough` object block is in
-// service mode: the session draws one json-render file per screen under design/mocks/screens/,
-// `round push` sends the round, `round pull` prints the worklist, and the client's confirmation
-// on the service is read back from design/rounds/<n>/approvals.json. Any other project is in
-// terminal mode: nothing is drawn or sent, and each story is confirmed by the user's literal
-// `approve`. The round itself is lib/mocks-round.js's; every request is made by running
-// scripts/walkthrough.js as a child process.
+// WHY: derives SEED -> SCREENS -> APPROVED on every invocation from design/mocks/status.json
+// (schemaVersion 3) plus the seed (lib/surfaces.js) and prints the one step needing the session's
+// judgment. A config `walkthrough` object block means service mode (screens drawn under
+// design/mocks/screens/, `round push`/`round pull`, approvals read from design/rounds/<n>/approvals.json);
+// otherwise terminal mode (each story confirmed by the user's literal `approve`). Every request runs
+// scripts/walkthrough.js as a child process. Owner ADRs: 0029, 0030, 0031.
 //
 // What this deliberately does NOT do:
 //   - author the seed or a screen, or judge whether a screen looks right — session work;
@@ -50,7 +45,7 @@ const { readConfig, policy } = require('./lib/host-config')
 const round = require('./lib/mocks-round')
 
 const die = core.makeDie('mocks-driver')
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./lib/util')
 
 const { root, rest } = core.takeRoot(process.argv.slice(2), die)
 
@@ -63,9 +58,7 @@ const WALK = path.join(__dirname, 'walkthrough.js')
 
 const SKILL_LINE = 'Skill: mock-authoring — load it before the first edit'
 
-// ---------------------------------------------------------------------------
-// Unknown commands refuse before any file is read or written.
-// ---------------------------------------------------------------------------
+// ---- Unknown commands refuse before any file is read or written. ----
 function checkRetired() {
   const first = rest[0]
   if (first !== undefined && !['--state', '--mark', '--reopen', 'round'].includes(first)) {
@@ -74,9 +67,7 @@ function checkRetired() {
 }
 checkRetired()
 
-// ---------------------------------------------------------------------------
-// status.json (schemaVersion 3). A cold root creates the status file and the seed.
-// ---------------------------------------------------------------------------
+// ---- status.json (schemaVersion 3). A cold root creates the status file and the seed. ----
 function freshStatus() {
   return {
     schemaVersion: 3, state: 'SEED', marks: { seedDone: null, approved: null },
@@ -119,9 +110,7 @@ function saveStatus() {
   core.saveStatusFile(statusPath, status)
 }
 
-// ---------------------------------------------------------------------------
-// Mode: the config block's presence — a non-null, non-array object — is service mode.
-// ---------------------------------------------------------------------------
+// ---- Mode: a non-null, non-array config `walkthrough` object is service mode. ----
 function walkBlock() { return readConfig(root).walkthrough }
 function serviceMode() { const b = walkBlock(); return isObj(b) }
 function requireService() {
@@ -136,9 +125,7 @@ function projectLink() {
   return base + '/p/' + project
 }
 
-// ---------------------------------------------------------------------------
-// seed.md — the journey set: `### <journey>` blocks, in seed order, via lib/surfaces.js.
-// ---------------------------------------------------------------------------
+// ---- seed.md — the journey set: `### <journey>` blocks, in seed order, via lib/surfaces.js. ----
 function seedTextOrNull() {
   try { return fs.readFileSync(seedPath, 'utf8') } catch { return null }
 }
@@ -169,9 +156,7 @@ function seedProblem(seedJourneys) {
   return null
 }
 
-// ---------------------------------------------------------------------------
-// State derivation — the only place SEED/SCREENS/APPROVED is decided.
-// ---------------------------------------------------------------------------
+// ---- State derivation — the only place SEED/SCREENS/APPROVED is decided. ----
 function deriveState() {
   if (!status.marks.seedDone) return 'SEED'
   const seed = currentSeedJourneys()
@@ -189,9 +174,7 @@ function printAcceptedTail(prevState, nextState) {
   core.checkpoint('mocks', prevState, nextState, '/spec:mocks')
 }
 
-// ---------------------------------------------------------------------------
-// The child calls: every request is `walkthrough.js` run as a child process.
-// ---------------------------------------------------------------------------
+// ---- The child calls: every request is `walkthrough.js` run as a child process. ----
 function walk(args) {
   const r = spawnSync(process.execPath, [WALK, ...args, '--root', root, '--json'],
     { encoding: 'utf8', env: process.env, maxBuffer: 256 * 1024 * 1024 })
@@ -254,9 +237,7 @@ function assembledOrDie(seed, ids, remedy) {
   return assembled
 }
 
-// ---------------------------------------------------------------------------
-// --mark seed-done.
-// ---------------------------------------------------------------------------
+// ---- --mark seed-done. ----
 // The two job-story refusals, in seed order; exit 1 (findings), unlike `die`'s exit 2 (precondition).
 function offPathProblem(seedJourneys) {
   for (const [name, j] of seedJourneys) {
@@ -290,9 +271,7 @@ function undeclared(journeyArg, seed) {
   die('--journey ' + journeyArg + ' is not declared in design/mocks/seed.md — remedy: use one of the seed journeys: ' + [...seed.keys()].join(', '))
 }
 
-// ---------------------------------------------------------------------------
-// --mark journey-drawn --journey <j> — service mode only; sends nothing.
-// ---------------------------------------------------------------------------
+// ---- --mark journey-drawn --journey <j> — service mode only; sends nothing. ----
 function cmdJourneyDrawn(journeyArg) {
   requireService()
   if (!journeyArg) die('--mark journey-drawn needs --journey <j> — remedy: --mark journey-drawn --journey <j>')
@@ -315,9 +294,7 @@ function cmdJourneyDrawn(journeyArg) {
   printAcceptedTail(prevState, deriveState())
 }
 
-// ---------------------------------------------------------------------------
-// round push.
-// ---------------------------------------------------------------------------
+// ---- round push. ----
 function cmdRoundPush() {
   requireService()
   const seed = currentSeedJourneys()
@@ -348,9 +325,7 @@ function cmdRoundPush() {
   finish(r, 'push')
 }
 
-// ---------------------------------------------------------------------------
-// round pull — the worklist.
-// ---------------------------------------------------------------------------
+// ---- round pull — the worklist. ----
 function confirmer(a) {
   if (typeof a.who === 'string' && a.who) return a.who
   return a.by === 'owner' ? 'the owner' : 'the client'
@@ -386,9 +361,7 @@ function cmdRoundPull() {
   process.exit(0)
 }
 
-// ---------------------------------------------------------------------------
-// --mark journey-approved --journey <j> [--waive --reason <r>].
-// ---------------------------------------------------------------------------
+// ---- --mark journey-approved --journey <j> [--waive --reason <r>]. ----
 function recordApproval(name, hash, by, reason) {
   const prior = status.journeys[name] || {}
   const entry = { drawn: prior.drawn || null, approved: nowIso(), beats: hash, by }
@@ -446,10 +419,7 @@ function cmdJourneyApproved(journeyArg, waive, reasonArg) {
   printAcceptedTail(prevState, deriveState())
 }
 
-// ---------------------------------------------------------------------------
-// --mark approved. The round is closed before the end is recorded, so a failed close never
-// leaves a finished stage over an open round.
-// ---------------------------------------------------------------------------
+// ---- --mark approved: the round is closed before the end is recorded. ----
 function cmdApproved() {
   const prevState = deriveState()
   const seed = currentSeedJourneys()
@@ -477,9 +447,7 @@ function cmdApproved() {
   printAcceptedTail(prevState, deriveState())
 }
 
-// ---------------------------------------------------------------------------
-// --reopen journey:<j>.
-// ---------------------------------------------------------------------------
+// ---- --reopen journey:<j>. ----
 function cmdReopen(target) {
   if (target && target.startsWith('journey:')) {
     const j = target.slice('journey:'.length)
@@ -495,9 +463,7 @@ function cmdReopen(target) {
   die('--reopen must be journey:<j> — remedy: --reopen journey:<j>')
 }
 
-// ---------------------------------------------------------------------------
-// Bare-invocation step printer — one step block per run.
-// ---------------------------------------------------------------------------
+// ---- Bare-invocation step printer — one step block per run. ----
 function driverCmd(extra) { return 'node ' + __filename + ' --root ' + root + ' ' + extra }
 
 // The genesis brief's first building paragraph, when the brief carries that section.
@@ -587,9 +553,7 @@ function printApprovedStep() {
   process.exit(0)
 }
 
-// ---------------------------------------------------------------------------
-// Dispatch.
-// ---------------------------------------------------------------------------
+// ---- Dispatch. ----
 if (rest.includes('--state')) {
   writeOut(1, deriveState() + '\n')
   process.exit(0)

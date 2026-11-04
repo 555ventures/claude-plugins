@@ -126,9 +126,7 @@ function relPath(repoRoot, abs) {
   return path.relative(repoRoot, abs).split(path.sep).join('/')
 }
 
-function escapeRe(t) {
-  return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+const { escapeRegExp: escapeRe } = require('./lib/util')
 
 function findDiffHit(body, diffLines) {
   for (const changed of diffLines) {

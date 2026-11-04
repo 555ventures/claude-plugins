@@ -1,23 +1,16 @@
 #!/usr/bin/env node
 'use strict'
-// expire-tests.js --root <r> --spec <spec path>  [--apply [--keep-on-red]] [--json]
-// expire-tests.js --root <r> --all-done          [--apply [--keep-on-red]] [--json]
+// expire-tests.js --root <r> --spec <spec path>  [--apply] [--json]
+// expire-tests.js --root <r> --all-done          [--apply] [--json]
 // expire-tests.js --root <r> --invariants        [--json]
 //
 // Owner: specs/20260911/03-tests-expire-at-close.md.
 //
-// A spec's tests die when the spec does. This
-// script is the ONE place the classification runs — spec-review-driver.js's doCloseWork() calls
-// it and /spec:doctor's check 20 calls it, so a close and a doctor dry run can never
-// disagree about what is retirable.
+// A spec's tests die when the spec does. This is the ONE place the classification runs — the review
+// driver's close and /spec:doctor check 20 both call it.
 //
-// Named `expire-tests.js`, never `test-expiry.js` — `node --test`'s default file discovery
-// matches `**/test-*.js` anywhere under the repo root (see spec/scripts/count-tests.js's own
-// header, renamed for the identical reason), so a `test-expiry.js` this repo ships gets
-// DISCOVERED AND EXECUTED as a test file by the post-gate's path-less `node --test` run — its own
-// argv handling exiting non-zero under the runner reported as a spurious test failure (this
-// spec's own forcing incident). The `spec-paths` KEY stays `test-expiry`; only the file this
-// key resolves to changed.
+// Named expire-tests.js, never test-expiry.js: `node --test` discovers `**/test-*.js` and would execute
+// it as a test. The `spec-paths` key stays `test-expiry`.
 //
 // A test is *tagged* when an AC-ID occurs in its title or the contiguous comment block directly
 // above the call (lib/scan-test-calls.js's own shape); an untagged test is never read for
@@ -69,9 +62,7 @@
 // An --apply is a change to the host like any other, so it lands through the host's own
 // `gateCommand`, run in --root once every write is made. A red gate puts every touched file back
 // byte-for-byte (deleted files and directories recreated) and names the gate and its output's tail
-// on stderr; `--keep-on-red` leaves the writes in place instead, for a sweep the host means to fix
-// forward (a trimmed file's now-unused imports are the host's to prune — this script never parses
-// a language beyond test calls). A host with no `gateCommand` gets the writes and one stderr
+// on stderr. A host with no `gateCommand` gets the writes and one stderr
 // warning that nothing checked them. A dry run never runs the gate.
 //
 // What this deliberately does NOT do: re-derive what a test case is (lib/scan-test-calls.js owns
@@ -82,13 +73,13 @@
 // Exit codes: 0 = derived (dry run, or applied with the gate green or absent), regardless of how
 //                 many tests were retirable, and regardless of how many spec files under --root
 //                 were unreadable ·
-//             1 = applied and the host's gateCommand went red (reverted, or kept under
-//                 --keep-on-red) ·
+//             1 = applied and the host's gateCommand went red (every write reverted) ·
 //             2 = usage error, --root not a readable directory, or (in --spec mode) the named
 //                 spec file cannot be read
 
 const fs = require('fs')
 const path = require('path')
+const { relPosix: relPosixFrom } = require('./lib/util')
 const { listTestFiles, scanCalls, scanCases, scanDescribes, resolveReference } = require('./lib/scan-test-calls')
 const { deriveInvariants } = require('./lib/invariants')
 const { caseReach, caseRequires } = require('./lib/case-reach')
@@ -100,14 +91,10 @@ const { readConfig } = require('./lib/host-config')
 const { resolveGateForFiles } = require('./lib/gate-resolve')
 const hostRun = require('./lib/host-run')
 
-const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply [--keep-on-red]] [--json]'
+const USAGE = 'expire-tests.js --root <r> (--spec <path> | --all-done | --invariants) [--apply] [--json]'
 const EXPIRY_APPLIES_FROM = '20260911'
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeOut(fd, str) {
-  syncWrite(fd, str + '\n')
-}
+const { writeLine: writeOut } = require('./lib/sync-write')
 
 function die(msg) {
   writeOut(2, 'expire-tests: ' + msg)
@@ -120,7 +107,6 @@ let specArg = null
 let allDone = false
 let invariantsMode = false
 let apply = false
-let keepOnRed = false
 let asJson = false
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {
@@ -130,7 +116,6 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--all-done') allDone = true
   else if (a === '--invariants') invariantsMode = true
   else if (a === '--apply') apply = true
-  else if (a === '--keep-on-red') keepOnRed = true
   else if (a === '--json') asJson = true
   else die('usage: ' + USAGE)
 }
@@ -147,10 +132,9 @@ if (!rootStat || !rootStat.isDirectory()) die('usage: ' + USAGE + ' — --root m
 
 const modeCount = (specArg !== null ? 1 : 0) + (allDone ? 1 : 0) + (invariantsMode ? 1 : 0)
 if (modeCount !== 1) die('usage: ' + USAGE + ' — exactly one of --spec/--all-done/--invariants is required')
-if (keepOnRed && !apply) die('usage: ' + USAGE + ' — --keep-on-red only means something with --apply')
 
 const config = readConfig(root)
-const relPosix = (abs) => path.relative(root, abs).split(path.sep).join('/')
+const relPosix = (abs) => relPosixFrom(root, abs)
 
 // ---- --invariants --------------------------------------------------------------------------------
 if (invariantsMode) {
@@ -198,14 +182,8 @@ const specsDir = path.join(root, 'specs')
 const specFiles = []
 if (fs.existsSync(specsDir)) walkSpecs(specsDir, specFiles)
 
-// acId -> [{ specRel, status, raw, dateStr }, ...]. An AC-ID is many-to-many: spec-number-check.js
-// polices collisions at the gate (this script is not the place for that — see header), so an ID
-// defined by more than one spec keeps every one of those owner records rather than the first
-// walked. The fail-safe rule then reads as "done only when EVERY owner is done" (allCitedDone
-// below) instead of picking a single winner by directory walk order.
-// A spec file under specs/ whose read throws is recorded here rather than
-// skipped — its path-derived AC-ID prefix is held unresolved for every id under it (see
-// matchesUnreadablePrefix below), scoped to that prefix only.
+// acId -> [{ specRel, status, raw, dateStr }, ...] — many-to-many: a collided id keeps every owner, and
+// an unreadable spec's path-derived AC-ID prefix is held unresolved (matchesUnreadablePrefix).
 function derivedAcPrefix(rel) {
   const m = /^specs\/(\d{8})\/(\d{2}[a-z]?)-/.exec(rel)
   return m ? 'AC-' + m[1] + '-' + m[2] + '-' : null
@@ -266,10 +244,8 @@ if (closingSpecRel !== null) {
 }
 
 // ---- invariants set + defect-class ids -----------------------------------------------------------
-// One whole-name pattern per invariant basename: not preceded by a name character, `.` or `-`,
-// and not followed by a name character — so `catalog.json` never names `log.js` and
-// `health.json()` never names `health.js`, while `scripts/log.js` and `'log.js'` still do.
-const escapeRe = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// Whole-name match per basename: `catalog.json` never names `log.js`; `scripts/log.js` and `'log.js'` do.
+const { escapeRegExp: escapeRe } = require('./lib/util')
 const invariantSet = deriveInvariants(root, config)
 const invariantScripts = new Set(invariantSet.scripts)
 const invariantNamePatterns = Array.from(
@@ -328,13 +304,8 @@ function citedAcIds(call) {
   return Array.from(new Set(hay.match(AC_ID_RE_GLOBAL) || []))
 }
 
-// allDone(ids): every cited AC-ID resolves to a spec that is done or superseded.
-// The closing spec itself (--spec mode) counts as done regardless of its literal on-disk
-// status (this runs before the status flip). An unresolved AC-ID is never "done"; an id
-// falling under an unreadable spec's derived prefix is always unresolved. A collided
-// AC-ID (defined by more than one spec) is done only when EVERY defining spec is done or
-// superseded — any single open or unreadable owner keeps the test (the fail-safe rule extended
-// to the many-to-many case; see the acOwners comment above).
+// allDone(ids): every cited AC-ID resolves to a done/superseded spec. The closing spec counts as done; a
+// collided id needs EVERY owner done; an unresolved or unreadable-prefix id never counts.
 function allCitedDone(ids) {
   return ids.every((id) => {
     if (matchesUnreadablePrefix(id)) return false
@@ -400,21 +371,16 @@ for (const file of testFiles) {
 const tagged = retired.length + kept.class + kept.invariant + kept.pin + kept.open
 
 // ---- classify emptied on every run; disk writes stay behind --apply ----
-// The per-file span removal and blank-run collapse are an in-memory pass that always runs, so a
-// dry run reports the same `emptied` array an apply would (the close reads this count before it
-// applies). Only fs.writeFileSync / fs.unlinkSync / the empty-directory climb are gated on `apply`.
+// Span removal runs in memory on every run so a dry run reports the same `emptied` array an apply would.
 const emptied = []
 const emptiedSuites = [] // [{ file, title }] — describes this pass leaves with zero cases
 const unscannable = [] // [{ file, title, reason }] — spans refused; each stays in its file uncut
 const refused = new Set() // the `retired` rows those spans carried
 const writes = [] // [{ abs, before, after }] — after:null deletes; performed only under --apply
 
-// A span is cut only when it is visibly bounded — lib/scan-test-calls.js is a plain-JS walk, and
-// a host file it misreads (JSX text holding an apostrophe or `//`) yields a span that eats a
-// describe's `})`, a kept sibling, or the rest of the file. Bounded: the call ends on its own `)`,
-// its closing line carries its opening line's indent, and no line-start test/it/describe inside it
-// falls outside `inner` (the spans already being cut) — a titled or table case or any describe, never a
-// `test.skip(cond)`/`test.setTimeout(`/`test.step(` inside a body. Returns why not, or null.
+// A span is cut only when visibly bounded (a misread host file can yield a span that eats a sibling):
+// it ends on its own `)`, closes at its opening line's indent, and no line-start case/describe inside it
+// falls outside `inner`. Returns why not, or null.
 const LINE_START_CALL_RE =
   /^[ \t]*(?:(?:test|it)(?:\.(?:only|skip|concurrent|sequential|fails|todo|fixme))*(?:\s*\(\s*['"`]|\.(?:each|for)\b)|describe\b[\w.]*\s*\()/
 let hostSiblings = [] // the current file's span-carrying host cases (unboundedReason reads it)
@@ -470,12 +436,8 @@ for (const [file, calls] of retiredByFile) {
     if (reason) refuse(c, reason)
     else removals.push({ start: c.start, end: c.end, call: c })
   }
-  // A line-start describe( that held a retired span and, once every removal inside it is cut,
-  // starts no line with a case or describe (LINE_START_CALL_RE) is removed too (inner first, so an outer describe
-  // emptied only by an emptied inner one goes as well) — the same invariant as the whole-file
-  // deletion below, one level down: vitest fails an empty suite. A comment naming `foo.test.tsx` never keeps it. An
-  // emptied describe that is not itself bounded keeps every case inside it, so it is never left
-  // standing empty.
+  // A line-start describe( left with no case or describe once its removals are cut goes too (inner first) —
+  // vitest fails an empty suite. An unbounded emptied describe keeps every case inside it.
   const retiredOnly = removals.slice()
   for (const d of scanDescribes(src).sort((a, b) => b.start - a.start)) {
     const inside = (r) => r.start >= d.start && r.end <= d.end
@@ -561,11 +523,8 @@ if (apply && writes.length > 0) {
       dir = path.dirname(dir)
     }
   }
-  // A {testDirs}/{scopeDirs} gate is pointed at the test files the sweep left in the directories
-  // it touched — there is no File Plan to derive them from, and the raw placeholder reaches the
-  // shell as a literal path the runner cannot find.
-  // relPosix(root) is '' while path.posix.dirname('root.test.js') is '.' — a root-level test file
-  // must count as surviving, or a resolvable gate is skipped with a false 'nothing survived' warning.
+  // A {testDirs}/{scopeDirs} gate points at the test files the sweep left in the directories it touched;
+  // a root-level test file ('.' dirname vs '' relPosix) must count as surviving.
   const touchedDirs = new Set(writes.map((w) => relPosix(path.dirname(w.abs)) || '.'))
   const emptiedSet = new Set(emptied)
   const surviving = testFiles.filter((f) => !emptiedSet.has(f) && touchedDirs.has(path.posix.dirname(f)))
@@ -583,7 +542,7 @@ if (apply && writes.length > 0) {
       cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024,
     })
     const ok = run.status === 0
-    const reverted = !ok && !keepOnRed
+    const reverted = !ok
     if (reverted) {
       for (const w of writes) {
         fs.mkdirSync(path.dirname(w.abs), { recursive: true })
@@ -596,9 +555,7 @@ if (apply && writes.length > 0) {
         .trimEnd().split('\n').slice(-40).join('\n')
       writeOut(2, 'expire-tests: the host gate `' + command + '` went red after the sweep (exit ' +
         (run.status === null ? run.signal : run.status) + ') — ' +
-        (reverted
-          ? 'every touched file is restored; fix what the gate names in the kept code, or rerun with --keep-on-red to fix forward'
-          : 'the writes are kept (--keep-on-red); fix what the gate names before committing') +
+        'every touched file is restored; fix what the gate names in the kept code, then rerun with --apply' +
         '\n' + tail)
     }
   }

@@ -3,13 +3,9 @@
 // prototype-driver.js's `--mark contracted`, `--mark tests-derived` and `--mark closed` handlers.
 //
 // Owner: specs/20261007/01-approve-writes-a-behaviour-contract.md.
-// WHY: approve writes a contract
-// (every pin as a record, one picture per route x state made by the host's own `picture` command,
-// one verified end-to-end test per behaviour pin) and nothing else leaves the prototype worktree;
-// each step lives here as a small, independently callable function so the driver's mark handlers
-// stay readable as an ordered list of calls. Not an entry point: every function is reached only
-// through the driver's mark handlers, and none of them owns
-// status.json/marks bookkeeping — the driver passes whatever facts each step needs.
+// WHY: approve writes a contract (every pin as a record, one picture per route x state, one verified
+// end-to-end test per behaviour pin); each step is a small function the driver's mark handlers call in
+// order, and none of them owns status.json/marks bookkeeping.
 //
 // What this deliberately does NOT do: read or write design/prototypes/<stem>/status.json, decide
 // which mark a driver invocation records, run a gate, capture structure, export code, reserve a
@@ -151,13 +147,9 @@ function copyContractTests({ root, branch, e2eFile, designDir }) {
 }
 
 // ---------------------------------------------------------------------------
-// deletion — split into two postcondition-checking steps so the driver can persist
-// status.json between them. dbDestroy is not assumed idempotent (a resume after a dirty-
-// worktree refusal must not run it twice), so the driver records `marks.dbDestroyed` right
-// after `runDbDestroy` succeeds, before ever attempting `removeProtoWorktreeAndBranch` — and
-// passes `alreadyRan` back in on every subsequent call so a re-run skips it. Worktree removal
-// and branch deletion each re-check their own postcondition first (registered / exists) so a
-// re-run after either one already succeeded is a no-op rather than the wrong remedy.
+// deletion — two postcondition-checking steps so the driver can persist status.json between them:
+// the driver records `marks.dbDestroyed` after `runDbDestroy` and passes `alreadyRan` back on a re-run;
+// worktree removal and branch deletion each re-check their own postcondition first.
 // ---------------------------------------------------------------------------
 function gitBranchExists(root, name) {
   const r = spawnSync('git', ['-C', root, 'branch', '--list', name], { encoding: 'utf8' })
@@ -236,4 +228,6 @@ module.exports = {
   runDbDestroy,
   removeProtoWorktreeAndBranch,
   ledgerRow,
+  gitBranchExists,
+  worktreeIsRegistered,
 }

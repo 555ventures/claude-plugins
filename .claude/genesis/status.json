@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 3,
+  "architect": "pending",
+  "design": "pending",
+  "archetype": null,
+  "localeScope": null,
+  "brief": null,
+  "stackDescriptorPath": ".claude/genesis/stack-descriptor.json",
+  "gateCommand": null,
+  "lastUpdated": null,
+  "marks": {},
+  "menus": {},
+  "scaffold": null,
+  "zeroDayGate": null,
+  "handoff": null
+}

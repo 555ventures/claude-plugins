@@ -1,16 +1,10 @@
 'use strict'
 // lib/surfaces.js — the one parser of the roadmap ```surfaces line grammar (a bare label, an
 // `a -> b` edge, a `#` comment) and of the seed's beat grammar (`N. "sentence" -> screen[@state]`).
-// The roadmap grammar and the seed's beat grammar are unrelated surfaces sharing
-// this module only because both parse a small line-oriented format: `parseSurfacesPlacement`
-// folds `docs/roadmap/**.md`'s ```surfaces blocks (genesis's every-brief-without-edges fold,
-// tracking every declaring brief so it can catch a double-placement); `parseSeedJourneys` folds
-// `design/mocks/seed.md`'s `### <journey>` blocks over the beat grammar, returning each journey's
-// beats verbatim plus `labels`/`edges` derived from them (genesis's `briefJourneysCheck` and
-// `journeyPlacementCheck` still read `labels` directly) and any body line that isn't a
-// well-numbered beat as `malformed`. `beatHash(beats)` is the one hash of a journey's story — the
-// driver (its `--waive` flag and the confirmations it reads) and the service's confirm control
-// all compute it the same way, over the beats' canonical `beat -> screen[@state]` lines.
+// `parseSurfacesPlacement` folds `docs/roadmap/**.md`'s ```surfaces blocks (tracking every declaring brief to
+// catch a double-placement); `parseSeedJourneys` folds `design/mocks/seed.md`'s `### <journey>` blocks into
+// beats plus derived `labels`/`edges` and `malformed` lines. `beatHash(beats)` is the one hash of a
+// journey's story, over the beats' canonical `beat -> screen[@state]` lines.
 // The first body line of a journey block is the job story (`When <situation>, I want <motivation>,
 // so I can <outcome>.`), kept under the `persona` key — the walkthrough service's wire field.
 // `JOB_STORY_RE` is the one authority for that shape (the driver's seed-done check and
@@ -18,14 +12,9 @@
 // tokens that mark a journey's first-run / empty beat.
 // Owner: specs/20260908/02-driver-dedupe-onto-lib.md; specs/20261103/01-the-user-reaches-build.md D1/D2/D4.
 //
-// What this deliberately does NOT do: read any file itself for `parseSurfaceLines` or
-// `parseSeedJourneys` — `parseSeedJourneys` takes the seed's already-read text (`null` on a cold
-// root) so this module stays free of path policy; only `parseSurfacesPlacement` takes a
-// directory, since its caller already agrees roadmap briefs live at `docs/roadmap/**.md`. Does
-// not validate a beat's `screen`/`state` against any screen file — that is the round check (lib/mocks-round.js `roundFindings`), run by the driver's
-// `--mark journey-drawn` and `round push`, not this parser. The retired
-// atlas's first-brief-wins-with-edges fold (`parseSurfaces`) is gone with the atlas it built — no
-// caller has spawned it since.
+// What this deliberately does NOT do: read any file for `parseSurfaceLines`/`parseSeedJourneys` (callers
+// pass text; only `parseSurfacesPlacement` takes a directory), or validate a beat's screen/state against
+// any screen file (lib/mocks-round.js `roundFindings` does).
 //
 // Exit codes: n/a (library, not an entrypoint).
 

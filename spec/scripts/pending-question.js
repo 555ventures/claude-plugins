@@ -4,7 +4,7 @@
 //        pending-question.js show|dismiss|consume|mark|is-delegated --root <dir>
 //        pending-question.js answer --root <dir> --id <qid> --label <label> --by user
 // Also a module: isDelegated, markDelegated, pendingPath, writePending, readPending,
-// consumePending, validate, stopPolicy, policyPick, recordLaneExit, clearLaneExit, readLaneExit.
+// consumePending, validate, stopPolicy, policyPick, pickOnce, recordLaneExit, clearLaneExit, readLaneExit.
 //
 // Owner: specs/20261102/02-a-delegated-driver-stops-on-disk.md D1 — the one writer and reader
 // of <root>/.claude/pending-question.json, the file a driver running delegated (a lane worker
@@ -108,6 +108,17 @@ function policyPick(root, key, labelByValue, marks) {
   const label = labelByValue[value]
   if (marks) (marks.policyPicks = Array.isArray(marks.policyPicks) ? marks.policyPicks : []).push({ key, value, label, at: new Date().toISOString() })
   return { value, label, line: `📌 Auto-picked ${label} — host policy stops.${key}: ${value} (veto anytime)` }
+}
+
+// policyPick recorded at most once per key: a repeat pick for an already-recorded key is popped
+// back off marks.policyPicks (the sidecar keeps its first record); a first pick calls save().
+function pickOnce(root, key, labelByValue, marks, save) {
+  const had = (marks.policyPicks || []).some((x) => x.key === key)
+  const r = policyPick(root, key, labelByValue, marks)
+  if (!r) return null
+  if (had) marks.policyPicks.pop()
+  else save()
+  return r
 }
 
 function markDelegated(root) {
@@ -354,6 +365,6 @@ function main() {
   process.exit(0)
 }
 
-module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, BY, markDelegated, stopPolicy, policyPick, recordLaneExit, clearLaneExit, readLaneExit }
+module.exports = { isDelegated, pendingPath, writePending, readPending, consumePending, validate, stopLine, stopKey, bareRun, waitingLine, KINDS, BY, markDelegated, stopPolicy, policyPick, pickOnce, recordLaneExit, clearLaneExit, readLaneExit }
 
 if (require.main === module) main()

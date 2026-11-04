@@ -6,10 +6,8 @@
 // and the four naming subsections.
 //
 // Owner: specs/20260926/02-the-design-contract-is-code.md.
-// The --rules/--kit/--tokens override flags — all three together, repo-relative
-// to --root, bypass `.claude/spec.config.json` entirely and run the same findings over the named
-// paths, for genesis's `--mark design-brief-written` (no `design` block exists in the config at
-// that point yet).
+// --rules/--kit/--tokens (all three together, repo-relative to --root) bypass the config and run the same
+// findings over the named paths, for genesis's `--mark design-brief-written`.
 //
 // Does NOT: author tables, components, or tokens; validate anything about a host whose
 // `.claude/spec.config.json` carries no `design` block and no override flags are given (that
@@ -17,10 +15,8 @@
 // exist; re-derive an enforcer (that is /spec:enforce's job — this script only reports
 // presence).
 //
-// A `design` block that is present but missing `kit`, `tokens`, or `rules` (all three are
-// required once the block exists) reports the same *-missing kind as a missing path would, with
-// no `path` (there is no configured value to point at) and a remedy naming the key to add — it
-// never crashes and never invents a new finding kind.
+// A `design` block missing `kit`, `tokens` or `rules` reports the same *-missing kind as a missing path,
+// with no `path` and a remedy naming the key to add.
 //
 // Exit codes: 0 clean or skipped (no design block, no overrides) · 1 one or more findings ·
 // 2 usage error (missing --root, or exactly one or two of --rules/--kit/--tokens given)
@@ -90,9 +86,7 @@ function extractSubsection(text, startRe) {
   return nextIdx === -1 ? rest : rest.slice(0, nextIdx)
 }
 
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+const { escapeRegExp } = require('./lib/util')
 
 function toKebab(pascal) {
   return pascal.replace(/(?<!^)(?=[A-Z])/g, '-').toLowerCase()

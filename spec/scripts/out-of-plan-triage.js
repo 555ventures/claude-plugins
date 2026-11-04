@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// out-of-plan-triage.js --spec <path> --file <repo-relative path> [--root <dir>] [--gate-line "<text>"] [--json]
+// out-of-plan-triage.js --spec <path> --file <repo-relative path> [--root <dir>] [--json]
 // Triages a gate failure in a file outside the File Plan by the FILE's risk, never the spec's tier.
 // Owner: specs/20261103/07-the-file-decides-not-the-tier.md D1/D2.
 //
@@ -31,21 +31,20 @@ const { fileShapes, isTestClassified } = require('./lib/file-shapes')
 const { fmValue } = require('./lib/frontmatter')
 const { writeOut } = require('./lib/sync-write')
 
-const USAGE = 'usage: out-of-plan-triage.js --spec <path> --file <repo-relative path> [--root <dir>] [--gate-line "<text>"] [--json]'
+const USAGE = 'usage: out-of-plan-triage.js --spec <path> --file <repo-relative path> [--root <dir>] [--json]'
 const die = (msg) => { writeOut(2, 'out-of-plan-triage: ' + msg + '\n'); process.exit(2) }
 
 const args = process.argv.slice(2)
-let specArg = '', fileArg = '', rootArg = process.cwd(), gateLine = '', asJson = false
+let specArg = '', fileArg = '', rootArg = process.cwd(), asJson = false
 for (let i = 0; i < args.length; i++) {
   const a = args[i]
   if (a === '--json') asJson = true
-  else if (a === '--spec' || a === '--file' || a === '--root' || a === '--gate-line') {
+  else if (a === '--spec' || a === '--file' || a === '--root') {
     if (i + 1 >= args.length) die(a + ' needs a value\n' + USAGE)
     const v = args[++i]
     if (a === '--spec') specArg = v
     else if (a === '--file') fileArg = v
-    else if (a === '--root') rootArg = v
-    else gateLine = v
+    else rootArg = v
   } else die('unknown argument ' + a + '\n' + USAGE)
 }
 if (!specArg || !fileArg) die('--spec and --file are required\n' + USAGE)
@@ -132,14 +131,13 @@ if (asJson) {
 } else if (verdict === 'ask') {
   writeOut(1, 'triage: ask — ' + file + ' ' + reason +' — ask: add to scope / file separately / pause\n')
 } else {
-  const clause = gateLine ? ' (gate line: ' + gateLine + ')' : ''
   writeOut(1, [
     '📌 Auto-picked add to scope — ' + file + ' (veto anytime)',
     'triage: auto — ' + file + ' is not a § Risk Tiers surface; ' + reason,
     'File Plan row:',
     '| ' + file + ' | MODIFY | ' + layer + ' | gate line — updated in place, never weakened [auto: out-of-plan-triage] |',
     'Decisions row:',
-    '| ' + nextDecision + ' | Scope widened at build: `' + file + '` enters the File Plan' + clause +
+    '| ' + nextDecision + ' | Scope widened at build: `' + file + '` enters the File Plan' +
       '; the pin is updated in place, never weakened. [auto: out-of-plan-triage — ' + reason +
       '] [no-ac: the gate line is the oracle] | The file\'s risk decides, never the spec\'s tier. |',
     '',

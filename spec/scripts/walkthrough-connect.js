@@ -4,8 +4,7 @@
 //                        — connect the host project to the hosted review service.
 //
 // Owner: specs/20261005/01-connect-wires-a-project-to-the-review-service.md, specs/20261005/02-connect-runs-first.md, specs/20261005/04-connect-protects-the-token-file.md
-// Since 7.242.0 the project and its token come from the public terminal tool walkthrough-cli
-// (walkthrough specs/20261006/01), so anyone signed in with it can connect, not only the Railway owner.
+// The project and its token come from the public terminal tool walkthrough-cli.
 // It creates the project on the service (or joins the id the service already holds) through
 // `npx walkthrough-cli new` and mints a token with `npx walkthrough-cli token`, stores
 // the token as env.<tokenEnv> in the host's .claude/settings.local.json, proves the link with one call
@@ -50,7 +49,7 @@ const SETTINGS_REL = '.claude/settings.local.json'
 const DEFAULT_TOKEN_ENV = 'WALKTHROUGH_TOKEN'
 const FLAGS = ['root', 'project', 'name', 'base-url']
 const FLAG_LIST = '--root <dir> --project <id> --name <text> --base-url <url>'
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./lib/util')
 
 let minted = ''
 const scrub = (s) => {
@@ -64,12 +63,8 @@ class Stop extends Error {
   line() { return scrub(`walkthrough-connect: ${this.code} — ${this.sentence} — remedy: ${this.remedy}`) }
 }
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
+const { writeLine: writeFd } = require('./lib/sync-write')
 
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeFd(fd, str) {
-  syncWrite(fd, str + '\n')
-}
 
 function parseArgs(argv) {
   const flags = {}

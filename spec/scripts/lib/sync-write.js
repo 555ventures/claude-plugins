@@ -16,8 +16,8 @@
 // - anything else (ENOSPC, EIO, EBADF on a `> file` redirect) — thrown; a lost write to a real
 //   destination is a failure, not a closed reader.
 //
-// What this deliberately does NOT do: append a newline (callers own their framing), buffer, or
-// pick the fd — every caller names fd 1 or 2.
+// What this deliberately does NOT do: buffer, or pick the fd — every caller names fd 1 or 2.
+// writeOut never appends a newline; writeLine always appends exactly one.
 //
 // Exit codes: n/a (library, not an entrypoint) — never exits.
 
@@ -37,4 +37,9 @@ function writeOut(fd, text) {
   }
 }
 
-module.exports = { writeOut }
+// writeLine: writeOut plus one trailing newline — the framing most print-and-exit callers want.
+function writeLine(fd, text) {
+  writeOut(fd, text + '\n')
+}
+
+module.exports = { writeOut, writeLine }

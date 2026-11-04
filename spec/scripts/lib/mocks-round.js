@@ -24,15 +24,14 @@
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
-const { checkRoundFile } = require('./walkthrough-client')
+const { checkRoundFile, roundsDir } = require('./walkthrough-client')
 const { validate } = require('./json-shape')
 const { beatHash } = require('./surfaces')
 
 const SCREEN_FILE_RE = /^([\w][\w-]*)(?:@([\w][\w-]*))?\.json$/
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./util')
 
 function screensDir(root) { return path.join(root, 'design', 'mocks', 'screens') }
-function roundsDir(root) { return path.join(root, 'design', 'rounds') }
 
 function badFile(name, detail) {
   return { screen: name, state: null, element: null, code: 'bad-screen-file', detail }

@@ -42,11 +42,7 @@ const path = require('path')
 const http = require('http')
 const https = require('https')
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeOut(fd, str) {
-  syncWrite(fd, str + '\n')
-}
+const { writeLine: writeOut } = require('./lib/sync-write')
 
 function die(code, msg) {
   writeOut(2, 'registry-check: ' + msg)

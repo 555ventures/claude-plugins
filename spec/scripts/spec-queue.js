@@ -12,8 +12,8 @@
 // `spec-status.js --next` (the one frozen next-pointer surface). Doneness and readiness (every
 // kind) are evaluated exclusively via lib/queue.js's isItemDone/isItemReady — the overlay's
 // own evaluators — never a second derivation. `list` never mutates the queue file (it
-// reconciles a copy for display numbering only); the retired `bump`/`defer`/`ok` verbs and
-// `add --after`/`--brief` flags each exit 2 naming their replacement.
+// reconciles a copy for display numbering only); the retired `add --after`/`--brief` flags each
+// exit 2 naming their replacement.
 //
 // Hygiene: `add` refuses a free-text prompt whose token
 // Jaccard against any PENDING prompt is >= 0.35 (`--distinct` overrides; a path-shaped payload
@@ -76,25 +76,10 @@ const argv = process.argv.slice(2)
 const sub = argv[0]
 const rest = argv.slice(1)
 
-// The retired verbs are recognized only to name their replacement and exit 2 — they
-// never touch the queue file. Checked before general usage validation so a typo'd old verb
-// gets a helpful message, not a bare usage dump.
-const REMOVED_SUBS = {
-  bump: ref => `spec-queue: 'bump' is retired — the reorder verb is move: spec-queue move ${ref || '<ref>'} 1`,
-  defer: ref => `spec-queue: 'defer' is retired — the reorder verb is move: spec-queue move ${ref || '<ref>'} <n>`,
-  ok: () => 'spec-queue: \'ok\' is retired — there is no accept step; a landed brief is placed last automatically. To reorder: spec-queue move <ref> <n>',
-}
-if (Object.prototype.hasOwnProperty.call(REMOVED_SUBS, sub)) {
-  console.error(REMOVED_SUBS[sub](rest[0]))
-  process.exit(2)
-}
-
 const SUBS = ['next', 'list', 'groom', 'add', 'move', 'done', 'show']
 if (!SUBS.includes(sub)) {
-  // A lone non-flag token is more often a <ref> typed without its verb (`spec-queue q133`)
-  // than a mistyped subcommand, and a usage dump leaves the user guessing. `show` is the only
-  // non-mutating verb, so the suggestion is always safe to paste; the verb list rides the same
-  // line so a genuine typo self-corrects too, without the dump burying the actionable half.
+  // A lone non-flag token is more often a <ref> typed without its verb than a mistyped subcommand,
+  // so suggest the non-mutating `show` alongside the verb list.
   if (sub && !sub.startsWith('-') && rest.length === 0) {
     console.error(`spec-queue: '${sub}' is not a subcommand (${SUBS.join('|')}) — did you mean: spec-queue show ${sub}`)
     process.exit(2)
@@ -103,9 +88,8 @@ if (!SUBS.includes(sub)) {
   process.exit(2)
 }
 
-// Only `add` takes flags (it validates its own). Every other subcommand takes none, so a trailing
-// --flag is refused (exit 2) before any read or write — a dropped `--root X` would act on the
-// cwd repo's queue while the caller believes it aimed at X. spec-queue never honours --root.
+// Only `add` takes flags; every other subcommand refuses a trailing --flag (exit 2) before any read or
+// write — a dropped `--root X` would otherwise act on the cwd repo's queue.
 if (sub !== 'add') {
   const flag = rest.find(a => /^--/.test(a))
   if (flag) {
@@ -114,13 +98,8 @@ if (sub !== 'add') {
   }
 }
 
-// The repository root, NOT the shell's CWD: every brief/spec state below is derived by
-// `spec-status.js --root <root>` and by `specRoot`-relative existsSync, so a run from a
-// subdirectory would otherwise resolve every `docs/roadmap/*` and `specs/*` path against that
-// subdirectory — reporting every finished item as pending and every gate target as missing,
-// with no error. Same `git rev-parse --show-toplevel` idiom the build and review drivers use;
-// falls back to the CWD so the not-a-git-repository exit below stays the one repo gate (and a
-// bare repo, which has a common dir but no toplevel, behaves exactly as before).
+// The repository root, NOT the shell's CWD, so a run from a subdirectory still resolves every
+// `docs/roadmap/*` and `specs/*` path; falls back to the CWD so the not-a-git-repository exit stays.
 function resolveToplevel(dir) {
   const r = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
   if (r.error || r.status !== 0) return null
@@ -176,9 +155,7 @@ function loadQueue() {
   return data
 }
 
-// Written atomically (temp file + rename) — see git history for the concurrency-safety
-// rationale this function's shape stands on (pinned by
-// tests/queue/spec-queue.test.js's AC-20260823-08-review-concurrent-writer-safety).
+// Written atomically (temp file + rename).
 function writeQueue(data) {
   const dir = path.dirname(QUEUE_PATH)
   const tmpPath = path.join(dir, `.spec-queue.${process.pid}.tmp`)
@@ -211,12 +188,9 @@ function appendArchive(gone) {
   fs.renameSync(tmpPath, ARCHIVE_PATH)
 }
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
+const { writeLine } = require('./lib/sync-write')
+const out = (text) => writeLine(1, text)
 
-// stdout for payloads: spec/scripts/lib/sync-write.js's header explains the pipe truncation and EPIPE handling.
-function out(text) {
-  syncWrite(1, text + '\n')
-}
 
 function archivedItem(ref) {
   return loadArchive().items.find(i => i.id === ref) || null
@@ -227,7 +201,7 @@ function refuseArchived(ref) {
   process.exit(2)
 }
 
-function nowIso() { return new Date().toISOString() }
+const { nowIso } = require('./lib/driver-core')
 
 function ageDays(it) {
   if (!it.added) return null
@@ -266,10 +240,8 @@ function onDiskBriefs(statusJson) {
 
 function ctxFor(statusJson) {
   const briefStatusMap = new Map(statusJson.briefs.map(b => [b.num, b.status]))
-  // `statusJson.specs` deliberately excludes superseded specs (they live in the separate
-  // `superseded` array) — merge both so a gate or queued item pointing at a since-superseded
-  // spec resolves to 'superseded' here exactly as spec-status.js's own in-process overlay
-  // does (ready ⇔ done or superseded; one readiness derivation for both callers).
+  // `statusJson.specs` excludes superseded specs — merge the separate `superseded` array so a gate on a
+  // since-superseded spec resolves to 'superseded' exactly as spec-status.js's overlay does.
   const specStatusMap = new Map(statusJson.specs.map(s => [s.path, s.status]))
   for (const s of statusJson.superseded) specStatusMap.set(s.path, 'superseded')
   return makeCtx({
@@ -280,10 +252,8 @@ function ctxFor(statusJson) {
   })
 }
 
-// Virtual reconcile shared by every subcommand: dedupe -> append missing on-disk
-// briefs last, all on a copy — never written back here. Every subcommand (including `list`,
-// which reconciles purely for display numbering) runs the full two-step reconcile with
-// `append: true`; only a write subcommand additionally persists the result.
+// Virtual reconcile shared by every subcommand: dedupe -> append missing on-disk briefs last, on a copy;
+// only a write subcommand persists the result.
 function reconciledItems(rawItems, statusJson, { append }) {
   let items = dedupeItems(rawItems)
   if (append) {
@@ -329,11 +299,8 @@ function laneLead(item) {
   return item.lane === 'decide' ? '📌 decide — needs your yes, nothing to run' : `🛣️ ${item.lane}`
 }
 
-// Every rendered row is exactly one line. A free-text payload runs to hundreds of words, and
-// a row that wraps across twenty terminal lines stops being a list entry at all — so the
-// description is collapsed to a single line and cut to the terminal width, `show <ref>`
-// being the way back to the full text. Width falls back to 100 off a TTY so piped output
-// (tests, `| less`) is deterministic.
+// Every rendered row is exactly one line, cut to the terminal width (`show <ref>` prints the full
+// text). Width falls back to 100 off a TTY so piped output is deterministic.
 const ROW_WIDTH = () => process.stdout.columns || 100
 function oneLine(text, width) {
   const flat = String(text).replace(/\s+/g, ' ').trim()
@@ -486,9 +453,8 @@ switch (sub) {
       else if (a === '--after-brief') flags.afterBrief = rest[++i]
       else if (a === '--when') flags.when = rest[++i]
       else if (a === '--lane') flags.lane = rest[++i]
-      // An unrecognized --flag never folds into the payload: that silently turns a spec path into a
-      // free-text prompt item (observed: `add specs/x.md --root /abs` landed as kind "prompt").
-      // spec-queue takes no --root — the queue is keyed off the cwd's git common dir; run it from the repo root.
+      // An unrecognized --flag never folds into the payload (it would turn a spec path into a prompt item).
+      // spec-queue takes no --root — the queue is keyed off the cwd's git common dir.
       else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --lane <lane> | --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args> | --distinct`); process.exit(2) }
       else payloadParts.push(a)
     }
@@ -517,10 +483,8 @@ switch (sub) {
       kind = 'prompt'
     }
 
-    // A free-text item must say which command takes it next — the one fact `next` cannot
-    // derive. The lane writes the command, so the payload carries the subject only; a payload
-    // that opens with its own command would let the two disagree. A brief or spec item's next
-    // command is already derived by spec-status.js, so a lane on one is refused, not ignored.
+    // A free-text item must say which command takes it next; the lane writes the command, so the payload
+    // carries the subject only. A lane on a brief or spec item is refused (spec-status.js derives it).
     if (kind === 'prompt') {
       if (!flags.lane) {
         console.error(`spec-queue: add needs --lane ${LANE_NAMES} for free text — a small fix is done now in-session, another repo's work goes to that repo, never this queue`)
@@ -560,10 +524,8 @@ switch (sub) {
     const items = reconciledItems(raw ? raw.items : [], statusJson, { append: true })
     const ctx = ctxFor(statusJson)
 
-    // A brief or spec is queued at most once — refuse regardless of the existing item's
-    // doneness (no done-item exception). Position is numbered exactly as `list` (pending)
-    // when the existing item is itself pending; a done duplicate has no `list` position (done
-    // items are hidden there), so it is named by its raw item-order position instead.
+    // A brief or spec is queued at most once, whatever the existing item's doneness. A pending duplicate is
+    // named by its `list` position, a done one by its raw item-order position.
     if (kind === 'brief' || kind === 'spec') {
       const dupIdx = items.findIndex(it => (kind === 'brief' && it.kind === 'brief' && it.brief === briefNum)
         || (kind === 'spec' && it.kind === 'spec' && it.spec === specPath))
@@ -578,10 +540,8 @@ switch (sub) {
       }
     }
 
-    // A near-duplicate free-text prompt is refused against PENDING prompts only (a ticked
-    // prompt re-added is a legitimate reopen); --distinct is the honest override. A path-shaped
-    // payload (a prototype contract in the plan lane) duplicates only an identical path — never
-    // a prose prompt or another path (promptDupScore).
+    // A near-duplicate free-text prompt is refused against PENDING prompts only; --distinct overrides.
+    // A path-shaped payload duplicates only an identical path (promptDupScore).
     if (kind === 'prompt' && !flags.distinct) {
       let best = null
       for (const it of items) {

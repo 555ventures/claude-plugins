@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// workspace-scan.js --root <dir> [--json] [--depth N] — walk a tree and print one
+// workspace-scan.js --root <dir> [--json] — walk a tree and print one
 // {root, stack, manifest} entry per (directory, stack) pair holding a package manifest, sorted
 // by root and then by the table's listing order (root "." for the tree's own root,
 // forward-slash repo-relative paths below it).
@@ -41,7 +41,7 @@ const SKIP_DIRS = new Set([
   '.venv', 'venv', 'target', '.next', 'coverage', '.claude',
 ])
 
-const USAGE = 'usage: workspace-scan.js --root <dir> [--json] [--depth N]'
+const USAGE = 'usage: workspace-scan.js --root <dir> [--json]'
 
 // Routes through lib/sync-write.js — see its header for why a bare write + exit truncates.
 function writeOut(fd, str) {
@@ -54,12 +54,11 @@ function fail(msg) {
 }
 
 function parseArgs(argv) {
-  const out = { root: null, json: false, depth: 4 }
+  const out = { root: null, json: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--root') out.root = argv[++i]
     else if (a === '--json') out.json = true
-    else if (a === '--depth') out.depth = Number(argv[++i])
     else fail('unknown argument ' + a)
   }
   return out
@@ -98,6 +97,8 @@ function detectManifests(dir) {
   return rows
 }
 
+const MAX_DEPTH = 4
+
 function walk(root, maxDepth) {
   const results = []
   function visit(absDir, relDir, depth) {
@@ -122,7 +123,6 @@ function walk(root, maxDepth) {
 function main() {
   const args = parseArgs(process.argv.slice(2))
   if (!args.root) fail('--root is required')
-  if (!Number.isFinite(args.depth) || args.depth < 0) fail('--depth must be a non-negative integer')
 
   let stat = null
   try {
@@ -132,7 +132,7 @@ function main() {
   }
   if (!stat.isDirectory()) fail('--root must be a directory: ' + args.root)
 
-  const results = walk(args.root, args.depth)
+  const results = walk(args.root, MAX_DEPTH)
 
   if (args.json) {
     writeOut(1, JSON.stringify(results) + '\n')

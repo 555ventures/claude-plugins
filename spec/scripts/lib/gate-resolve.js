@@ -1,12 +1,6 @@
 'use strict'
-// lib/gate-resolve.js — the sole derivation of `{testDirs}`/`{scopeDirs}` substitution against a
-// host's declared `gateCommand`. Extracted verbatim from review-legs.js's own local resolveGate():
-// the driver's new
-// close-time gate re-run (spec-review-driver.js's handleClosed()) needs to resolve the exact same
-// command review-legs.js already resolves for the review-time gate leg — a second, paraphrased
-// copy in the driver would be a drift seam (the same reason ci-query.js was unified).
-// Semantics are byte-identical to the function this replaces: only the config source moved, from
-// review-legs.js's module-scope `config` to an explicit second parameter.
+// lib/gate-resolve.js — the sole derivation of `{testDirs}`/`{scopeDirs}` substitution against a host's
+// declared `gateCommand`, shared by review-legs.js and the review driver's close-time gate re-run.
 // Owner: specs/20260830/02-close-gate-rerun.md.
 //
 // resolveGate(specText, config) -> { gate: string } | { gate: null, reason: string }
@@ -23,14 +17,9 @@
 // Plan, and running the raw command handed `{testDirs}` to the shell literally). The caller owns
 // the empty-list case.
 //
-// Every path under a `fixtures/`
-// directory (`/(^|\/)fixtures\//`) is dropped from the File Plan's test rows before either
-// placeholder is derived — a fixture is never a test entry point, and `node --test`'s own glob
-// matching would otherwise execute it as one (the scoped gate reddened on
-// `tests/fixtures/genesis/shadcn-stub.js` and `tests/fixtures/genesis/catalog-docs/card.md`,
-// neither of which `node --test`'s default whole-suite discovery ever matches). A File Plan
-// whose test rows are fixtures only resolves to the same `{ gate: null, reason }` form as a File
-// Plan with no test rows at all.
+// Every path under a `fixtures/` directory is dropped from the File Plan's test rows before either
+// placeholder is derived — a fixture is never a test entry point. Fixture-only test rows resolve to the
+// `{ gate: null, reason }` form.
 //
 // What this deliberately does NOT do: read the host config itself (the caller passes it — this
 // module has no opinion on config-read error policy, readConfig vs readConfigStrict), run the

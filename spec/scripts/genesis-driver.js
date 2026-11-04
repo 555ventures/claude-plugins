@@ -3,222 +3,57 @@
 //
 // Owner: specs/20260825/04-genesis-driver.md.
 //
-// WHY: genesis's architect stage was three phases
-// of hand-performed choreography: run the coverage-audit gate,
-// invoke registry-check.js per research menu, close the decision record, run the scaffold
-// command, run the zero-day gate, close the roadmap — each a deterministic check a session could
-// (and, measured, did) skip or fabricate while reporting success. Procedural hallucination is
-// the largest agent-failure class (38.5%, agenticrail.nz). By contract, this script EXECUTES every one of those checks itself and prints only the ONE step
-// that still needs the session's judgment (the interview, the picks, the ADRs, the day-zero
-// skeleton, the roadmap decomposition). State is re-derived from `.claude/genesis/status.json`
-// plus the artifacts actually on disk on EVERY invocation — a mark whose artifact vanished (a
-// coverage answer edited back to `dark`, a menu file deleted) is demanded again, never trusted
-// from the recorded mark alone. Every accepted mark prints a checkpoint line so a full genesis
-// interview never has to fit inside one context window: the session may /clear and
-// re-invoke, and the driver picks up exactly where the disk says it left off.
+// EXECUTES every deterministic check of greenfield genesis itself (the coverage-audit gate,
+// registry-check.js per research menu, the decision-record closure, the scaffold command, the
+// zero-day gate, the roadmap closure, init-gen) and prints only the ONE step that still needs the
+// session's judgment. State is re-derived from `.claude/genesis/status.json` plus the artifacts on
+// disk on EVERY invocation — a mark whose artifact vanished is demanded again. Every accepted mark
+// prints a checkpoint line, so the session may /clear and re-invoke at any point.
 //
-// Every child process this driver spawns (registry-check.js, the descriptor's scaffoldCommand,
-// the descriptor's gateCommand) is routed through one fail-closed helper, runChild: spawnSync's
-// `status` is null when a child dies by signal, never spawns, or overflows maxBuffer (still true
-// of any caller that captures output through a pipe via `encoding`, e.g. the registry-check.js
-// call) — treating that null as a pass (or reading `.stdout` off a child that never ran) is the
-// exact silent-success failure this driver exists to prevent. scaffoldCommand/gateCommand run
-// through runShell, which streams the child's stdout+stderr straight to the log file's own fd
-// instead of buffering it through a Node pipe: a real scaffold (create-next-app plus an install)
-// routinely emits well over spawnSync's 1 MiB default maxBuffer, and a Node pipe at that ceiling
-// SIGTERM-kills the child mid-run (ENOBUFS) before a single byte reaches the log — permanently
-// bricking genesis on that project, since the truncated scaffold never completes and every re-run
-// hits the identical wall. Streamed output can never
-// overflow a buffer that does not exist in the parent; runChild's fail-closed guard for a
-// genuine signal death or spawn failure is unchanged.
+// Chain: DISCOVERY -> BRIEF -> MENUS -> [FINALISTS -> RACE -> PROBE -> PICK] -> DECIDE -> SCAFFOLD
+// -> SKELETON -> GATE -> [DESIGN_BRIEF -> DESIGN_KIT -> DESIGN_JOURNEYS -> AWAITING_DESIGN_APPROVAL]
+// -> ROADMAP -> HANDOFF -> GROUNDED.
+//   - BRIEF: a pass-through for DESIGN_SKIPPED_ARCHETYPES; a visual archetype needs an APPROVED
+//     design/mocks/status.json and records design: "ratified".
+//   - Tournament (TOURNAMENT_ARCHETYPES only): the driver races 2-3 session-composed finalist
+//     stacks for real (scaffold, gate, boot through smoke.sh's contract) under
+//     `.claude/genesis/tournament/finalists/<name>/`, re-runs gate+boot after each probe slice,
+//     and assembles benchmark.json/.md + gallery.html. `--mark picked` records whichever finalist
+//     the brief's own `## Picks` names — the driver never ranks. The winner is re-scaffolded clean
+//     in --root on `decided`; finalists/ and logs/ are deleted, the benchmark and evidence survive.
+//   - `decided` also validates `.claude/genesis/conventions.json`; `skeleton-landed` requires every
+//     enforceable convention's probe file and a root CLAUDE.md/AGENTS.md (<= 150 lines) naming the
+//     gateCommand and testTree.
+//   - Design stage (a visual archetype whose descriptor names Storybook): kit-landed and
+//     journeys-drawn are proven by an EXECUTED Storybook static build and lib/storybook-index.js
+//     (a build with no iframe.html is a refusal); AWAITING_DESIGN_APPROVAL probes the served
+//     index by CONTENT, never a story URL's status, and `--mark design-approved` (on the user's
+//     literal `approve`) freezes docs/design/approval.json, which ROADMAP then derives from.
+//   - HANDOFF closes with `profile-written --file <f> [--refresh]`, which runs init-gen.js generate
+//     (streamed to `.claude/genesis/init-gen.log`); exit 0 reaches the terminal GROUNDED
+//     (`next: /spec:enforce`).
+//
+// Every child process routes through driver-io.js's fail-closed runChild. scaffoldCommand,
+// gateCommand and the Storybook build run through runShell, which streams stdout+stderr straight
+// to the log file's fd — never a Node pipe, which a real scaffold would overflow (ENOBUFS).
+// logTail reads only the last LOGTAIL_MAX_BYTES of a log, so a single huge line can never flood
+// this driver's own stdout.
 //
 // What this deliberately does NOT do:
-//   - hold the interview, write the picks, author the ADRs, land the skeleton, or decompose the
-//     roadmap itself — those stay session judgment; the driver only closes them once they exist.
+//   - hold the interview, write the picks, author ADRs/conventions/probes/CLAUDE.md/the profile,
+//     land the skeleton, author the kit or journeys, or decompose the roadmap — session judgment;
+//     the driver only closes each step once its artifact exists and validates.
 //   - assert a design or roadmap judgment as "correct" — its checks are closure checks on
-//     artifacts (a key is not dark, a file parses, a Dissents section is non-empty, a dimension
-//     is named somewhere, a roadmap has no cycle), never opinions on their content.
+//     artifacts, never opinions on their content; it never executes a story's `play` function.
+//   - pick a tournament winner from benchmark numbers, or promote a raced copy into --root.
 //   - relocate the session CWD, or touch any file outside `--root`'s `.claude/genesis/`,
-//     `docs/roadmap/`, and whatever `scaffoldCommand`/`gateCommand` themselves write.
-//   - run scaffoldCommand/gateCommand, or write status.json beyond `loadStatus()`'s own cold-root
-//     creation, for a `--state` invocation: `--state` is a read-only peek at the derived state, so
-//     it may report the transient driver-only states `SCAFFOLD`/`GATE` (in the state enum) that a bare
-//     invocation never leaves standing, instead of running the command a bare invocation would.
-//
-// Between MENUS and DECIDE, five archetypes
-// (web-app, realtime-trading, backend-api, mobile-app, desktop-app) gain a tournament —
-// FINALISTS -> RACE (driver-only) -> PROBE -> PICK. The driver races 2-3 session-composed
-// finalist stacks for real (scaffold, zero-day gate, boot through smoke.sh's own contract) into
-// `.claude/genesis/tournament/finalists/<name>/`, hands the session one probe slice per finalist
-// to build under a two-retry cap, re-runs gate+boot once the slice lands, and assembles a
-// benchmark table + screenshot gallery. Executed evidence INFORMS the pick; `--mark picked`
-// records whichever finalist the brief's own `## Picks` already names — the driver never ranks
-// or chooses. The winner is re-scaffolded clean into the project root on `decided`: the probe
-// slice was built under retry caps with no spec and no review, and must
-// never become the project's foundation — `tournament/finalists/` and `tournament/logs/` are
-// deleted once the decision record cites `benchmark.md`; `benchmark.json/.md`, `gallery.html`,
-// and `evidence/` survive as the ADR's cited evidence. Every other archetype's MENUS -> DECIDE
-// path is untouched and never creates `.claude/genesis/tournament/` at all.
-//
-// What the tournament deliberately does NOT do:
-//   - render a screenshot itself, or judge a probe slice's quality — `probe.json` is
-//     session-written; the driver only validates its shape (task coverage, retry cap, tokens)
-//     and re-runs gate/boot as an executed fact.
-//   - promote the raced copy under `tournament/finalists/<name>/` into the project root — the
-//     winner's `scaffoldCommand` runs fresh in `--root` on `decided`; the raced directory is
-//     always deleted, never moved.
-//   - pick a winner from the benchmark numbers — `--mark picked` reads the winner off the
-//     brief's own `## Picks`, matched against each finalist's `picks`; a benchmark with a clear
-//     leader and a `## Picks` that names the other finalist still records THAT finalist as the
-//     winner.
-//
-// An EXPLORE state (a pre-tournament
-// taste funnel) and a DESIGN state (the
-// design lock, between ROADMAP and HANDOFF) are both retired outright — see the paragraph
-// below for the current contract; `deriveState` never derives either name for any status shape.
-//
-// The ops-conventions table
-// stops being ADR paragraph nobody re-runs. `--mark decided` additionally validates
-// `.claude/genesis/conventions.json` — the nine floor keys, each row DECIDED-with-boolean-
-// enforceable or DEFERRED-with-reason, an enforceable row's probe living under the declared
-// testTree, and every row's adr existing. `--mark skeleton-landed` additionally requires every
-// enforceable DECIDED row's probe file to exist and be non-empty, and a root CLAUDE.md or
-// AGENTS.md, capped at 150 lines, naming the descriptor's gateCommand and the testTree as
-// literals — the binding subset agents actually read. HANDOFF stops being terminal: it becomes
-// a judgment step (author `.claude/genesis/init-profile.json`, init.md Phase 4's shape) that
-// closes with the new mark `profile-written --file <f> [--refresh]`, which runs `node
-// init-gen.js generate --root <root> --profile <f> [--refresh]` through the existing runShell
-// idiom (stdout+stderr streamed to `.claude/genesis/init-gen.log`, never a Node pipe). Exit 0
-// records `status.handoff = {initGenExit: 0, at}` and advances to the new terminal state
-// GROUNDED (`next: /spec:enforce`); any other exit refuses the mark (exit 2) with the log tail
-// and a remedy keyed on init-gen's own exit code. Greenfield genesis is now init + enforce;
-// `/spec:init` stays the brownfield entry and the regeneration owner (`--refresh`).
-//
-// What these additions deliberately do NOT do:
-//   - author conventions.json, land a probe file, write CLAUDE.md/AGENTS.md, or author the init
-//     profile itself — those stay session judgment; the driver only closes each gate once the
-//     artifact exists and validates.
-//   - judge whether the gate command actually INCLUDES the probes (a property of the host's own
-//     gateCommand, not checkable from here), or whether CLAUDE.md's content is the right subset
-//     (existence and the two required literals are checked; content is judgment).
-//   - read status.json a second time inside init-gen — the profile itself carries every genesis
-//     artifact init-gen needs (config.genesisStackDescriptor, config.design).
-//
-// `--mark tokens-landed` (visual
-// archetypes) additionally requires `design/shell/app.html` to exist and its shell check to
-// exit 0, refused naming the missing file or carrying the check's own output otherwise — the
-// navigation shell is the mock-side artifact of the same
-// decision `tokens.css` already gates here, checked by the same driver so the mark cannot pass
-// without it. The check runs alongside the tokens.css checks (both validate a CANON file), ahead
-// of the approved-mock/matrix checks that validate the MOCKS.
-// NOTE: this paragraph describes a mark (`tokens-landed`) retired outright —
-// kept here only as history for the
-// shell-canon fact it recorded; `design/shell/app.html` is not re-checked by BRIEF (spec 11 is
-// expected to fold shell extraction into SCAFFOLD).
-//
-// Genesis loses its design
-// states. The chain becomes DISCOVERY -> BRIEF -> MENUS -> tournament -> DECIDE -> SCAFFOLD ->
-// SKELETON -> GATE -> ROADMAP -> HANDOFF -> GROUNDED (specs/20260926/04-06 later insert
-// DESIGN_BRIEF -> DESIGN_KIT -> DESIGN_JOURNEYS -> AWAITING_DESIGN_APPROVAL between GATE and
-// ROADMAP on a design-stage-applicable host). DISCOVERY now also names the archetype
-// (`- archetype: <registry key>` in `## Picks`, moved here from menus-done) and hands off to
-// `/spec:mocks` for a visual archetype. BRIEF sits between DISCOVERY and MENUS: for
-// DESIGN_SKIPPED_ARCHETYPES (backend-api/data-ml/conversational-bot/cli-devtool) it is a
-// pass-through; a visual archetype records design: "ratified" once `design/mocks/status.json`
-// is APPROVED. The pick record lives
-// in the mocks status (`status.brief`); a status past MENUS that never ratified a brief derives
-// DISCOVERY or BRIEF from its live artifacts like a fresh run.
-//
-// What the BRIEF addition deliberately does NOT do:
-//   - approve a mocks set itself — that stays session (or `/spec:mocks`) judgment; the driver
-//     only closes brief-written once the preconditions validate.
-//   - re-derive whether a mocks set was ever needed after DISCOVERY — that fact is fixed the
-//     moment discovery-done records `status.archetype`.
-//
-// Applicability — a fresh visual
-// run only (`status.brief.mocks` set; non-visual runs are untouched): `brief-written` requires
-// design/mocks/status.json at APPROVED and nothing else (no ledger, no `## Journeys`, no gate on
-// `## Non-UI Coverage`); the BRIEF step prints the seed's journey count and open notes; the
-// FINALISTS step prints an auto-picked skip;
-// `roadmap-written` additionally requires every seed-declared label to land in exactly one
-// brief's ```surfaces block; `skeleton-landed` additionally requires design/shell/app.html
-// to pass `check`, every top-level design/mocks/*.html to declare `data-shell`,
-// `check --matrix design/mocks` to exit 0, and design/components.json to name every
-// design/mocks/canon.md primitive.
-// NOTE: the skeleton-landed HTML-design checks are retired outright — kept here only as
-// history for the other checks above, which still apply; `handleSkeletonLanded` no longer runs
-// the HTML-design checks.
-//
-// What these additions deliberately do NOT do:
-//   - author brief.md's prose or the mocks approval itself — those stay session
-//     judgment; the driver only closes each mark once the artifacts exist and cover the seed.
-//
-// Two more design-stage states,
-// DESIGN_KIT and DESIGN_JOURNEYS, sit between DESIGN_BRIEF and ROADMAP for a design-stage-
-// applicable host. DESIGN_KIT closes with `--mark kit-landed` once every brief composite has a
-// fixture story per declared state, proven by an EXECUTED Storybook static build (`runStorybookBuild`)
-// and lib/storybook-index.js's index reader — a build that exits 0 with no `iframe.html`
-// (the salon-os TanStack Start spike) is still a refusal, never a pass on exit code alone.
-// DESIGN_JOURNEYS closes with `--mark journeys-drawn` once every seed journey has a story that
-// imports the driver's own `<journeys>/<j>.beats.json` derivation (written at this state's own
-// print) and calls `step()` per beat, contains no import of a primitive (the ban walks every
-// file under `<journeys>` by location, never by filename shape), and the rebuilt index tags it
-// `journey`+`play-fn`. Both marks re-derive their state from disk on every invocation — a
-// deleted `.storybook/main.*` or journey story file is demanded again, never trusted from the
-// recorded mark alone.
-//
-// What these additions deliberately do NOT do:
-//   - author the kit, the tokens, the shell, or a single journey screen — those stay session
-//     (Fable at every design step) judgment; the driver only closes each mark once the artifacts exist,
-//     compile, and the executed build proves it.
-//   - parse `step()` call sites out of a journey story's source to verify it "matches" the seed's
-//     beats — the story imports the beats file and iterates it, so equality holds by
-//     construction; the mark proves the import and the literal `step(` call, never the steps'
-//     content.
-//   - execute a story's `play` function at either mark — Storybook's own build only compiles and
-//     indexes stories; walking a journey is the human review at the approval stop (spec 06).
-//
-// One more design-stage state,
-// AWAITING_DESIGN_APPROVAL, sits between DESIGN_JOURNEYS and ROADMAP — the one look stop where JJ
-// approves the designed set in Storybook. It probes the live dev server's own `/index.json` (or
-// `design-paths.storybook.indexUrl`) through `curl`, proving by CONTENT that every seed
-// journey's story is served — never by a story URL's HTTP status, since Storybook answers 200 for
-// a story id that does not exist. `--mark design-approved`, run only on the
-// user's literal `approve` — the driver cannot see the conversation, so doctrine binds the session
-// to that one word — re-runs the build and both journey/state checks against a fresh index, then
-// freezes the designed set into `docs/design/approval.json`: journeys with their story id, file,
-// beats hash and screens, composites with their states, and deliberately no per-file hash (frozen
-// after approval, never gated later — recording a hash would invite exactly that gate). ROADMAP
-//  then derives from that record: it prints one `approved:` line per approved journey, and
-// `roadmap-written`'s placement check reads its label set from the record's `screens` once it
-// exists, falling back to the seed only for a legacy or skipped-stage host. No driver code
-// path reads a wireframe-stage approval record after `DESIGN_BRIEF`'s print — the wireframe's
-// confirmations live in design/mocks/status.json and design/rounds/, a different record with a
-// different owner than this spec's `docs/design/approval.json`.
-//
-// What these additions deliberately do NOT do:
-//   - walk a journey story's `play` function, or judge whether JJ actually reviewed each one —
-//     the probe proves the index serves the story; JJ's own literal `approve` is the only mark
-//     the driver ever accepts as that review having happened.
-//   - make or push a picture round from this stop — ROADMAP only prints the optional command;
-// no mark and no state reads the pictures block.
-//
-// Fixing that overflow only at the child's own capture is insufficient: `logTail`, which builds the
-// SCAFFOLD_RED/GATE_RED excerpt embedded in the driver's OWN stdout, bounds its excerpt by BYTES,
-// not lines (`text.split('\n').slice(-n)` cannot: a caller's buffer is measured in bytes). A single
-// unbroken multi-megabyte line (realistic `\r`-driven install/progress output, exactly the class
-// the streaming fix above targets) makes "the last 20 lines" the WHOLE file, and a caller capturing
-// the driver's own stdout through a pipe (e.g. a test's default 1 MiB maxBuffer) hits the identical
-// ENOBUFS one layer up. `logTail` reads only the last LOGTAIL_MAX_BYTES of the file via
-// `fs.openSync`/`fs.readSync`, never the whole thing, and marks the excerpt as truncated when it is
-// (bounding a printed excerpt by line count alone is not a
-// bound, because a caller's buffer is measured in bytes).
+//     `docs/roadmap/`, `docs/design/`, and whatever the host's own commands write.
+//   - run any command or write status.json (beyond loadStatus()'s cold-root creation) for a
+//     `--state` invocation: a read-only peek that may report the transient SCAFFOLD/GATE states.
 //
 // Exit codes:
-//   0  a bare invocation printed the current step (or `--state` printed the state name — a
-//      read-only derivation that never executes scaffoldCommand/gateCommand, and never writes
-//      status.json beyond `loadStatus()`'s own cold-root creation), or an accepted `--mark`
-//      recorded its result and printed the checkpoint line.
+//   0  a bare invocation printed the current step (or `--state` printed the state name), or an
+//      accepted `--mark` recorded its result and printed the checkpoint line.
 //   2  a precondition failure or a refused mark — stderr names the missing/invalid artifact and
 //      the remedy command — or a wrapped child process dying with no exit code (runChild's
 //      fail-closed refusal: signal-killed, never spawned, or maxBuffer-overflowed).
@@ -227,9 +62,7 @@
 const fs = require('fs')
 const path = require('path')
 const { CONFIG_RELPATH, readConfig } = require('./lib/host-config')
-// The BRIEF step text's
-// "seed journeys" count is the seed's own journey count and "notes open" is lib/mocks-round.js's
-// openNoteCount — nothing in this file reads a file under a mock app.
+// The BRIEF step's seed-journey and open-note counts come from lib/mocks-round.js.
 const mocksRoundLib = require('./lib/mocks-round')
 const surfacesLib = require('./lib/surfaces')
 const driverIo = require('./lib/driver-io')
@@ -242,11 +75,7 @@ function writeOut(fd, str) { driverIo.writeOut(fd, str + '\n') }
 
 function die(msg) { writeOut(2, 'genesis-driver: ' + msg); process.exit(2) }
 
-// spawnSync's `status` is null when the child dies by signal, fails to spawn, or overflows
-// maxBuffer — driver-io.js's runChild is the ONE place that death is handled; every spawnSync
-// call in this file routes through it. A legitimate non-zero exit (a failing gateCommand, a
-// dropped registry option) still comes back as a normal result for the caller's own branch to
-// read.
+// driver-io.js's runChild is the ONE place a child's null status (signal, spawn failure) is handled.
 const runChild = driverIo.runChild
 
 // ---------------------------------------------------------------------------
@@ -270,10 +99,8 @@ const statusPath = path.join(genesisDir, 'status.json')
 function genesisRel(name) { return '.claude/genesis/' + name }
 
 // ---------------------------------------------------------------------------
-// status.json (v3) — created fresh on a
-// cold root; an existing v1/v2 file is read as-is (missing keys default in memory, and any
-// legacy-only keys such as `explore` or `exploreRecord` are kept untouched — see loadStatus())
-// and rewritten as v3 only on the next accepted mark.
+// status.json (v3) — created fresh on a cold root; an older file is read as-is (missing keys
+// default in memory, legacy keys kept) and rewritten as v3 on the next accepted mark.
 // ---------------------------------------------------------------------------
 function freshStatus() {
   return {
@@ -332,9 +159,7 @@ function section(text, name) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-// The `covered|dark|n/a` line
-// grammar is shared by ## Coverage and ## Non-UI Coverage — one parser, parameterized by
-// section name, never a second copy of the regex.
+// The `covered|dark|n/a` grammar is shared by ## Coverage and ## Non-UI Coverage — one parser.
 function parseKeyedSection(text, sectionName) {
   const sec = section(text, sectionName)
   const keys = {}
@@ -398,13 +223,8 @@ function seedText() { try { return fs.readFileSync(seedPath(), 'utf8') } catch (
 
 function seedJourneysMap() { return surfacesLib.parseSeedJourneys(seedText()) }
 
-// Every declared label placed in exactly one brief's ```surfaces block.
-// surfacesLib.parseSurfacesPlacement tracks EVERY brief declaring a label (the retired HTML
-// atlas's own parseSurfaces kept only the first) since the check must also catch a double-placement,
-// not just an absence. Once
-// docs/design/approval.json exists, its own journeys' `screens` are the label source — the seed
-// is no longer read here (a journey the seed gains AFTER approval froze must never re-enter this
-// check); a legacy or skipped-stage host with no approval record falls back to the seed, unchanged.
+// Every declared label placed in exactly one brief's ```surfaces block (a double placement fails
+// too). The label source is docs/design/approval.json's `screens` once it exists, else the seed.
 function journeyPlacementCheck() {
   const approval = readDocsDesignApproval()
   const seedLabels = []
@@ -431,10 +251,8 @@ function journeyPlacementCheck() {
   return { ok: true }
 }
 
-// On registryExit === 1 the step re-print names the dropped labels, read from the menu
-// file's `droppedForCurrency` (registry-check.js --write's shape: [{label, packages: [...]}]).
-// Read defensively — a missing/unparseable menu file or an absent/empty array degrades to null
-// so the caller falls back to the generic wording; it must never throw.
+// On registryExit === 1 the re-print names the dropped labels from the menu file's
+// `droppedForCurrency`; any read problem degrades to null (generic wording), never a throw.
 function droppedLabelsFor(key) {
   try {
     const menuPath = path.join(genesisDir, 'interview-research', key + '.json')
@@ -544,9 +362,7 @@ function handleMenuWritten() {
   return { prev: 'MENUS', next: 'MENUS' }
 }
 
-// The eight registry archetype keys — the grammar
-// `--mark menus-done` now requires a `- archetype: <key>` ## Picks line to name. Five of the
-// eight are TOURNAMENT archetypes; every other archetype's MENUS -> DECIDE path is unchanged.
+// The eight registry archetype keys a `- archetype: <key>` ## Picks line may name.
 const REGISTRY_KEYS = [
   'web-app', 'mobile-app', 'conversational-bot', 'backend-api',
   'realtime-trading', 'cli-devtool', 'data-ml', 'desktop-app',
@@ -554,36 +370,25 @@ const REGISTRY_KEYS = [
 const TOURNAMENT_ARCHETYPES = ['web-app', 'realtime-trading', 'backend-api', 'mobile-app', 'desktop-app']
 function isTournamentArchetype(a) { return TOURNAMENT_ARCHETYPES.includes(a) }
 
-// The four VISUAL archetypes are every tournament
-// archetype except backend-api (headless — no UI, no taste funnel). Every other archetype (the
-// three TOURNAMENT_ARCHETYPES are a superset check, not a subset — data-ml/cli-devtool/
-// conversational-bot are neither tournament nor visual) gets explore: "skipped" the moment
-// menus-done resolves it and is never routed through EXPLORE.
+// The visual archetypes: every tournament archetype except headless backend-api.
 const VISUAL_ARCHETYPES = ['web-app', 'realtime-trading', 'mobile-app', 'desktop-app']
 function isVisualArchetype(a) { return VISUAL_ARCHETYPES.includes(a) }
 
-// These four archetypes carry no design
-// record at all — handleBriefWritten records design: "skipped" and brief.mocks: null for them.
-// Every other archetype is visual and ratifies at BRIEF behind the mocks precondition.
+// These archetypes carry no design record; every other archetype ratifies at BRIEF behind the mocks precondition.
 const DESIGN_SKIPPED_ARCHETYPES = ['backend-api', 'data-ml', 'conversational-bot', 'cli-devtool']
 function isDesignSkipped(a) { return DESIGN_SKIPPED_ARCHETYPES.includes(a) }
 
 // ---------------------------------------------------------------------------
-// DESIGN_BRIEF: sits between the green zero-day gate
-// and ROADMAP, for a visual archetype whose stack descriptor names Storybook as its design
-// catalog. Applicability is recomputed on every call (never cached) so a descriptor edited after
-// the gate is still read correctly; only the SKIP outcome is persisted (once), since "applies"
-// has nothing to record until the mark itself lands.
+// DESIGN_BRIEF: between the green zero-day gate and ROADMAP, for a visual archetype whose stack
+// descriptor names Storybook. Applicability is recomputed on every call; only SKIP is persisted.
 // ---------------------------------------------------------------------------
 function designStageApplies() {
   const desc = readStackDescriptor() || {}
   return isVisualArchetype(status.archetype) && desc.designCatalog === 'storybook'
 }
 
-// Called exactly at the two places the zero-day gate first turns green (handleSkeletonLanded's
-// mark acceptance, and deriveState's own bare-run gate branch) — never from a `--state` peek,
-// so this never violates the "peek writes nothing" contract. A no-op once status.designStage is
-// already set (either this skip record, or the full record a later mark writes).
+// Called only where the zero-day gate first turns green — never from a `--state` peek. A no-op once
+// status.designStage is set.
 function recordDesignStageSkipIfNeeded() {
   if (status.designStage) return
   if (designStageApplies()) return
@@ -599,11 +404,8 @@ function readDesignPathsJson() {
 function designBriefMdPath() { return path.join(root, 'docs/design/brief.md') }
 function catalogMdPath() { return path.join(root, 'docs/design/catalog.md') }
 
-// The designed-set record JJ's
-// `approve` freezes — distinct from the wireframe stage's own records (design/mocks/status.json and
-// design/rounds/, read only at/before BRIEF, never again). This one
-// lives at docs/design/, is written once by design-approved, and is what AWAITING_DESIGN_APPROVAL
-// (its re-derivation), ROADMAP and roadmap-written's placement check all read.
+// The designed-set record the user's `approve` freezes (docs/design/approval.json), written once by
+// design-approved and read by AWAITING_DESIGN_APPROVAL, ROADMAP and roadmap-written.
 function docsDesignApprovalPath() { return path.join(root, 'docs/design/approval.json') }
 function readDocsDesignApproval() {
   try { return JSON.parse(fs.readFileSync(docsDesignApprovalPath(), 'utf8')) } catch (e) { return null }
@@ -639,10 +441,8 @@ function designPathsCheck() {
   return { ok: true, parsed }
 }
 
-// design-paths.json is re-validated
-// (never trusted from design-brief-written's earlier pass alone) at both kit-landed and
-// journeys-drawn — shares designPathsCheck()'s reasons and design-brief-written's own wording,
-// parameterized by the mark name so the remedy names the right re-mark command.
+// design-paths.json is re-validated at both kit-landed and journeys-drawn, with the remedy naming
+// the right re-mark command.
 function requireDesignPaths(markName) {
   const dp = designPathsCheck()
   if (dp.ok) return dp.parsed
@@ -672,20 +472,11 @@ function briefCompositesWithStates() {
     .map((r) => ({ composite: r[0], states: (r[2] || '').split(',').map((s) => s.trim()).filter(Boolean) }))
 }
 
-// Runs catalog-inventory.js only when docs/design/catalog.md is absent — that is its own trigger,
-// the file's absence, so a file already on the host (never generated by this driver) is left
-// untouched, never overwritten, and never re-run for. A recorded FAILED run
-// (status.designStage.catalog.exit !== 0) is the second half of the gate: catalog-inventory.js
-// never writes the file on a non-zero exit, so gating on the file alone would re-run the child
-// on every single print after a failure. A recorded SUCCESS does not gate — a catalog.md deleted
-// after a successful run is regenerated on the next print. The GENESIS_SHADCN_COMMAND env override is threaded to the child's --shadcn flag
-// when set. Records status.designStage.catalog on EITHER outcome of a run it actually performs
-// — {exit, components, unavailable, at}, with components/unavailable at 0 on a non-zero exit —
-// so a later print derives its ⚠️ warning (or its normal catalog line) from the recorded exit
-// alone, never from a fresh child spawn. A pre-existing file with no record leaves nothing
-// recorded, so the step prints no catalog line at all for that host (the pre-fix behavior this
-// review round restores) — the driver never reads a foreign catalog.md's own content to derive
-// one. Never blocks the mark either way.
+// Runs catalog-inventory.js only when docs/design/catalog.md is absent and no FAILED run is
+// recorded (a failed run never writes the file, so gating on the file alone would re-run it on
+// every print). GENESIS_SHADCN_COMMAND is threaded to --shadcn. Records status.designStage.catalog
+// {exit, components, unavailable, at} for a run it performs; a pre-existing file with no record
+// prints no catalog line. Never blocks the mark.
 function ensureCatalogGenerated() {
   const rec = status.designStage && status.designStage.catalog
   if (rec && rec.exit !== 0) return
@@ -711,10 +502,8 @@ function ensureCatalogGenerated() {
   saveStatus()
 }
 
-// A small markdown-table reader shared by designBriefCheck below — the same shape
-// design-contract-check.js's own findTable() reads, kept as a second small copy here (this
-// driver has never required() that script, and doing so now would couple a CLI script's argv
-// parsing into a library role neither file wants).
+// A small markdown-table reader — a second small copy of design-contract-check.js's findTable(),
+// since requiring that CLI script would pull in its argv parsing.
 function findMdTableRows(text) {
   const lines = text.split('\n')
   let start = -1
@@ -739,11 +528,9 @@ function extractMdSubHeading(text, name) {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
-// docs/design/brief.md's grammar — heading presence/order, one JTBD line per seed journey,
-// no entity-shaped heading, a non-empty ## Composites table equal to the rules file's own
-// Composite column, and every ### Used name present in docs/design/catalog.md when that
-// inventory lists any. Returns { ok: true } or { ok: false, message } naming the FIRST failure,
-// in the order the brief grammar lists them.
+// docs/design/brief.md's grammar — heading presence/order, one JTBD line per seed journey, no
+// entity-shaped heading, a ## Composites table equal to the rules file's Composite column, every
+// ### Used name in docs/design/catalog.md. Returns { ok } or { ok: false, message } (first failure).
 const DESIGN_BRIEF_REQUIRED_HEADINGS = ['## Users and context', '## Direction', '## Journeys', '## Navigation', '## Catalog', '## Composites', '## Contract']
 
 function designBriefCheck(paths) {
@@ -850,9 +637,7 @@ function designBriefCheck(paths) {
   return { ok: true }
 }
 
-// Findings blocking the mark — table-missing/table-empty/naming-section-missing; the
-// others (kit-missing, tokens-missing, composite-missing) are tolerated at this mark (the kit
-// lands in spec 05's own build).
+// Findings that block the mark; kit-missing/tokens-missing/composite-missing are tolerated here.
 const DESIGN_CONTRACT_BLOCKING_KINDS = ['table-missing', 'table-empty', 'naming-section-missing']
 
 function handleDesignBriefWritten() {
@@ -917,9 +702,7 @@ function handleDesignBriefWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// DESIGN_KIT / DESIGN_JOURNEYS: two more design-stage states between DESIGN_BRIEF and ROADMAP. Shared plumbing first —
-// runStorybookBuild, the Storybook main-config check, the journey-story-file finder, the
-// primitive ban's directory walk, and the beats-file writer — then the two mark handlers.
+// DESIGN_KIT / DESIGN_JOURNEYS: shared plumbing first, then the two mark handlers.
 // ---------------------------------------------------------------------------
 
 function storybookBuildLogPath() { return path.join(genesisDir, 'storybook-build.log') }
@@ -929,12 +712,9 @@ function storybookMainExists() {
   return STORYBOOK_MAIN_EXTS.some((ext) => fs.existsSync(path.join(root, '.storybook', 'main.' + ext)))
 }
 
-// Runs `design-paths.storybook.buildCommand` through the existing runShell idiom (streamed to
-// storybook-build.log, never a Node pipe), writes `<staticDir>/.gitignore` containing `*`
-// before every attempt (the file must exist after ANY attempt, successful or
-// not, so the static export is never accidentally committed), and returns `{ exit, ms, index }`.
-// Refusing on the result is the caller's job (refuseOnStorybookBuild, below) — both marks share
-// the exact same refusal wording.
+// Runs design-paths.storybook.buildCommand through runShell (streamed to storybook-build.log),
+// writes `<staticDir>/.gitignore` (`*`) before every attempt, and returns `{ exit, ms, index }`;
+// refusing is refuseOnStorybookBuild's job.
 function runStorybookBuild(paths) {
   const staticDir = path.join(root, paths.storybook.staticDir)
   fs.mkdirSync(staticDir, { recursive: true })
@@ -947,10 +727,8 @@ function runStorybookBuild(paths) {
   return { exit: r.status, ms, index }
 }
 
-// Shared by kit-landed and journeys-drawn: a non-zero exit quotes the log's tail and
-// names "storybook build"; an ok:false index names whichever file readIndex found missing —
-// `iframe.html` (the salon-os false-pass class this whole design exists to catch) or
-// `index.json`.
+// Shared refusal: a non-zero exit quotes the log's tail and names "storybook build"; an ok:false
+// index names the missing file (`iframe.html` or `index.json`).
 function refuseOnStorybookBuild(build, markName) {
   if (build.exit !== 0) {
     die('storybook build exited ' + build.exit + ' — ' + logTail(storybookBuildLogPath()) +
@@ -988,11 +766,9 @@ function walkFilesRecursive(dir) {
   return out
 }
 
-// The primitive ban: every `.ts/.tsx/.js/.jsx` file under `<journeysDir>` (classified by
-// LOCATION — the directory walk — never by filename shape, per the pipeline rules' own recorded
-// gotcha) is scanned for an import specifier that equals `primitivesAlias`, starts with
-// `primitivesAlias + '/'`, or (a relative specifier) resolves inside `primitives`. Returns the
-// first `{ file, specifier }` hit (repo-relative file path), or `null`.
+// The primitive ban: every `.ts/.tsx/.js/.jsx` file under <journeysDir> (by location, never by
+// filename shape) is scanned for an import of `primitivesAlias` (or a path under it) or a relative
+// specifier resolving inside `primitives`. Returns the first `{ file, specifier }` hit, or null.
 function primitiveBanCheck(journeysAbsDir, primitivesAlias, primitivesAbs) {
   const files = walkFilesRecursive(journeysAbsDir).filter((f) => /\.(ts|tsx|js|jsx)$/.test(f)).sort()
   for (const f of files) {
@@ -1011,11 +787,8 @@ function primitiveBanCheck(journeysAbsDir, primitivesAlias, primitivesAbs) {
   return null
 }
 
-// `<journeysDir>/<name>.beats.json` — the driver's own derivation of a journey's story,
-// never the story's declaration (see the header's rationale paragraph). Called only from
-// STEPS.DESIGN_JOURNEYS's print (never from `--state`, which never side-effects): creates the
-// journeys directory, rewrites a file whose recorded `beatHash` no longer matches the seed's own
-// hash, and never touches one that still matches.
+// `<journeysDir>/<name>.beats.json` — the driver's own derivation of a journey. Written only at
+// DESIGN_JOURNEYS' print (never `--state`); rewritten only when its beatHash no longer matches.
 function beatsFilePath(journeysRel, name) { return path.join(root, journeysRel, name + '.beats.json') }
 
 function writeBeatsFilesIfNeeded(journeysRel) {
@@ -1170,18 +943,12 @@ function handleJourneysDrawn() {
 }
 
 // ---------------------------------------------------------------------------
-// AWAITING_DESIGN_APPROVAL: the
-// one look stop where JJ approves the designed set in Storybook. The probe proves by CONTENT —
-// index.json's own entries — never by a story URL's HTTP status (spiked
-// 2026-09-26) is that Storybook answers 200 for a story id that does not exist, so a URL-status
-// check would point JJ at a page that may show nothing.
+// AWAITING_DESIGN_APPROVAL: the look stop. The probe proves by CONTENT — index.json's entries —
+// never by a story URL's HTTP status (Storybook answers 200 for a story id that does not exist).
 // ---------------------------------------------------------------------------
 
-// `curl -sf -m 3 <url>` routed through runChild — a genuine spawn failure or signal death is
-// runChild's own fail-closed refusal (exit 2); a reachable-but-erroring server, a closed port, or
-// a `file:` URL to a missing fixture all come back as an ordinary non-zero curl exit, read here as
-// 'unreachable'. curl reads `file:` URLs natively, so this same code path serves both the real
-// dev server and this spec's own `indexUrl`-pointed test fixtures.
+// `curl -sf -m 3 <url>` through runChild; any ordinary non-zero curl exit reads as 'unreachable'.
+// curl reads `file:` URLs too, so test fixtures use the same path.
 function probeStorybookIndex(url) {
   const r = runChild('curl', ['-sf', '-m', '3', url], { encoding: 'utf8' }, 'curl ' + url)
   if (r.status !== 0) return { ok: false, reason: 'unreachable' }
@@ -1197,16 +964,12 @@ function storybookIndexUrl(paths) {
   return (typeof sb.indexUrl === 'string' && sb.indexUrl) || ('http://127.0.0.1:' + sb.port + '/index.json')
 }
 
-// The journey story ids the served index must carry — journeys-drawn's own recorded result
-// (status.designStage.journeys.stories), in seed order (the object's own insertion order, since
-// handleJourneysDrawn built it by walking seedJourneysMap() in file order).
+// The journey story ids the served index must carry, in seed order (journeys-drawn's recorded result).
 function requiredJourneyStoryIds() {
   return (status.designStage && status.designStage.journeys && status.designStage.journeys.stories) || {}
 }
 
-// The full serving check the look stop and the refusal both need — probes the index, then
-// walks the required journey ids in seed order so the result names the FIRST journey the served
-// index does not carry.
+// Probes the index, then names the FIRST seed-order journey the served index does not carry.
 function checkStorybookServingJourneys(paths) {
   const probe = probeStorybookIndex(storybookIndexUrl(paths))
   if (!probe.ok) return probe
@@ -1217,11 +980,8 @@ function checkStorybookServingJourneys(paths) {
   return { ok: true, entriesById: probe.entriesById }
 }
 
-// `--mark design-approved` — re-runs its own build + journeyStoriesCheck +
-// stateStoriesCheck against a FRESH index (never trusted from journeys-drawn's earlier pass
-// alone), then freezes the designed set into docs/design/approval.json. No per-file hash is
-// recorded (the rationale: "frozen after approval, never gated later" — recording one would
-// invite exactly the gate that forbids).
+// `--mark design-approved` — re-runs the build and both story checks against a FRESH index, then
+// freezes docs/design/approval.json. No per-file hash is recorded: the set is never gated later.
 function handleDesignApproved() {
   if (!status.marks.journeysDrawn) die('journeys-drawn has not been marked yet — mark journeys-drawn first')
   if (!designStageApplies()) {
@@ -1286,17 +1046,11 @@ function handleMenusDone() {
     die('open dimension(s) with no recorded menu (--mark menu-written --file <menu.json>) or no ## Picks line: ' + check.missing.join(', ') +
       ' — finish the interview, then re-mark menus-done')
   }
-  // The archetype was already validated
-  // and recorded at discovery-done — a ## Picks archetype line is required
-  // still present here (never removed from the grammar) to keep being accepted, never re-parsed
-  // or re-validated a second time.
+  // The archetype was validated at discovery-done; the ## Picks line is still required, never re-parsed.
   status.marks.menusDone = true
   saveStatus()
   const archetype = status.archetype
-  // Once the mock app
-  // exists the tournament is recorded skipped at MENUS and FINALISTS/RACE/PROBE/PICK are never
-  // derived — the tournament-archetype branch below still runs first (the existing guard), this
-  // only narrows which archetypes it actually routes into the tournament.
+  // Once the mock app exists the tournament is recorded skipped at MENUS.
   let next
   if (isTournamentArchetype(archetype) && !(status.tournament && status.tournament.skipped)) next = 'FINALISTS'
   else next = 'DECIDE'
@@ -1304,20 +1058,15 @@ function handleMenusDone() {
 }
 
 // ---------------------------------------------------------------------------
-// BRIEF: sits between DISCOVERY and
-// MENUS. `--mark brief-written` is the ONLY mark this state accepts. For DESIGN_SKIPPED_ARCHETYPES
-// (backend-api/data-ml/conversational-bot/cli-devtool) it is a pass-through: nothing beyond
-// DISCOVERY is owed. A VISUAL archetype requires an APPROVED `design/mocks/status.json`,
-// then records design: "ratified".
+// BRIEF: `--mark brief-written` is the only mark. A pass-through for DESIGN_SKIPPED_ARCHETYPES; a
+// visual archetype requires an APPROVED design/mocks/status.json, then records design: "ratified".
 // ---------------------------------------------------------------------------
 function mocksStatusPath() { return path.join(root, 'design/mocks/status.json') }
 function readMocksStatus() {
   try { return JSON.parse(fs.readFileSync(mocksStatusPath(), 'utf8')) } catch (e) { return null }
 }
 
-// "seed journeys" is the
-// number of journeys design/mocks/seed.md declares; "notes open" is the waiting items of the
-// latest round's notes.json (0 with no round or no file).
+// "notes open" is the waiting items of the latest round's notes.json (0 with none).
 function seedJourneyCount() { return seedJourneysMap().size }
 function notesOpenCount() { return mocksRoundLib.openNoteCount(root) }
 
@@ -1378,16 +1127,10 @@ function handleBriefWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// FINALISTS / RACE / PROBE / PICK: the tournament of scaffolds,
-// entered only for TOURNAMENT_ARCHETYPES. RACE is driver-only: a bare invocation races every
-// not-yet-raced finalist for real — scaffold, then (if scaffold is green) gate, then boot through
-// spec/scripts/smoke.sh's own contract, unchanged. PROBE is a session-judgment
-// step whose closure (`probe-done`) re-runs gate+boot per finalist and assembles the benchmark
-// PICK (`picked`) never ranks finalists itself — it matches the brief's own ## Picks
-// against each finalist's `picks`.
+// FINALISTS / RACE / PROBE / PICK: the tournament, TOURNAMENT_ARCHETYPES only. RACE is driver-only
+// (scaffold, then gate, then boot via smoke.sh's contract); `probe-done` re-runs gate+boot and
+// assembles the benchmark; `picked` matches the brief's ## Picks against each finalist's `picks`.
 // ---------------------------------------------------------------------------
-// PROBE_TASKS carries only the
-// archetype's own task set — no per-archetype tile-rendering task exists.
 const PROBE_TASKS = {
   'web-app': ['authed-crud-screen', 'background-job'],
   'realtime-trading': ['authed-crud-screen', 'background-job'],
@@ -1511,11 +1254,8 @@ function handleFinalistsWritten() {
   return { prev: 'FINALISTS', next: 'RACE' }
 }
 
-// Races every finalist in `status.tournament.finalistDefs` that has no `race[name]` yet, in
-// file order. A finalist whose scaffold fails records `race[name] = {scaffold, at}` and spends
-// nothing further — no gate, no boot. Persisted after every finalist so a crash mid-race never
-// re-spends an already-recorded step. Driver-only: called from deriveState on a bare (non-peek)
-// invocation reaching RACE, never from `--state`.
+// Races every finalist with no `race[name]` yet, in file order; a failed scaffold spends nothing
+// further. Persisted after every finalist. Called only on a bare invocation reaching RACE.
 function runRace() {
   fs.mkdirSync(tournamentDir(), { recursive: true })
   const gitignorePath = path.join(tournamentDir(), '.gitignore')
@@ -1568,14 +1308,10 @@ function runRace() {
 
 function safeReadFile(p) { try { return fs.readFileSync(p, 'utf8') } catch (e) { return '' } }
 
-// probe-done validates every finalist that reached a green scaffold, then re-runs its gate
-// and boot as an executed fact (never trusted from the race's own earlier run) before assembling
-// the benchmark. A finalist whose scaffold failed owes no probe.json — "nothing further is
-// spent" extends through PROBE.
+// Re-runs each green-scaffold finalist's gate and boot as an executed fact before assembling the
+// benchmark; a finalist whose scaffold failed owes no probe.json.
 function handleProbeDone() {
-  // A mock-app host records the tournament skipped and never derives finalists — name that
-  // remedy before falling into the generic "not raced yet" message, which would point at a state
-  // (RACE/PROBE) this host never reaches.
+  // A mock-app host records the tournament skipped — name that remedy before the generic message.
   if (status.tournament && status.tournament.skipped) {
     die('the tournament was skipped for this host (' + JSON.stringify(status.tournament.skipped) +
       ') — the mock app fixes the frontend dimensions and PROBE is never reached; run --mark decided instead')
@@ -1739,11 +1475,8 @@ function writeBenchmark() {
   fs.writeFileSync(galleryPath(), renderGalleryHtml(rows))
 }
 
-// The driver never ranks finalists — it matches the brief's CURRENT ## Picks against each
-// finalist's own `picks`. Exactly one match records the winner; zero or several is refused.
-// The design pick this mark used
-// to also validate (specs/20260827/02's EXPLORE tile winner) is retired outright — the design
-// canon is ratified at BRIEF, before the tournament ever runs, so PICK is a stack-only decision.
+// The driver never ranks finalists — exactly one finalist whose `picks` match the brief's current
+// ## Picks records the winner; zero or several is refused. PICK is a stack-only decision.
 function handlePicked() {
   // Same remedy as handleProbeDone's guard above — a skipped tournament never reaches PICK.
   if (status.tournament && status.tournament.skipped) {
@@ -1805,10 +1538,8 @@ function readConventions() {
   try { return JSON.parse(fs.readFileSync(conventionsPath(), 'utf8')) } catch (e) { return null }
 }
 
-// `decided` gains this as an ADDITIONAL gate, run only once the pre-existing decideCheck()
-// below has already passed (regression pin: the ADR/Dissents/dimension checks must keep
-// firing exactly as before, never superseded or reordered away by this new gate). Walks rows in
-// file order and returns the FIRST offender, named by key.
+// An ADDITIONAL gate on `decided`, run only after decideCheck() passes; returns the first
+// offending row, named by key.
 function conventionsCheck() {
   const conv = readConventions()
   if (!conv) return { ok: false, reason: 'unreadable' }
@@ -1889,20 +1620,14 @@ function describeDecideGap(check) {
   return 'the decision record is not yet closed'
 }
 
-// Once a tournament winner is recorded, `decided`
-// gains two more checks on top of the base decideCheck() closure: the descriptor's
-// scaffoldCommand must be the winner's own (the descriptor must scaffold exactly what the race
-// validated, never something the race never touched), and at least one listed ADR must cite the
-// literal `.claude/genesis/tournament/benchmark.md` path (the durable link back to the executed
-// evidence). On success the raced `finalists/` and `logs/` are deleted — scratch race
-// output, never durable evidence; `benchmark.json/.md`, `gallery.html`, and `evidence/` survive.
+// With a tournament winner, `decided` also requires the descriptor's scaffoldCommand to be the
+// winner's own and an ADR citing `.claude/genesis/tournament/benchmark.md`. On success the raced
+// `finalists/` and `logs/` are deleted; benchmark, gallery and evidence survive.
 function handleDecided() {
   if (!status.marks.menusDone) die('menus-done has not been marked yet — mark menus-done first')
   const check = decideCheck()
   if (!check.ok) die(describeDecideGap(check) + ' — fix it, then re-mark decided')
-  // An ADDITIONAL gate, run only once decideCheck() above has already passed — the
-  // regression pin requires the pre-existing ADR/Dissents/dimension checks to keep firing
-  // exactly as before, never superseded or reordered away by this new conventions.json gate.
+  // Run only after decideCheck() passes, so the ADR/Dissents/dimension checks keep firing first.
   const convCheck = conventionsCheck()
   if (!convCheck.ok) die(describeConventionsGap(convCheck) + ' — fix it, then re-mark decided')
   if (status.tournament && status.tournament.winner) {
@@ -1933,9 +1658,7 @@ function handleDecided() {
 function scaffoldLogPath() { return path.join(genesisDir, 'scaffold.log') }
 function gateLogPath() { return path.join(genesisDir, 'gate.log') }
 
-// `cwd` is an ADDITIVE option (default `root`,
-// byte-identical to the pre-spec behavior) — the tournament's RACE/PROBE legs run every finalist
-// command inside its own `tournament/finalists/<name>/`, never in `--root` itself.
+// `cwd` defaults to root; the tournament runs each finalist's commands inside its own directory.
 function runLogged(cmd, args, logPath, opts) {
   const cwd = (opts && opts.cwd) || root
   const what = (opts && opts.what) || ('command "' + [cmd].concat(args).join(' ') + '"')
@@ -1943,10 +1666,8 @@ function runLogged(cmd, args, logPath, opts) {
 }
 
 function runLoggedWith(logPath, spawnWith) {
-  // The log fd is opened and truncated BEFORE the child spawns, then handed straight to
-  // spawnSync's stdio for both stdout and stderr — the child's output never transits a Node
-  // pipe, so it can never overflow one (see the header's runChild paragraph). Closed on every
-  // path, including a die() inside runChild (the process is exiting anyway; the OS reclaims it).
+  // The log fd is opened and truncated before the child spawns and handed to stdio for stdout and
+  // stderr — output never transits a Node pipe. Closed on every path.
   fs.mkdirSync(path.dirname(logPath), { recursive: true })
   let fd
   try {
@@ -1995,10 +1716,7 @@ function runGateIfDue() {
   return status.zeroDayGate
 }
 
-// Every enforceable DECIDED row's probe
-// file must exist and be non-empty, checked at `skeleton-landed` (not at `decided` — probes are
-// landed WITH the skeleton, per Behavior). Re-reads conventions.json fresh, never trusts the
-// `decided` mark's earlier validation alone.
+// Every enforceable DECIDED convention's probe file must exist and be non-empty (re-read fresh).
 function probeCheck() {
   const conv = readConventions()
   const rows = (conv && Array.isArray(conv.rows)) ? conv.rows : []
@@ -2018,9 +1736,8 @@ function describeProbeGap(check) {
     check.probe + ' does not exist or is empty'
 }
 
-// The binding-subset file (CLAUDE.md, or AGENTS.md when CLAUDE.md is absent) must exist,
-// be <= 150 lines, and name the descriptor's gateCommand and the conventions testTree as
-// literals — the doc agents actually read, not judged on content beyond that.
+// The binding-subset file (CLAUDE.md, else AGENTS.md) must exist, be <= 150 lines, and name the
+// gateCommand and the testTree as literals.
 const BINDING_SUBSET_LINE_CAP = 150
 
 function bindingSubsetCheck(desc, testTree) {
@@ -2065,9 +1782,6 @@ function handleSkeletonLanded() {
   if (!pc.ok) die(describeProbeGap(pc) + ' — land it, then re-mark skeleton-landed')
   const bc = bindingSubsetCheck(desc, testTree)
   if (!bc.ok) die(describeBindingSubsetGap(bc) + ' — fix it, then re-mark skeleton-landed')
-  // The mock app no longer pre-empts the day-zero
-  // skeleton gate — every host lands the skeleton through the probe/binding-subset checks above
-  // only (no HTML-design checks, no reviewer-package check, no reimplementation, no shim).
   status.marks.skeletonLanded = true
   saveStatus()
   const g = runGateIfDue()
@@ -2076,9 +1790,7 @@ function handleSkeletonLanded() {
   return { prev: 'SKELETON', next: designStageApplies() ? 'DESIGN_BRIEF' : 'ROADMAP' }
 }
 
-// Caps the byte window logTail reads off disk before it ever looks at lines. A few KB is enough
-// to show a failing gate's last output; it is far below any caller's stdout-capture buffer (a
-// test's default 1 MiB spawnSync maxBuffer among them) — see the header's F7 paragraph.
+// Caps the byte window logTail reads, far below any caller's stdout-capture buffer.
 const LOGTAIL_MAX_BYTES = 4096
 
 function logTail(p, n) {
@@ -2096,9 +1808,7 @@ function logTail(p, n) {
     const buf = Buffer.alloc(readLen)
     if (readLen > 0) fs.readSync(fd, buf, 0, readLen, size - readLen)
     text = buf.toString('utf8')
-    // A byte-offset cut can land mid-character; Node's UTF-8 decoder renders the resulting
-    // partial sequence at the start of the string as one or more U+FFFD, never a throw. Strip
-    // them so the excerpt doesn't open with visible mojibake.
+    // A byte-offset cut can land mid-character; strip the leading U+FFFD replacement characters.
     while (text.length && text.charCodeAt(0) === 0xfffd) text = text.slice(1)
     byteTruncated = size > readLen
   } catch {
@@ -2106,14 +1816,8 @@ function logTail(p, n) {
   } finally {
     try { fs.closeSync(fd) } catch { /* already closed */ }
   }
-  // The line slice runs BEFORE the truncation marker is attached, never after: prepending the
-  // marker and then slicing the last N lines would make the marker itself a slice candidate —
-  // on any byte window holding more than N lines (the ordinary large multi-line failing-gate
-  // log, not just the single-giant-line case), the marker would sit far enough back in the
-  // window that the line slice discards it, and the reader would see a plain, confident-looking
-  // excerpt with no sign it's partial. A line dropped by the slice is exactly as much "there is
-  // more, on disk" as a byte dropped by the read window, so either condition attaches the marker
-  // to the final text.
+  // The line slice runs BEFORE the truncation marker is attached, so the marker can never be sliced
+  // away; either a dropped line or a dropped byte attaches it.
   const lines = text.split('\n')
   const wanted = n || 20
   const tail = lines.slice(-wanted)
@@ -2179,11 +1883,8 @@ function roadmapCheck() {
       .map((s) => { const m2 = s.match(/\d\d/); return m2 ? m2[0] : s })
     graph[id] = deps
   }
-  // Brief 01 is the first-light brief — its
-  // header (text before the first ## heading) must name the one real record through the
-  // deployed production path. Runs after missing-headers (every brief's header is already known
-  // well-formed here) and before cycle. A roadmap with no 01-*.md brief (legacy numbering) is
-  // not refused by this check.
+  // Brief 01's header must name the one real record through the deployed production path. A
+  // roadmap with no 01-*.md brief is not refused by this check.
   const firstBrief = briefs.find((f) => /^01-.*\.md$/.test(f))
   if (firstBrief && !/First light:\s*\S/.test(beforeFirstHeadingByFile[firstBrief])) {
     return { ok: false, reason: 'first-light-missing', detail: firstBrief }
@@ -2213,10 +1914,7 @@ function handleRoadmapWritten() {
       die('docs/roadmap has a Depends-on cycle: ' + check.detail.join(' -> ') + ' — break the cycle, then re-mark roadmap-written')
     }
   }
-  // On a fresh visual run (status.brief.mocks
-  // set — Behavior: Applicability; legacy and non-visual runs see none of this), every seed
-  // label must land in exactly one brief's ```surfaces block — the atlas's gap/orphan badges
-  // then mean what they say from day one.
+  // On a fresh visual run every seed label must land in exactly one brief's ```surfaces block.
   if (status.brief && status.brief.mocks) {
     const pc = journeyPlacementCheck()
     if (!pc.ok) {
@@ -2238,10 +1936,8 @@ function handleRoadmapWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// HANDOFF -> GROUNDED: the greenfield
-// grounding closure. `profile-written` is the last mark of the whole genesis driver — it runs
-// init-gen.js generate itself (the way /spec:init's own Phase 5 does) instead of handing off to
-// a separate command, and its acceptance is what reaches the new terminal state GROUNDED.
+// HANDOFF -> GROUNDED: `profile-written` runs init-gen.js generate itself; its acceptance reaches
+// the terminal state GROUNDED.
 // ---------------------------------------------------------------------------
 function initGenLogPath() { return path.join(genesisDir, 'init-gen.log') }
 
@@ -2288,15 +1984,9 @@ function handleProfileWritten() {
 }
 
 // ---------------------------------------------------------------------------
-// deriveState — side-effecting by default: runs the driver-only SCAFFOLD/GATE stages as
-// needed, idempotent on scaffold.exit === 0; every check re-reads the artifacts, never trusts a
-// mark whose backing file has vanished or regressed.
-//
-// `{ peek: true }` (used only by `--state`, F3) derives the SAME state without ever invoking
-// runScaffoldIfDue/runGateIfDue or writing status.json: it reads back whatever scaffold/gate
-// result is already on disk instead of running the command. When no result is on disk yet, it
-// reports the transient driver-only name (`SCAFFOLD`/`GATE`, both in the state enum) that a
-// bare invocation would immediately resolve by running the command — never runs it itself.
+// deriveState — side-effecting by default: runs the driver-only SCAFFOLD/GATE stages as needed.
+// `{ peek: true }` (--state only) derives the same state without running anything or writing
+// status.json, reporting SCAFFOLD/GATE when no result is on disk yet.
 // ---------------------------------------------------------------------------
 function deriveState(opts) {
   const peek = !!(opts && opts.peek)
@@ -2311,12 +2001,8 @@ function deriveState(opts) {
   const menus = menusCheck()
   if (!status.marks.menusDone || !menus.ok) return 'MENUS'
 
-  // FINALISTS -> RACE -> PROBE -> PICK sits between
-  // MENUS and DECIDE for a tournament archetype that hasn't been skipped or resolved yet. Once
-  // skipped (tournament.skipped) or resolved (tournament.winner), fall straight through to the
-  // unchanged decideCheck() derivation below — a non-tournament archetype never enters this block
-  // at all (status.archetype stays outside TOURNAMENT_ARCHETYPES). A host whose `decided` mark
-  // is already recorded is never routed backward into FINALISTS.
+  // The tournament sits between MENUS and DECIDE until skipped or resolved; a host whose `decided`
+  // mark is recorded is never routed backward into FINALISTS.
   if (isTournamentArchetype(status.archetype) && !status.marks.decided &&
       !(status.tournament && (status.tournament.skipped || status.tournament.winner))) {
     const t = status.tournament || {}
@@ -2353,17 +2039,13 @@ function deriveState(opts) {
     return designStageApplies() ? 'DESIGN_BRIEF' : 'ROADMAP'
   }
 
-  // DESIGN_BRIEF sits between the green gate and
-  // ROADMAP for a design-stage-applicable host — derived from the mark alone — the
-  // design-brief-written handler verifies the brief file and design-paths.json.
+  // DESIGN_BRIEF is derived from the mark alone; the handler verifies brief.md and design-paths.json.
   if (designStageApplies() && !status.marks.designBriefWritten) {
     return 'DESIGN_BRIEF'
   }
 
-  // DESIGN_KIT while
-  // `marks.designBriefWritten && !marks.kitLanded`, or a vanished `.storybook/main.*`; then
-  // DESIGN_JOURNEYS while `!marks.journeysDrawn`, or a vanished journey story — both re-derived
-  // from disk on every call, never trusted from the mark alone.
+  // DESIGN_KIT / DESIGN_JOURNEYS re-derive from disk on every call — a vanished `.storybook/main.*`
+  // or journey story is demanded again.
   if (designStageApplies()) {
     if (!status.marks.kitLanded || !storybookMainExists()) return 'DESIGN_KIT'
     if (!status.marks.journeysDrawn || anyJourneyStoryVanished()) return 'DESIGN_JOURNEYS'
@@ -2378,10 +2060,7 @@ function deriveState(opts) {
   // ROADMAP hands directly to HANDOFF —
   // the design canon is ratified at BRIEF, before ROADMAP is ever reached.
 
-  // HANDOFF is not terminal — once
-  // `profile-written` records a successful init-gen generate run, the derived state advances to
-  // the new terminal state GROUNDED. No `peek` branch is needed here (unlike SCAFFOLD/GATE):
-  // this reads a value status.handoff already persisted, with no side effect either way.
+  // HANDOFF advances to GROUNDED once profile-written recorded a successful init-gen run.
   if (status.handoff && status.handoff.initGenExit === 0) return 'GROUNDED'
 
   return 'HANDOFF'
@@ -2390,15 +2069,6 @@ function deriveState(opts) {
 // ---------------------------------------------------------------------------
 // Step text per state (every step opens with a Read only: file list).
 // ---------------------------------------------------------------------------
-// The standalone genesis-explore command is deleted — the explore
-// funnel is now a driver state this session already ran, not a separate command HANDOFF hands
-// off into. The design lock folds into the driver
-// too (the DESIGN state) — there is no separate command left to hand off into for ANY archetype
-// or designCatalog. HANDOFF itself stops
-// being terminal and stops printing a next command at all — it is a judgment step that closes
-// with `--mark profile-written`, and only the new terminal state GROUNDED prints `next:
-// /spec:enforce` (nextCommandLine() is retired along with it — greenfield genesis is now
-// init + enforce, with nothing left for /spec:init to hand off into).
 
 // These share this count: the enforceable, checker-backed DECIDED rows conventions.json
 // carries — read fresh off disk, never cached in status.json.
@@ -2543,10 +2213,8 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // Sits between DISCOVERY and
-  // MENUS. DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a
-  // visual archetype whose mocks set is not yet APPROVED is sent to `/spec:mocks`; otherwise the
-  // step prints the brief-written mark command.
+  // DESIGN_SKIPPED_ARCHETYPES owe nothing beyond DISCOVERY; a visual archetype whose mocks set is not
+  // APPROVED is sent to `/spec:mocks`; otherwise the step prints the brief-written mark.
   BRIEF: () => {
     const archetype = status.archetype
     const doctrineLine = 'Doctrine: spec/doctrine/genesis.md § Genesis: Brief State'
@@ -2623,10 +2291,8 @@ const STEPS = {
     ].join('\n')
   },
 
-  // RACE is driver-only: a bare invocation runs it and lands directly on PROBE, so this
-  // entry is only ever rendered by acceptedOutput() right after finalists-written accepts —
-  // never by deriveState() itself (which resolves RACE before returning, exactly like the
-  // existing SCAFFOLD entry below resolves SCAFFOLD before returning).
+  // RACE is driver-only: rendered only by acceptedOutput() right after finalists-written accepts,
+  // never by deriveState() itself.
   RACE: () => [
     '## Step: race the finalists',
     'Read only: ' + genesisRel('tournament/'),
@@ -2668,9 +2334,7 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // benchmark.md printed verbatim (never paraphrased — reading it verbatim is the whole
-  // point of not making the session open a second file mid-decision) plus the evidence-informs
-  // line, so a session cannot read this step and think a benchmark number decides anything.
+  // benchmark.md printed verbatim plus the evidence-informs line — a benchmark number never decides.
   PICK: () => {
     const benchmarkMd = fs.existsSync(benchmarkMdPath()) ? fs.readFileSync(benchmarkMdPath(), 'utf8').trimEnd() : '(no benchmark.md yet)'
     return [
@@ -2780,12 +2444,8 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // The Agent dispatch line
-  // naming the fable model (arranging composites into screens is hierarchy and flow judgment — the same
-  // seat as the brief and kit steps; no design step hands work to a cheaper model), one journey
-  // line per seed journey (beat count and the story's target path),
-  // the primitive-ban rule, the CSF/router recipe (Contracts), and --mark journeys-drawn.
-  // beats-file writer runs here, at this step's own print — never from `--state`.
+  // The Agent dispatch line (fable model), one journey line per seed journey, the primitive-ban
+  // rule, the CSF/router recipe, and --mark journeys-drawn. The beats-file writer runs at this print.
   DESIGN_JOURNEYS: () => {
     const dp = readDesignPathsJson() || {}
     const journeysRel = typeof dp.journeys === 'string' ? dp.journeys : 'src/journeys'
@@ -2811,13 +2471,9 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // The one look stop where JJ
-  // approves the designed set in Storybook. On a served index carrying every journey story
-  // (Contracts): the 🎨 line naming the first journey's own verified URL, one `journey:` line per
-  // journey in seed order, the composite count, the reply line, and `--mark design-approved`. On
-  // any probe failure: the refusal naming the port and the reason, a `Session:` line for the
-  // background command, and no URL — the spike showed Storybook answering 200 for a story id
-  // that does not exist, so a URL here would point JJ at a page that may show nothing.
+  // On a served index carrying every journey story: the 🎨 line with the first journey's verified
+  // URL, one `journey:` line per journey, the composite count, the reply line, and
+  // `--mark design-approved`. On any probe failure: the refusal, a `Session:` line, and no URL.
   AWAITING_DESIGN_APPROVAL: () => {
     const paths = readDesignPathsJson() || {}
     const port = paths.storybook && paths.storybook.port
@@ -2866,10 +2522,7 @@ const STEPS = {
       'proceeding unless vetoed: brief order and dependencies (reorder later with spec-queue move)',
       'ask once: milestone gates — one AskUserQuestion',
     ]
-    // The roadmap derives from
-    // the approved set once docs/design/approval.json exists — a legacy or skipped-stage host
-    // (the file never written) prints no `approved:` line at all. D4a: this prefix replaced an
-    // earlier word the plugin's own retired-literal sweep (spec 01) bans under spec/ and tests/.
+    // The roadmap derives from docs/design/approval.json when it exists; otherwise no `approved:` line.
     const approval = readDocsDesignApproval()
     if (approval && approval.journeys && typeof approval.journeys === 'object') {
       const dp = readDesignPathsJson() || {}
@@ -2903,15 +2556,8 @@ const STEPS = {
     return lines.join('\n')
   },
 
-  // The DESIGN state (its own
-  // doctrine-drafted -> tokens-landed progression) is retired — the design canon
-  // is ratified at BRIEF, long before ROADMAP.
-
-  // HANDOFF becomes a judgment step — the
-  // session authors .claude/genesis/init-profile.json (init.md Phase 4's shape) and closes with
-  // `--mark profile-written`, which the driver runs init-gen.js generate for itself.
-  // regression pin still requires archetype/resolved gate/ADR count/brief count to print here —
-  // this step keeps ALL of them, on top of the new profile-authoring instructions.
+  // HANDOFF is a judgment step: the session authors .claude/genesis/init-profile.json and closes with
+  // `--mark profile-written`; archetype/gate/ADR count/brief count still print here.
   HANDOFF: () => {
     const desc = readStackDescriptor() || {}
     const adrCount = Array.isArray(desc.decisionRecords) ? desc.decisionRecords.length : 0
@@ -2921,12 +2567,8 @@ const STEPS = {
       genesisRel('conventions.json'),
     ]
     readFiles.push('docs/adr/')
-    // HANDOFF writes the
-    // contract's design block from status.app when it stamps spec.config.json — { "app":
-    // "<status.app>" } and nothing else, present only on a host the mocks stage actually ran on.
-    // Once the design stage landed a
-    // kit, the line reads design-paths.json instead — { "kit", "tokens", "rules" }, plus "app"
-    // when the mocks status still carries one. A skipped or never-reached stage is unchanged.
+    // HANDOFF writes the contract's design block: design-paths.json's { kit, tokens, rules } (+ app)
+    // once a kit landed, else { app } when the mocks stage ran; otherwise nothing.
     const mocksStatus = readMocksStatus()
     let designLine = ''
     if (status.designStage && status.designStage.kit) {

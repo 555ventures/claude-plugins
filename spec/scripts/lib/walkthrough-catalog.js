@@ -30,7 +30,7 @@ const { validate, lintShapes } = require('./json-shape')
 
 const DEFAULT_NAME = /^(?!.*--)[A-Za-z0-9_.-]{1,80}$/
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+const { isObj } = require('./util')
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
 
 function screenLabel(name, state) { return state ? `${name}@${state}` : String(name) }

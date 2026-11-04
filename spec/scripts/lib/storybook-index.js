@@ -8,10 +8,8 @@
 // scan and the beats-file-import scan, both in genesis-driver.js.
 // Owner: specs/20260926/05-the-kit-and-the-journey-stories.md.
 //
-// WHY iframe.html is required, not just index.json: spiked 2026-09-26 on a TanStack Start host —
-// `storybook build` exits 0 and prints "completed successfully" while writing index.json but no
-// iframe.html at all (Start's planning plugin replaces the client build input). Trusting the exit
-// code, or index.json's mere presence, would be a false pass on exactly the host that matters most.
+// WHY iframe.html is required, not just index.json: `storybook build` can exit 0 writing index.json but
+// no iframe.html (a TanStack Start host) — the exit code alone would be a false pass.
 //
 // What this deliberately does NOT do: read any file itself beyond staticDir's own index.json/
 // iframe.html (the driver resolves staticDir and passes it in) — no path policy lives here; judge
@@ -24,9 +22,7 @@
 const fs = require('fs')
 const path = require('path')
 
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+const { escapeRegExp } = require('./util')
 
 // `index.json` parsed, `iframe.html` required. A build that exits 0 without writing
 // iframe.html at all reports `reason: 'no-iframe'` rather than a false pass; a missing or
@@ -60,10 +56,8 @@ function normalizeName(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-// An entry belongs to `composite` when either its importPath's basename is
-// `<Composite>.stories.<ext>` under `kitDir`, or its title's last `/` segment equals the
-// composite — the index spikes on both storybook 10.5.8 and 10.6.0 name composites the second
-// way when the file lives elsewhere than `kitDir` names.
+// An entry belongs to `composite` when its importPath basename is `<Composite>.stories.<ext>` under
+// `kitDir`, or its title's last `/` segment equals the composite.
 function entryBelongsToComposite(entry, composite, kitDir) {
   const ip = typeof entry.importPath === 'string' ? entry.importPath.replace(/^\.\//, '') : ''
   const base = path.posix.basename(ip)
@@ -89,14 +83,9 @@ function stateStoriesCheck(entries, composites, kitDir) {
   return null
 }
 
-// Per journey, the entry whose importPath ends `/<journey>.journey.stories.<ext>` under
-// `journeysDir` and whose tags include both `journey` and `play-fn` — the two tags together are
-// the proof the story exists AND walks (`play-fn` is Storybook's own auto-added tag for a story
-// carrying a `play` function). `journeysDir` is repo-relative but Storybook writes importPath
-// relative to its own project root — on a workspace host (Storybook in apps/web) that is
-// "src/journeys" against "apps/web/src/journeys", so the dir matches journeysDir or a `/`-bounded
-// suffix of it. Returns `{ ok: true, stories: { <journey>: <story id> } }` once
-// every journey has one, or `{ ok: false, journey }` naming the first missing journey.
+// Per journey, the entry whose importPath ends `/<journey>.journey.stories.<ext>` under `journeysDir`
+// (or a `/`-bounded suffix — Storybook may sit in a workspace) and whose tags include `journey` and
+// `play-fn`. Returns `{ ok: true, stories }` or `{ ok: false, journey }` naming the first missing one.
 function journeyStoriesCheck(entries, journeys, journeysDir) {
   const stories = {}
   for (const name of journeys) {
@@ -115,30 +104,15 @@ function journeyStoriesCheck(entries, journeys, journeysDir) {
   return { ok: true, stories }
 }
 
-// Strips `//` line comments and `/* */` block comments before any import/require scan — the
-// pipeline rules' own recorded gotcha (a reader that scans commented-out code as if it were live
-// is a false positive waiting to happen). Naive by design: it does not
-// understand string literals, so a specifier containing a literal `//` (a URL) would be cut short
-// — genesis's own specifiers are all relative paths or `@/…` aliases, never URLs.
+// Strips `//` and `/* */` comments before any import/require scan. Naive by design: a specifier holding
+// a literal `//` would be cut short (genesis specifiers never do).
 function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
 }
 
-// Every specifier from `import … from <specifier>`, a bare `import <specifier>`, a
-// require(<specifier>) call, and a dynamic import(<specifier>) call, after stripComments,
-// admitting both quote forms, in source order. One combined regex (rather than four separate
-// passes merged and re-sorted) so source order falls out of a single left-to-right `exec` walk
-// for free. The bare-import alternative is tried BEFORE the from-clause alternative: the
-// from-clause alternative's `[\s\S]*?` span is lazy but unbounded, so if it were tried first at a
-// bare import's own `import` keyword it would keep expanding right past that whole statement
-// looking for the next `from` anywhere later in the file — silently swallowing a bare import that
-// precedes an `import … from` statement (repro: `import '@/x'\nimport y from './a.json'`, which
-// would report only `./a.json`). Trying the bare form first means it wins outright whenever
-// `import` is directly followed by a quote, so the from-clause alternative only ever fires when no
-// bare form matches at that position. What this still cannot see: a `from`-clause statement whose
-// own span (no bare import in between) has to cross into a LATER statement because the word
-// `from` never appears before then — not expected in real import statements, but a contrived
-// multi-import block engineered to lack an early `from` could still mis-scan.
+// Every specifier from `import … from`, a bare `import`, `require(…)` and dynamic `import(…)`, after
+// stripComments, in source order, via one combined regex. The bare-import alternative is tried first so
+// the lazy from-clause span never swallows a preceding bare import.
 const IMPORT_SPECIFIER_RE =
   /import\s*\(\s*(['"])([^'"]+)\1\s*\)|require\s*\(\s*(['"])([^'"]+)\3\s*\)|import\s+(['"])([^'"]+)\5|import\s+[\s\S]*?\bfrom\s+(['"])([^'"]+)\7/g
 

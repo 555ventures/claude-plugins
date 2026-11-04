@@ -3,51 +3,25 @@
 # Owner: specs/20260904/02-worktree-include-shared-owner.md.
 #
 # WHY A SCRIPT (and what it deliberately does NOT do):
-#   A subprocess cannot move the harness session's working directory. Only an
-#   ExitWorktree(keep) tool call, or a `cd` issued in the MAIN session, relocates
-#   the session. So this script never tries to relocate — instead the `cleanup`
-#   subcommand REFUSES to remove a worktree the session is still inside (exit 4),
-#   turning review.md's "relocate first" rule into a mechanical guarantee. That is
-#   the one defense against landing the session in $HOME after `git worktree remove`.
-#
-#   All git runs via `git -C <root>` so the merge targets the root checkout
-#   regardless of where the session sits. Strategy + conflict judgment stay with
-#   the model: `merge` exits 3 on conflicts for the model to resolve, then commit.
+# A subprocess cannot move the harness session's working directory, so this script never
+# relocates: `cleanup` REFUSES to remove a worktree the session is still inside (exit 4).
+# All git runs via `git -C <root>`. Strategy and conflict judgment stay with the model:
+# `merge` exits 3 on conflicts for the model to resolve, then commit.
 #
 # Subcommands:
-#   branch-for <spec path>    -> prints `spec/<stem>` (the spec filename sans directory and
-#                                extension) — pure string derivation, no git ops, no --root
-#                                precondition. The sole owner of the build-branch naming rule;
-#                                `create`'s --source is derived by callers via this subcommand
-#                                (see create's own note below), never re-derived inline.
-#   create   --source S [--attach] [--spec P] [--root R] [--base REF] [--name N]
-#                             -> deterministically `git worktree add` the build tree under
-#                                .claude/worktrees/, then print its ABSOLUTE path as the LAST
-#                                stdout line. The caller passes that path to EnterWorktree
-#                                {path:} and VERIFIES entry. This is the front half of the
-#                                lifecycle: it fails LOUDLY (branch/path exists, bad base,
-#                                run-from-worktree) so the build stage never silently lands on the
-#                                root branch when isolation was requested. Defaults: base=HEAD,
-#                                name=S with '/'->'-'. Must run from the MAIN working tree.
-#                                --source is taken pre-derived; callers derive it via `branch-for`
-#                                — `create` itself never re-derives the `spec/<stem>` naming rule.
-#                                The .worktreeinclude copy step is delegated to the shared owner
-#                                spec/scripts/worktree-include.sh (spec-paths worktree-include).
-#                                --attach re-attaches an EXISTING branch whose worktree directory
-#                                is gone (a parked build): same path, same include copy, no -b and
-#                                no --base. Without it an existing branch still dies — a caller
-#                                never silently resumes a dead branch.
-#                                Host setup runs HERE, in both modes: after the include copy,
-#                                the host's `setupCommand` (host config) runs inside
-#                                the new worktree, output on stderr. A failing setup undoes the
-#                                create (worktree removed; a fresh branch deleted, an attached one
-#                                kept) and exits 2, so a retry starts clean and no caller ever
-#                                enters a half-provisioned tree. No config or no setupCommand →
-#                                nothing runs.
-#                                --spec P (fresh create only): refuse unless the spec file at P
-#                                is committed, unmodified, on the base — a worktree branched from
-#                                a base without it has no spec to build, and the uncommitted file
-#                                left behind trips the clean-root gate at merge time.
+# branch-for <spec path>    -> prints `spec/<stem>` — pure string derivation, no git ops, no --root.
+# The sole owner of the build-branch naming rule.
+# create   --source S [--attach] [--spec P] [--root R] [--base REF] [--name N]
+# -> `git worktree add` the build tree under .claude/worktrees/ and print its
+# ABSOLUTE path as the LAST stdout line; the caller EnterWorktree {path:}s it and
+# verifies entry. Fails loudly (branch/path exists, bad base, run-from-worktree).
+# Defaults: base=HEAD, name=S with '/'->'-'. Must run from the MAIN working tree.
+# --source comes from `branch-for`. The .worktreeinclude copy is delegated to
+# worktree-include.sh. --attach re-attaches an EXISTING branch whose worktree
+# directory is gone (no -b, no --base). After the copy the host's `setupCommand`
+# runs inside the new worktree (stderr); a failing setup undoes the create and
+# exits 2. --spec P (fresh create only): refuse unless P is committed, unmodified,
+# on the base.
 #   root     [--worktree W]   -> prints the absolute PROJECT root (the main worktree), so the
 #                                caller cd's to a verified path and never guesses "root".
 #                                Project root != $HOME. Run from inside the worktree if no W.
@@ -76,11 +50,8 @@ note() { echo "$*"; }
 ROOT=""; TARGET=""; SOURCE=""; STRATEGY=""; WORKTREE=""; BASE=""; NAME=""; ATTACH=""; SPEC=""
 SUB="${1:-}"; shift || true
 
-# branch-for is pure string derivation (no git ops, no --root precondition) — it must be
-# special-cased HERE, before the generic flag loop below, because that loop dies on any bare
-# positional ("unknown arg") before subcommand dispatch ever runs (a refuter-executed defect).
-# The sole owner of the `spec/<stem>` build-branch rule: doctor.md check 11
-# and enter-worktree.md step 1 both derive {source} by invoking this instead of restating the rule.
+# branch-for is pure string derivation, special-cased HERE before the generic flag loop (which dies
+# on any bare positional). The sole owner of the `spec/<stem>` build-branch rule.
 if [ "$SUB" = "branch-for" ]; then
   SPEC_PATH="${1:-}"
   [ -n "$SPEC_PATH" ] || die "branch-for needs a spec path (e.g. branch-for specs/20260810/07-per-sha-ci-legs.md)"
@@ -91,8 +62,7 @@ if [ "$SUB" = "branch-for" ]; then
 fi
 
 while [ $# -gt 0 ]; do
-  # Every flag REQUIRES a value; a trailing/valueless flag dies loudly. (The old `shift 2` on a
-  # 1-arg tail shifted nothing and spun this loop forever.)
+  # Every flag REQUIRES a value; a trailing/valueless flag dies loudly.
   # --attach is the one valueless flag (create only).
   if [ "$1" = "--attach" ]; then ATTACH=1; shift; continue; fi
   case "$1" in
@@ -123,12 +93,9 @@ case "$SUB" in
     grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'
     exit 0 ;;
   create)
-    # Front half of the worktree lifecycle. `git worktree add` is deterministic and
-    # debuggable; EnterWorktree {name:} is a single opaque step that can fail to enter
-    # (base-ref fetch, name collision) and leave the build running on the root branch.
-    # So: create here, loudly; the caller then EnterWorktree {path:} into this exact path
-    # and VERIFIES the session actually moved. All diagnostics go to stderr; the LAST
-    # stdout line is the absolute worktree path for the caller to capture.
+    # Front half of the worktree lifecycle: create here, loudly; the caller then EnterWorktree {path:}
+    # into this exact path and verifies the session moved. Diagnostics go to stderr; the LAST stdout
+    # line is the absolute worktree path.
     [ -n "$SOURCE" ] || die "create needs --source (the new build branch name)"
     CROOT="${ROOT:-$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)}"
     [ -n "$CROOT" ] || die "create: not inside a git repo and no --root given"
@@ -170,17 +137,10 @@ case "$SUB" in
       fi
       git -C "$CROOT" worktree add -b "$SOURCE" "$WT" "$BASE" >&2 || die "create: 'git worktree add' failed"
     fi
-    # `git worktree add` materializes only TRACKED files, so gitignored runtime config
-    # (.env*, local overrides) never arrives and worktree builds boot env-less. Honor
-    # .worktreeinclude (Claude Code's native manifest: gitignore-syntax patterns at the
-    # repo root) with the same semantics the harness applies to worktrees IT creates —
-    # copy files that are BOTH gitignored AND manifest-matched. Claude Code never
-    # processes the manifest for externally created worktrees like this one, hence here.
-    # The copy step itself is delegated
-    # to the shared owner (spec-paths worktree-include) — replay.js's scratch worktree calls the
-    # same owner, so the two paths cannot drift apart again. Exit 0/3 continue (3 is already a
-    # printed WARNING from the owner); any other exit is a programmer-error `die` naming the
-    # owner's usage remedy.
+    # `git worktree add` materializes only TRACKED files, so gitignored runtime config (.env*) never
+    # arrives. Honor .worktreeinclude (copy files that are BOTH gitignored AND manifest-matched) through
+    # the shared owner (spec-paths worktree-include). Exit 0/3 continue (3 is a printed WARNING); any
+    # other exit is a programmer-error `die`.
     bash "$SELF_DIR/worktree-include.sh" --root "$CROOT" --dest "$WT"
     OWNER_RC=$?
     case "$OWNER_RC" in
@@ -341,28 +301,10 @@ case "$SUB" in
       if git -C "$ROOT" branch -d "$SOURCE"; then
         note "deleted branch $SOURCE"
       else
-        # `branch -d` proves containment by ANCESTRY, which a squash merge deliberately does not
-        # create: it copies the tree into one new commit and links nothing. So the recommended
-        # strategy for a many-commit spec (see RECOMMEND above) made this step fail 100% of the
-        # time, and the failure landed BEFORE the driver could record the merge as concluded —
-        # so a caller following the protocol's own "re-run the driver" instruction re-ran the
-        # legs and demanded a fresh reviewer for an already-closed review, appending a duplicate
-        # ledger row to the surface the replay schedule and catch-rate denominator are read from.
-        #
-        # Fall back to containment by CONTENT, which is what a squash actually guarantees: if the
-        # target's tree already equals the source's tree, every byte of the branch is on the
-        # target and nothing can be lost by deleting it. That check is strictly stronger than the
-        # thing `-d` was protecting (it compares the whole tree, not one merge-base walk), so the
-        # safety property is preserved — a branch carrying ANY content the target lacks still
-        # falls through to the refusal below, untouched.
-        #
-        # Tree identity alone is too narrow: the target legitimately moves on after a squash (the
-        # review driver commits the promoted ledger rows there before it calls cleanup, and a
-        # sibling spec may have landed while this one ran), so the two trees differ although the
-        # branch has nothing left to give. The second proof is the one a squash itself would give
-        # on a re-run — merging the source into the target produces the target's own tree, i.e.
-        # "nothing to squash". A conflicted or changing merge proves nothing and still refuses, and so
-        # does a git without `merge-tree --write-tree`.
+        # `branch -d` proves containment by ANCESTRY, which a squash merge never creates. Fall back to
+        # containment by CONTENT: the target's tree equals the source's, or merging the source into the
+        # target reproduces the target's own tree ("nothing to squash"). A conflicted or changing merge,
+        # or a git without `merge-tree --write-tree`, proves nothing and still refuses.
         CLEAN_TARGET="$(git -C "$ROOT" symbolic-ref --short -q HEAD || true)"
         CONTAINED=""
         if [ -n "$CLEAN_TARGET" ]; then

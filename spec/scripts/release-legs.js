@@ -112,26 +112,17 @@ function usage() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
-const { writeOut: syncWrite } = require('./lib/sync-write')
-// Synchronous writer: spec/scripts/lib/sync-write.js's header explains the 64 KiB pipe truncation it avoids.
-function writeAll(fd, str) {
-  syncWrite(fd, str)
-}
+const { writeOut: writeAll } = require('./lib/sync-write')
 
 const q = (p) => `"${p}"`
 
-// ---- shared child-process discipline (copied from review-legs.js's sh(), D-Behavior) -----------
-// bash -c, cwd = the passed root, NODE_TEST_CONTEXT scrubbed, output captured. A signal-killed or
-// spawn-failed child collapses to a red leg (exit 1), never a silent pass — mirrors review-legs.js
-// exactly so the two scripts' child-process semantics never drift apart.
+// ---- shared child-process discipline, mirroring review-legs.js's sh() -------------------------
+// bash -c, cwd = the passed root, NODE_TEST_CONTEXT scrubbed; a signal-killed or spawn-failed child is a red leg.
 function sh(cmd, opts = {}) {
   return runAsync(cmd, { cwd: opts.cwd, env: opts.env })
 }
 
-// computeTestsExecuted/computeSkips/
-// isUnobserved live in ./lib/count-observation.js, the sole home this script and review-legs.js
-// both import — each read against the LAST regex match over the runner's output, never the
-// first, so a decoy line quoting the summary phrase can never be misread as the count.
+// Count parsing lives in lib/count-observation.js (shared with review-legs.js), reading the LAST match.
 
 function readManifestRows(manifestPath) {
   if (!fs.existsSync(manifestPath)) return []
@@ -205,10 +196,7 @@ function ciQueryOnce(root) {
   const commit = (head.status === 0 && head.stdout ? head.stdout : '').trim() || 'HEAD'
   const r = spawnSync(process.execPath, [path.join(__dirname, 'ci-query.js'), '--commit', commit, '--root', root],
     { encoding: 'utf8' })
-  // review-legs.js's exact output->row mapping, copied verbatim so the two ci consumers can
-  // never drift apart. It extends it with the
-  // shaUnseen alternative, mapped to exit 0 unconditionally — `exit` is never touched on that
-  // branch, so a red branchConclusion can never redden this leg (the never-block ruling).
+  // review-legs.js's ci output->row mapping, plus shaUnseen mapped to exit 0 unconditionally.
   let observed = { unavailable: 'no-adapter' }, exit = 0
   const line = ((r.stdout) || '').trim().split('\n').pop() || ''
   if (/^unavailable/.test(line)) observed = { unavailable: 'no-adapter' }
@@ -245,9 +233,7 @@ async function runDeployLeg(root, deployCommand, outDir) {
   return { leg: 'deploy', exit: r.code, observed: { result: r.code === 0 ? 'pass' : 'fail' } }
 }
 
-// A plain curl probe, retried up to 3 attempts 5s apart, exit 0 iff any attempt succeeds.
-// runtime.readyCheck is deliberately NOT reused (it probes local boot, the wrong host for a
-// deployed URL). Shells bare `curl` (PATH-resolved), never an absolute path.
+// Plain curl probe, 3 attempts 5s apart; runtime.readyCheck is not reused (it probes local boot).
 async function runReadyLeg(stagingUrl, healthPath) {
   const url = stagingUrl + (healthPath || '')
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -264,13 +250,8 @@ async function runMigrationsLeg(root, migrationsCheck, outDir) {
   return { leg: 'migrations', exit: r.code, observed: { result: r.code === 0 ? 'pass' : 'fail' } }
 }
 
-// BASE_URL={stagingUrl} rides as spawn env, so every command of a compound e2eCommand sees it.
-// `executed` is derived on EVERY run,
-// red or green, through the lib's last-match parser, and recorded as a new LAST key on
-// `observed`. The existing branch on the child's exit code runs unchanged to produce
-// passed/failed; `exit` is then forced to 1 when the child exited 0 but isUnobserved(executed) —
-// an observed zero or a declared testCountPattern that never matched is the unsupported "the
-// suite ran" promise this leg exists to catch. A non-zero child exit is recorded as-is.
+// BASE_URL={stagingUrl} rides as spawn env. `executed` is derived on every run; exit is forced to 1
+// when the child exited 0 but isUnobserved(executed). A non-zero child exit is recorded as-is.
 async function runE2eLeg(root, release, capabilities, outDir) {
   const r = await sh(release.e2eCommand, { cwd: root, env: { BASE_URL: release.stagingUrl } })
   fs.writeFileSync(path.join(outDir, 'e2e.txt'), r.out + r.err)
@@ -362,11 +343,7 @@ async function cmdStage(argv) {
     }
   }
 
-  // ---- summary: mirrors review-legs.js's per-leg line, RED_BLOCKING, manifest/outputs footer ----
-  // A row that measured nothing prints ⚪
-  // instead of ✅ (never both — a leg cannot be reported measured and unmeasured at once) and
-  // its leg:reason pair is named on a trailing UNMEASURED: line, in row order, so a silent
-  // exit-0 row can no longer read as a passed release gate.
+  // ---- summary: per-leg line (⚪ when a row measured nothing), RED_BLOCKING, UNMEASURED, footer ----
   const lines = []
   const blocked = []
   const unmeasured = []
@@ -416,9 +393,7 @@ function cmdAppend(argv) {
         'non-negative integers')
       process.exit(2)
     }
-    // exit is forced to 1 when walked is 0 (with failed 0) — release.md requires every
-    // release to walk at least one journey, so a zero walk contradicts doctrine the same way an
-    // observed zero contradicts a declared count. --walked 0 --failed 0 stays well-formed input.
+    // exit is forced to 1 when walked is 0 — every release walks at least one journey.
     row = { leg: 'journeys', exit: (w === 0 || f !== 0) ? 1 : 0, observed: { walked: w, failed: f } }
   } else {
     if (result !== 'verified' && result !== 'skipped' && result !== 'failed') {
@@ -521,9 +496,8 @@ function cmdRecord(argv) {
 
   const verdictPath = path.join(__dirname, 'verdict.js')
   const r = spawnSync(process.execPath, [verdictPath, ...verdictArgs], { encoding: 'utf8' })
-  // The null-exit-status gotcha: spawnSync's status is null when the child is signal-killed,
-  // fails to spawn, or overflows maxBuffer — handing that straight to process.exit would exit 0,
-  // a fail-open in exactly the place this gate must fail closed.
+  // spawnSync's status is null when the child is signal-killed, fails to spawn or overflows maxBuffer —
+  // never hand that to process.exit, which would exit 0.
   if (r.status === null) {
     console.error('release-legs.js record: verdict.js died without an exit status (signal-killed, ' +
       `failed to spawn, or output exceeded maxBuffer) — re-run node ${q(verdictPath)} ` +

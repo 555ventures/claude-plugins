@@ -1,0 +1,9 @@
+{
+  "name": "spec",
+  "version": "8.0.0",
+  "description": "Spec-driven building for one person: plan a feature with the strong model, then one builder takes it to merged in its own worktree behind your test command.",
+  "author": {
+    "name": "JJ",
+    "email": "jj@555.ventures"
+  }
+}

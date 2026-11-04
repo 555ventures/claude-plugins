@@ -2,190 +2,95 @@
 
 A Claude Code plugin marketplace with three plugins:
 
-- **spec** — the full project lifecycle: optional greenfield **genesis** (picks your stack and
-  design direction), then the spec-driven **plan → run** loop per feature, and a **release**
-  gate per milestone.
-- **git** — fast add-all-commit and a guided merge.
-- **style** — an output style with outcome-first, emoji-anchored response rules that applies
-  wherever the plugin is enabled, instead of per-machine `CLAUDE.md` edits.
+- **spec**: build products quickly with AI, one spec at a time.
+- **git**: an add-all commit in two approvals, a guided merge, and per-spec worktree entry.
+- **style**: an outcome-first output style that applies wherever the plugin is enabled.
 
-The idea in one sentence:
+## spec v8
 
-> **The expensive model authors the contract; cheap models execute it behind deterministic
-> gates; the expensive model is consulted, not resident; a fresh-context reviewer must
-> demonstrate its verdicts.**
-
-Fable writes and hardens the plan, Sonnet workers do the typing test-first behind gates, and an
-independent review has to *demonstrate* its verdicts — executed tests, an observed app boot —
-before work counts as done. The steps run as a script, not model improvisation, so a crashed
-build resumes instead of restarting.
+You fill the queue and plan each feature with the strong model. Then the plugin builds it.
+One builder writes the spec test-first in its own git worktree, and your own test command
+decides green. One fresh reviewer reads the diff against the spec's Intent block, and green
+merges. A typical spec goes from queued to merged in minutes. Nothing that changes
+architecture or behaviour, and nothing irreversible, happens without your yes. Everything
+else is decided for you and printed as `📌 Auto-picked … (veto anytime)`. State lives in
+small files, so any run survives a crash or a `/clear` and resumes where it stopped.
 
 ## Install
 
 ```
 /plugin marketplace add 555ventures/claude-plugins
 /plugin install spec@555-tools
-/plugin install git@555-tools            # optional
+/plugin install git@555-tools            # optional, used by /spec:fix
 /plugin install style@555-tools          # optional
 ```
 
-### Prerequisites
+Needs `git` and Node 22 or newer.
 
-| Tool | Needed for | If missing |
-|---|---|---|
-| `git` | everything — worktrees, diffs, the state the pipeline derives | nothing works |
-| `node` (18+) | every deterministic gate and driver script | nothing works |
-| `jq` | the hook-enforced state machine and the plugin's own path helper | **stage-order enforcement stops running** — install it before you rely on the gates |
-| Chrome or Chromium | design capture (`/spec:mocks`) only | set `CHROME_BIN` to your binary; discovery probes macOS app paths first |
-| `gh` | optional PR conveniences | degrades with a named fallback |
+## Lifecycle
 
-## Set up a repo (once)
-
-**Existing repo** — one required step:
+A spec moves `draft → hardened → implementing → done`. `/spec:plan` writes and locks it.
+`/spec:run`, or `/spec:fanout` for several at once, builds, reviews and merges it. A hook
+refuses to run a draft.
 
 ```
-/spec:init          # profiles the repo, writes config + rules, then runs /spec:enforce for you
+/spec:init                                                   # existing repo, once
+/spec:plan "let signed-in users export invoices as CSV"      # → specs/20261104/01-invoice-export.md
+/spec:run  specs/20261104/01-invoice-export.md               # hardened → done
 ```
 
-**Brand-new project** (no code yet) — mock the product first, then run genesis and enforce:
+Brand-new project:
 
 ```
-/spec:mocks                                                               # driver-stepped to an approved mock set (stages: docs/canonical/design.md)
-/spec:genesis         "a trading simulator for retail traders in Japan"  # stack + scaffold + roadmap briefs, grounded in the approved mocks
-/spec:enforce
+/spec:mocks                                   # optional: approve the screens first
+/spec:genesis "a trading simulator for retail traders in Japan"
+/spec:plan docs/roadmap/01-<slug>.md
 ```
 
-Chain: `/spec:mocks → /spec:genesis → /spec:enforce → /spec:plan`.
+Lost? Run `/spec:status`.
 
-`/spec:mocks` is optional but recommended for any product with a UI: a driver-stepped design
-session derives its state from disk and ends with
-an approved set of screens genesis can ground its stack pick in. Genesis researches live (web
-agents), has one proposer — the planning session itself — write the decision record from that
-research, and brings every hard-to-reverse fork back to you as a question — nothing is
-silently decided without you. It ends with a scaffolded repo and `docs/roadmap/` briefs, so
-setup never ends without a next command. Existing repos skip both entirely.
+## Commands
 
-Until `/spec:init` has run, every other `spec` command refuses to start.
+| Command | What it does |
+|---|---|
+| `/spec:init [notes]` | Detects the test command and trunk and writes `.claude/spec.config.json`. Lint and typecheck go into the gate |
+| `/spec:doctor [--fix]` | Checks the config, the gate, gitignored worktrees and leftover runs. `--fix` applies the remedies after one yes |
+| `/spec:connect [--project <id>] [--name <text>] [--base-url <url>]` | Links the project to the hosted walkthrough review service |
+| `/spec:genesis <idea>` | Greenfield only. Covers discovery, a researched stack, ADRs, a green scaffold and roadmap briefs |
+| `/spec:mocks` | Gray wireframes of each journey, approved before genesis |
+| `/spec:prototype <idea \| brief \| stem> [--stem <name>]` | A throwaway app you pin notes on until you approve. It ends in a behaviour contract |
+| `/spec:plan <description \| spec \| brief \| contract.json>` | Writes a spec with an Intent block, asks only the real forks, then locks and queues it |
+| `/spec:run <spec> [--in-place]` | Builds, gates, reviews and merges one spec in its own worktree |
+| `/spec:fanout [<spec>…]` | Drains the queue as parallel lanes and merges them in order with the gate green after each |
+| `/spec:fix [symptom]` | Root cause in one sentence, a regression test, the fix, the gate, then `/git:commit` |
+| `/spec:queue [next\|list\|add\|move\|done\|show]` | Your intended work order |
+| `/spec:status` | Roadmap, what to run next, and waiting questions |
+| `/spec:release [note]` | Deploys to staging, runs checks against it, and promotes on your yes. Only you start it |
+| `/spec:migrate` | One-time upgrade of a v7 repo. It prints a plan, then applies it on your yes |
+| `/spec:enforce` | Retired. Init folds lint and typecheck into the gate |
+| `/git:commit` | `git add -A` and commit, in two approvals |
+| `/git:merge [branch]` | Inspect, pick a strategy, repair conflicts and clean up the worktree |
+| `/git:enter-worktree <spec>` | Create or re-enter `.claude/worktrees/spec-<stem>` by hand |
 
-**Lost? Run `/spec:status`.** It is the orientation surface: one script run that prints where the
-work stands and the single command to paste next. Nothing it prints is stored — every status is
-derived from disk — so it is always safe to run and never needs to be kept up to date.
+## Seats
 
-## Build a feature (the loop you repeat)
+| Role | Model |
+|---|---|
+| genesis, prototype, plan, architecture review | Fable, high effort |
+| run and fanout orchestrator | Opus, medium |
+| builder | Sonnet, high, retried on Opus after a red gate |
+| reviewer | Opus, low (Fable when a spec says `architecture: true`) |
 
-```
-/spec:plan "let signed-in users export their invoices as CSV"   # existing repo: just describe it
-/spec:run  specs/20260716/01-invoice-export.md                  # hardened → done
-```
+Override any seat with `seats` in `.claude/spec.config.json`.
 
-`plan` takes a **feature description, a spec path, or a roadmap brief path**. An existing repo has
-no `docs/roadmap/`, so describe the feature in prose — briefs only exist if genesis wrote them, or
-if you write them yourself. With briefs, the same loop reads:
+## Upgrading from v7
 
-```
-/spec:plan   docs/roadmap/01-*.md            # write + harden the spec (asks the hard questions)
-/spec:run    specs/20260716/01-foo.md        # hardened → done: build driver, then review driver
-```
+Run `/spec:migrate`. It trims the config, archives v7-only files under `docs/archive/v7/`,
+and leaves specs, briefs, ADRs, mocks and prototypes as they are. It refuses while a fanout
+or an unmerged build is in flight.
 
-- `plan` prints the spec path — paste it into the commands that follow. It also tells you when a
-  change is too small to bother; small work should just be asked for directly.
-- `/spec:run` opens the spec's own worktree first, then carries a hardened spec the rest of the
-  way itself: test-first implementation behind the host gate, then independent executed review.
-  It stops only for decisions — a worktree it cannot create, findings the disposition agent
-  wants to let stand, merge strategy, and the step out of the worktree before merge — and never
-  for a `/clear`.
-- Requirement changed mid-build? Write the ruling into the spec's Decisions table — that is
-  where workers read it — and re-run `/spec:run`; it resumes by skipping File Plan rows the
-  diff already shows landed.
+## For plugin authors
 
-Each stage refuses to run out of order (`draft → hardened → implementing → done` is enforced by
-a hook); `/spec:run` itself is admitted on `hardened`, `implementing`, and `done` since one
-invocation now spans build through review. A wrong command still costs you an error message,
-not a mess.
-
-## Ship a milestone
-
-```
-/spec:release       # staging deploy → executed checks against the deployed product → confirmed promote
-```
-
-Per-spec review proves a diff works on a dev boot; release proves the milestone works as a
-*deployed product*. Run it every few briefs so cross-spec seams get executed continuously.
-
-## Keep it healthy (occasional)
-
-- **`/spec:doctor [--fix]`** — drift + ledger health check; run after plugin updates or when
-  something feels stale. A hook also auto-warns when generated files go stale.
-- **`/spec:enforce`** — re-mechanize your rules into deterministic checks when rules or tooling
-  change (init runs it the first time).
-- **The escape row is automatic.** When a fix commit touches lines a reviewed spec landed,
-  `/git:commit` writes the escape row itself — at most one skippable question, the defect class.
-  This keeps the review layer honest.
-
-## Command reference
-
-| Command | What it does | When |
-|---|---|---|
-| `/spec:connect` | Wire this project to the hosted review service in one command: create or join the project with `npx walkthrough-cli` (signed in once with `npx walkthrough-cli login`), store the token in the git-ignored `settings.local.json`, prove the link, write the `walkthrough` block | Once per project, first — before `/spec:genesis` in an empty folder, otherwise before `/spec:mocks` |
-| `/spec:mocks` | Driver-stepped design entry point, run to an approved mock set — the current stage chain lives in [`docs/canonical/design.md`](docs/canonical/design.md) | Greenfield only, before genesis |
-| `/spec:genesis` | Stack + scaffold + roadmap + rendered design candidates in your browser; ratify the pick | Greenfield only, before init |
-| `/spec:init` | Profile the repo, generate the grounding layer, run enforce | Once per repo |
-| `/spec:plan` | Author + adversarially harden a spec | Per feature |
-| `/spec:run` | Isolates in the spec's own worktree, then runs the whole feature: test-first implementation behind the host gate, then independent executed review, commits/merges and flips `done`; resumable, stopping only for decisions — the only way into the build and review stages | Per feature |
-| `/spec:release` | Staging deploy → executed checks → confirmed promote | Per milestone |
-| `/spec:fix` | Root-cause repair in the Direct lane: root-cause statement before the first edit, a decisions stop on every authored string, one fresh reviewer, then the host gate and `/git:commit` (which records the fix row) | A repair under ~100 production lines touching at most three non-test files, whatever the host's layerGroups, or one that touches user-visible text; above that floor a repair is a spec |
-| `/spec:status` | Where the work stands + the one command to paste next; `--all` adds lanes, blocked list, hygiene | Anytime you are lost |
-| `/spec:queue` | Your intended work order across briefs and specs — the one thing the pipeline cannot derive | When the order matters |
-| `/spec:doctor` | Drift + ledger check; `--fix` repairs with approval | When things feel off |
-| `/spec:enforce` | Turn rules into deterministic checks | On rule/tooling change |
-| `claude plugin eval ./spec` | The plugin's eval suite: proves a fresh session picks the commands on plain phrasing and runs their scripts, scored against a no-plugin baseline — see [`spec/evals/README.md`](spec/evals/README.md) | After a command or skill-description change; never in the gate (each run is paid) |
-| `/git:commit`, `/git:merge` | Add-all-commit (writes the escape row on fix commits); guided merge | Anytime |
-| `/git:enter-worktree` | Manually enter or repair a spec's worktree — `/spec:run` opens it automatically | If `/spec:run`'s isolation step fails, or to re-enter by hand |
-
-## What makes it different
-
-This is not another specify → plan → implement template — that skeleton is commodity now
-([GitHub Spec Kit](https://github.com/github/spec-kit), [OpenSpec](https://github.com/Fission-AI/OpenSpec),
-Kiro, BMAD, and several Claude Code plugins all have one). This plugin was built around a
-different question: **how do you trust work you didn't watch happen?** Its answers don't exist
-elsewhere:
-
-- **The review must execute, not read.** Elsewhere "review" is a model reading a diff; here the
-  reviewer runs the tests and boots the app before a verdict counts. Independent testing of Spec
-  Kit found exactly this gap — good planning artifacts, code that drifts from spec intent.
-- **The review layer is falsifiable.** `/git:commit` records the escape row for defects that slipped past a CLEAN
-  verdict, and guards that don't earn their keep on ledger evidence get retired. No other tool
-  keeps score on its own review process.
-- **Model economics are encoded.** Expensive model authors and judges, cheap models type behind
-  deterministic gates, a fresh-context reviewer judges. Others are single-model or model-agnostic.
-- **Genesis writes the record in front of you.** Live-researched stack and design decisions,
-  authored by one proposer — the session itself — with hard forks surfaced as questions — not
-  a template questionnaire.
-- **It's shaped by daily production use.** 555 Ventures LLC runs this pipeline internally every
-  day across multiple projects. Features here were promoted or retired on evidence from real
-  builds — the v7.0 redesign deleted every guard that stopped earning its keep.
-
-Honest trade-off: this buys rigor with ceremony and maintenance surface (grounding layers,
-deterministic gate scripts, doctor checks). If you want a lightweight spec loop, Spec Kit or OpenSpec is
-less to carry. This is for when the failure you fear is *plausible-looking work that was never
-actually verified*.
-
-## When *not* to use it
-
-This is heavy machinery. Use the pipeline only when the work needs **delegation** (big enough
-that workers should type while the strong model plans), **durability** (spans sessions), or
-**gates** (blast radius that warrants refuters and executed review). A one-file fix in an
-established pattern never gets a spec — the plugin will tell you the same.
-
-## Notes for plugin authors
-
-- **Behavior lives in scripts; prose states contracts.** Deterministic checks are scripts with
-  exit codes (`spec/scripts/`), pinned by behavioral tests that execute them;
-  prose is pinned only for the references and protocol tokens it must keep
-  (core § Doctrine Authoring); retiring wording is checked once at review through `[oracle: literals]`. A standing guard is earned by a third recurrence of a class (core § Incident
-  Policy), never by an incident memory written into doctrine.
-- **The design family's `wf-*.js` files are frozen checked-in scripts** (the codegen seam was
-  retired in v7.0); they change only under a spec that names them, pending the v7.1 design
-  thinning.
-- **Doctrine hygiene:** state a fact once (highest common ancestor in `doctrine/core.md` or
-  `doctrine/design.md`, everywhere else points); never name a derived case.
+Behaviour lives in `spec/scripts/` and is tested by running it (exit codes, files, JSON).
+Command prose states intent and hard rules only. See `docs/v8/` for the design and
+architecture.

@@ -1,138 +1,46 @@
 ---
-description: Guided branch merge — pre-merge inspection, strategy choice, conflict repair, and worktree cleanup
-argument-hint: [source branch]
+description: Guided branch merge covering pre-merge inspection, strategy choice, conflict repair, and worktree cleanup
+argument-hint: "[source branch]"
 ---
 
-# Git Merge with Conflict Repair
+# Guided merge
 
-## Step 1: Identify Source Branch (ASK IF AMBIGUOUS)
+**1. Source.** Use `$ARGUMENTS` if given. Otherwise run `git branch --show-current` (the
+target), `git branch -vv`, `git worktree list` and `git log --oneline -5` in parallel. If the
+source is still ambiguous, ask with the real branches as options. A single `spec/*` branch
+ahead of the target goes first, marked Recommended. Refuse a `proto/*` source:
+`🚫 <source> is a prototype branch — it is never merged; its contract lands through a spec`,
+with Next `/spec:plan design/prototypes/<stem>/contract.json`.
 
-If the user provided a branch name as an argument, use it. Otherwise, run **in parallel**:
+**2. Inspect (one approval).** In parallel: `git fetch --all --prune`, `git status`,
+`git log --oneline <target>..<source>`, `git diff --stat <target>...<source>`,
+`git merge-base <target> <source>`. Summarise as N commits, M files, and the touched paths.
+If the tree is dirty, ask:
 
-- `git branch --show-current` — current branch (the merge target)
-- `git branch -vv` — list branches with tracking info
-- `git worktree list` — show worktrees (we may be inside one)
-- `git log --oneline -5` — recent context on current branch
+- commit them first with `/git:commit` (Recommended), then continue;
+- stash them with `git stash push -u -m "merge: <source>"` and restore them after;
+- abort. Nothing is merged. Report `🚫 working tree is dirty — cannot inspect or merge safely`.
 
-If the source branch is still ambiguous, use `AskUserQuestion` with concrete branch options pulled from `git branch -vv`. Do NOT guess. When exactly one `spec/*` branch is ahead of the target it is the first option, marked `(Recommended)`; the question is still asked.
+**3. Strategy.** Use the config's `mergeStrategy` if it is set. Otherwise derive it: `ff-only`
+when the target has not moved since the merge base, else `merge-commit`. Print
+`📌 Auto-picked <strategy> — <reason> (veto anytime)` and go on. The user can veto by naming
+`--no-ff`, `--ff-only`, `--squash`, or rebase then fast-forward.
 
-**Refusals, before any inspection runs:**
+**4. Merge.** If you are inside the source's worktree, call `ExitWorktree(action="keep")`
+first. Then merge from the main checkout.
 
-- Source matches `proto/*` → STOP: a prototype branch is never merged. Report `outcome:
-  {anchor:'🚫', text:'<source> is a prototype branch — it is never merged; its behaviour
-  contract (design/prototypes/<stem>/contract.json) lands through a spec'}`, `next:
-  {kind:'command', text:'/spec:plan design/prototypes/<stem>/contract.json'}`.
+**5. Conflicts.** List them with `git diff --diff-filter=U`. Read both sides of each file and
+resolve by intent. For a real disagreement (logic on both sides, deleted vs modified), ask
+with ours / theirs / a described combination. `git add` each file, show a short summary of the
+resolutions, then `git commit --no-edit` (or `-m` for a squash).
 
-## Step 2: Pre-Merge Inspection (ONE APPROVAL)
+**6. Clean up.** Confirm with `git log --oneline -3` and `git status`. If the source had a
+worktree, run `git worktree remove <path>` and `git branch -d <source>`. A path that is
+already gone counts as cleaned.
 
-Run **in parallel in a single message**:
+End with one report: `✅ merged <source> into <target>`, with commit and file counts.
 
-- `git fetch --all --prune` — sync remotes
-- `git status` — verify working tree is clean
-- `git log --oneline <target>..<source>` — commits being merged in
-- `git diff --stat <target>...<source>` — file-level summary of incoming changes
-- `git merge-base <target> <source>` — common ancestor (for sanity)
+## Rules
 
-**If working tree is dirty**: do not proceed; ask ONE `AskUserQuestion`:
-
-- "commit the unrelated changes first via `/git:commit` (Recommended)" — the tree is clean, then the merge continues
-- "stash them with a tagged entry (`git stash push -u -m "merge: <source>"`)" — the changes are shelved; restore them after the merge
-- "abort" — nothing is merged; Report as **dirty working tree** (see ## Report)
-
-**Show user**: short summary — N commits, M files, list of touched paths. Do not dump full diffs. Run any landing-time check the host's pipeline rules § Review Checks declare before Step 3.
-
-## Step 3: Derive Merge Strategy
-
-Run `bash "$(spec-paths merge-back)" inspect --root . --target <target> --source <source>` and
-take its `RECOMMEND:` line — the single home of the strategy heuristic. Print `📌 Auto-picked
-<strategy> — <reason> (veto anytime)` and proceed. Where the host's `policy.mergeStrategy` names a
-strategy (not `derived`), skip the `RECOMMEND:` read and print `📌 Auto-picked <strategy> — host policy (veto anytime)`; the user vetoes by naming another strategy
-(`git merge --no-ff`, `--ff-only`, `--squash`, or rebase then FF).
-
-## Step 4: Execute Merge
-
-Run the chosen merge command. If it succeeds cleanly, jump to Step 6.
-
-## Step 5: Conflict Repair (IF CONFLICTS)
-
-If `git merge` reports conflicts:
-
-1. Run `git status` and `git diff --diff-filter=U` to enumerate conflicted files
-2. **For each conflicted file**: read the file, understand BOTH sides of the conflict markers, and resolve based on intent — do not blindly pick one side
-3. For non-trivial conflicts (logic changes on both sides, structural disagreement, deleted-vs-modified), use `AskUserQuestion` with concrete options:
-   - "Keep target version (ours)"
-   - "Keep source version (theirs)"
-   - "Manual merge — combine both" (and describe the proposed combination)
-4. After resolving, run `git add <file>` for each repaired file
-5. Run `git diff --cached` and show the user a concise summary of resolutions before committing
-6. Complete with `git commit --no-edit` (uses the prepared merge message) OR `git commit -m "..."` if squash
-
-**NEVER** use `git checkout --ours/--theirs` blindly. **NEVER** use `git merge --abort` without asking.
-
-## Step 6: Verify Merge
-
-Run **in parallel**:
-
-- `git log --oneline -3` — confirm merge commit landed
-- `git status` — confirm clean tree
-
-## Step 7: Worktree Cleanup
-
-If we are inside a worktree (detected in Step 1) OR the source branch had a dedicated worktree:
-
-**Correct sequence (avoids CWD warning):**
-
-`ExitWorktree(action="remove")` cannot be called after merging — the worktree branch still appears unmerged from the harness's perspective at that point. And merging requires switching to the target branch, which is impossible from inside the worktree (it's already checked out in the main repo). The clean path is:
-
-1. **`ExitWorktree(action="keep")`** — restores the session CWD to the main repo root; leaves the worktree directory and branch intact. No unmerged-commit check on `keep`.
-2. **Do the merge** from the main repo root (Steps 3–5 execute here — target branch is already checked out).
-3. **Remove the worktree** from the main repo root — no CWD warning:
-   ```
-   git worktree remove <worktree-path>
-   git branch -d <source-branch>
-   ```
-
-If the worktree path is already gone (e.g. already removed), treat cleanup as done — verify with `git worktree list` if unsure.
-
-If the session was NOT entered via `EnterWorktree` (ExitWorktree is a no-op), skip step 1 and do steps 2–3 directly via `git -C <main-repo-path>`. A CWD warning may appear — this is unavoidable in that case.
-
-## Report
-
-report contract: spec core.md § Console Output Style — rendered via `spec-paths report-render`
-
-Assemble a slots object and run `node "$(spec-paths report-render)" --slots <file>` (write the
-JSON to the scratch dir first), printing its output verbatim:
-
-- **Merged** (Step 7 done, or Step 6 confirmed clean with no worktree to clean up):
-  `outcome: {anchor:'✅', text:'merged {source} into {target}'}`, optional `bullets` noting
-  commit/file counts from Step 2, `next: {kind:'none', reason:'merge landed'}`.
-- **Dirty working tree** (Step 2): `outcome: {anchor:'🚫', text:'working tree is dirty — cannot
-  inspect or merge safely'}`, `next: {kind:'command', text:'/git:commit — commit the dirty tree
-  (or run \`git stash -u\` to shelve it), then retry the merge'}`.
-- **Prototype refusal** (Step 1): the slots named above under Refusals.
-
-```report
-✅ **merged spec/checkout into main**
-Next: nothing needs you — merge landed
-```
-
-```report
-🚫 **working tree is dirty — cannot inspect or merge safely**
-Next: /git:commit — commit the dirty tree (or run `git stash -u` to shelve it), then retry the merge
-```
-
-```report
-🚫 **proto/28-functional-prototype is a prototype branch — it is never merged; its behaviour contract (design/prototypes/28-functional-prototype/contract.json) lands through a spec**
-Next: /spec:plan design/prototypes/28-functional-prototype/contract.json
-```
-
-## NON-NEGOTIABLE RULES
-
-1. **Never `--no-verify`** — pre-merge hooks run unmodified
-2. **Never force-push, never `merge --abort` silently** — both require explicit user approval
-3. **Never resolve conflicts by picking a side without reading the file** — conflicts are logic decisions
-4. **Worktree cleanup**: follow Step 7's sequence exactly.
-5. **Use `AskUserQuestion`** for non-trivial conflict resolution only; the strategy is derived
-   — question style: plain language, self-contained, consequences per option, recommended
-   pick first
-6. **Never push after merge** unless user explicitly asks
+- No `--no-verify`, no force-push, no push unless asked.
+- Never `git merge --abort` or take one side of a conflict without asking.

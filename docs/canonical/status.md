@@ -38,4 +38,12 @@ path); any pair with a briefless side by File Plan — disjoint plans are parall
 serialize with `File Plan overlap: <paths>`, where the host's `policy.fanout.overlapExempt` globs and
 its pipeline rules file never count; a side with no File Plan rows makes no claim. The 🔶 heads-up
 keeps reporting raw overlap. `fixes[]` carries `after`, the queued item's after-spec path or null.
-(specs/20261103/06-the-fan-out-drains-the-queue.md)
+(specs/20261103/06-the-fan-out-drains-the-queue.md) An item may carry `origin: {spec, stage}`,
+`trigger` and `batch`, written only by `spec-queue add` (`--origin`/`--stage`/`--trigger`, or the lane
+fallback from the fan-out table; `batch` is the live fan-out's `startedAt`); the dashboard prints
+`↳ from <spec> (<trigger>)` under such a row and `show` prints it with the batch. Items without the
+fields read as origin unknown. `--lanes --json`'s `fixes[]` carries `origin`, `trigger` and `batch`
+(null when absent), `files` (the repo files the item's text names, null when none), `overlaps` (the
+open specs whose File Plans name them) and `blocker` (the unmet `after` gate's text, null when ready),
+and a fourth top-level key `born` lists every undone item carrying any of the three provenance fields.
+(specs/20261103/08-queue-items-remember-their-origin.md)

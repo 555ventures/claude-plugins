@@ -198,6 +198,18 @@ after every green merge, green repair and lane end to dispatch waiting members a
 batch's own lanes queued after a member, and reports when the batch is done; the next bare run starts
 the next batch. A pending question, then a merge-ready lane, outrank a new dispatch; a red main
 outranks both. (specs/20261103/06-the-fan-out-drains-the-queue.md)
+A fix born of the batch joins it by provenance: its `batch` is this run's `startedAt`, its `after` gate
+is met and its `origin.spec` is a member lane that has merged; a fix born of a fix lane, a birth of
+another run, and anything `/spec:plan` queues wait for the next batch. The batch walk admits every
+startable spec before it meets a queue prompt, so a `/spec:plan` item ends the batch without holding a
+spec back and heads the REPORT with its `↳ from` line. A fix whose text names repo files runs beside the
+run lanes whose File Plans it does not overlap; one naming none runs after them as before. A gated fix
+under `--include-fixes` waits in the table until its gate is met. A red main is repaired by a lane: the
+run's gate-red item is tabled as the repair lane, dispatched onto the red main alone, and its merge
+re-runs the gate that was red; a green `--mark gate-repaired` still ticks the item for a repair landed
+another way. MERGE refuses a dirty main root naming the stray files. The REPORT's `queued` slot leads
+with this run's births, `/spec:plan` births first, each with its `↳ from` line.
+(specs/20261103/08-queue-items-remember-their-origin.md)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

@@ -7,6 +7,9 @@
 // sinceLastRelease() counts distinct specs closed CLEAN since the last CLEAN release row, never a
 // raw row count (a fix round writes two review rows for one close).
 //
+// ceremonyMetrics() sums, over distinct specs with a CLEAN review row, the suite runs and the
+// test:production line split the ledger records (specs/20261103/13 D15) — a number to read, never a guard.
+//
 // What it deliberately does NOT do: query CI, write ledger rows, or shape a render — callers
 // render their own clauses.
 //
@@ -46,6 +49,30 @@ function sinceLastRelease(rows) {
   return { done, released }
 }
 
+// suiteRuns: review-row legs named suite/slow whose observed carries no `unavailable` key, plus each
+// build row's gate.finalRounds when gate.postGate is true; closes/testLines/productionLines: review rows
+// carrying `lines`. All over specs that have a CLEAN review row.
+function ceremonyMetrics(rows) {
+  const specs = new Set(rows.filter((r) => r.stage === 'review' && r.verdict === 'CLEAN').map((r) => r.spec))
+  const m = { specs: specs.size, suiteRuns: 0, closes: 0, testLines: 0, productionLines: 0 }
+  for (const r of rows) {
+    if (!specs.has(r.spec)) continue
+    if (r.stage === 'build' && r.gate && r.gate.postGate === true && typeof r.gate.finalRounds === 'number') {
+      m.suiteRuns += r.gate.finalRounds
+    } else if (r.stage === 'review') {
+      for (const l of Array.isArray(r.legs) ? r.legs : []) {
+        if (l && (l.leg === 'suite' || l.leg === 'slow') && !(l.observed && 'unavailable' in l.observed)) m.suiteRuns++
+      }
+      if (r.lines && typeof r.lines === 'object') {
+        m.closes++
+        m.testLines += Number(r.lines.tests) || 0
+        m.productionLines += Number(r.lines.production) || 0
+      }
+    }
+  }
+  return m
+}
+
 module.exports = {
-  readLedgerRows, sinceLastRelease,
+  readLedgerRows, sinceLastRelease, ceremonyMetrics,
 }

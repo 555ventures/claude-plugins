@@ -47,31 +47,24 @@ The standing rules:
   verdict, the ledger row, or mark acceptance. `/spec:doctor` check 17 is the same derivation's
   authoritative, browsable form; review's line only surfaces it at the moment new drift is
   created. (specs/20260907/01-mixed-pin-guard-and-drift-line.md D6)
-- **Tests are classified at close, deleted only by a deliberate sweep.** The driver's close
-  work runs `expire-tests.js --spec <spec>` after the authoritative verdict and before the
-  ledger append: every test tagged with the closing spec's AC-IDs is classified *retirable*
-  unless its call text cites a ledger escape class, its file names a script in the derived
-  invariants set (`lib/invariants.js`: the transitive closure of scripts reachable from the
-  host's config commands, hook commands and the pipeline's four entrypoints), a cited AC is a
-  `SHALL CONTINUE TO` pin in a spec dated on or after 20260911, or a cited AC is unresolved.
-  An AC-ID is unresolved when it belongs to a spec that is neither `done` nor `superseded`,
-  when no spec defines it, or when a spec file under `specs/` cannot be read and the id falls
-  under that file's path-derived prefix (`specs/YYYYMMDD/NN[a]-*.md` →
-  `AC-YYYYMMDD-NN[a]-`) — the unreadable file is warned about on stderr and never changes the
-  exit code. An AC-ID defined by more than one spec counts as closed only when every spec
-  defining it is closed; the fail-safe holds through a number collision. Untagged tests are
-  never touched. That close-time run is a **dry run in every mode the driver uses** — it
-  reports what is retirable and which files that would empty, and writes nothing. The review
-  row records `tests:{born,kept,retired}` from it (`retired` meaning *retirable*, not
-  *deleted*) and the CLOSE step prints one 🧹 line when anything is retirable, stating that
-  nothing is deleted at close and naming the sweep. With `policy.testExpiry: off` the close skips
-  classification, prints `test expiry: off by policy` in place of the 🧹 line, and omits the
-  row's `tests` key (specs/20261029/09-the-commands-read-the-policy-block.md D4). A failing or unparseable classification
-  refuses the close. `--mark closed` re-runs the resolved host gate and then the host's whole
-  suite over the committed close tree and refuses on either red; it applies no expiry, makes
-  no commit of its own, and leaves `git rev-parse HEAD` untouched. The one path that deletes a
-  test is `/spec:doctor` check 20's remedy — `node "$(spec-paths test-expiry)" --root .
-  --all-done --apply` — run only after one question naming the count and the files.
+- **Tests are classified and deleted at close.** The driver's close work runs
+  `expire-tests.js --spec <spec> --apply --no-gate` after the authoritative verdict and before
+  the ledger append: a test tagged with the closing spec's AC-IDs survives only through a ledger
+  escape class cited in its call text, an `[invariant]`/`[pin]` token in its title or comment
+  block, or a cited AC that is a `SHALL CONTINUE TO` bullet (or is unresolved — an AC-ID whose
+  spec is neither `done` nor `superseded`, that no spec defines, or that falls under an
+  unreadable spec file's path-derived prefix, warned on stderr). An AC-ID defined by more than
+  one spec counts as closed only when every spec defining it is closed. Untagged tests are never
+  touched. The deletions ride the session's close commit and the drift check ignores them; the
+  review row records `tests:{born,kept,retired}` (`retired` now meaning deleted) and
+  `lines:{tests,production}`, and the 🧹 line says what was removed. With
+  `policy.testExpiry: off` the close skips expiry, prints `test expiry: off by policy` in place of
+  the 🧹 line, and omits the row's `tests` key (specs/20261029/09-the-commands-read-the-policy-block.md D4).
+  A failing or unparseable classification refuses the close. `--mark closed` re-runs the resolved
+  host gate, then the host's whole suite, then the declared slow tier over the committed close
+  tree and refuses on any red; it makes no commit of its own and leaves `git rev-parse HEAD`
+  untouched. `node "$(spec-paths test-expiry)" --root . --all-done --apply` remains the catch-up
+  sweep for tests that closed before this version (specs/20261103/13).
 - **A merge-back that deletes shipped work records it.** Before the first `merge-back.sh`
   subcommand, the driver derives the files the spec branch deleted that a done spec's File Plan
   created (`supersession-rows.js --merge`, creator rows only, tests layer excluded) and stores

@@ -35,6 +35,9 @@
 //       to 1 when isUnobserved(executed) (imported from spec/scripts/lib/count-observation.js,
 //       the same predicate review's at-risk/suite legs apply — never a second copy); a non-zero
 //       child exit is recorded as-is. no-format-declared never forces.
+//   {"leg":"slow","exit":E,"observed":{"skips":N,"todos":N,"testsExecuted":N|{"unavailable":R}}}   (only when the
+//       host declares slowTestCommand, after wave 2; exit forced to 1 on an exit-0 run whose testsExecuted is
+//       unobserved; output in slow-output.txt; blocking — specs/20261103/13 D13)
 //   {"leg":"journeys","exit":0|1,"observed":{"walked":N,"failed":M}}      (append-only; exit is
 //       forced to 1 when walked is 0 — release.md requires every release to walk at least one
 //       journey)
@@ -274,6 +277,17 @@ async function runE2eLeg(root, release, capabilities, outDir) {
   return { leg: 'e2e', exit, observed: { passed, failed, skipped, executed } }
 }
 
+// The host's optional slowTestCommand, bare, typed like the e2e leg's counts; exit is forced to 1 when
+// the child exited 0 but isUnobserved(testsExecuted). Output retained as slow-output.txt.
+async function runSlowLeg(root, slowCommand, capabilities, outDir) {
+  const r = await sh(slowCommand, { cwd: root })
+  fs.writeFileSync(path.join(outDir, 'slow-output.txt'), `$ ${slowCommand}\n\n${r.out}${r.err}`)
+  const output = r.out + r.err
+  const testsExecuted = computeTestsExecuted(output, capabilities.testCountPattern)
+  return { leg: 'slow', exit: r.code === 0 && isUnobserved(testsExecuted) ? 1 : r.code,
+    observed: { ...computeSkips(output, capabilities.skipReportPattern), testsExecuted } }
+}
+
 async function cmdStage(argv) {
   let root = null, manifest = null, outDir = null
   for (let i = 0; i < argv.length; i++) {
@@ -340,6 +354,9 @@ async function cmdStage(argv) {
       const results = await Promise.all(wave2)
       appendRow(results[0])
       if (runMigrations) appendRow(results[1])
+      if (typeof config.slowTestCommand === 'string' && config.slowTestCommand.trim()) {
+        appendRow(await runSlowLeg(root, config.slowTestCommand, capabilities, outDir))
+      }
     }
   }
 

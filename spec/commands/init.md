@@ -134,7 +134,7 @@ each option's `description`.
 - **slow tier** — where the slow tests live. Option 1 is "(Recommended) none — every test is fast
   enough for the gate" when Phase 1 found no boot/build/service test; otherwise the runner's own
   exclusion mechanism, named with its command. Consequence text: slow tests leave the gate and run
-  once per review. The answer lands as `config.slowTestCommand` (absent for "none").
+  at review close and at release. The answer lands as `config.slowTestCommand` (absent for "none").
 
 Both rulings land in the profile at `probeOutcomes.testCommand` / `probeOutcomes.atRisk`
 (Phase 4) — never omitted, never inferred silently.

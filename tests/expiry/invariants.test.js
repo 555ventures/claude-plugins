@@ -63,7 +63,7 @@ test('AC-20260911-03-2 (D9): WHEN expire-tests.js --root . --invariants runs ove
     JSON.stringify(out.scripts))
 })
 
-test('AC-20261103-05-7: WHEN tools/bin/launch names scripts/cli.js, nothing else does, and deep/a/bin/other names scripts/dead.js THE SYSTEM lists cli.js under scripts and tools/bin/launch under launchers, omits dead.js, and keeps a done-spec case whose reach is spawnSync of tools/bin/launch as invariant', () => {
+test('AC-20261103-05-7: WHEN tools/bin/launch names scripts/cli.js, nothing else does, and deep/a/bin/other names scripts/dead.js THE SYSTEM lists cli.js under scripts and tools/bin/launch under launchers, and omits dead.js', () => {
   const root = tmpdir('invariants-launcher')
   const put = (rel, body) => {
     fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true })
@@ -90,11 +90,4 @@ test('AC-20261103-05-7: WHEN tools/bin/launch names scripts/cli.js, nothing else
     'only bin/ files at depth <= 2 are launchers — a deeper bin must not open roots: ' + r.stdout)
   assert.ok(!out.scripts.includes('scripts/dead.js'),
     'a script named only by a too-deep bin file is unreachable and must not be immortal: ' + r.stdout)
-
-  const e = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--json'])
-  assert.strictEqual(e.status, 0, 'a dry run must succeed: ' + e.stdout + e.stderr)
-  const ex = JSON.parse(e.stdout)
-  assert.strictEqual(ex.kept.invariant, 1,
-    'a case that spawns a launcher executes the pipeline and must be kept: ' + e.stdout)
-  assert.strictEqual(ex.retired.length, 0, 'nothing may retire: ' + JSON.stringify(ex.retired))
 })

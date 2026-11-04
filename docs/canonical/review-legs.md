@@ -114,10 +114,8 @@ beside the manifest, one wall-clock millisecond count per leg.
 
 ## The slow leg
 
-When the host declares `slowTestCommand`, `review-legs.js` runs it bare once per legs iteration as the
-`slow` leg, typed like the suite row, blocking in review-legs, `verdict.js` (blocking only when
-the row is present, never required) and the driver alike. Absent key, absent row.
-(specs/20261101/07)
+Review legs run no slow leg; `slowTestCommand` runs at `--mark closed` and as `release-legs.js`'s
+`slow` leg (specs/20261103/13).
 
 ## A rerun over an unchanged tree copies its green rows
 

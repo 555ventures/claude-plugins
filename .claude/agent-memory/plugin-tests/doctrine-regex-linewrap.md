@@ -3,7 +3,7 @@ name: doctrine-regex-linewrap
 description: Don't hand-roll \s+ regexes for doctrine prose — slice with section() and spell literals with phrase() from tests/helpers.js (whitespace runs become \s+), and only for references or verbatim protocol tokens (retired wording goes through [oracle: literals], never a test)
 metadata:
   type: feedback
-  reviewed: 2026-11-03
+  reviewed: 2026-11-04
 ---
 
 Doctrine `.md` files in this repo hard-wrap prose at ~85-90 chars. A regex pin like

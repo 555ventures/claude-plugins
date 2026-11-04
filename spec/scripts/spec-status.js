@@ -6,8 +6,9 @@
 // Owner: specs/20260903/05-status-diet.md
 //
 // Human output is ALWAYS the pretty render: bare invocation → the four-block dashboard —
-// 🗺️ Roadmap, 🎯 Next, up to three ⚠️ decide lines, one glyph+sentence footer — and nothing
-// else. The 🎯 Next block IS the lane render —
+// 🗺️ Roadmap, 🎯 Next, up to three ⚠️ decide lines, two 📈 ceremony lines (suite runs per spec,
+// test:production lines — ledger-derived, render-only, specs/20261103/13 D15), one glyph+sentence
+// footer — and nothing else. The 🎯 Next block IS the lane render —
 // escape lines first, then the ⚡ parallel-lanes fan-out (or the lone pick's 🚦 solo tag), or
 // the blocked top pick's ⏳ branch when nothing is unblocked — identically in the default
 // render and under --all. --next → the lean
@@ -80,7 +81,7 @@ const { parseFilePlan } = require('./lib/file-plan')
 const { globMatch } = require('./lib/glob-match')
 const { policy: hostPolicy, readConfig: readHostConfig } = require('./lib/host-config')
 // sinceLastRelease feeds the footer's ignorable done-since-release clause.
-const { readLedgerRows, sinceLastRelease } = require('./lib/observation')
+const { readLedgerRows, sinceLastRelease, ceremonyMetrics } = require('./lib/observation')
 const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems,
   reconcileMissingBriefs, promptAction, originLine, namedFiles,
@@ -938,7 +939,13 @@ const waitClause = n => `${n} more open`
     if (h > 0) clauses.push(`${h} hygiene finding${h === 1 ? '' : 's'} (/spec:doctor)`)
     const { done, released } = sinceLastRelease(ledgerRows)
     if (done >= 1) clauses.push(released ? `${done} done since last release` : `${done} done, never released`)
-    out.push('', `${glyph} ${head}${clauses.map(c => ` · ${c}`).join('')}`)
+    // Two render-only ceremony lines ride just above the footer (specs/20261103/13 D15).
+    const cm = ceremonyMetrics(ledgerRows)
+    const perSpec = cm.specs > 0 ? (cm.suiteRuns / cm.specs).toFixed(1) : 'n/a'
+    const ratio = cm.specs > 0 && cm.productionLines > 0 ? (cm.testLines / cm.productionLines).toFixed(2) : 'n/a'
+    out.push('', `📈 suite runs per spec: ${perSpec} (${cm.specs} spec${cm.specs === 1 ? '' : 's'})`,
+      `📈 test:production lines: ${ratio} (+${cm.testLines}/+${cm.productionLines} over ${cm.closes} close${cm.closes === 1 ? '' : 's'})`)
+    out.push(`${glyph} ${head}${clauses.map(c => ` · ${c}`).join('')}`)
   }
 
   // Redraw from the top of the viewport, only on a TTY so piped output stays escape-free.

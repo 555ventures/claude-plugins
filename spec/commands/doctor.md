@@ -151,8 +151,8 @@ Run with Bash/Read/Glob; each produces pass / fail-with-evidence (`file:line`):
     `config-no-test-count` → add `capabilities.testCountPattern` matching the runner's executed-tests
     count line (advisory; zero tests stays sanctioned).
 20. **Expiry readiness** (advisory) — when `policy.testExpiry` is `off`, print `⚠️ test expiry: disabled by policy` and skip both dry runs; otherwise run `node "$(spec-paths test-expiry)" --root . --all-done`
-    (dry run) and `node "$(spec-paths coverage-scope)" --root .`, both every time; the only
-    deletion path is the same `test-expiry` command with `--apply`, run only after one
+    (dry run) and `node "$(spec-paths coverage-scope)" --root .`, both every time; the close applies expiry;
+    `--all-done --apply` is the catch-up for tests that closed before this version, run only after one
     `AskUserQuestion` naming the count and the files — never under `--fix`'s line-item path
     and never silently.
 21. **Catalog currency** (advisory) — only when `docs/design/catalog.md` exists, run

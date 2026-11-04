@@ -3,7 +3,7 @@ name: feedback-pinned-sentence-hardwrap
 description: A pinned doctrine phrase (reference or verbatim protocol token) must survive markdown line-wrap — keep it unwrapped, and expect tests to spell it with phrase() (whitespace runs become \s+); wording-of-a-rule pins no longer exist
 metadata:
   type: feedback
-  reviewed: 2026-11-03
+  reviewed: 2026-11-04
 ---
 
 When a task says "keep this sentence verbatim — it's a regex pin," the danger isn't

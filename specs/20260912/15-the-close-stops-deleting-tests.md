@@ -139,13 +139,13 @@ this repo's retired count stays 0.
   byte-identical on disk, record `tests:{born:2,kept:1,retired:1}` on the review row, flip the
   spec to `status: done`, and print exactly
   `🧹 1 tests are retirable with this spec (0 files would empty) — nothing is deleted at close; sweep deliberately with: node "$(spec-paths test-expiry)" --root . --all-done --apply`
-  → rewrites tests/review/review-driver-close-expiry.test.js :: AC-20260912-13-2
+  → rewrites tests/review/review-driver-close-expiry.test.js :: AC-20260912-13-2 [retired: specs/20261103/13-a-change-is-sized-by-its-files.md]
 - **AC-20260912-15-2**: WHEN `--mark closed` runs with a green gate and a green suite over a
   host whose close recorded `retired: 1` THE SYSTEM SHALL exit `0`, leave
   `git rev-parse HEAD` byte-identical before and after the mark, and leave the retirable test
   file byte-identical on disk (the fixture's `tests/old/gone.test.js` still holds its one
   tagged test after the mark)
-  → rewrites tests/review/review-driver-close-expiry.test.js :: AC-20260912-13-6
+  → rewrites tests/review/review-driver-close-expiry.test.js :: AC-20260912-13-6 [retired: specs/20261103/13-a-change-is-sized-by-its-files.md]
 - **AC-20260912-15-3**: WHEN a tagged test cites one AC-ID owned by a `done` spec and by a
   `superseded` spec and by nothing else THE SYSTEM SHALL classify it `retired` — fixture
   `specs/20260911/01-alpha.md` (`status: done`) plus `specs/20260911/01-alpha-twin.md`
@@ -170,7 +170,7 @@ this repo's retired count stays 0.
 - **AC-20260912-15-6**: WHEN `--mark closed` completes over a retiring close THE SYSTEM SHALL
   print neither `⚠ expiry skipped` nor `chore(tests): expire` on stdout or stderr, and
   `git log -1 --format=%s` SHALL NOT match `^chore\(tests\): expire`
-  → writes tests/review/review-driver-close-expiry.test.js
+  → writes tests/review/review-driver-close-expiry.test.js [retired: specs/20261103/13-a-change-is-sized-by-its-files.md]
 - **AC-20260912-15-7**: WHEN `spec/templates/grounding-contract.md` § Test expiry is read THE
   SYSTEM SHALL contain neither the literal `At review close the plugin deletes` nor the
   literal `deadlocks every close`, SHALL contain the sentence naming

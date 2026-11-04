@@ -204,7 +204,7 @@ function expire(dir) {
     ['--root', dir, '--spec', 'specs/20260911/55-closing.md', '--apply', '--json'])
 }
 
-test('AC-20261101-01-9: expiry never cuts a host case that has no span, lists it unscannable with the span reason, and leaves the file byte-identical', () => {
+test('AC-20261101-01-9 / AC-20261103-13-13: expiry never cuts a host case that has no span, lists it unscannable with the span reason, and leaves the file byte-identical', () => {
   // The case title carries the AC-ID so expiry's citedAcIds (title + commentAbove) tags it.
   const dir = expiryHost('hs-ac9', 'tests/test_x.py :: AC-20260911-55-1 test_alpha\n')
   const before = fs.readFileSync(path.join(dir, 'tests/test_x.py'), 'utf8')

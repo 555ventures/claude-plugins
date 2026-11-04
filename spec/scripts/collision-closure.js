@@ -4,9 +4,14 @@
 //
 // Owner: specs/20260814/05-collision-closure.md.
 //
-// Two plan-time collateral-damage sweeps, invoked at plan lock: the **paths leg** (always runs) joins
-// every non-tests File Plan path against the test corpus; the **literals leg** (--literal, optional,
-// repeatable) joins planner-supplied stems against the whole repo. Advisory listing only — never blocks.
+// Three plan-time collateral-damage sweeps, invoked at every plan lock: the **paths leg** (always runs)
+// joins every non-tests File Plan path against the test corpus; the **literals leg** (--literal,
+// optional, repeatable) joins planner-supplied stems against the whole repo; the **overlap leg**
+// (always runs, specs/20261103/13 D3, AC-20261103-13-10) intersects this draft's non-tests File Plan
+// paths with every other spec the ledger records a `stage:"plan"` row for in the last 7 days — a
+// sibling sharing 3 or more paths is a hit, declared when this draft's `depends_on` names it; an
+// undeclared hit is resolved by folding the draft into the sibling or adding it to `depends_on`.
+// Advisory listing only — never blocks.
 //
 // Paths-leg targets key on their last two `/`-segments (test helpers spawn by root-stripped paths), and
 // runnable targets (`.js`/`.mjs`/`.cjs`/`.sh` or a `#!` sniff) tier their hits `executes`, alongside the
@@ -23,7 +28,7 @@
 //
 // Exit codes:
 //   0 = every hit is already a File Plan row (or there are no hits)
-//   1 = one or more hits are not File Plan rows — ADVISORY listing, never a block
+//   1 = one or more hits are not File Plan rows, or an undeclared overlap hit — ADVISORY listing, never a block
 //   2 = usage / unreadable spec / no File Plan table / no tests-layer rows /
 //       a resolved test root that is missing or unreadable
 
@@ -34,9 +39,12 @@ const { globMatch, pipelineOwnedGlobs } = require('./lib/glob-match')
 const { getIgnoredPaths } = require('./lib/ignored-paths')
 const { readConfig } = require('./lib/host-config')
 const { fileShapes, isCodeFile } = require('./lib/file-shapes')
+const { readLedgerRows } = require('./lib/observation')
+const { fmValue } = require('./lib/frontmatter')
 
 const HONESTY_LINE = 'likely/mentions tier is a lexical proxy; mentions may contain closed pins; an executes hit names a runnable file the test spawns, loads, or cites — not distinguished; the build-time suite check adjudicates'
 const REMEDY_LINE = "remedy: add each literals hit as a File Plan row, or record the waive in the spec's Rationale; an `executes` hit names a test that runs a script you are changing — if the change alters that script's observable behavior, widen the File Plan or plan the fixture repair now; `likely` and `mentions` hits are visibility only and owe no waive line"
+const OVERLAP_REMEDY_LINE = 'remedy: fold this draft into the overlapping sibling, or add the sibling to `depends_on` so the two builds do not race the same files'
 const PROXIMITY_LINES = 25
 
 // ---- match-key derivation and runnable classification, applied once at target
@@ -250,6 +258,31 @@ if (literals.length) {
   }
 }
 
+// ---- overlap leg: plan rows of the last 7 days, >= 3 shared non-tests paths ----------------------
+
+const OVERLAP_WINDOW_MS = 7 * 86400 * 1000
+const OVERLAP_MIN_SHARED = 3
+const dependsOn = fmValue(specText, 'depends_on') || ''
+const overlap = []
+{
+  const cutoff = Date.now() - OVERLAP_WINDOW_MS
+  const siblings = new Set()
+  for (const row of readLedgerRows(root)) {
+    if (row.stage !== 'plan' || typeof row.spec !== 'string' || row.spec === specRel) continue
+    if (!(Date.parse(row.ts) >= cutoff)) continue
+    siblings.add(row.spec)
+  }
+  const mine = new Set(targets)
+  for (const sib of [...siblings].sort()) {
+    const text = readSafe(path.join(root, sib))
+    if (text === null) continue
+    const theirs = new Set(parseFilePlanRows(text).filter(r => !isTestsRow(r)).flatMap(r => r.paths))
+    const shared = [...mine].filter(t => theirs.has(t)).sort()
+    if (shared.length >= OVERLAP_MIN_SHARED) overlap.push({ spec: sib, shared, declared: dependsOn.includes(sib) })
+  }
+}
+const undeclaredOverlap = overlap.some(o => !o.declared)
+
 // ---- assemble: unplanned = union of all hits minus planned minus the spec's own path --------
 
 const plannedSet = new Set(planned)
@@ -279,6 +312,7 @@ if (jsonOut) {
     unplanned,
     likely,
     executes,
+    overlap,
   }, null, 2))
 } else {
   const out = []
@@ -326,9 +360,14 @@ if (jsonOut) {
     }
   }
   out.push('')
+  out.push('overlap leg:')
+  if (!overlap.length) out.push('  (none)')
+  for (const o of overlap) out.push(`  ${o.spec}: ${o.shared.length} shared — ${o.shared.join(', ')}${o.declared ? ' (declared in depends_on)' : ''}`)
+  if (undeclaredOverlap) out.push(OVERLAP_REMEDY_LINE)
+  out.push('')
   out.push(`unplanned=${unplanned.length} likely=${likely.length}`)
   out.push(REMEDY_LINE)
   console.log(out.join('\n'))
 }
 
-process.exit(unplanned.length ? 1 : 0)
+process.exit(unplanned.length || undeclaredOverlap ? 1 : 0)

@@ -39,7 +39,7 @@ Run **in parallel in a single message**:
 - "stash them with a tagged entry (`git stash push -u -m "merge: <source>"`)" — the changes are shelved; restore them after the merge
 - "abort" — nothing is merged; Report as **dirty working tree** (see ## Report)
 
-**Show user**: short summary — N commits, M files, list of touched paths. Do not dump full diffs.
+**Show user**: short summary — N commits, M files, list of touched paths. Do not dump full diffs. Run any landing-time check the host's pipeline rules § Review Checks declare before Step 3.
 
 ## Step 3: Derive Merge Strategy
 

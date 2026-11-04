@@ -42,7 +42,7 @@ when the work needs **delegation** (execution large enough that workers build wh
 only plans) or **durability** (scope spans sessions; the spec is the re-entrant state).
 
 Changes travel one of three lanes. **Direct**: a one-sentence change with no behaviour or data change,
-made on main through the host's `gateCommand` — no spec, no branch, the commit-time escape row still lands (where the host's `policy.directLaneToMain` is `false`, a Direct change lands through a branch and `/git:merge`, never a commit on main — still no spec, the escape row still lands at commit time); a repair across more than two `layerGroups` or user-visible text follows `/spec:fix`, its playbook.
+made on main through the host's `gateCommand` — no spec, no branch, the commit-time escape row still lands (where the host's `policy.directLaneToMain` is `false`, a Direct change lands through a branch and `/git:merge`, never a commit on main — still no spec, the escape row still lands at commit time); a repair under ~100 production lines touching at most three non-test files takes `/spec:fix`, its playbook, whatever the host's `layerGroups` count — and so does one that touches text a user sees; above that floor a repair is a spec.
 **Behaviour**: running `/spec:prototype` is choosing this lane; the
 prototype's contract lands through a spec, its code never. **Structural**: a schema or API change is
 planned first — a spec. The three are told apart at commit time: a spec branch lands only through the
@@ -50,7 +50,7 @@ review stage's merge-back, a direct change has no branch, and a `proto/*` branch
 
 ## Tiers
 
-`tier:` in spec frontmatter, applied at plan time. **`standard`** for almost everything.
+`tier:` in spec frontmatter, applied at plan time. The tier is a property of the files a spec touches (the host's § Risk Tiers surfaces and the process-boundary trigger), never of the spec as a whole — a spec whose critical-tier files are few carries literal examples on the ACs of those files and stays `standard`; a change touching only doctrine, command or template prose is never critical. **`standard`** for almost everything.
 **`critical`** when the work touches irreversible or high-blast-radius surfaces — the host's
 pipeline rules § Risk Tiers lists its triggers — plus the universal
 process-boundary trigger: boot-path code (process/plugin registration, env/config schema,
@@ -121,10 +121,10 @@ reader where it exists, run as `node "$(spec-paths fleet-reader)" --json`.
 
 ## Decomposition
 
-One brief → one spec by default: split only past ~12 source-layer File Plan rows
-(`tests`/`other`/docs/ledger rows uncounted) or a second primary area (plus host-declared caps), into `##-`
+One brief → one spec by default: split only past ~30 source-layer File Plan rows
+(`tests`/`other`/docs/ledger rows uncounted; plus host-declared caps), into `##-`
 siblings sliced by **landing unit** — each leaves the system green — never by layer;
-order via `depends_on`.
+order via `depends_on`; landing stays in small green waves and checkpoint commits inside the spec.
 
 ## State Machine
 

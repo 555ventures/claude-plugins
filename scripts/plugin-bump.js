@@ -16,8 +16,15 @@
 //       Rewrites the plugin's manifest: version -> MAJOR.(MINOR+1).0; the description's
 //       "Changelog (last 3): " run gains "<new> — <paragraph>" at its head and keeps exactly three
 //       entries. Prints the new version. --dry-run prints it and writes nothing.
+//   node scripts/plugin-bump.js --shipped --plugin <name> [--root <dir>]
+//       Lists what the next bump carries: finds the commit that last changed the plugin's manifest
+//       (none -> every row qualifies), reads <root>/.claude/spec-runs*.jsonl rows with stage "review",
+//       verdict "CLEAN" and a ts after that commit's date, and prints one line per distinct spec,
+//       oldest first: "<spec path> — <the spec's H1 title, or the path when unreadable>". Nothing
+//       qualifies -> prints nothing. Read-only; the changelog paragraph stays human-written.
 //
-// Owner: specs/20260908/01-plugin-bump-and-merge-base-pin.md (D1–D4, D9; landed as a direct fix).
+// Owner: specs/20260908/01-plugin-bump-and-merge-base-pin.md (D1–D4, D9; landed as a direct fix);
+// --shipped: specs/20261103/13-a-change-is-sized-by-its-files.md D7 (AC-20261103-13-11).
 //
 // What this deliberately does NOT do: decide whether a change is a "behavior change" (any change
 // under the plugin directory owes a bump — a script cannot tell a chore from a feature); check
@@ -25,7 +32,7 @@
 // plugin.json at merge, and git reports that); touch any manifest during --check.
 //
 // Exit codes:
-//   0 = --check: every plugin green · --bump: manifest written (or --dry-run)
+//   0 = --check: every plugin green · --bump: manifest written (or --dry-run) · --shipped: listed (possibly nothing)
 //   1 = --check: at least one plugin changed without a higher version (one ❌ line each)
 //   2 = usage error, unreadable marketplace/manifest, non-semver version, unresolvable base,
 //       --bump on a manifest with no "Changelog (last 3): " run, empty --changelog, or unknown
@@ -34,6 +41,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { readLedgerRows } = require('../spec/scripts/lib/observation')
 
 const MARKER = 'Changelog (last 3): '
 const ENTRY_SPLIT = /(?=\b\d+\.\d+\.\d+ — )/
@@ -177,6 +185,35 @@ function bump() {
   process.exit(0)
 }
 
-if (has('--check') && !has('--bump')) check()
-else if (has('--bump') && !has('--check')) bump()
-else die('usage: plugin-bump.js --check [--base <ref>] [--root <dir>] | --bump --plugin <name> --changelog "<paragraph>" [--root <dir>] [--dry-run]')
+// ---- --shipped ------------------------------------------------------------------------------
+function shipped() {
+  const name = flag('--plugin')
+  if (!name) die('--shipped needs --plugin <name> — remedy: name a plugin from .claude-plugin/marketplace.json')
+  const pl = readMarketplace().find((p) => p.name === name)
+  if (!pl) die(`plugin ${JSON.stringify(name)} is not in .claude-plugin/marketplace.json — remedy: use one of its plugins[].name values`)
+  const last = git('log', '-1', '--format=%H %cI', '--', manifestRel(pl.dir))
+  const date = last.code === 0 && last.out ? last.out.split(' ')[1] : null
+  const since = date ? Date.parse(date) : -Infinity
+  const rows = readLedgerRows(root)
+    .filter((r) => r.stage === 'review' && r.verdict === 'CLEAN' && typeof r.spec === 'string' && Date.parse(r.ts) > since)
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts))
+  const seen = new Set()
+  const lines = []
+  for (const r of rows) {
+    if (seen.has(r.spec)) continue
+    seen.add(r.spec)
+    let title = r.spec
+    try {
+      const h1 = /^# (.+)$/m.exec(fs.readFileSync(path.join(root, r.spec), 'utf8'))
+      if (h1) title = h1[1].trim()
+    } catch { /* unreadable spec: the path stands in for the title */ }
+    lines.push(`${r.spec} — ${title}`)
+  }
+  if (lines.length) process.stdout.write(lines.join('\n') + '\n')
+  process.exit(0)
+}
+
+if (has('--shipped') && !has('--check') && !has('--bump')) shipped()
+else if (has('--check') && !has('--bump') && !has('--shipped')) check()
+else if (has('--bump') && !has('--check') && !has('--shipped')) bump()
+else die('usage: plugin-bump.js --check [--base <ref>] [--root <dir>] | --bump --plugin <name> --changelog "<paragraph>" [--root <dir>] [--dry-run] | --shipped --plugin <name> [--root <dir>]')

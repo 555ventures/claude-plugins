@@ -5,36 +5,31 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { tmpdir, runNode } = require('../helpers')
 
-// specs/20261101/07-the-gate-is-scoped-and-the-slow-tier-has-a-home.md D3: AC-20261101-07-5 —
-// verdict.js treats a present slow row as blocking and never requires one.
+// specs/20261103/13-a-change-is-sized-by-its-files.md D13, AC-20261103-13-8: a present slow row blocks
+// the release profile too.
 
 const GREEN = [
-  { leg: 'gate', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 40 }, scope: 'full' },
-  { leg: 'suite', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 1035 }, scope: 'full' },
-  { leg: 'smoke', exit: 4, observed: { result: 'inert' }, scope: 'full' },
-  { leg: 'reconcile', exit: 0, observed: { outOfPlan: 0 }, scope: 'full' },
-  { leg: 'ac-matrix', exit: 0, observed: { uncovered: 0, oracle: 0 }, scope: 'full' },
-  { leg: 'skip-reconcile', exit: 0, observed: { skipped: 0, sanctioned: 0 }, scope: 'full' },
-  { leg: 'ci', exit: 0, observed: { conclusion: 'success' }, scope: 'full' },
-  { leg: 'at-risk', exit: 0, observed: { files: 0, testsExecuted: 0 }, scope: 'full' },
-  { leg: 'promise-sweep', exit: 0, observed: { rows: 1, carried: 1, sanctioned: 0, orphans: 0 }, scope: 'full' },
-  { leg: 'tests', exit: 0, observed: { count: 1 }, scope: 'full' },
+  { leg: 'deploy', exit: 0, observed: {}, scope: null },
+  { leg: 'ready', exit: 0, observed: {}, scope: null },
+  { leg: 'e2e', exit: 0, observed: { executed: 3 }, scope: null },
+  { leg: 'journeys', exit: 0, observed: {}, scope: null },
+  { leg: 'substrate', exit: 0, observed: { checked: 2, inert: 0 }, scope: null },
+  { leg: 'production', exit: 0, observed: { result: 'pass' }, scope: null },
+  { leg: 'ci', exit: 0, observed: { conclusion: 'success' }, scope: null },
 ]
 
 function derive(extraRows) {
   const dir = tmpdir('verdict-tier')
   const manifest = path.join(dir, 'manifest.jsonl')
   fs.writeFileSync(manifest, GREEN.concat(extraRows).map(r => JSON.stringify(r)).join('\n') + '\n')
-  const workflow = path.join(dir, 'workflow.json')
-  fs.writeFileSync(workflow, JSON.stringify({ verdict: 'CLEAN', survivors: [], killed: 0, reviewerCount: 1, scope: 'full' }))
-  return runNode('scripts/verdict.js', ['--manifest', manifest, '--workflow', workflow])
+  return runNode('scripts/verdict.js', ['--manifest', manifest, '--profile', 'release'])
 }
 
-test('AC-20261101-07-5: a red slow row derives GATE_RED and a green slow row derives CLEAN over an otherwise green full-scope manifest', () => {
-  const red = derive([{ leg: 'slow', exit: 1, observed: { skips: 0, todos: 0, testsExecuted: 17 }, scope: 'full' }])
+test('AC-20261103-13-8: a red slow row derives GATE_RED and a green slow row derives CLEAN over an otherwise green release manifest', () => {
+  const red = derive([{ leg: 'slow', exit: 1, observed: { skips: 0, todos: 0, testsExecuted: 17 }, scope: null }])
   assert.strictEqual(red.stdout.split('\n')[0], 'GATE_RED',
-    'a red slow row must block like a red suite row — CLEAN here lets a review close over failing host integration tests: ' + red.stdout + red.stderr)
-  const green = derive([{ leg: 'slow', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 17 }, scope: 'full' }])
+    'a red slow row must block the release profile like any release leg — CLEAN here promotes a release over failing host integration tests: ' + red.stdout + red.stderr)
+  const green = derive([{ leg: 'slow', exit: 0, observed: { skips: 0, todos: 0, testsExecuted: 17 }, scope: null }])
   assert.strictEqual(green.stdout.split('\n')[0], 'CLEAN',
-    'a green slow row must not disturb the verdict: ' + green.stdout + green.stderr)
+    'a green slow row must not disturb the release verdict: ' + green.stdout + green.stderr)
 })

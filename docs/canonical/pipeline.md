@@ -51,9 +51,10 @@ than running the suite twice (specs/20261101/05).
 The scoping is a host declaration the contract now spells out: `gateCommand` carries `{testDirs}`
 wherever its runner takes paths, `/spec:init` warns when it does not, and `/spec:doctor` check 25
 reports it. The contract also names the slow tier: `slowTestCommand`, the host's own invocation of
-the tests it excludes from `testCommand`, runs once per legs iteration as the blocking `slow` leg,
-alone in its wave after smoke, never at close, and a host that declares none is unchanged.
-(specs/20261101/07-the-gate-is-scoped-and-the-slow-tier-has-a-home.md)
+the tests it excludes from `testCommand`, runs once at review close (`--mark closed`, after the
+whole-suite re-run) and once at release as `release-legs.js`'s blocking `slow` leg — never in the
+build loop or the review legs (specs/20261103/13-a-change-is-sized-by-its-files.md, superseding
+specs/20261101/07's per-iteration run).
 
 ## Runtime verification covers stopping, not just starting
 
@@ -85,6 +86,15 @@ healed at its one source rather than validated downstream — a tier-enum check 
 already closed. (specs/20260823/04-review-close-hardening.md, done 2026-08-23)
 
 ## One command per feature
+
+A repair under ~100 production lines touching at most three non-test files takes `/spec:fix`
+whatever the host's `layerGroups` count; a spec is one capability of up to ~30 source-layer File
+Plan rows, and a draft sharing three or more non-test files with a spec locked in the last seven
+days folds into it or declares `depends_on` — `collision-closure.js`'s overlap leg at every lock.
+The tier is a property of the files touched, never of the spec. The plugin version bumps once per
+release or landing from `plugin-bump.js --shipped`'s list, never per spec. `/spec:status` prints
+suite runs per spec and the test:production line ratio from the ledger; no ratchet guards them
+(ADR-0039).
 
 `/spec:run` is the only way into the design, build and review stages. It derives the next
 stage from disk, opens the spec's own git worktree before anything else runs, and carries a

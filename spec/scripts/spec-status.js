@@ -78,8 +78,6 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { writeLine } = require('./lib/sync-write')
 const { parseFilePlan } = require('./lib/file-plan')
-const { globMatch } = require('./lib/glob-match')
-const { policy: hostPolicy, readConfig: readHostConfig } = require('./lib/host-config')
 // sinceLastRelease feeds the footer's ignorable done-since-release clause.
 const { readLedgerRows, sinceLastRelease, ceremonyMetrics } = require('./lib/observation')
 const {
@@ -460,36 +458,20 @@ function briefSerialReason(a, b) {
   return null
 }
 
-// 'a' | 'a, b' | 'a, b (+3 more)' — shared by the 🔶 heads-up and the File Plan overlap reason.
+// 'a' | 'a, b' | 'a, b (+3 more)' — used by the 🔶 heads-up.
 function shownFiles(paths) {
   return paths.slice(0, 2).join(', ') + (paths.length > 2 ? ` (+${paths.length - 2} more)` : '')
 }
 
 // Parallelism verdict between two deriveNext entries — the one derivation for the vs-top
-// annotation and pairwise lane admission. Both briefed → the brief verdict; otherwise both
-// need a File Plan with rows, and the shared paths minus the exempt set (policy.fanout.overlapExempt
-// globs plus the pipeline rules file) decide. string = serial, null = parallel, undefined = no claim.
-let exemptCache = null
-function exemptSet() {
-  if (!exemptCache) {
-    const cfg = readHostConfig(root)
-    exemptCache = {
-      globs: hostPolicy(root).fanout.overlapExempt,
-      rules: cfg && typeof cfg.pipelineRules === 'string' && cfg.pipelineRules ? cfg.pipelineRules : null,
-    }
-  }
-  return exemptCache
-}
+// annotation and pairwise lane admission. Both briefed → the brief verdict; any other pair is
+// parallel (null): shared files never decide parallelism, the landing step settles them.
+// string = serial, null = parallel.
 function pairSerialReason(a, b) {
   const rel = relateBriefs(a.brief, b.brief)
   if (rel.relation === 'same') return `shared brief ${briefNum(a.brief)}`
   if (rel.relation === 'different') return briefSerialReason(briefNum(a.brief), briefNum(b.brief))
-  const sa = specs.find(x => x.path === a.path), sb = specs.find(x => x.path === b.path)
-  if (!sa || !sb || !sa.filePlan.length || !sb.filePlan.length) return undefined
-  const ex = exemptSet()
-  const shared = sa.filePlan.filter(f => sb.filePlan.includes(f))
-    .filter(f => f !== ex.rules && !ex.globs.some(g => globMatch(g, f)))
-  return shared.length ? `File Plan overlap: ${shownFiles(shared)}` : null
+  return null
 }
 
 // Does brief a transitively depend on brief b (via roadmap `Depends on:` headers)?
@@ -581,11 +563,6 @@ function deriveNext() {
     for (const e of entries.slice(1)) {
       if (e === top || e.blockers.length || e.action === '/spec:fix' || e.queue) continue
       const reason = pairSerialReason(e, top)
-      if (reason === undefined) {
-        const rel = relateBriefs(e.brief, top.brief)
-        if (rel.relation === 'unknown') e.parallelUnknown = `${rel.reason}; no File Plan rows`
-        continue
-      }
       if (reason) { e.parallel = false; e.parallelReason = reason }
       else e.parallel = true
     }
@@ -612,7 +589,7 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeLine(1, JSON.stringify({
-      next: entries.map(({ rank, parallelReason, parallelUnknown, __queuePos, __queueId, __after, __origin, __trigger, __batch, __payload, ...e }) =>
+      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, __after, __origin, __trigger, __batch, __payload, ...e }) =>
         e.queue ? { ...e, brief: briefNum(e.brief) } : { ...e, brief: briefNum(e.brief), parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)
@@ -872,8 +849,7 @@ const waitClause = n => `${n} more open`
       out.push('', '🕓 after that:')
       // Consecutive entries with the same reason share one branch line.
       const reasonOf = e => e.parallel === false ? `⛓️ ${e.parallelReason}`
-        : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
-        : `🤷 no brief — parallelism unknown (${e.parallelUnknown || 'no File Plan rows'})`
+        : `⛓️ ${laneClash.get(e)}`
       later.forEach((e, i) => {
         emit(e)
         const reason = reasonOf(e)

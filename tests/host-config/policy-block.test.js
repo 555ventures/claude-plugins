@@ -49,21 +49,17 @@ test('AC-20261029-08-1: validatePolicy returns one finding per defect naming the
 })
 
 // specs/20261103/06-the-fan-out-drains-the-queue.md D3: the policy.fanout block.
-test('AC-20261103-06-7: policy(root) defaults fanout.selfSurfaces and fanout.overlapExempt, merges a partial fanout block key by key, and validatePolicy reports a bad list and an unknown key exactly', () => {
+test('AC-20261103-06-7 / AC-20261103-15-15: policy(root) carries no fanout key, validatePolicy reports a fanout block as an unknown key, and the other blocks are untouched', () => {
   const { policy, validatePolicy } = lib()
   const bare = tmpdir('policy-fanout-bare')
   writeConfig(bare, {})
-  const d = policy(bare).fanout
-  assert.ok(d && d.selfSurfaces.includes('spec/scripts/fanout-driver.js'), 'the default selfSurfaces must name the driver, or a batch never stops before a spec rewriting the runner: ' + JSON.stringify(d))
-  assert.ok(d.overlapExempt.includes('**/.claude-plugin/plugin.json'), 'the default overlapExempt must name plugin.json, or every spec serializes on its own version bump')
-  const part = tmpdir('policy-fanout-part')
-  writeConfig(part, { policy: { fanout: { overlapExempt: ['docs/**'] } } })
-  const p = policy(part).fanout
-  assert.deepStrictEqual(p.overlapExempt, ['docs/**'], 'a set list must win over its default, or a host cannot name its own ceremony paths')
-  assert.ok(p.selfSurfaces.includes('spec/scripts/fanout-driver.js'), 'an unset list must keep its default, or a partial fanout block drops the other list')
-  assert.deepStrictEqual(validatePolicy({ fanout: { selfSurfaces: 'x', other: 1 } }),
-    ['fanout.selfSurfaces: expected an array of non-empty strings', 'unknown key fanout.other'],
-    'a bad list and an unknown key must each yield exactly one finding naming the key, or an invalid hand-edit passes silently')
+  assert.strictEqual('fanout' in policy(bare), false, 'policy() must carry no fanout key, or a retired block still has a reader-shaped default')
+  const withBlock = tmpdir('policy-fanout-block')
+  writeConfig(withBlock, { policy: { fanout: { selfSurfaces: [] } } })
+  assert.strictEqual('fanout' in policy(withBlock), false, 'a host block carrying fanout must not be merged into the policy, or the retired key survives in a hand-edited host')
+  assert.deepStrictEqual(validatePolicy({ fanout: { selfSurfaces: [] } }), ['unknown key fanout'],
+    'a fanout block must yield exactly the generic unknown-key finding, or a stale hand-edit passes silently or gets a bespoke message')
+  assert.strictEqual(policy(bare).stops.repairRound, 'repair', 'the stops block must keep its defaults, or deleting fanout broke the policy merge')
 })
 
 test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement table rows for workers, reviewer and disposer', () => {

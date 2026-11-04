@@ -3,12 +3,17 @@
 // fanout-driver.js [--root <dir>] [--spec <path>]… [--batch <id>[,<id>…]|all] [--include-fixes] [--override-serial] [--ask <key|all>] [--state]
 // fanout-driver.js --root <dir> --mark <planned|dispatched|returned|answered|dismissed|resumed|merged|gate-repaired|reported> [flags]
 //
-// Owner: specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/06-the-fan-out-drains-the-queue.md — the driver behind
+// Owner: specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/06-the-fan-out-drains-the-queue.md,
+// specs/20261103/15-shared-files-land-by-rebase.md — the driver behind
 // /spec:fanout: one session dispatches a worktree-isolated sub-agent per lane, relays the questions
 // the lanes write, merges each finished lane one at a time with the host gate re-run on main, and
 // renders one report; a bare run derives the batch (the queue's startable specs up to the first
 // boundary), re-queries after every landing, and reports when the batch is done. State lives in <git-common-dir>/spec-fanout.json; every step is re-derived
-// from that file and the lanes' own disks, so /clear loses nothing. Prints exactly one step per run.
+// from that file and the lanes' own disks, so /clear loses nothing. Prints exactly one step per run. States: PLAN, DISPATCH,
+// RELAY, REBASE, MERGE, MERGE_RED, WAIT, REPORT. Lanes run in parallel whatever their File Plans share: the
+// MERGE step rebases the lane onto the root's branch and fast-forwards it (merge-back rebase-ff); a conflict
+// leaves the rebase in progress in the lane's worktree and sends the lane back to its worker (REBASE,
+// `--mark resumed`), and a second conflict against the same main aborts it and stops the lane.
 //
 // Does NOT ask for a repair on main (a red main is repaired by a lane in its own worktree), open the queue
 // file (spec-status --lanes --json is the only queue reader), answer a lane's question itself (the host's policy.stops auto-picks are printed by the
@@ -21,18 +26,15 @@
 // Exit codes: 0 step, mark or --state printed · 2 refused (run outside the main worktree, unknown
 // mark, mark outside its state, a lane that is not in the table or not merged, a gate-red main, an
 // unknown --ask key, a lane id missing, an unknown argument such as the retired --lanes, a --batch id
-// matching no startable spec, a dirty main root at the MERGE step — merge-back refuses it by design) — stderr names the remedy.
+// matching no startable spec, a dirty main root at the MERGE step — merge-back refuses it by design, a merge-ready lane with no recorded
+// worktree, a merge-back exit other than 0 or 3) — stderr names the remedy.
 
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { makeDie, writeJson, nowIso } = require('./lib/driver-core')
 const { writeOut, runHost } = require('./lib/driver-io')
-const { readConfig, readPipelineRules, agentCall, policy } = require('./lib/host-config')
-const { globMatch } = require('./lib/glob-match')
-const { parseFilePlan } = require('./lib/file-plan')
-const { extractSection } = require('./lib/spec-sections')
-const { fmValue } = require('./lib/frontmatter')
+const { readConfig, agentCall } = require('./lib/host-config')
 const { resolveGate } = require('./lib/gate-resolve')
 const runCache = require('./lib/run-cache')
 const { computeTestsExecuted, computeSkips } = require('./lib/count-observation')
@@ -46,7 +48,7 @@ const die = makeDie('fanout-driver')
 const MARKS = ['planned', 'dispatched', 'returned', 'answered', 'dismissed', 'resumed', 'merged', 'gate-repaired', 'reported']
 const ASK_KEYS = ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'rejectWithEvidence', 'all']
 const LANE_CAP = 4
-const ACTIVE = ['dispatched', 'pending', 'merge-ready']
+const ACTIVE = ['dispatched', 'pending', 'conflicted', 'merge-ready']
 const TERMINAL = ['merged', 'stopped', 'done']
 
 const stemOf = (p) => path.basename(p).replace(/\.[^.]*$/, '')
@@ -148,11 +150,13 @@ function deriveState(st) {
   // a landing precedes a new dispatch so the lane branches from the newest main.
   if (isRed(st)) {
     if (pending) return 'RELAY'
+    if (repairLane(st, 'conflicted')) return 'REBASE'
     if (repairLane(st, 'planned')) return 'DISPATCH'
     if (repairLane(st, 'dispatched')) return 'WAIT'
     return repairLane(st, 'merge-ready') ? 'MERGE' : 'MERGE_RED'
   }
   if (pending) return 'RELAY'
+  if (st.lanes.some((l) => l.state === 'conflicted')) return 'REBASE'
   if (st.lanes.some((l) => l.state === 'merge-ready')) return 'MERGE'
   if (dispatchable(st).length) return 'DISPATCH'
   if (st.lanes.some((l) => l.state === 'dispatched' || l.state === 'planned')) return 'WAIT'
@@ -191,51 +195,19 @@ function newLane(id, kind, fields) {
 // The File Plan fields a fix lane carries: what its text names and the open specs that plan them.
 const fixFields = (f) => ({ files: f.queue_id && f.files ? f.files : null, overlaps: f.queue_id && f.overlaps ? f.overlaps : [] })
 
-const readSpec = (p) => { try { return fs.readFileSync(path.join(root, p), 'utf8') } catch (e) { return '' } }
-
-// Backticked paths inside the host rules file's `## Risk Tiers` section; missing config, file or section → none.
-function riskTierPaths() {
-  const r = readPipelineRules(root)
-  if (!r.ok) return new Set()
-  const sec = extractSection(r.text, 'Risk Tiers')
-  return new Set(sec ? [...sec.matchAll(/`([^`\s]+)`/g)].map((m) => m[1]) : [])
-}
-
-// The batch: first every unblocked /spec:run entry in queue order up to a boundary (self-surface,
-// critical sharing a Risk Tiers file, a brief dependency); then, when none was met, the first remaining
-// entry is the boundary (a queue prompt or non-run spec ends the batch, a blocked spec waits).
-// Returns { members: [entry], stopBefore }.
+// The batch: every unblocked /spec:run entry in queue order up to a boundary (a brief dependency); then,
+// when none was met, the first remaining entry is the boundary (a queue prompt or non-run spec ends the
+// batch, a blocked spec waits). Shared files never end a batch. Returns { members: [entry], stopBefore }.
 function deriveBatch(nextJson, startable, serialized) {
-  const globs = policy(root).fanout.selfSurfaces
-  const tiers = riskTierPaths()
   const members = []
-  const plans = new Map()
   const entries = nextJson.filter((e) => !(e.action === '/spec:fix' || String(e.action).startsWith('/spec:fix ')))
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i]
+  for (const e of entries) {
     const stop = (reason) => ({ path: e.path, reason })
     if (e.action !== '/spec:run' || (e.blockers && e.blockers.length)) continue
     if (!startable.has(e.path)) continue
     // A brief that depends on a member's brief is a dependency the batch cannot meet in one wave.
     const dep = serialized.find((x) => x.path === e.path && /^brief \S+ depends on /.test(x.reason))
     if (dep) return { members, stopBefore: stop('blocked: ' + dep.reason) }
-    const text = readSpec(e.path)
-    const filePlan = parseFilePlan(text)
-    const self = filePlan.find((f) => globs.some((g) => globMatch(g, f)))
-    if (self) {
-      if (members.length) return { members, stopBefore: stop('touches pipeline self-surface ' + self) }
-      members.push(e)
-      const nxt = entries[i + 1]
-      return { members, stopBefore: nxt ? { path: nxt.path, reason: 'self-surface runs alone' } : null }
-    }
-    if (fmValue(text, 'tier') === 'critical') {
-      for (const f of filePlan) {
-        if (!tiers.has(f)) continue
-        const other = members.find((m) => plans.get(m.path).includes(f))
-        if (other) return { members, stopBefore: stop(`critical: shares Risk Tiers path ${f} with ${stemOf(other.path)}`) }
-      }
-    }
-    plans.set(e.path, filePlan)
     members.push(e)
   }
   const cmdWord = (e) => (String(e.action).match(/^\/\S+/) || ['queue'])[0]
@@ -422,20 +394,68 @@ function relay(st, apply) {
 
 // ---- MERGE / gate ----------------------------------------------------------------------------
 
-function printMerge(st) {
+// The main root's checked-out branch — the landing target.
+const targetBranch = () => git(['symbolic-ref', '--short', 'HEAD']).stdout.trim()
+
+// Paths with an unmerged status (UU, AA, DU, …) in a lane's worktree, sorted.
+function unmergedPaths(wt) {
+  return git(['status', '--porcelain'], wt).stdout.split('\n').filter((x) => x.length > 3 && (/U/.test(x.slice(0, 2)) || x.slice(0, 2) === 'AA' || x.slice(0, 2) === 'DD'))
+    .map((x) => x.slice(3)).sort()
+}
+
+// MERGE: a bare run lands the first merge-ready lane (rebase onto the target, fast-forward) with
+// merge-back's rebase-ff; a mark only prints the step.
+function printMerge(st, apply) {
   const dirty = git(['status', '--porcelain']).stdout.split('\n').filter(Boolean).map((x) => x.slice(3))
   if (dirty.length) die(`the main root is dirty — merge-back refuses a dirty root by design: ${dirty.join('\n')}; commit them on a branch or move them to the session scratchpad (core § On-Disk Handoff), then re-run`)
   const l = st.lanes.find((x) => x.state === 'merge-ready' && (!isRed(st) || x.repairs === st.lastGate.lane))
-  const proto = policy(root).stops.prototypeClose
-  const lines = [header('MERGE'), `## Step: merge ${l.id}`, `git worktree unlock ${l.worktree}`]
-  if (l.kind === 'fix') lines.push(`/git:merge ${l.branch}`)
-  else lines.push(`run from ${mainRoot}: node "$(spec-paths review-driver)" ${l.worktree}/${l.spec} — follow its MERGE step (strategy derived; ` +
-    (proto === 'keep' || proto === 'delete' ? `a prototype question is answered by host policy: "${proto}"` : 'a prototype question is asked of the user') + ')')
+  const target = targetBranch()
+  if (!apply) {
+    return out([header('MERGE'), `## Step: merge ${l.id}`, `Then: ${cmd('').trim()} — lands ${l.branch} (rebase onto ${target}, fast-forward)`])
+  }
+  if (!l.worktree) die(`lane ${l.id} has no recorded worktree — run ${cmd(`--mark returned --lane ${l.id}`)}, then re-run the driver bare`)
+  const r = spawnSync('bash', [path.join(DIR, 'merge-back.sh'), 'merge', '--root', root, '--target', target, '--source', l.branch, '--strategy', 'rebase-ff', '--worktree', l.worktree], { encoding: 'utf8' })
+  if (r.status === 3) return conflicted(st, l, target)
+  if (r.status !== 0) die(`merge-back rebase-ff failed for ${l.id} (exit ${r.status}):\n${((r.stdout || '') + (r.stderr || '')).trim()}\nfix the cause, then re-run the driver bare`)
+  const note = (r.stdout || '').split('\n').map((x) => x.trim()).filter(Boolean).pop() || `landed ${l.branch}`
+  const lines = [header('MERGE'), `## Step: merge ${l.id}`, note, `git worktree unlock ${l.worktree}`]
+  if (l.kind !== 'fix') lines.push(`run from ${mainRoot}: node "$(spec-paths review-driver)" ${l.worktree}/${l.spec} — its MERGE step finds ${l.branch} already landed; mark merge-strategy rebase-ff (promotion and cleanup)`)
   lines.push(`then: ${cmd(`--mark merged --lane ${l.id}`)}`)
   out(lines)
 }
 
-function runGate(l) {
+// Exit 3: the rebase stays in progress in the lane's worktree and the lane goes back to its worker;
+// a second conflict against the same main aborts the rebase and stops the lane.
+function conflicted(st, l, target) {
+  const sha = git(['rev-parse', 'HEAD']).stdout.trim()
+  if (l.rebaseHead === sha) {
+    git(['rebase', '--abort'], l.worktree)
+    l.state = 'stopped'
+    l.stoppedReason = `rebase conflict unresolved twice on ${sha.slice(0, 7)} — resume by hand: cd ${l.worktree} && git rebase ${target}`
+    rolling(st)
+    save(st)
+    return printStep(st, true)
+  }
+  l.state = 'conflicted'
+  l.conflicts = unmergedPaths(l.worktree)
+  l.rebases = (l.rebases || 0) + 1
+  l.rebaseHead = sha
+  save(st)
+  printRebase(st)
+}
+
+// REBASE: re-prints the send-back step for the first conflicted lane; changes nothing.
+function printRebase(st) {
+  const l = st.lanes.find((x) => x.state === 'conflicted' && (!isRed(st) || x.repairs === st.lastGate.lane))
+  const g = gateOf(l).gate || 'the host gate, by hand'
+  const again = l.kind === 'fix' ? 'report MERGE_READY' : `run \`/spec:run ${l.spec}\` again and report its MERGE_READY line verbatim`
+  out([header('REBASE'), `## Step: send ${l.id} back to rebase`,
+    `SendMessage {to: "${l.agent}", message: "Lane ${l.id}: main moved and ${l.branch} conflicts with it in ${(l.conflicts || []).join(', ')} — a rebase is in progress in your worktree. Resolve each conflicted file by intent (never a mechanical pick), \`git add\` it and \`git rebase --continue\` until the rebase ends; then run the gate \`${g}\` and repair what it reds; then ${again} — or STOPPED with the reason when the conflict cannot be resolved by intent."}`,
+    `Then: ${cmd(`--mark resumed --lane ${l.id}`)}`])
+}
+
+// The gate command a lane's landing is judged by: { gate, why } (gate null with the remedy in why).
+function gateOf(l) {
   const cfg = readConfig(root)
   let gate = null
   let why = null
@@ -451,6 +471,12 @@ function runGate(l) {
     gate = r.gate
     if (!gate) why = `gate unavailable — ${r.reason}; run it by hand`
   }
+  return { gate, why }
+}
+
+function runGate(l) {
+  const cfg = readConfig(root)
+  const { gate, why } = gateOf(l)
   if (!gate) return { result: null, log: null, why }
   fs.mkdirSync(WORK_DIR, { recursive: true })
   const log = path.join(WORK_DIR, `${l.id}.gate.log`)
@@ -542,7 +568,7 @@ function printReport(st) {
   const waiting = st.lanes.filter((l) => l.state === 'waiting')
   const bullets = st.lanes.map((l) => {
     const name = l.kind === 'fix' ? l.branch : l.spec
-    if (l.state === 'merged') return `${name}: merged (gate ${l.gate || 'unavailable'})`
+    if (l.state === 'merged') return `${name}: merged (gate ${l.gate || 'unavailable'}${l.rebases > 0 ? `, rebased ×${l.rebases}` : ''})`
     if (l.state === 'done') return `${name}: done`
     if (l.state === 'stopped') return `${name}: stopped — ${l.stoppedReason}`
     const dep = st.lanes.find((d) => d.state === 'stopped' && d.id !== l.id && d.spec && ((l.kind !== 'fix' && relateBriefs(parseBrief(d.brief), parseBrief(l.brief)).relation === 'same') || String(l.waitingOn).includes(d.spec)))
@@ -594,7 +620,8 @@ function printStep(st, apply) {
     const lines = relay(st, apply)
     return out([header('RELAY'), `## Step: relay ${st.lanes.filter((l) => l.state === 'pending').length} questions`, ...lines])
   }
-  if (state === 'MERGE') return printMerge(st)
+  if (state === 'REBASE') return printRebase(st)
+  if (state === 'MERGE') return printMerge(st, apply)
   if (state === 'WAIT') return printWait(st)
   return printReport(st)
 }
@@ -643,7 +670,7 @@ function doMerged(st, l) {
     if (wt) git(['worktree', 'unlock', wt])
     const c = spawnSync('bash', [path.join(DIR, 'merge-back.sh'), 'cleanup', '--root', root, '--source', l.branch, ...(wt ? ['--worktree', wt] : [])], { encoding: 'utf8' })
     pre.push((c.stdout || '') + (c.stderr || ''))
-    if (c.status !== 0) die(`merge-back.sh cleanup failed for ${l.id} — finish by hand: bash "$(spec-paths merge-back)" cleanup --root ${root} --source ${l.branch}${wt ? ' --worktree ' + wt : ''}`)
+    if (c.status !== 0) die(`merge-back.sh cleanup failed for ${l.id}: ${((c.stdout || "") + (c.stderr || "")).trim()} — finish by hand: bash "$(spec-paths merge-back)" cleanup --root ${root} --source ${l.branch}${wt ? ' --worktree ' + wt : ''}`)
   }
   const repaired = l.repairs ? laneOf(st, l.repairs) : null
   const g = repaired ? { result: null, why: null } : runGate(l)
@@ -745,8 +772,8 @@ function doMark(st, mark) {
     const a = py('pending-question.js', ['dismiss', '--root', l.worktree])
     if (a.status !== 0) die(`the dismissal was refused: ${(a.stderr || '').trim()}`)
   } else if (mark === 'resumed') {
-    needState(l, ['pending'], mark)
-    l.state = 'dispatched'; l.question = null
+    needState(l, ['pending', 'conflicted'], mark)
+    l.state = 'dispatched'; l.question = null; delete l.conflicts
   } else if (mark === 'merged') {
     if (isRed(st) && l.repairs !== st.lastGate.lane) die(`main gate is red after ${st.lastGate.lane} — only its repair lane merges now; re-run ${cmd('').trim()} (no mark), or run ${cmd('--mark gate-repaired')} once it is repaired another way`)
     needState(l, ['merge-ready'], mark)

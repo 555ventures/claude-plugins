@@ -20,7 +20,6 @@ const S08S = specRel('08-s')
 const S08K = specRel('08-k')
 const S08C = specRel('08-c')
 const bytes = (file) => fs.readFileSync(file, 'utf8')
-const SELF_SURFACE = 'spec/scripts/fanout-driver.js'
 const batchOf = (h) => {
   const b = h.state().batch
   assert.ok(b, 'the state file must record the batch it derived, or a resumed session cannot name where the batch stops: ' + JSON.stringify(h.state()))
@@ -118,7 +117,7 @@ test('AC-20261102-03-7: --include-fixes appends fix lanes F1 and F2 with their b
 })
 
 test('AC-20261102-03-21: an explicit --spec list tables the startable specs in the order given, prints the unknown one as excluded, records the list as given, and holds the shared-brief one back', () => {
-  const h = fanoutHost()
+  const h = fanoutHost({ briefed: true })
   const nope = specRel('nope')
   const r = h.must(['--spec', S04, '--spec', S03, '--spec', S06, '--spec', nope])
   const st = h.state()
@@ -128,6 +127,10 @@ test('AC-20261102-03-21: an explicit --spec list tables the startable specs in t
   assert.ok(!y || y.state === 'waiting', '06-y shares brief 32 with a listed lane and must wait for it (D4), never be planned alongside: ' + JSON.stringify(y))
   assert.ok(r.stdout.includes('⛔ ' + nope + ' — not a startable lane'), 'an unknown spec must print as excluded with the reason: ' + r.stdout)
   assert.deepStrictEqual(st.options.specs, [S04, S03, S06, nope], 'options.specs records the --spec list as given, or a resumed session loses the user\'s selection')
+  const adhoc = fanoutHost()
+  adhoc.must(['--spec', S04, '--spec', S03, '--spec', S06])
+  assert.deepStrictEqual(adhoc.state().lanes.map((l) => [l.id, l.spec, l.state]), [['L1', S04, 'planned'], ['L2', S03, 'planned'], ['L3', S06, 'planned']],
+    'ad-hoc specs sharing src/shared.js are all planned in the order given, or File Plan overlap still holds a listed lane back: ' + JSON.stringify(adhoc.state().lanes))
 })
 
 test('AC-20261102-03-21: --override-serial lets an explicitly listed shared-brief spec into the table as planned', () => {
@@ -171,22 +174,21 @@ test('AC-20261102-03-22: a waiting spec whose predecessor stopped is reported as
     'the report must say the waiting spec never started and why: ' + JSON.stringify(slots.bullets))
 })
 
-test('AC-20261103-10-8: on the ad-hoc default fixture a waiting lane whose File Plan overlap named no stopped lane is reported as waited on the overlap and never as waiting on the stopped lane', () => {
+test('AC-20261103-10-8 / AC-20261103-15-6: on the ad-hoc default fixture a lane sharing a File Plan row with a stopped lane is tabled planned beside it and never reported as waiting on the stopped lane', () => {
   const h = fanoutHost()
   h.plan(['--spec', S03, '--spec', S06, '--spec', S04])
-  assert.deepStrictEqual([h.lane('L2').spec, h.lane('L2').state, h.lane('L2').waitingOn], [S06, 'waiting', 'File Plan overlap: src/shared.js'],
-    'the ad-hoc default must table 06-y waiting on the File Plan overlap, or the report test below proves nothing: ' + JSON.stringify(h.state().lanes))
+  assert.deepStrictEqual(h.state().lanes.map((l) => [l.id, l.spec, l.state, l.waitingOn || null]), [['L1', S03, 'planned', null], ['L2', S06, 'planned', null], ['L3', S04, 'planned', null]],
+    'two ad-hoc specs sharing src/shared.js must both be planned, or the File Plan overlap still serializes the fan-out: ' + JSON.stringify(h.state().lanes))
   h.dispatch('L1', 'lane-one')
+  h.dispatch('L2', 'lane-two')
   h.dispatch('L3', 'lane-three')
   h.must(['--mark', 'returned', '--lane', 'L1', '--stopped', 'worker gone'])
+  h.must(['--mark', 'returned', '--lane', 'L2', '--stopped', 'worker gone'])
   landLane(h, '04-z', 'L3')
   const r = h.must([])
-  assert.ok(r.stdout.includes('## Step: report'), 'with L1 stopped and L3 merged the run must reach REPORT: ' + r.stdout)
+  assert.ok(r.stdout.includes('## Step: report'), 'with L1 and L2 stopped and L3 merged the run must reach REPORT: ' + r.stdout)
   const bullets = JSON.parse(bytes(h.reportFile)).bullets
-  assert.ok(bullets.includes(S06 + ': not started — waited on File Plan overlap: src/shared.js'),
-    'the bullet must name what the lane really waited on, or the maintainer restarts the wrong spec: ' + JSON.stringify(bullets))
-  assert.ok(!bullets.some((b) => b.includes(', which stopped')),
-    'no bullet may blame the stopped lane for an ad-hoc wait, since two ad-hoc briefs are unknown and never the same brief: ' + JSON.stringify(bullets))
+  assert.ok(!bullets.some((b) => b.includes('not started')), 'no ad-hoc lane waits on anything, so none may be reported as not started: ' + JSON.stringify(bullets))
 })
 
 test('AC-20261103-10-17: the fixture writes ad-hoc specs with File Plan rows by default, the briefed opt restores the brief stamps, and dependent without briefed throws', () => {
@@ -195,9 +197,8 @@ test('AC-20261103-10-17: the fixture writes ad-hoc specs with File Plan rows by 
   assert.match(x, /^brief: n\/a$/m, 'the default 03-x must be an ad-hoc spec, or the ad-hoc path is not the default every new test walks: ' + x)
   assert.ok(x.includes('src/shared.js'), 'the default 03-x must carry the shared File Plan row that keeps the lane topology: ' + x)
   const lanes = JSON.parse(d.status(['--lanes', '--json']).stdout)
-  assert.deepStrictEqual(lanes.lanes.map((l) => l.path), [S03, S04], 'the default topology must keep 03-x and 04-z as lanes: ' + JSON.stringify(lanes))
-  assert.deepStrictEqual(lanes.serialized, [{ path: S06, brief: null, reason: 'File Plan overlap: src/shared.js' }],
-    '06-y must serialize behind 03-x on the File Plan overlap with a null brief: ' + JSON.stringify(lanes.serialized))
+  assert.deepStrictEqual(lanes.lanes.map((l) => l.path), [S03, S04, S06], 'the default topology must admit 03-x, 04-z and 06-y as lanes, File Plan overlap holding nothing back: ' + JSON.stringify(lanes))
+  assert.deepStrictEqual(lanes.serialized, [], '06-y shares src/shared.js with 03-x and must still be a lane, or File Plan overlap serializes the fan-out: ' + JSON.stringify(lanes.serialized))
   const b = fanoutHost({ briefed: true })
   assert.match(bytes(path.join(b.root, S03)), /^brief: 32$/m, 'briefed: true must write the brief stamp, or the shared-brief tests lose their fixture')
   const bl = JSON.parse(b.status(['--lanes', '--json']).stdout)
@@ -360,7 +361,7 @@ test('AC-20261102-03-14: a malformed question stops its lane without relaying it
   assert.ok(d.stdout.includes('SendMessage {to: "lane-two"'), 'the worker is told to continue to its stop: ' + d.stdout)
 })
 
-test('AC-20261102-03-15: MERGE names only the first merge-ready lane from the main root, and a pending lane keeps the run in RELAY', () => {
+test('AC-20261102-03-15: MERGE names only the first merge-ready lane from the main root, and a pending lane keeps the run in RELAY, and a clean lane on a moved main is rebased onto it, fast-forwarded and landed with the review driver finishing promotion (AC-20261103-15-9)', () => {
   const h = fanoutHost()
   h.dispatchedPair()
   for (const stem of ['03-x', '04-z']) {
@@ -388,22 +389,45 @@ test('AC-20261102-03-15: MERGE names only the first merge-ready lane from the ma
   const rp = p.must([])
   assert.match(rp.stdout, /state: RELAY/, 'a pending question may change the outcome, so it is relayed before any merge: ' + rp.stdout)
   assert.ok(!rp.stdout.includes('## Step: merge'), 'no merge while a lane is pending: ' + rp.stdout)
+
+  {
+  const h = mergeReadyHost()
+  h.moveMain('other.txt', 'o\n')
+  const r = h.must([])
+  const wt = h.wt('03-x')
+  assert.ok(r.stdout.includes('## Step: merge L1'), 'the bare run prints the merge step: ' + r.stdout)
+  assert.ok(r.stdout.includes('rebased spec/03-x onto main and fast-forwarded'), 'merge-back\'s landed note is printed, or the session cannot tell the landing happened: ' + r.stdout)
+  assert.ok(r.stdout.includes('git worktree unlock ' + wt), 'the harness lock on the worktree is lifted before cleanup: ' + r.stdout)
+  assert.ok(r.stdout.includes('node "$(spec-paths review-driver)" ' + wt + '/' + S03 + ' — its MERGE step finds spec/03-x already landed; mark merge-strategy rebase-ff'), 'the review driver finishes promotion and cleanup on the landed branch: ' + r.stdout)
+  assert.ok(r.stdout.includes('--mark merged --lane L1'), 'the merged mark closes the step: ' + r.stdout)
+  assert.ok(!r.stdout.includes('strategy derived') && !r.stdout.includes('/git:merge'), 'the session is no longer asked to choose a strategy or run the merge command: ' + r.stdout)
+  assert.strictEqual(isAncestor(h, 'spec/03-x'), 0, 'the lane branch must be contained in main after the bare run, or nothing landed: ' + r.stdout)
+  assert.strictEqual(h.git('status', '--porcelain').trim(), '', 'the main root must stay clean after the landing, or the next landing is refused')
+  h.mergeLane('03-x')
+  h.must(['--mark', 'merged', '--lane', 'L1'])
+  assert.deepStrictEqual([h.lane('L1').state, h.lane('L1').gate], ['merged', 'green'], 'the merged mark gates main once and lands the lane')
+  }
 })
 
 // Lane L1 (03-x) merge-ready with real work on its branch, as a closed review leaves it.
-function mergeReadyHost(specFlags = ['--spec', S03]) {
+function mergeReadyHost(specFlags = ['--spec', S03], before = () => {}) {
   const h = fanoutHost()
+  before(h)
   h.plan(specFlags)
   h.dispatch('L1', 'lane-one')
   h.startLane('03-x')
   h.commitInLane('03-x', 'x.txt', 'x\n')
   h.sidecar('03-x', 'review', { closed: true })
-  h.must(['--mark', 'returned', '--lane', 'L1'])
+  h.returnedOut = h.must(['--mark', 'returned', '--lane', 'L1']).stdout
   return h
 }
+const gitIn = (dir, ...args) => require('node:child_process').execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' })
+const isAncestor = (h, branch) => require('node:child_process').spawnSync('git', ['-C', h.root, 'merge-base', '--is-ancestor', branch, 'HEAD']).status
 
-test('AC-20261102-03-16: --mark merged refuses a branch that is not contained in HEAD, and for a merged one runs the host gate in the root, logs it and records green, AC-20261103-06-22', () => {
+test('AC-20261102-03-16 / AC-20261103-15-10 / AC-20261103-15-18: a mark that reaches MERGE prints the land-it line and runs no git, --mark merged refuses a branch that is not contained in HEAD, and for a merged one runs the host gate in the root, logs it and records green, AC-20261103-06-22', () => {
   const h = mergeReadyHost()
+  assert.ok(h.returnedOut.includes('## Step: merge L1') && h.returnedOut.includes('— lands spec/03-x (rebase onto main, fast-forward)'), 'the mark must print the merge step with the land-it line, or the session is told to run a merge the driver now performs: ' + h.returnedOut)
+  assert.strictEqual(isAncestor(h, 'spec/03-x'), 1, 'a mark must run no git, or the landing happens before the bare run that owns it: ' + h.returnedOut)
   const refused = h.run(['--mark', 'merged', '--lane', 'L1'])
   assert.strictEqual(refused.status, 2, 'an unmerged branch must be refused: ' + refused.stdout)
   assert.ok(refused.stderr.includes('fanout-driver: lane L1 is not merged — run the MERGE step first'), 'the refusal names the remedy: ' + refused.stderr)
@@ -425,7 +449,7 @@ test('AC-20261102-03-17: a red gate after a merge enters MERGE_RED, queues the f
   h.must(['--mark', 'returned', '--lane', 'L1'])
   h.must(['--mark', 'returned', '--lane', 'L2'])
   h.mergeLane('03-x', { markDone: true })
-  h.mergeLane('04-z', { markDone: true })
+  h.mergeLane('04-z', { markDone: true, cleanup: false })
   h.gateRed(true)
   const r = h.run(['--mark', 'merged', '--lane', 'L1'])
   const log = path.join(h.common, 'spec-fanout', 'L1.gate.log')
@@ -624,45 +648,24 @@ test('fanout: after a red gate is repaired green, the report carries no queued "
 })
 
 const pinLine = (members, tail) => '📌 Auto-picked batch: ' + members + ' — ' + tail + ' (veto: --batch <ids|all>)'
-const SELF_REASON = 'touches pipeline self-surface ' + SELF_SURFACE
+const DEP_REASON = 'blocked: brief 34 depends on 32'
 
-test('AC-20261103-06-9: a bare run prints the derived batch as one 📌 line before the table, tables the members with the shared-brief one waiting, and records the batch with its boundary', () => {
+test('AC-20261103-06-9 / AC-20261103-15-7: a bare run prints the derived batch as one 📌 line before the table, tables a spec naming the driver and a critical spec sharing a Risk Tiers path like any other, and records the batch with no boundary', () => {
   const h = fanoutHost({ briefed: true, selfSurface: true })
   const r = h.must([])
-  const line = pinLine('03-x, 06-y, 04-z', 'stops before 08-s (' + SELF_REASON + ')')
-  assert.ok(r.stdout.includes(line), 'the PLAN step must print the batch and its boundary as one vetoable line: ' + r.stdout)
+  const line = pinLine('03-x, 06-y, 04-z, 08-s', 'the whole queue')
+  assert.ok(r.stdout.includes(line), 'the PLAN step must print the whole queue as one vetoable line, or a spec naming the driver still ends the batch: ' + r.stdout)
   assert.ok(r.stdout.indexOf(line) < r.stdout.indexOf('L1 '), 'the 📌 line must come ahead of the table, or the veto is read after the plan is already shown: ' + r.stdout)
   const st = h.state()
-  assert.deepStrictEqual(st.lanes.map((l) => [l.id, l.spec, l.state]), [['L1', S03, 'planned'], ['L2', S06, 'waiting'], ['L3', S04, 'planned']],
-    'the batch members must be tabled in queue order with the shared-brief member waiting: ' + JSON.stringify(st.lanes))
+  assert.deepStrictEqual(st.lanes.map((l) => [l.id, l.spec, l.state]), [['L1', S03, 'planned'], ['L2', S06, 'waiting'], ['L3', S04, 'planned'], ['L4', S08S, 'planned']],
+    'the batch members must be tabled in queue order, the shared-brief member waiting and the driver-naming spec planned: ' + JSON.stringify(st.lanes))
   assert.strictEqual(st.lanes[1].waitingOn, 'shared brief 32', 'the waiting member must name what it waits on: ' + JSON.stringify(st.lanes[1]))
-  assert.deepStrictEqual(batchOf(h), { members: [S03, S06, S04], stopBefore: { path: S08S, reason: SELF_REASON }, by: 'derived' },
-    'the state must record the derived batch and the self-surface boundary, or REPORT cannot say why the batch ended: ' + JSON.stringify(st.batch))
-})
-
-test('AC-20261103-06-10: a self-surface spec at the head is the whole batch and the boundary falls before the next entry, or the whole queue when none follows', () => {
-  const h = fanoutHost({ selfSurface: true, draft: true })
-  h.markDone('03-x', '06-y', '04-z')
-  const r = h.must([])
-  assert.ok(r.stdout.includes(pinLine('08-s', 'stops before 08-p (self-surface runs alone)')), 'a self-surface head must run alone and name the entry it stops before: ' + r.stdout)
-  assert.deepStrictEqual(h.state().lanes.map((l) => [l.id, l.spec]), [['L1', S08S]], 'the self-surface spec must be tabled alone as L1, or it runs beside lanes on the runner it rewrites: ' + JSON.stringify(h.state().lanes))
-  const only = fanoutHost({ selfSurface: true })
-  only.markDone('03-x', '06-y', '04-z')
-  const o = only.must([])
-  assert.ok(o.stdout.includes(pinLine('08-s', 'the whole queue')), 'with nothing after it the batch is the whole queue: ' + o.stdout)
-})
-
-test('AC-20261103-06-11: a critical spec sharing a Risk Tiers file with an earlier member ends the batch before it, and a rules file with no Risk Tiers section admits it', () => {
-  const h = fanoutHost({ critical: true })
-  h.must([])
-  assert.deepStrictEqual(batchOf(h).stopBefore, { path: S08C, reason: 'critical: shares Risk Tiers path src/db.js with 03-x' },
-    'a critical spec on an irreversible shared file must stop the batch before it: ' + JSON.stringify(h.state().batch))
-  assert.ok(!h.state().lanes.some((l) => l.spec === S08C), 'the critical spec must not be tabled beside the lane it shares a surface with: ' + JSON.stringify(h.state().lanes))
-  const open = fanoutHost({ critical: true })
-  fs.writeFileSync(path.join(open.root, '.claude/rules/spec-pipeline.md'), '# Pipeline rules\n\n## Planning\n\n- nothing\n')
-  open.must([])
-  assert.ok(batchOf(open).members.includes(S08C), 'with no Risk Tiers section there is no shared tier path, so the spec is admitted: ' + JSON.stringify(open.state().batch))
-  assert.strictEqual(open.state().batch.stopBefore, null, 'no boundary is met without a Risk Tiers section: ' + JSON.stringify(open.state().batch))
+  assert.deepStrictEqual(batchOf(h), { members: [S03, S06, S04, S08S], stopBefore: null, by: 'derived' },
+    'the state must record the derived batch with no boundary, or a self-surface spec still serializes the fan-out: ' + JSON.stringify(st.batch))
+  const crit = fanoutHost({ briefed: true, critical: true })
+  crit.must([])
+  assert.ok(batchOf(crit).members.includes(S08C), 'a critical spec sharing a Risk Tiers path with a member must be tabled, or the critical boundary still ends the batch: ' + JSON.stringify(crit.state().batch))
+  assert.strictEqual(batchOf(crit).stopBefore, null, 'no boundary is met when shared files hold nothing back: ' + JSON.stringify(crit.state().batch))
 })
 
 test('AC-20261103-06-12: a blocked entry ends the batch with its first blocker and a planning item ends it with the action that heads the queue', () => {
@@ -963,8 +966,8 @@ test('AC-20261103-08-26: MERGE exits 2 naming the stray file and the session scr
   assert.ok(!r.stdout.includes('## Step: merge'), 'no merge step is printed over a dirty root: ' + r.stdout)
 })
 
-test('AC-20261103-06-18: REPORT after a derived batch names where the batch stopped, and the next bare run after the reported mark starts the next batch with the stopped spec startable again', () => {
-  const h = fanoutHost({ selfSurface: true })
+test('AC-20261103-06-18 / AC-20261103-15-8: REPORT after a derived batch names where the batch stopped, and the next bare run after the reported mark starts the next batch with the stopped spec startable again', () => {
+  const h = fanoutHost({ briefed: true, dependent: true })
   h.must([])
   h.must(['--mark', 'planned'])
   const [l1, l2, l3] = [idOf(h, S03), idOf(h, S06), idOf(h, S04)]
@@ -977,12 +980,12 @@ test('AC-20261103-06-18: REPORT after a derived batch names where the batch stop
   const r = h.must([])
   assert.ok(r.stdout.includes('## Step: report'), 'every lane terminal means REPORT: ' + r.stdout)
   const slots = JSON.parse(bytes(h.reportFile))
-  assert.ok(slots.warns.includes('batch stopped before 08-s — ' + SELF_REASON + '; the next bare run starts the next batch'),
+  assert.ok(slots.warns.includes('batch stopped before 07-d — ' + DEP_REASON + '; the next bare run starts the next batch'),
     'REPORT must say where the batch stopped and that the next bare run goes on: ' + JSON.stringify(slots.warns))
   h.must(['--mark', 'reported'])
   const next = h.must([])
   assert.match(next.stdout, /state: PLAN/, 'after the reported mark the next bare run is a fresh plan: ' + next.stdout)
-  assert.ok(next.stdout.includes(pinLine('06-y', 'stops before 08-s (' + SELF_REASON + ')')), 'the spec whose lane stopped is startable again in the next batch: ' + next.stdout)
+  assert.ok(next.stdout.includes(pinLine('06-y', 'stops before 07-d (' + DEP_REASON + ')')), 'the spec whose lane stopped is startable again in the next batch: ' + next.stdout)
 })
 
 test('AC-20261103-06-20: a merge-ready lane is merged before a planned lane is dispatched, and --state says MERGE', () => {
@@ -1001,4 +1004,106 @@ test('AC-20261103-06-20: a merge-ready lane is merged before a planned lane is d
   assert.ok(r.stdout.includes('## Step: merge ' + a), 'the finished lane must be merged first, or a lane dispatched now branches from a main about to move: ' + r.stdout)
   assert.ok(!r.stdout.includes('## Step: dispatch'), 'no lane is dispatched while one is merge-ready: ' + r.stdout)
   assert.match(h.must(['--state']).stdout, /\bMERGE\b/, '--state must agree with the step the bare run printed: ' + r.stdout)
+})
+
+// specs/20261103/15-shared-files-land-by-rebase.md D1, D4-D6: shared files hold no lane back; MERGE rebases and fast-forwards;
+// a conflict goes back to the lane's worker; a second conflict against the same main stops the lane.
+const OVERLAP_STEMS = ['20-o01', '20-o02', '20-o03', '20-o04', '20-o05']
+const stemOf = (spec) => path.basename(spec, '.md')
+
+test('AC-20261103-15-6: five hardened briefless specs naming the same two scripts are all tabled planned, four are dispatched with none waiting, and the fifth is dispatched after a landing', () => {
+  const h = fanoutHost({ overlap: 5 })
+  const r = h.must([])
+  assert.ok(r.stdout.includes(pinLine(OVERLAP_STEMS.join(', '), 'the whole queue')), 'the batch must be the whole queue, or shared scripts still end it: ' + r.stdout)
+  assert.deepStrictEqual(h.state().lanes.map((l) => [l.id, stemOf(l.spec), l.state]), OVERLAP_STEMS.map((s, i) => ['L' + (i + 1), s, 'planned']),
+    'every overlapping spec must be tabled planned and none waiting, or File Plan overlap still serializes the fan-out: ' + JSON.stringify(h.state().lanes))
+  assert.strictEqual(batchOf(h).stopBefore, null, 'no boundary may end a batch over shared files: ' + JSON.stringify(h.state().batch))
+  assert.deepStrictEqual(JSON.parse(h.status(['--lanes', '--json']).stdout).serialized, [], '--lanes --json must serialize nothing on File Plan overlap, or spec-status still predicts a collision')
+  const d = h.must(['--mark', 'planned'])
+  assert.ok(d.stdout.includes('## Step: dispatch 4 lanes'), 'the four-lane cap dispatches four at once: ' + d.stdout)
+  for (const s of OVERLAP_STEMS.slice(0, 4)) assert.ok(d.stdout.includes(s), 'the dispatch must name ' + s + ': ' + d.stdout)
+  assert.ok(!d.stdout.includes('20-o05'), 'the fifth spec stays planned past the cap: ' + d.stdout)
+  assert.strictEqual(h.lane('L5').state, 'planned', 'L5 is held by the cap alone, never by a wait: ' + JSON.stringify(h.state().lanes))
+  for (let i = 1; i <= 4; i++) h.dispatch('L' + i, 'lane-' + i)
+  landLane(h, '20-o01', 'L1')
+  const next = h.must([])
+  assert.ok(next.stdout.includes('## Step: dispatch 1 lanes') && next.stdout.includes('20-o05'), 'the first bare run after a landing dispatches the fifth lane: ' + next.stdout)
+})
+
+// A base where x.txt already exists, so the lane's edit and main's edit conflict as UU (add/add would show AA).
+const conflictHost = () => mergeReadyHost(['--spec', S03], (h) => h.moveMain('x.txt', 'base\n'))
+
+test('AC-20261103-15-11: a lane whose branch conflicts with the moved main is left mid-rebase in its worktree, recorded conflicted and sent back to its worker, and a second bare run changes nothing', () => {
+  const h = conflictHost()
+  h.moveMain('x.txt', 'main\n')
+  const r = h.must([])
+  assert.ok(r.stdout.includes('## Step: send L1 back to rebase'), 'a conflict prints the send-back step: ' + r.stdout)
+  assert.ok(r.stdout.includes('SendMessage {to: "lane-one", message: "Lane L1: main moved and spec/03-x conflicts with it in x.txt'), 'the message goes to the lane\'s own worker and names the conflicted file: ' + r.stdout)
+  assert.ok(r.stdout.includes('run `/spec:run ' + S03 + '` again'), 'a run lane\'s worker is told to run its spec again and report MERGE_READY: ' + r.stdout)
+  assert.ok(r.stdout.includes('--mark resumed --lane L1'), 'the step closes with the resumed mark: ' + r.stdout)
+  const l = h.lane('L1')
+  assert.deepStrictEqual([l.state, l.conflicts, l.rebases, l.rebaseHead], ['conflicted', ['x.txt'], 1, h.git('rev-parse', 'HEAD').trim()], 'the lane records the conflict, the round and the main it conflicted with: ' + JSON.stringify(l))
+  assert.match(gitIn(h.wt('03-x'), 'status', '--porcelain'), /^UU x\.txt$/m, 'the rebase must stay in progress in the lane\'s worktree, or the worker has nothing to continue')
+  assert.strictEqual(h.git('status', '--porcelain').trim(), '', 'the conflict must never touch the main root')
+  assert.match(h.must(['--state']).stdout, /\bREBASE\b/, '--state must name the REBASE state')
+  const before = fs.readFileSync(h.stateFile, 'utf8')
+  const again = h.must([])
+  assert.strictEqual(fs.readFileSync(h.stateFile, 'utf8'), before, 'a bare run on REBASE must change nothing, or a re-print counts as a second round')
+  assert.ok(again.stdout.includes('## Step: send L1 back to rebase'), 'a bare run re-prints the same step: ' + again.stdout)
+})
+
+test('AC-20261103-15-12: a worker that resolves the rebase and returns gets its lane landed on the next bare run, and REPORT says it was rebased', () => {
+  const h = conflictHost()
+  h.moveMain('x.txt', 'main\n')
+  h.must([])
+  h.must(['--mark', 'resumed', '--lane', 'L1'])
+  const l = h.lane('L1')
+  assert.strictEqual(l.state, 'dispatched', 'resumed puts the lane back to work: ' + JSON.stringify(l))
+  assert.ok(l.conflicts === undefined || l.conflicts === null, 'the resumed mark clears the conflict list: ' + JSON.stringify(l))
+  const wt = h.wt('03-x')
+  fs.writeFileSync(path.join(wt, 'x.txt'), 'both\n')
+  gitIn(wt, 'add', 'x.txt')
+  require('node:child_process').execFileSync('git', ['-C', wt, 'rebase', '--continue'], { env: { ...process.env, GIT_EDITOR: 'true' } })
+  h.must(['--mark', 'returned', '--lane', 'L1'])
+  assert.strictEqual(h.lane('L1').state, 'merge-ready', 'the resolved lane returns merge-ready')
+  const r = h.must([])
+  assert.ok(r.stdout.includes('## Step: merge L1'), 'the next bare run lands the resolved lane: ' + r.stdout)
+  assert.strictEqual(isAncestor(h, 'spec/03-x'), 0, 'the resolved branch must be contained in main: ' + r.stdout)
+  h.mergeLane('03-x')
+  h.must(['--mark', 'merged', '--lane', 'L1'])
+  h.must([])
+  assert.ok(JSON.parse(bytes(h.reportFile)).bullets.includes(S03 + ': merged (gate green, rebased ×1)'), 'REPORT must say where the shared files collided: ' + bytes(h.reportFile))
+})
+
+test('AC-20261103-15-13: a lane returned merge-ready with its conflict unresolved against the same main has its rebase aborted and is stopped naming the hand remedy', () => {
+  const h = conflictHost()
+  h.moveMain('x.txt', 'main\n')
+  h.must([])
+  h.must(['--mark', 'resumed', '--lane', 'L1'])
+  const wt = h.wt('03-x')
+  gitIn(wt, 'rebase', '--abort')
+  h.must(['--mark', 'returned', '--lane', 'L1'])
+  const r = h.must([])
+  const l = h.lane('L1')
+  assert.strictEqual(l.state, 'stopped', 'a second conflict against the same main stops the lane: ' + JSON.stringify(l))
+  assert.match(l.stoppedReason, /^rebase conflict unresolved twice on [0-9a-f]{7} — resume by hand: cd .* && git rebase main$/, 'the reason names the hand remedy: ' + l.stoppedReason)
+  assert.strictEqual(gitIn(wt, 'status', '--porcelain', '--untracked-files=no').trim(), '', 'the driver must abort the rebase and leave the worktree clean, or the person resuming by hand inherits a half-done rebase')
+  assert.match(gitIn(wt, 'log', '--oneline', '-1'), /lane work 03-x/, 'the lane\'s own commit survives the abort')
+  assert.ok(r.stdout.includes('## Step: report'), 'with its only lane stopped the run reaches REPORT: ' + r.stdout)
+  assert.ok(JSON.parse(bytes(h.reportFile)).bullets.some((b) => b.startsWith(S03 + ': stopped — rebase conflict unresolved twice')), 'REPORT names the reason: ' + bytes(h.reportFile))
+})
+
+test('AC-20261103-15-14: a bare run at MERGE lands a merge-ready fix lane the same way and prints only the merged mark after the landing note', () => {
+  const h = fanoutHost({ fixes: true })
+  h.plan(['--spec', specRel('nope'), '--include-fixes'])
+  h.dispatch('F1', 'fix-one')
+  h.startFixLane('q107')
+  h.commitInLane('q107', 'fix.txt', 'fix\n')
+  h.must(['--mark', 'returned', '--lane', 'F1'])
+  assert.strictEqual(h.lane('F1').state, 'merge-ready', 'the setup needs F1 merge-ready')
+  const r = h.must([])
+  assert.ok(r.stdout.includes('## Step: merge F1'), 'the bare run prints the merge step: ' + r.stdout)
+  assert.ok(r.stdout.includes('rebased fix/q107 onto main and fast-forwarded'), 'the fix lane is landed by the driver: ' + r.stdout)
+  assert.ok(r.stdout.includes('--mark merged --lane F1'), 'the merged mark closes the step: ' + r.stdout)
+  assert.ok(!r.stdout.includes('/git:merge') && !r.stdout.includes('review-driver'), 'a fix lane has no spec to promote and no merge command to run: ' + r.stdout)
 })

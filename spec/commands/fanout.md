@@ -21,7 +21,7 @@ The script derives and writes; you do the one judgment step it prints.
 - `--include-fixes` — red-CI and queued `/spec:fix` items become one serial fix group after the run lanes.
 - `--override-serial` — admit shared-brief specs the queue held back (never a `depends on` hold).
 - `--ask <key|all>` — repeatable, on the planning run: relay that `policy.stops` stop (`repairRound`,
-  `buildEscalate`, `reviewEscalate`, `redFindings`) to you for this fan-out instead of the host's auto-pick.
+  `buildEscalate`, `reviewEscalate`, `redFindings`, `rejectWithEvidence`) to you for this fan-out instead of the host's auto-pick.
 
 ## Run — the loop
 

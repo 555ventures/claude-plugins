@@ -190,7 +190,7 @@ One `AskUserQuestion`, four questions, each first option the default:
   what the area covers here. The first listed option carries `(Recommended)` — the area Phase 1
   found most at risk, else `auth`.
 
-`policy.stops` is written with its defaults (repairRound repair, buildEscalate derived, reviewEscalate queue, redFindings remove-mention, prototypeClose ask) and never asked — edit .claude/spec.config.json to change a stop.
+`policy.stops` is written with its defaults (repairRound repair, buildEscalate derived, reviewEscalate queue, redFindings remove-mention, prototypeClose ask, rejectWithEvidence accept) and never asked — edit .claude/spec.config.json to change a stop.
 
 ## Phase 4 — Author the profile JSON
 

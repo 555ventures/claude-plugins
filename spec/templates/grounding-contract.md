@@ -258,7 +258,8 @@ JSON is the default block:
     "buildEscalate": "derived",
     "reviewEscalate": "queue",
     "redFindings": "remove-mention",
-    "prototypeClose": "ask"
+    "prototypeClose": "ask",
+    "rejectWithEvidence": "accept"
   }
 }
 ```
@@ -268,7 +269,7 @@ Enums: `mergeStrategy` `derived | merge-commit | ff-only | squash | rebase-ff`; 
 `fable | opus | sonnet | haiku`; `models.<seat>.effort` `low | medium | high | xhigh | max`;
 `riskTiers` an array of non-empty strings; `stops.repairRound` `repair | ask`; `stops.buildEscalate`
 `derived | ask`; `stops.reviewEscalate` `queue | ask`; `stops.redFindings` `remove-mention | ask`;
-`stops.prototypeClose` `ask | keep | delete`.
+`stops.prototypeClose` `ask | keep | delete`; `stops.rejectWithEvidence` `accept | ask`.
 
 Semantics: `worktreePerSpec` false → `/spec:run` runs in place without `--in-place`;
 `directLaneToMain` false → a Direct-lane change lands through a branch and `/git:merge`, never a
@@ -292,7 +293,7 @@ critical-tier unsanctioned green removes the AC-ID mention, printing `📌 Auto-
 mention — host policy stops.redFindings: remove-mention (veto anytime)`; `stops.prototypeClose`
 `keep` or `delete` → the MERGE step closes an unmerged prototype that way, printing `📌 Auto-picked
 <Keep it for now|Delete it> — host policy stops.prototypeClose: <value> (veto anytime)`, while `ask`
-(the default) asks, deleting unmerged work being the one unrecoverable pick. Any `stops` key set to
+(the default) asks, deleting unmerged work being the one unrecoverable pick. `stops.rejectWithEvidence` `accept` → `--mark dispositions` accepts a disposer `reject` whose `repro` names the command it ran and the output it observed, printing `📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)`, while a `waive` and a repro-less `reject` are asked whatever the value. Any `stops` key set to
 `ask` brings its question back; `/spec:fanout --ask <key>` brings it back for one fan-out.
 
 **Absent or partial block = the defaults above, key by key** — a host that predates the block

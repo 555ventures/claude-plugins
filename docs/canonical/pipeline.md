@@ -127,8 +127,12 @@ effort come from the host policy, defaulting to the seat table); both seats are 
 never the session's model, and independence is the fresh context plus executed evidence, not a
 model family (specs/20261029/01-model-placement-refresh.md;
 specs/20261029/08-the-policy-round-at-init.md D8). Fix
-recommendations dispatch without a question; waive and reject recommendations go to the
-user, and the user's answer is recorded as `final` with `overriddenBy: "user"`. Every
+recommendations dispatch without a question; a reject whose `repro` names the command the
+disposer ran and its observed output is accepted at the mark by
+`policy.stops.rejectWithEvidence` `accept` (the default — the driver stamps `final: "reject"`,
+`acceptedBy: "policy"` and prints the 📌 line; `ask` brings the question back); every other
+waive and reject recommendation goes to the user, and the user's answer is recorded as `final`
+with `overriddenBy: "user"`. Only the user waives. (specs/20261103/09) Every
 review row records `checkpoint: {outcome, overrides}` — `disposer` (with the count of
 recommendations the user overrode), `empty` (nothing to disposition), or `not-reached`
 (the run stopped before dispositions) — so how often the user overrules the independent
@@ -171,7 +175,7 @@ review's fix-cap stop lists the open findings and recommends abandon-and-queue. 
 is derived in every command from `merge-back.sh inspect`'s RECOMMEND line. Only the user
 waives, in every lane — `/spec:fix` included. (specs/20261029/07)
 The predictable stops are answered by the host's `policy.stops` block (`repairRound`, `buildEscalate`,
-`reviewEscalate`, `redFindings`, `prototypeClose`), written with safe defaults at init and shared by solo runs
+`reviewEscalate`, `redFindings`, `prototypeClose`, `rejectWithEvidence`), written with safe defaults at init and shared by solo runs
 and lanes; each pick prints one `📌 Auto-picked <label> — host policy stops.<key>: <value> (veto anytime)` line
 and is listed in the run report; `ask` on a key brings the question back, and deleting a prototype stays a
 question by default. `/spec:fix` no longer asks before committing a dirty tree — `/git:commit`'s own two

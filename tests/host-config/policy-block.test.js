@@ -63,9 +63,9 @@ test('AC-20261029-08-2: POLICY_DEFAULTS.models equals core.md § Model Placement
   assert.deepStrictEqual(POLICY_DEFAULTS.models.disposer, row('Disposer'), 'disposer default drifted from the doctrine table')
 })
 
-const STOP_DEFAULTS = { repairRound: 'repair', buildEscalate: 'derived', reviewEscalate: 'queue', redFindings: 'remove-mention', prototypeClose: 'ask' }
+const STOP_DEFAULTS = { repairRound: 'repair', buildEscalate: 'derived', reviewEscalate: 'queue', redFindings: 'remove-mention', prototypeClose: 'ask', rejectWithEvidence: 'accept' }
 
-test('AC-20261103-04-1: policy(root) returns the five stops defaults for a config without a block and merges a partial stops block key by key', () => {
+test('AC-20261103-04-1 / AC-20261103-09-1: policy(root) returns the six stops defaults for a config without a block and merges a partial stops block key by key', () => {
   const { policy } = lib()
   const bare = tmpdir('policy-stops-bare')
   writeConfig(bare, {})
@@ -74,11 +74,17 @@ test('AC-20261103-04-1: policy(root) returns the five stops defaults for a confi
   const part = tmpdir('policy-stops-part')
   writeConfig(part, { policy: { stops: { prototypeClose: 'keep' } } })
   assert.deepStrictEqual(policy(part).stops, { ...STOP_DEFAULTS, prototypeClose: 'keep' },
-    'a set stop must win while the other four keep their defaults, or a partial block drops the rest')
+    'a set stop must win while the other five keep their defaults, or a partial block drops the rest')
+  const ask = tmpdir('policy-stops-rwe')
+  writeConfig(ask, { policy: { stops: { rejectWithEvidence: 'ask' } } })
+  assert.deepStrictEqual(policy(ask).stops, { ...STOP_DEFAULTS, rejectWithEvidence: 'ask' },
+    'a set rejectWithEvidence must win while the other five keep their defaults, or the key is dropped by the merge')
 })
 
-test('AC-20261103-04-1: validatePolicy reports a bad stops enum and an unknown stops key exactly, and a non-object stops as one finding', () => {
+test('AC-20261103-04-1 / AC-20261103-09-1: validatePolicy reports a bad stops enum and an unknown stops key exactly, and a non-object stops as one finding', () => {
   const { validatePolicy } = lib()
+  assert.deepStrictEqual(validatePolicy({ stops: { rejectWithEvidence: 'always' } }), ['stops.rejectWithEvidence: expected one of accept|ask'],
+    'a bad rejectWithEvidence value must yield exactly its enum finding, or the owner cannot tell which stop to fix')
   assert.deepStrictEqual(validatePolicy({ stops: { repairRound: 'always', bogus: 1 } }),
     ['stops.repairRound: expected one of repair|ask', 'unknown key stops.bogus'],
     'the findings must name the stop key and its enum, or the owner cannot tell which stop to fix')

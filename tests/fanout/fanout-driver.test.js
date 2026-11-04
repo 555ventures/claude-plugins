@@ -153,7 +153,7 @@ test('AC-20261102-03-8: a bare run on an existing file in DISPATCH re-prints the
   assert.strictEqual(bytes(p.stateFile), file, 'the re-print must not rewrite the file')
 })
 
-test('AC-20261102-03-9 / AC-20261103-04-12: the planned mark prints DISPATCH with no AskUserQuestion block, the standing mark is refused with the remaining marks listed, and --ask validates its key and lands in the state file', () => {
+test('AC-20261102-03-9 / AC-20261103-04-12 / AC-20261103-09-8: the planned mark prints DISPATCH with no AskUserQuestion block, the standing mark is refused with the remaining marks listed, and --ask validates its key and lands in the state file', () => {
   const h = fanoutHost()
   const r = h.plan()
   assert.match(r.stdout, /state: DISPATCH/, 'the planned mark leaves the run in DISPATCH: ' + r.stdout)
@@ -164,11 +164,14 @@ test('AC-20261102-03-9 / AC-20261103-04-12: the planned mark prints DISPATCH wit
   const bad = fanoutHost()
   const b = bad.run(['--ask', 'bogus'])
   assert.strictEqual(b.status, 2, 'an unknown --ask key must exit 2 or a typo silently asks nothing: ' + b.stdout)
-  for (const w of ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'all']) assert.ok(b.stderr.includes(w), 'the refusal must name ' + w + ': ' + b.stderr)
+  for (const w of ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'rejectWithEvidence', 'all']) assert.ok(b.stderr.includes(w), 'the refusal must name ' + w + ': ' + b.stderr)
   assert.ok(!fs.existsSync(bad.stateFile), 'a refused planning run must write no state file')
   const ok = fanoutHost()
   ok.plan(['--ask', 'repairRound'])
   assert.deepStrictEqual(ok.state().ask, ['repairRound'], 'the planning run must record the per-run ask list in the state file')
+  const rwe = fanoutHost()
+  rwe.plan(['--ask', 'rejectWithEvidence'])
+  assert.deepStrictEqual(rwe.state().ask, ['rejectWithEvidence'], 'the planning run must record rejectWithEvidence, or the per-run relay never reaches the reject stop')
 })
 
 test('AC-20261102-03-10: DISPATCH prints one lane-seat agent line and worker prompt per planned lane and the dispatched mark records the agent name', () => {

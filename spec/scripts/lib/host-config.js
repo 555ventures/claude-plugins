@@ -126,6 +126,7 @@ const STOP_ENUMS = Object.freeze({
   reviewEscalate: Object.freeze(['queue', 'ask']),
   redFindings: Object.freeze(['remove-mention', 'ask']),
   prototypeClose: Object.freeze(['ask', 'keep', 'delete']),
+  rejectWithEvidence: Object.freeze(['accept', 'ask']),
 })
 const POLICY_BOOLEANS = Object.freeze(['worktreePerSpec', 'directLaneToMain', 'ledgerCommitted'])
 const POLICY_SEATS = Object.freeze(['workers', 'reviewer', 'disposer', 'lanes'])
@@ -152,6 +153,7 @@ const POLICY_DEFAULTS = Object.freeze({
     reviewEscalate: 'queue',
     redFindings: 'remove-mention',
     prototypeClose: 'ask',
+    rejectWithEvidence: 'accept',
   }),
   riskTiers: Object.freeze([]),
 })

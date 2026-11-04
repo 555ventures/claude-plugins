@@ -157,10 +157,7 @@ const seedReviewRow = (i) => ({
   verdict: 'CLEAN', runId: `rv_seed00000${i}`, tier: 'standard', survived: 0,
 })
 
-// The replay fixtures are makeHost()'s shape with two additions the replay harness needs: a
-// seeded ledger (which decides dueness) and an optional base-less spec frontmatter (which makes
-// `replay.js --select` fail at exit 4, the only reachable "due but nothing selectable" arm —
-// see AC-20260821-02-3's own note).
+// makeHost()'s shape plus a seeded ledger and an optional base-less spec frontmatter.
 function makeReplayHost(prefix, { seedRows = [], withBase = true, acId } = {}) {
   const root = fs.realpathSync(tmpdir(prefix))
   const g = gitRepo(root)
@@ -207,8 +204,7 @@ function driveToClose(host, scratchName) {
 }
 
 // The session's close commit. `amend: true` folds the status flip into the implement commit
-// instead, so the spec's newest commit has a parent that predates the spec entirely — which is
-// what makes `replay.js --select` fail to resolve a target (AC-20260821-02-3).
+// instead, so the spec's newest commit has a parent that predates the spec entirely.
 function commitClose(host, { amend = false } = {}) {
   host.g('add', host.specRel, 'tests/foo.test.js')
   if (amend) host.g('commit', '-q', '--amend', '--no-edit')

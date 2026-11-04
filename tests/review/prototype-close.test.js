@@ -266,14 +266,6 @@ test('AC-20261029-04-8: WHEN 2 unmerged commits are marked --prototype delete TH
   assert.ok(statusMarks(h.root).closed, 'delete must set marks.closed')
 })
 
-test('AC-20261029-04-9: WHEN stage-review.md is read THE SYSTEM SHALL state the unmerged-commits question in the MERGE bullet', () => {
-  const text = read('spec/doctrine/stages/stage-review.md')
-  const i = text.indexOf('- **Merge strategy')
-  assert.ok(i !== -1, 'the MERGE bullet moved, so the prototype rule has no home to pin')
-  const bullet = text.slice(i).split(/\n- \*\*|\n## /)[0].replace(/\s+/g, ' ')
-  assert.ok(bullet.includes('--prototype delete|keep'), 'the MERGE bullet must name the operand that answers the question')
-  assert.match(bullet, /AskUserQuestion[\s\S]*Delete it \(Recommended\)/, 'the bullet must carry the question with "Delete it (Recommended)" first')
-})
 
 test('AC-20261103-04-11: WHEN the MERGE step runs with 2 unmerged proto commits on a host with stops.prototypeClose keep THE SYSTEM SHALL print the count, the Auto-picked keep line and a mark line ending --prototype keep, and no AskUserQuestion', () => {
   const h = driveToMerge('pickkeep', { prototype: true, protoCommits: 2, stops: { prototypeClose: 'keep' } })

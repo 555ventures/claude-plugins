@@ -191,14 +191,8 @@ test('AC-20260823-03-11: WHEN the review driver processes a spec whose frontmatt
     'the ledger row\'s tier field must never carry a "#" — a surviving comment fragment here corrupts every downstream tier===\'critical\' comparison and tier-economics derivation reading this row: got ' + JSON.stringify(row.tier))
 })
 
-// specs/20260823/05-replay-unattended-hardening.md D3 (rv_387d84a3b424's replay):
-// replay.js --select emits a spec's build_base ref verbatim — typically the MOVING ref "main",
-// stale the instant the review's own merge lands (observed: reconcile exit 3, phantom out-of-plan
-// and unrealized files, until hand-pinned to the true pre-image sha). The close commit is the last
-// moment a symbolic base ref and the true pre-image coincide, so the driver stamps a durable
-// diff_base into the spec frontmatter at the SAME implementing -> done edit that flips status —
-// but only when the frontmatter carries no diff_base already, since an existing pin (however it
-// got there) must never be silently repointed. AC-20260823-05-7.
+// specs/20260823/05-replay-unattended-hardening.md D3 (AC-20260823-05-7): the close flip stamps a
+// durable diff_base after build_base unless the frontmatter already carries one.
 
 function noDiffBaseSpecBody({ status = 'implementing', tier = 'standard', buildBaseRef, acId }) {
   return `---
@@ -283,7 +277,7 @@ test('AC-20260823-05-7 / AC-20260824-06-11: WHEN the driver flips a spec whose f
   assert.ok(buildIdx !== -1, 'sanity: build_base: must survive the flip: ' + fmBlock)
   assert.ok(diffIdx !== -1,
     'D3: a diff_base: line must be stamped into the frontmatter at the implementing -> done flip — without ' +
-    'it replay.js --select has nothing durable to read once the review\'s merge makes build_base: main a ' +
+    'it a later reader has nothing durable to read once the review\'s merge makes build_base: main a ' +
     'moving, stale ref: ' + fmBlock)
   assert.strictEqual(diffIdx, buildIdx + 1,
     'D3 Contracts: the stamped diff_base: line must be inserted DIRECTLY AFTER the build_base: line — a ' +

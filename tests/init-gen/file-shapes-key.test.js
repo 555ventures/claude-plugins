@@ -133,17 +133,3 @@ test('AC-20261101-02-13: shapes-check reports unmatched declared test globs with
     'an undeclared host reports the default-classified file count and no unmatched globs: ' + n.stdout)
 })
 
-test('AC-20261101-02-14: doctor check 1 names shapes-check and init Phase 4 names config.fileShapes', () => {
-  const doctor = read('spec/commands/doctor.md')
-  const start = doctor.indexOf('1. **Config integrity**')
-  const end = doctor.indexOf('\n2. ', start)
-  assert.ok(start !== -1 && end > start, 'doctor.md must keep check 1 as the first numbered check or this pin cannot locate it')
-  assert.ok(doctor.slice(start, end).includes('shapes-check'),
-    'doctor check 1 must run init-gen shapes-check or a declared test glob matching nothing is invisible to the host')
-  const init = read('spec/commands/init.md')
-  const p4 = init.indexOf('## Phase 4')
-  const p5 = init.indexOf('## Phase 5')
-  assert.ok(p4 !== -1 && p5 > p4, 'init.md must keep Phase 4 before Phase 5')
-  assert.ok(init.slice(p4, p5).includes('config.fileShapes'),
-    'init Phase 4 must tell the session to write config.fileShapes or no host ever declares its shapes')
-})

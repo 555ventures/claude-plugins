@@ -6,10 +6,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20260805/02-review-evidence-manifest.md D4 (A1): the review `ci` leg and spec 03's
-// observe-ci.js both need to ask "what did CI just do?" without duplicating a `gh`
-// wrapper — two independent wrappers was the drift seam a refuter flagged. ci-query.js is the
-// one normalized wrapper: gh missing / no remote / `[]` is a structural "no CI to consult"
+// specs/20260805/02-review-evidence-manifest.md D4: ci-query.js is the one normalized `gh` wrapper: gh missing / no remote / `[]` is a structural "no CI to consult"
 // (available:false, transient:false); gh executing but exiting non-zero is a retryable
 // auth/network failure (available:false, transient:true); a completed run passes its fields
 // through untouched. This file pins the raw-vs-mapped distinction by execution against a fake
@@ -19,8 +16,7 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // hard-stop on evidence about a DIFFERENT commit. D1 adds a `--commit <sha>` mode, mutually
 // exclusive with `--branch`, that keys `gh run list` on the exact reviewed commit instead —
 // every other behavior (normalization, the raw-vs-mapped split, `--limit 1`, no retry) stays
-// byte-identical, and `--branch` mode itself is untouched (observe-ci.js depends on it,
-// AC-20260810-07-4).
+// byte-identical, and `--branch` mode itself is untouched (AC-20260810-07-4).
 //
 // specs/20260830/03-ci-leg-honest-absence.md D1/D2/D3: an unpushed HEAD's empty --commit run
 // list was indistinguishable from "no CI at all" —

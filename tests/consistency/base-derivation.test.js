@@ -8,10 +8,7 @@ const { BASE_KEYS, pinnedBaseCandidates } = require('../../spec/scripts/lib/base
 
 // A PIN ALWAYS BEATS A REF — and this file is why that stays true.
 //
-// The `build_base` → `diff_base` inversion was diagnosed and fixed THREE times, one consumer at a
-// time: replay.js first, then spec-review-driver.js, and spec-build-driver.js never at all until
-// a field run in a host repo surfaced it again. Each consumer carried its own spelling of the
-// same ordering rule, so fixing one taught the others nothing. lib/base-derivation.js is now the
+// lib/base-derivation.js is the
 // single authority for the ORDER (never for validity — the per-consumer validity predicates
 // genuinely differ, see that module's header), and these pins make a fourth private spelling
 // impossible rather than merely discouraged.
@@ -102,12 +99,3 @@ test('pinnedBaseCandidates accepts a lookup function as well as a map', () => {
     [{ key: 'diff_base', value: 'pinned' }, { key: 'build_base', value: 'main' }])
 })
 
-// specs/20260912/03-run-isolates-and-owns-the-stages.md AC-20260912-03-6: review.md's body
-// moves to spec/doctrine/stages/stage-review.md — repointed in place.
-test('the review command documents the pin before the ref', () => {
-  const doc = fs.readFileSync(path.join(ROOT, 'spec/doctrine/stages/stage-review.md'), 'utf8')
-  assert.ok(!/`build_base`\s*→\s*`diff_base`/.test(doc),
-    'spec/doctrine/stages/stage-review.md states the base order backwards from its own driver — ' +
-    'the prose is what the next person reads before touching base derivation')
-  assert.match(doc, /`diff_base`\s*→\s*`build_base`/)
-})

@@ -29,8 +29,7 @@ test('AC-20260904-02-1: worktree-include.sh copies every .worktreeinclude-matche
   assert.strictEqual(r.status, 0,
     'D1: a manifest-matched, gitignored, untracked file set must copy cleanly and exit 0: ' + r.stderr)
   assert.strictEqual(r.stdout, '',
-    'D2: the owner writes nothing on stdout, ever — a stray line here would corrupt replay.js\'s --setup, ' +
-    'which forwards this script\'s stdout verbatim: ' + JSON.stringify(r.stdout))
+    'D2: the owner writes nothing on stdout, ever — a caller forwarding stdout verbatim would be corrupted: ' + JSON.stringify(r.stdout))
   assert.match(r.stderr, /^worktree-include: copied 2 \.worktreeinclude-matched file\(s\) into /,
     'D2: the exactly-one stderr line must name the count and the dest, preserving the phrase merge-back\'s ' +
     'own retagged test still greps for: ' + JSON.stringify(r.stderr))

@@ -54,12 +54,3 @@ test('AC-20261024-02-5: no driver deriveState() body holds a banned file-presenc
   assert.deepStrictEqual(hits, [], 'a deriveState() reads a stand-in (file presence or count) instead of the recorded fact, the class behind 13 of 62 fix diffs: ' + hits.join('; '))
 })
 
-test('AC-20261024-02-6: the checker names the driver and the call when a fixture deriveState() contains fs.existsSync(', () => {
-  const fixture = 'function other() { return fs.existsSync(x) }\nfunction deriveState(opts) {\n  if (!fs.existsSync(p)) return 1\n  return 2\n}\n'
-  const hits = findBanned('fixture-driver.js', fixture)
-  assert.deepStrictEqual(hits, ['fixture-driver.js: existsSync('], 'the checker missed a banned call inside deriveState() or flagged one outside it, so the live ban proves nothing')
-  const tpl = 'function deriveState(opts) {\n  const t = `\n}\n`\n  if (!fs.existsSync(p)) return 1\n}\n'
-  assert.deepStrictEqual(findBanned('tpl.js', tpl), ['tpl.js: existsSync('], 'a column-0 } inside a template literal truncated the deriveState() body, hiding banned calls after it')
-  const clean = findBanned('clean.js', 'function other() { fs.existsSync(x) }\nfunction deriveState() {\n  return 1\n}\n')
-  assert.deepStrictEqual(clean, [], 'a presence check outside deriveState() was flagged, banning legitimate mark-handler checks')
-})

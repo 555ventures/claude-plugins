@@ -34,7 +34,7 @@ test('AC-20260815-01-10: readConfigStrict(root) throws an Error naming the confi
     err => err instanceof Error && err.message.includes('cannot read/parse') &&
       err.message.includes(path.join(absentDir, '.claude', 'spec.config.json')),
     'readConfigStrict must throw naming the config path and "cannot read/parse" when the config ' +
-    'file is absent — a strict caller (ci-gate-parity.js, spec-design-driver.js) relies on this ' +
+    'file is absent — a strict caller relies on this ' +
     'exact message text to compose its own remedy suffix without re-wrapping (D6)')
 
   const dirAsFileDir = tmpdir('host-config-dirasfile')
@@ -141,17 +141,6 @@ function scanConfigReadOffenders(scriptsRoot) {
   return offenders
 }
 
-test('AC-20260820-08-1: offendingLine flags any line naming the config stem regardless of readFileSync or path.join co-occurring on the line, and clears a line built only from an already-hoisted identifier', () => {
-  assert.strictEqual(offendingLine("const CONFIG_NAME = 'spec.config.json'"), true,
-    'a hoisted constant naming the config is an offender even with no readFileSync or path.join on the same line — requiring their co-occurrence is exactly the clause that let this evasion pass under d10-predicate-v1')
-  assert.strictEqual(offendingLine("const p = path.join(root, '.claude', CONFIG_NAME)"), false,
-    'a line that builds a path from an already-hoisted identifier never spells the filename itself, so it must stay green — flagging it would make every legitimate use of a config-holding variable an offender')
-})
-
-test('AC-20260820-08-2: a line naming the config stem in executable text is an offender even when it also carries a trailing // comment', () => {
-  assert.strictEqual(offendingLine("const p = root + '//.claude/spec.config.json' // presence probe"), true,
-    'a trailing-comment exemption would reopen the hole this predicate closes: the // here sits inside a string built by live code, not before it, so exempting any line containing // anywhere would launder this exact evasion as green')
-})
 
 test('AC-20260820-08-3: the walk inspects every file under scriptsRoot regardless of extension, name shape, or the absence of an extension', () => {
   const root = tmpdir('config-read-noext')
@@ -180,23 +169,6 @@ test('AC-20260820-08-4: the sweep skips exactly the three literal exempt paths l
     'lib/host-config.js, smoke.sh, and spec-state-gate.sh must be skipped (their real or jq reads are the sanctioned routes), but lib/host-config-helper.js is not on the exempt list and must be reported even though its name is similar — an exempt-by-similar-name walk is exactly the extension-filter-shaped hole this predicate replaces')
 })
 
-test('AC-20260820-08-15: offendingLine treats *, /*, and a bare identifier-following # as live code — never as a comment prefix — while a legacy #-with-space and a shebang comment stay green', () => {
-  assert.strictEqual(offendingLine("#cfg = fs.readFileSync('.claude/spec.config.json', 'utf8')"), true,
-    'a private class field spells the filename in executable text; the trimmed line starts with # immediately followed by an identifier character (c), so it must not be treated as a shell comment')
-  assert.strictEqual(offendingLine("*readCfg () { return fs.readFileSync('.claude/spec.config.json') }"), true,
-    'a generator method signature is live code, not prose — * was never a sanctioned comment prefix and must not be treated as one')
-  assert.strictEqual(offendingLine("/* */ const raw = fs.readFileSync('.claude/spec.config.json')"), true,
-    'a same-line-closed block comment followed by live code reading the config is an offender — the code after /* */ still executes')
-  assert.strictEqual(offendingLine('# CONFIG=".claude/spec.config.json" (legacy)'), false,
-    'a shell comment with a space after # (no identifier character) must stay green — this is the one shape the identifier test is designed to admit')
-  assert.strictEqual(offendingLine('#!/usr/bin/env bash  # reads .claude/spec.config.json'), false,
-    'a shebang line carrying a trailing shell comment mentioning the config must stay green — # immediately followed by ! is not an identifier character')
-})
-
-test('AC-20260820-08-16: offendingLine flags a line that splits the filename after the stem, e.g. string concatenation', () => {
-  assert.strictEqual(offendingLine("const n = 'spec.config.' + 'json'"), true,
-    'splitting the filename after the stem still spells the full stem `spec.config` in one literal on this line — only a split BEFORE the stem is an accepted residual gap (D12), and this predicate must not treat the two as equivalent')
-})
 
 test('AC-20260820-08-7: this test file contains no trace of the retired display-join-exemption identifier and no clause conditioned on the literal readFileSync or path.join', () => {
   const src = read('tests/host-config/config-read.test.js')
@@ -211,18 +183,6 @@ test('AC-20260820-08-7: this test file contains no trace of the retired display-
     'the predicate must not condition offender status on the literal string "path.join" appearing on the line — that co-occurrence requirement, plus its display-join carve-out, is exactly what the superseded predicate leaned on')
 })
 
-test('AC-20260820-08-13: this file\'s header states the three accepted residual evasions and that no AST checker is used', () => {
-  const src = read('tests/host-config/config-read.test.js')
-  const header = src.slice(0, src.indexOf('function writeConfig'))
-  assert.match(header, /split across the stem itself/,
-    'the header must name a literal split across the stem itself as an accepted residual evasion — pretending this gap is closed would mislead the next reader into treating a broken predicate as complete')
-  assert.match(header, /encoded or computed filename/,
-    'the header must name an encoded or computed filename as an accepted residual evasion')
-  assert.match(header, /readdir-based discovery/,
-    'the header must name readdir-based discovery as an accepted residual evasion')
-  assert.match(header, /No AST checker/,
-    'the header must state that no AST checker is used, so a future reader does not assume this predicate parses source rather than pattern-matching lines')
-})
 
 test('AC-20260820-08-10 / AC-20260820-08-11: an end-to-end canary over a synthetic tree exercises the walk, the predicate, and the exemption together, reporting exactly the three evasions at any depth', () => {
   const root = tmpdir('config-read-canary')

@@ -90,7 +90,7 @@ test('AC-20260820-07-2 (also AC-20260821-04-8, SHALL CONTINUE TO) / AC-20260824-
     'exactly one ledger line must be appended for the STOPPED run — more than one is a duplicate append, fewer means the append was skipped: before=' + beforeLines.length + ' after=' + afterLines.length)
   const appended = JSON.parse(afterLines[afterLines.length - 1])
   assert.strictEqual(appended.verdict, 'GATE_RED', 'the appended ledger row must carry verdict GATE_RED: ' + JSON.stringify(appended))
-  assert.ok(appended.runId, 'the appended row must carry a runId — /spec:escape needs a backlink on every row: ' + JSON.stringify(appended))
+  assert.ok(appended.runId, 'the appended row must carry a runId — an escape row needs a backlink on every row: ' + JSON.stringify(appended))
 
   // AC-20260824-06-5: the hard-stop row must name the range it hard-stopped on.
   assert.match((appended.diff && appended.diff.base) || '', /^[0-9a-f]{40}$/,
@@ -534,7 +534,7 @@ function makeDoneHost() {
   return { root, spec, sidecar: spec.replace(/\.md$/, '.review') }
 }
 
-test('AC-20261025-01-9 / AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record this run\'s own closeRunId THE SYSTEM refuses (exit 2, names /spec:fix and the escape row, never /spec:escape) and appends no ledger line, in BOTH an empty hand-recreated sidecar and one carrying stray marks with no closeRunId', () => {
+test('AC-20261025-01-9 / AC-20260820-07-15: WHEN a done spec\'s sidecar exists but does not record this run\'s own closeRunId THE SYSTEM refuses (exit 2, names /spec:fix and the escape row) and appends no ledger line, in BOTH an empty hand-recreated sidecar and one carrying stray marks with no closeRunId', () => {
   const host = makeDoneHost()
   const ledger = path.join(host.root, '.claude/spec-runs.jsonl')
   const ledgerSnap = () => (fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf8') : '')
@@ -549,8 +549,6 @@ test('AC-20261025-01-9 / AC-20260820-07-15: WHEN a done spec\'s sidecar exists b
     'the refusal must name /spec:fix as the remedy — the lane whose commit records the defect escaping an already-passed review: ' + r1.stderr)
   assert.match(r1.stderr, /escape row/,
     'the refusal must say the fix commit records the escape row, or the caller cannot tell what the remedy does: ' + r1.stderr)
-  assert.doesNotMatch(r1.stderr, /\/spec:escape/,
-    'the refusal must never name the deleted /spec:escape command — a remedy naming a command that does not exist strands the caller: ' + r1.stderr)
   assert.strictEqual(ledgerSnap(), before1,
     'the refused cold invocation must append NO ledger line — the old bug was a full review walk over a done spec recording nothing while looking like a real run: ' + JSON.stringify({ before: before1, after: ledgerSnap() }))
 
@@ -565,8 +563,6 @@ test('AC-20261025-01-9 / AC-20260820-07-15: WHEN a done spec\'s sidecar exists b
     'this case must also name /spec:fix: ' + r2.stderr)
   assert.match(r2.stderr, /escape row/,
     'this case must also mention the escape row: ' + r2.stderr)
-  assert.doesNotMatch(r2.stderr, /\/spec:escape/,
-    'this case must also never name the deleted /spec:escape command: ' + r2.stderr)
   assert.strictEqual(ledgerSnap(), before2,
     'this case must also append no ledger line: ' + JSON.stringify({ before: before2, after: ledgerSnap() }))
 

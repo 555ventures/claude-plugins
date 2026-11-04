@@ -48,8 +48,7 @@ const cleanReviewRow = (i) => ({
   verdict: 'CLEAN', runId: `rv_seed00000${i}`, tier: 'standard', survived: 0,
 })
 
-// The retired export's name is built by concatenation so this file does not itself spell an
-// identifier tests/consistency/replay-retired.test.js sweeps for.
+// The retired export's name is built by concatenation so this file does not spell it.
 const DUENESS_EXPORT = 'replay' + 'Dueness'
 
 test('AC-20260913-09-5 / AC-20261024-05-2: WHEN lib/observation.js is required THE SYSTEM exports no replay-dueness helper, and WHEN spec-status.js runs over a ledger with six review rows and no release row THE SYSTEM prints a footer with no replay due clause', () => {

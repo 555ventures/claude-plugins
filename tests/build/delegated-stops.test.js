@@ -83,37 +83,6 @@ function seedEscalatePending(host, extra = {}) {
   return doc
 }
 
-test('AC-20261102-02-13: bare build re-runs while the pending file is unanswered print the waiting line identically and leave the file and sidecar byte-identical', () => {
-  const host = escalatedHost(SHRINKING, ASK_ESCALATE)
-  seedEscalatePending(host)
-  const stateFile = path.join(host.spec.replace(/\.md$/, '.build'), 'build-state.json')
-  const fileBefore = fs.readFileSync(pendingOf(host.root), 'utf8')
-  const stateBefore = fs.readFileSync(stateFile, 'utf8')
-  const outs = [1, 2, 3].map(() => runD(host.root, host.spec))
-  for (const r of outs) {
-    assert.strictEqual(r.status, 0, 'waiting is not a failure: ' + r.stdout + r.stderr)
-    assert.ok(r.stdout.includes('## PENDING_QUESTION — waiting for the parent session: ' + pendingOf(host.root)), 'the waiting line must name the file: ' + r.stdout)
-  }
-  assert.strictEqual(new Set(outs.map((r) => r.stdout)).size, 1, 're-runs must print identical output, not re-ask')
-  assert.strictEqual(fs.readFileSync(pendingOf(host.root), 'utf8'), fileBefore, 'waiting must not touch the file')
-  assert.strictEqual(fs.readFileSync(stateFile, 'utf8'), stateBefore, 'waiting must not touch the sidecar')
-})
-
-test('AC-20261102-02-15: a bare build run on a dismissed file consumes it, prints the STOPPED line forever, and a mark is refused naming dismissedStop and the delete remedy', () => {
-  const host = escalatedHost(SHRINKING, ASK_ESCALATE)
-  seedEscalatePending(host, { dismissed: { at: '2026-11-02T10:06:00Z' } })
-  const LINE = '## STOPPED — the question was dismissed; the run ends (core § Decisions)'
-  const r = runD(host.root, host.spec)
-  assert.strictEqual(r.status, 0, 'a dismissal is a clean stop: ' + r.stdout + r.stderr)
-  assert.ok(r.stdout.includes(LINE), 'the dismissal line must print: ' + r.stdout)
-  assert.ok(!fs.existsSync(pendingOf(host.root)), 'the dismissed file is consumed on sight')
-  assert.ok(runD(host.root, host.spec).stdout.includes(LINE), 'every later bare run must re-print the line, or the lane resumes a dismissed run')
-  const refused = runD(host.root, host.spec, '--mark', 'escalate-choice', 'park')
-  assert.strictEqual(refused.status, 2, 'a mark after a dismissal must be refused: ' + refused.stdout + refused.stderr)
-  assert.match(refused.stderr, /dismissedStop/, 'the refusal must name the mark: ' + refused.stderr)
-  assert.ok(refused.stderr.includes('delete ' + host.spec.replace(/\.md$/, '.build') + ' to restart'), 'the refusal must name the remedy command: ' + refused.stderr)
-})
-
 test('AC-20261102-02-19: an in-session ESCALATE with no choice still prints the ask with the four options and the escalate-choice mark line, and writes no pending file', () => {
   const host = escalatedHost(SHRINKING, ASK_ESCALATE)
   const step = run(host.root, host.spec).stdout

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: critical           # spec/scripts/spec-status.js changes what --next --json / --lanes --json derive; spec/templates/grounding-contract.md gains policy.fanout (§ Risk Tiers: both are triggers)
 area: pipeline
 breaking: false
@@ -375,6 +375,17 @@ keeps), `tests/genesis/tournament.fixtures.js` (`shared brief` in prose about br
 `tests/review/*`, `tests/build/*`, `tests/frontmatter/*`, `tests/ceiling/*`, `tests/init/*`) read a
 policy block that only gains a defaulted key and host no briefless spec with a File Plan beside
 another, so D1 and D3 change nothing they observe; the build's whole-suite check adjudicates.
+
+### Advisory debt (review rv_cc2f0c80d2e1)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/tests/consistency/contract-stamp.test.js:1 — File Plan row `tests/consistency/contract-stamp.test.js | MODIFY | AC-20261103-06-8 (reuses the contractHash restamp pin, retagged in its title)` was never executed: the file is untouched in the range and carries no AC-20261103-06-8 tag. AC-8 is still covered via contract-keys.test.js (ac-matrix green), so this is plan/implementation drift, not a coverage gap.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/spec/scripts/spec-status.js:701 — `pairSerialReason(e, top)` (annotation loop) and `pairSerialReason(e, clash)` (laneAdmission) order the shared paths by the runner-up's File Plan rows (D1: `a`'s row order, a = first argument), while AC-20261103-06-2's parenthetical says the reason lists paths 'in `01-a.md`'s order' (the top pick). The AC fixture gives both specs identical row order, so the test cannot discriminate.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/spec/scripts/fanout-driver.js:283 — Cold walk (maintainer, bare run): when the first queue entry is itself a boundary (a `/spec:plan` item or a blocked entry heads the queue), `deriveBatch` returns zero members and `plan()` prints `no startable lanes — nothing to fan out` without the boundary reason; the D6 'run it attended' bullet is only emitted at REPORT, which a zero-member plan never reaches, and no state is written.
+- a3 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a4bef8db015278338/tests/fanout/fixture.js:462 — `tests/fanout/fixture.js` `h.plan()` now silently prefixes `--spec 03-x --spec 04-z` whenever the caller passes no `--spec`/`--batch`, so five pre-existing pins (AC-20261102-03-6, -8, -9, -10 and the fixMergedHost/mergeReadyHost helpers) that previously certified the bare-run path now certify `--spec` mode without their test names or comments saying so.
+
+Build departures (folded from the deviations sidecar, one-offs): the AC-10 worked example's
+arithmetic was wrong once `03-x` is done (`08-k` unblocks and sorts ahead of `08-s`), fixed by D13;
+an implicit `.claude/rules/**` exemption a worker added beyond D1 was removed, D14; a dependent-brief
+entry ends the derived batch rather than waiting in it, D15.
 
 ## Canonical Delta
 

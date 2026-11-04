@@ -1,6 +1,6 @@
 ---
 date: 2026-11-04
-status: implementing
+status: done
 tier: standard           # 📌 auto-picked (D0); the host's § Risk Tiers names verdict.js and review-legs.js — every AC carries a literal example so a mid-build upgrade costs nothing
 area: gate-integrity
 breaking: false
@@ -253,6 +253,15 @@ audit record of the very duplication this spec removes — waived, never edited.
 Fragile: `byLeg` must keep admitting string-`observed` rows (A5), or three ac-matrix tests go red
 for a reason unrelated to this spec. Watch: a sidecar that predates the seal is unchecked by
 design — its next legs run seals it.
+
+Build deviation (2026-11-04, one-off): the drift refusal's copy-and-re-run line prints
+`node "$(spec-paths <leg script>)" … --manifest <scratch>` rather than the Contracts block's literal
+`spec-paths ac-matrix` — a literal key in the driver reads as an undeclared invocation to the
+entrypoints manifest pin, and the refusal fires for any leg. AC-7's asserted tokens are unchanged.
+
+### Advisory debt (review rv_9d65a168efd8)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a0c71fae32d3e3d10/spec/scripts/review-legs.js:465 — review-legs.js summary destructures readManifest(manifest) with no null guard; an absent manifest at that point raises a bare TypeError ('Cannot destructure property byLeg of null') instead of a message naming the file. Pre-image threw an equally unnamed ENOENT from readFileSync, so this is not a regression, but the new reader's null contract makes a one-line named refusal cheap.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a0c71fae32d3e3d10/spec/scripts/verdict.js:270 — verdict.js's cannot-read refusal dropped the underlying error message (`: ${e.message}`) when the inline loader was replaced by readManifest, so ENOENT vs EACCES are no longer distinguishable on stderr. The remedy sentence ('confirm the evidence manifest was created') is retained, so the host's error-path rule is still met.
 
 ## Canonical Delta
 

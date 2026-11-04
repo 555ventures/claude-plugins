@@ -293,6 +293,17 @@
   extraction. `skips-extracted` refuses an empty file against a gate reporting skips and warns on
   a count mismatch. (specs/20261024/01-review-driver-reads-recorded-facts.md)
 
+- **The legs seal the manifest.** `runLegs(n)` records `marks.manifestDigest[n]` (sha256 of
+  `manifest-<n>.jsonl`'s bytes); every later driver invocation refuses at exit 2 when the live
+  iteration's bytes differ, naming the duplicated leg when one exists ("a leg script was re-run
+  with `--manifest` pointing at the live file") or "edited by hand", the copy-first rule, and the
+  remedy (`rm` the manifest; the driver regenerates that iteration). Every manifest reader —
+  `verdict.js`, the review driver, `ac-matrix.js`, `release-legs.js`, `review-legs.js` — goes
+  through `spec/scripts/lib/manifest.js`'s `readManifest`, which keeps the first row per leg and
+  reports a duplicate as `manifest invalid: duplicate leg <name> (rows i, j)` → `UNVERIFIED`; no
+  reader resolves a duplicate by choosing a row. Reviewer and disposer re-run a leg only against a
+  scratch copy. (specs/20261104/01-the-legs-seal-the-manifest.md)
+
 - **The merge step is re-entrant, and promotion leaves the worktree clean.** A worktree
   review's merge-back sequence can fail mid-promotion; the retry must not deadlock on its own
   landed work. The driver therefore derives containment before acting — when the source branch

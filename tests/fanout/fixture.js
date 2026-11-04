@@ -56,8 +56,7 @@ const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Laye
 // born of it; fixFiles — src/b.js and src/shared.js committed, 03-x planning src/a.js and src/shared.js, fix items
 // q107, q113 (names src/b.js) and q114 (names src/shared.js); gatedFix — fix item q115 after 04-z; overlap: n —
 // replaces the default specs with n hardened `brief: n/a` specs 20-o01..20-o0n whose File Plan names
-// spec/scripts/spec-status.js and spec/scripts/fanout-driver.js; many: n — adds n hardened specs 20-m01..
-// each on its own brief (40, 41, …), so the pick step has more than sixteen candidates.
+// spec/scripts/spec-status.js and spec/scripts/fanout-driver.js; many: n — adds n hardened specs 20-m01.. on briefs 40.. (a pick step past sixteen).
 function fanoutHost(opts = {}) {
   const briefed = opts.briefed === true
   if (opts.dependent && !briefed) throw new Error('fixture: dependent needs briefed: true (the ad-hoc analogue is opt blocked)')
@@ -259,21 +258,14 @@ function fanoutHost(opts = {}) {
     const labels = paths.map((x) => (options.find((o) => o.description.startsWith(x + ' ')) || {}).label).filter(Boolean)
     return h.must(['--mark', 'picked', ...labels.flatMap((l) => ['--label', l])], '--mark picked ' + labels.join(','))
   }
-  // A plain plan() picks the default pair 03-x and 04-z (L1, L2); a test of the derived batch calls
-  // h.must([...]) then h.must(['--mark', 'planned']) itself.
-  h.plan = (args = []) => {
-    if (args.includes('--pick') || fs.existsSync(h.stateFile)) h.must(args, 'plan')
-    else h.pick()
-    return h.must(['--mark', 'planned'], '--mark planned')
-  }
+  // pickPlan picks the listed specs (default 03-x and 04-z: L1, L2) and admits the table; admit does the same for the derived batch.
   h.pickPlan = (paths) => { h.pick(paths); return h.must(['--mark', 'planned'], '--mark planned') }
+  h.plan = () => (fs.existsSync(h.stateFile) ? h.admit() : h.pickPlan())
+  h.admit = () => { h.must([]); return h.must(['--mark', 'planned']) }
   h.dispatch = (id, agent) => h.must(['--mark', 'dispatched', '--lane', id, '--agent', agent], '--mark dispatched ' + id)
   h.dispatchAll = (...ids) => ids.forEach((id) => h.dispatch(id, { L1: 'lane-one', L2: 'lane-two', L3: 'lane-three' }[id]))
   // plan + dispatch of the default two lanes: L1 = 03-x (agent lane-one), L2 = 04-z (agent lane-two).
-  h.dispatchedPair = (planArgs = []) => {
-    h.plan(planArgs)
-    h.dispatchAll('L1', 'L2')
-  }
+  h.dispatchedPair = () => { h.plan(); h.dispatchAll('L1', 'L2') }
   return h
 }
 

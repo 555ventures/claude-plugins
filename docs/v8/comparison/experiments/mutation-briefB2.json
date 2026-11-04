@@ -1,0 +1,87 @@
+{
+  "root": "/tmp/claude-1000/-home-jj-projects-claude-plugins/deda4bc7-4a41-418b-bd36-c12be0b73afb/scratchpad/exp-briefB2",
+  "files": {
+    "src/rate-limit.js": {
+      "killed": 27,
+      "total": 29,
+      "score": 0.9310344827586207
+    },
+    "src/store.js": {
+      "killed": 20,
+      "total": 23,
+      "score": 0.8695652173913043
+    },
+    "src/keys.js": {
+      "killed": 25,
+      "total": 29,
+      "score": 0.8620689655172413
+    },
+    "src/auth.js": {
+      "killed": 8,
+      "total": 8,
+      "score": 1
+    }
+  },
+  "survivors": [
+    {
+      "file": "src/rate-limit.js",
+      "line": 9,
+      "op": "||→&&",
+      "mutated": "if (typeof refillPerSec !== 'number' && !Number.isFinite(refillPerSec) || refillPerSec <= 0) {"
+    },
+    {
+      "file": "src/rate-limit.js",
+      "line": 24,
+      "op": "num→n+1",
+      "mutated": "b.tokens = Math.min(capacity, b.tokens + ((t - b.last) / 1001) * refillPerSec)"
+    },
+    {
+      "file": "src/store.js",
+      "line": 10,
+      "op": "&&→||",
+      "mutated": "return isObject(s) && Array.isArray(s.items) && Number.isInteger(s.nextId) || s.nextId > 0"
+    },
+    {
+      "file": "src/store.js",
+      "line": 10,
+      "op": ">→>=",
+      "mutated": "return isObject(s) && Array.isArray(s.items) && Number.isInteger(s.nextId) && s.nextId >= 0"
+    },
+    {
+      "file": "src/store.js",
+      "line": 29,
+      "op": "num→n+1",
+      "mutated": "const text = JSON.stringify(doc, null, 3)"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 5,
+      "op": "num→n+1",
+      "mutated": "let nextId = 2"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 15,
+      "op": ">→>=",
+      "mutated": "const ok = section && Array.isArray(section.items) && Number.isInteger(section.nextId) && section.nextId >= 0"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 15,
+      "op": "num→n+1",
+      "mutated": "const ok = section && Array.isArray(section.items) && Number.isInteger(section.nextId) && section.nextId > 1"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 27,
+      "op": "||→&&",
+      "mutated": "if (typeof name !== 'string' && !name) return { status: 400, body: { error: 'name required' } }"
+    }
+  ],
+  "overall": {
+    "killed": 80,
+    "total": 89,
+    "score": 0.898876404494382
+  },
+  "seconds": 232.2
+}

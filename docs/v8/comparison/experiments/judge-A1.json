@@ -1,0 +1,39 @@
+{
+  "04-rate-limiting": {
+    "architecture": {"order1": "X", "order2": "Y", "stable": false, "winner": null, "confidence": 1,
+      "evidence": "X src/server.js:72-84 isolates the check as one pre-routing block via setHeader; Y src/server.js:72-88 threads one headers object into the existing writeHead; equivalent and the preference flipped with reading order."},
+    "clean_code": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "X src/rate-limit.js:25-31 runs the refill arithmetic as a no-op on a freshly created bucket and X tests/rate-limit.test.js:173 carries a stale 'see spec Deviations' comment; Y src/rate-limit.js:25-31 branches new vs existing."},
+    "test_quality": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "X tests/rate-limit.test.js drains every response body (e.g. :120, :148) and adds a second eviction probe at t=1200000 (:175-177); Y tests/rate-limit.test.js:119-122,144-146,155 leaves bodies unread on several fetches."},
+    "spec_adherence": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Both meet AC-1..9; X titles tests with the full AC-20261104-04-n ids the spec cites (tests/rate-limit.test.js:108) while Y shortens them to AC-n (:110)."},
+    "overall": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Implementations are near-identical; X's test file is the more hygienic one to inherit (body drain, extra eviction assertion, traceable AC names)."}
+  },
+  "05-todo-persistence": {
+    "architecture": {"order1": "X", "order2": "Y", "stable": false, "winner": null, "confidence": 1,
+      "evidence": "X src/store.js:70-79 folds every non-ENOENT read error into the corrupt-file warning (matches D5's 'never take the API down') and X src/todos.js:142 emits the spec-spelled X-Total-Count; Y src/store.js:70 rethrows non-ENOENT errors, a cleaner boundary; preference flipped with order."},
+    "clean_code": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "X src/store.js:73 sets text = null to force a later JSON.parse failure and :79 guards logger && logger.warn speculatively; Y src/todos.js:130-132 reads as three plain validation lines."},
+    "test_quality": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 2,
+      "evidence": "X tests/store.test.js:194 injects a fake logger that fabricates the 'WARN ' prefix itself, so D6's real createLogger.warn is never exercised; Y tests/store.test.js:187 routes through createLogger(sink) and :240 asserts the exact write-then-rename call sequence."},
+    "spec_adherence": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Both meet AC-1..9; Y's tests are titled by AC id (tests/store.test.js:192,204,226,244,257,269) and verify D6 end to end, X's are not traceable to ACs."},
+    "overall": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y's suite proves the logger path and is AC-traceable; X's only edge is tmpdir cleanup (tests/store.test.js:186-190) which Y lacks."}
+  },
+  "06-api-keys": {
+    "architecture": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y src/auth.js:12 hashes then looks the hash up (keys.lookup(keys.hash(..))) exactly as D4 words it; X src/auth.js:14 delegates hashing into keys.findByKey, and X src/keys.js:38-45 keeps stale in-memory keys when the store has no section."},
+    "clean_code": {"order1": "X", "order2": "Y", "stable": false, "winner": null, "confidence": 1,
+      "evidence": "X updates the router comment (src/router.js:82) where Y leaves it stale, but Y src/keys.js:66-68 uses findIndex and X src/auth.js:10 names a factory UNAUTHORIZED; Y tests/keys.test.js:165 makes a tmpdir for every test though only AC-9 uses it; flipped with order."},
+    "test_quality": {"order1": "X", "order2": "Y", "stable": false, "winner": null, "confidence": 1,
+      "evidence": "X tests/keys.test.js:178-182 asserts 201 inside mint and :237 adds extra 400 shapes but leaks its tmpdir (:277); Y cleans up (afterEach :167-171) and silences the logger (:174) but mint (:184) never checks status; flipped with order."},
+    "spec_adherence": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Both meet AC-1..10 and guard the same routes (src/router.js:110-116 in each); Y follows D4's hash-then-lookup split literally (src/auth.js:12)."},
+    "overall": {"order1": "X", "order2": "Y", "stable": false, "winner": null, "confidence": 1,
+      "evidence": "Near-identical implementations; X's AC-labelled, 201-asserting tests versus Y's cleanup and literal D4 adherence traded places with reading order."}
+  },
+  "note": "The strongest difference is in 05-todo-persistence test quality: X's tests/store.test.js:194 hands createApp a hand-rolled logger whose warn pushes `WARN ${m}` itself, so the D6 change to src/logger.js (the real createLogger.warn prefixing 'WARN ') is never executed by any test and could be broken without a failure, whereas Y's tests/store.test.js:187 builds the logger with createLogger((l) => lines.push(l)) and asserts the exact sink line, and Y's :240 pins the exact writeFileSync/renameSync call order rather than X's weaker findIndex ordering. Everything else across the three specs is a coin flip between two near-identical diffs: same limiter arithmetic, same store, same guard-in-router design, differing mainly in test hygiene (X drains bodies in 04, cleans tmpdirs in 05, asserts mint status in 06) versus AC traceability and literal decision wording."
+}

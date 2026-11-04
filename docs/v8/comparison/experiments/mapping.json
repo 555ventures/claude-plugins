@@ -1,0 +1,88 @@
+{
+ "A1": {
+  "04-rate-limiting": {
+   "X": "ctrl1",
+   "Y": "treat1"
+  },
+  "05-todo-persistence": {
+   "Y": "ctrl1",
+   "X": "treat1"
+  },
+  "06-api-keys": {
+   "X": "ctrl1",
+   "Y": "treat1"
+  }
+ },
+ "A2": {
+  "04-rate-limiting": {
+   "Y": "ctrl2",
+   "X": "treat2"
+  },
+  "05-todo-persistence": {
+   "Y": "ctrl2",
+   "X": "treat2"
+  },
+  "06-api-keys": {
+   "Y": "ctrl2",
+   "X": "treat2"
+  }
+ },
+ "B1": {
+  "04-rate-limiting": {
+   "X": "ctrl1",
+   "Y": "briefB1"
+  },
+  "05-todo-persistence": {
+   "Y": "ctrl1",
+   "X": "briefB1"
+  }
+ },
+ "B2": {
+  "04-rate-limiting": {
+   "Y": "ctrl2",
+   "X": "briefB2"
+  },
+  "05-todo-persistence": {
+   "Y": "ctrl2",
+   "X": "briefB2"
+  },
+  "06-api-keys": {
+   "Y": "ctrl2",
+   "X": "briefB2"
+  }
+ },
+ "D1": {
+  "04-rate-limiting": {
+   "X": "ctrl1",
+   "Y": "effD1"
+  },
+  "05-todo-persistence": {
+   "X": "ctrl1",
+   "Y": "effD1"
+  },
+  "06-api-keys": {
+   "Y": "ctrl1",
+   "X": "effD1"
+  }
+ },
+ "D2": {
+  "04-rate-limiting": {
+   "Y": "ctrl2",
+   "X": "effD2"
+  },
+  "05-todo-persistence": {
+   "Y": "ctrl2",
+   "X": "effD2"
+  },
+  "06-api-keys": {
+   "X": "ctrl2",
+   "Y": "effD2"
+  }
+ },
+ "B1x": {
+  "06-api-keys": {
+   "X": "ctrl1",
+   "Y": "briefB1"
+  }
+ }
+}

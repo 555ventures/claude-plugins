@@ -1,0 +1,75 @@
+{
+  "root": "/tmp/claude-1000/-home-jj-projects-claude-plugins/deda4bc7-4a41-418b-bd36-c12be0b73afb/scratchpad/exp-effD1",
+  "files": {
+    "src/rate-limit.js": {
+      "killed": 27,
+      "total": 29,
+      "score": 0.9310344827586207
+    },
+    "src/store.js": {
+      "killed": 21,
+      "total": 24,
+      "score": 0.875
+    },
+    "src/keys.js": {
+      "killed": 25,
+      "total": 27,
+      "score": 0.9259259259259259
+    },
+    "src/auth.js": {
+      "killed": 7,
+      "total": 7,
+      "score": 1
+    }
+  },
+  "survivors": [
+    {
+      "file": "src/rate-limit.js",
+      "line": 9,
+      "op": "||→&&",
+      "mutated": "if (typeof refillPerSec !== 'number' && !Number.isFinite(refillPerSec) || refillPerSec <= 0) {"
+    },
+    {
+      "file": "src/rate-limit.js",
+      "line": 19,
+      "op": "num→n+1",
+      "mutated": "b.tokens = Math.min(capacity, b.tokens + ((t - b.last) / 1001) * refillPerSec)"
+    },
+    {
+      "file": "src/store.js",
+      "line": 11,
+      "op": "&&→||",
+      "mutated": "return isObj(t) && Array.isArray(t.items) && Number.isInteger(t.nextId) || t.nextId > 0"
+    },
+    {
+      "file": "src/store.js",
+      "line": 11,
+      "op": ">→>=",
+      "mutated": "return isObj(t) && Array.isArray(t.items) && Number.isInteger(t.nextId) && t.nextId >= 0"
+    },
+    {
+      "file": "src/store.js",
+      "line": 31,
+      "op": "num→n+1",
+      "mutated": "fs.writeFileSync(abs + '.tmp', JSON.stringify(doc, null, 3))"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 5,
+      "op": "num→n+1",
+      "mutated": "let nextId = 2"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 24,
+      "op": "||→&&",
+      "mutated": "if (typeof name !== 'string' && !name) return { status: 400, body: { error: 'name required' } }"
+    }
+  ],
+  "overall": {
+    "killed": 80,
+    "total": 87,
+    "score": 0.9195402298850575
+  },
+  "seconds": 211.7
+}

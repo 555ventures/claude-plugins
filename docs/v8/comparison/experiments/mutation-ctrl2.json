@@ -1,0 +1,69 @@
+{
+  "root": "/tmp/claude-1000/-home-jj-projects-claude-plugins/deda4bc7-4a41-418b-bd36-c12be0b73afb/scratchpad/exp-ctrl2",
+  "files": {
+    "src/rate-limit.js": {
+      "killed": 28,
+      "total": 29,
+      "score": 0.9655172413793104
+    },
+    "src/store.js": {
+      "killed": 18,
+      "total": 21,
+      "score": 0.8571428571428571
+    },
+    "src/keys.js": {
+      "killed": 20,
+      "total": 22,
+      "score": 0.9090909090909091
+    },
+    "src/auth.js": {
+      "killed": 6,
+      "total": 6,
+      "score": 1
+    }
+  },
+  "survivors": [
+    {
+      "file": "src/rate-limit.js",
+      "line": 24,
+      "op": "num→n+1",
+      "mutated": "b.tokens = Math.min(capacity, b.tokens + ((t - b.last) / 1001) * refillPerSec)"
+    },
+    {
+      "file": "src/store.js",
+      "line": 9,
+      "op": "&&→||",
+      "mutated": "return isObject(section) && Array.isArray(section.items) && Number.isInteger(section.nextId) || section.nextId > 0"
+    },
+    {
+      "file": "src/store.js",
+      "line": 9,
+      "op": ">→>=",
+      "mutated": "return isObject(section) && Array.isArray(section.items) && Number.isInteger(section.nextId) && section.nextId >= 0"
+    },
+    {
+      "file": "src/store.js",
+      "line": 34,
+      "op": "num→n+1",
+      "mutated": "fs.writeFileSync(file + '.tmp', JSON.stringify(next, null, 3))"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 5,
+      "op": "num→n+1",
+      "mutated": "let nextId = 2"
+    },
+    {
+      "file": "src/keys.js",
+      "line": 26,
+      "op": "||→&&",
+      "mutated": "if (typeof name !== 'string' && !name) return { status: 400, body: { error: 'name required' } }"
+    }
+  ],
+  "overall": {
+    "killed": 72,
+    "total": 78,
+    "score": 0.9230769230769231
+  },
+  "seconds": 212.1
+}

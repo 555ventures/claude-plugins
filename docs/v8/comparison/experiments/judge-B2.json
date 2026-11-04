@@ -1,0 +1,39 @@
+{
+  "04-rate-limiting": {
+    "architecture": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y src/server.js:80 calls req.resume() after the 429 short-circuit so an unread request body is drained (D6 answers before the body is read); X src/server.js:77-81 returns with the socket's body unread."},
+    "clean_code": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 2,
+      "evidence": "Y src/rate-limit.js:30-31 refills unconditionally (elapsed is 0 for a new bucket) and src/server.js:72 builds one headers object reused by both writeHead calls; X src/rate-limit.js:26-32 needs an if/else and src/server.js:73-88 spreads an `extra` object into two separate literals."},
+    "test_quality": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 2,
+      "evidence": "Y tests/rate-limit.test.js:167-178 runs AC-6 exactly as written (size 2 at 599999, still 2 at 600000 with the 1-ms-old bucket surviving); X tests/rate-limit.test.js:166-180 splits into two limiters and asserts size 1 on a fresh one, so it never proves the 1-ms-old bucket survives the sweep."},
+    "spec_adherence": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Both implementations meet D1-D9; the only AC-literal gap is X's AC-6 test (tests/rate-limit.test.js:174-179) which does not reproduce the AC's three-address scenario, while Y's does."},
+    "overall": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 2,
+      "evidence": "Same algorithm in both; Y is slightly tighter in src/server.js:72-83 and its AC-6 test is faithful; X's extra refused-take eviction test (tests/rate-limit.test.js:182-191) is the one thing the next maintainer would miss."}
+  },
+  "05-todo-persistence": {
+    "architecture": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y src/store.js:84-88 builds `next`, writes and renames, then commits `doc = next`, so a failed write leaves the in-memory document consistent with disk; X src/store.js:80-84 mutates `doc[section]` before the write."},
+    "clean_code": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y src/store.js:64-75 extracts `load()` with early returns; X tests/store.test.js:181 does a `require('../src/logger')` inside the helper on every call and src/store.js:67-75 interleaves raw/parsed temporaries."},
+    "test_quality": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "X tests/store.test.js:197,215,230,244,261,279 removes every mkdtemp dir in `finally` and AC-3 uses `t.mock.method` (auto-restored, :225-226); Y tests/store.test.js:183 leaks a tmp dir per test and AC-3 relies on a manual `mock.restoreAll()` (:239); X AC-4 also asserts no `a/` directory was created (:240), stricter than Y's file-only check (:250)."},
+    "spec_adherence": {"order1": "X", "order2": "Y", "stable": false, "winner": null, "confidence": 1,
+      "evidence": "Both satisfy AC-1..9 and D1-D10 identically (same store/todos/server logic); no decisive difference, so the forced choice flipped between orders."},
+    "overall": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Source is a wash (Y's src/store.js:64-91 marginally nicer), but X's tests are the ones a maintainer can run repeatedly without filling the tmp filesystem (tests/store.test.js:197 ff.)."}
+  },
+  "06-api-keys": {
+    "architecture": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "X src/keys.js:42-44 validates the loaded `keys` section shape before use (mirrors spec 05 D5 for todos), so a file with a malformed `keys` section cannot leave `items` undefined and crash `count()`; Y src/keys.js:39-42 trusts `section.items` as-is."},
+    "clean_code": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y src/auth.js:18 defines bootstrapGuard as `count()===0 ? null : requireKey(req)` (reuse), and Y tests/store.test.js:303-304 mints the in-memory key with a plain reset+create; X tests/store.test.js:320-323 fakes a store object (`read: () => ..., write() {}`) and X tests/todos.test.js:354-356 shadows the global `fetch` for the whole file."},
+    "test_quality": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "X tests/rate-limit.test.js:298 keeps spec 04's AC-2 asserting a 200 by sending a key; Y tests/rate-limit.test.js:275 rewrites that locked AC to expect 401, weakening what the rate-limit test proves; X's `mint` (tests/keys.test.js:182) also asserts 201 and X awaits server.close (:170) while Y's does neither (:167,174)."},
+    "spec_adherence": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "Y changes another spec's acceptance criterion (spec 04 AC-2, tests/rate-limit.test.js:274-275) instead of adapting the request, whereas X leaves spec 04's AC intact (tests/rate-limit.test.js:298); both otherwise meet AC-1..10 and D1-D8."},
+    "overall": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "Identical runtime code apart from X's defensive keys.attach (src/keys.js:42); X's suite preserves the earlier spec's contract (tests/rate-limit.test.js:298) and the fetch-shadow (tests/todos.test.js:354) keeps the existing todos tests byte-identical, which is the smaller review surface despite being a little magic."}
+  },
+  "note": "The strongest difference is in 06-api-keys: faced with /todos now requiring a key, X adapts spec 04's AC-2 test by minting a key and sending it (tests/rate-limit.test.js:298) so the locked `200 then 429` expectation still holds, while Y edits the locked AC to expect `401 then 429` (tests/rate-limit.test.js:275) and justifies it with a comment; that is a weakened assertion on another spec's contract. Elsewhere the two pipelines produce near-identical runtime code, and the margins are test hygiene (X cleans up every mkdtemp dir and uses per-test t.mock; Y leaks tmp dirs and uses mock.restoreAll) versus Y's slightly tighter source (non-mutating store.write, extracted load(), single headers object, req.resume() on 429, and an AC-6 rate-limit test that follows the AC literally where X's does not)."
+}

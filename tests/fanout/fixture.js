@@ -4,7 +4,7 @@ const path = require('node:path')
 const assert = require('node:assert')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md and specs/20261103/08-queue-items-remember-their-origin.md File Plan: the synthetic host shared by the
+// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md and specs/20261103/08-queue-items-remember-their-origin.md and specs/20261103/15-shared-files-land-by-rebase.md File Plan: the synthetic host shared by the
 // fan-out driver tests — a roadmap, hardened specs, optional parked and dependent specs, a queued
 // fix and a red-CI row, plus helpers that stand a lane's worktree up the way the harness does
 // (a linked worktree on spec/<stem>) and write the fake pending question and review sidecar a
@@ -54,7 +54,9 @@ const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Laye
 // bornFix — queue items q108 (fix, after 03-x), q109 (fix, after the done 01-base), q110 (fix born of 03-x by
 // another run) and q111 (gate-red birth of another run); planItem — done 01-base and a queue-head plan item q112
 // born of it; fixFiles — src/b.js and src/shared.js committed, 03-x planning src/a.js and src/shared.js, fix items
-// q107, q113 (names src/b.js) and q114 (names src/shared.js); gatedFix — fix item q115 after 04-z.
+// q107, q113 (names src/b.js) and q114 (names src/shared.js); gatedFix — fix item q115 after 04-z; overlap: n —
+// replaces the default specs with n hardened `brief: n/a` specs 20-o01..20-o0n whose File Plan names
+// spec/scripts/spec-status.js and spec/scripts/fanout-driver.js.
 function fanoutHost(opts = {}) {
   const briefed = opts.briefed === true
   if (opts.dependent && !briefed) throw new Error('fixture: dependent needs briefed: true (the ad-hoc analogue is opt blocked)')
@@ -69,7 +71,12 @@ function fanoutHost(opts = {}) {
   brief('32', 'fan')
   brief('33', 'solo')
   const specs = {}
-  for (const [stem, row] of Object.entries(SPECS)) {
+  if (opts.overlap) {
+    for (let i = 1; i <= opts.overlap; i++) {
+      specs['20-o' + String(i).padStart(2, '0')] = { brief: 'n/a', status: 'hardened', body: filePlan('spec/scripts/spec-status.js', 'spec/scripts/fanout-driver.js') }
+    }
+  }
+  for (const [stem, row] of opts.overlap ? [] : Object.entries(SPECS)) {
     specs[stem] = briefed ? { brief: row.brief, status: row.status } : { brief: 'n/a', status: row.status, body: filePlan(...row.rows) }
   }
   if (opts.dependent) { brief('34', 'after', '32'); specs['07-d'] = { brief: briefed ? '34' : 'n/a', status: 'hardened' } }
@@ -171,6 +178,13 @@ function fanoutHost(opts = {}) {
       const fresh = items().filter((i) => !before.includes(i.id) && i.kind === 'prompt' && i.payload === subject).map((i) => i.id)
       assert.strictEqual(fresh.length, 1, 'exactly one new prompt carrying the subject must appear after add: ' + JSON.stringify(fresh))
       return fresh[0]
+    },
+    // One commit on main, in the root: the file written and committed, as another lane's landing leaves it.
+    moveMain(file, text) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+      fs.writeFileSync(path.join(root, file), text)
+      git('add', file)
+      git('commit', '-q', '-m', 'main moves ' + file)
     },
     // A linked worktree on spec/<stem>, standing in for the one the harness gives a worker.
     startLane(stem) {

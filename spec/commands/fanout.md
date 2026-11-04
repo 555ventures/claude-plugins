@@ -16,7 +16,7 @@ The script derives and writes; you do the one judgment step it prints.
 
 - `<spec path>…` — run exactly these specs, in the order given; each becomes a `--spec <path>` flag on
   the driver line. A member blocked by a dependency or held back for a shared brief waits and is
-  dispatched when the lane it waits on has merged. With none, the driver derives the batch — the queue's startable specs in order, stopping before a spec that touches a pipeline self-surface (policy.fanout.selfSurfaces), a critical spec sharing a § Risk Tiers file with an unmerged lane, a dependency the batch cannot meet, or a planning item — prints it as one 📌 Auto-picked batch line, and runs it to the end; the next bare run after --mark reported starts the next batch.
+  dispatched when the lane it waits on has merged. With none, the driver derives the batch — the queue's startable specs in order, stopping before a dependency the batch cannot meet, or a planning item — prints it as one 📌 Auto-picked batch line, and runs it to the end; the next bare run after --mark reported starts the next batch.
 - `--batch <ids|all>` — the veto of the derived batch; ids are spec stems or paths.
 - `--include-fixes` — pre-existing red-CI and queued `/spec:fix` items become one serial fix group after the run lanes (fixes born of the batch join without the flag); a fix whose after gate is unmet waits in the table until the gate is met.
 - `--override-serial` — admit shared-brief specs the queue held back (never a `depends on` hold).
@@ -44,7 +44,7 @@ The script derives and writes; you do the one judgment step it prints.
   (--ask <key> relays them for one run).
 - Never run a lane's driver except the MERGE step from the main root — the worker owns its lane's
   build and review drivers; you only follow the printed review-driver MERGE line.
-- Workers never land on main: merge one lane at a time, in table order, never while a lane is `pending`;
+- Workers never land on main: merge one lane at a time, in table order, never while a lane is `pending`; the driver's MERGE step runs merge-back's rebase-ff itself;
   a red main (MERGE_RED) stops the queue until `--mark gate-repaired` is green.
 - Never edit `spec-fanout.json` or a lane's `.claude/pending-question.json` by hand; to change the lane
   set, delete the state file the driver names.
@@ -53,7 +53,7 @@ The script derives and writes; you do the one judgment step it prints.
 - Plan and fix work never touches the main checkout: a fix lane runs in its own worktree on fix/<queue_id> and lands only through the MERGE step with the gate after — the main-gate repair included — never by committing on main; no lane or planner leaves an untracked file in the main root (merge-back refuses a dirty root by design; a planner's scratch goes to the session scratchpad, core § On-Disk Handoff).
 - A spec whose lane stopped in this run is never re-admitted — resume it by hand or start the next batch.
 - A merge-ready lane lands before any new lane is dispatched.
-- Two briefless specs that share only policy.fanout.overlapExempt paths run in parallel.
+- Lanes run in parallel whatever their File Plans share; the MERGE step rebases the lane onto main and fast-forwards it, a conflict sends the lane back to its worker to resolve by intent (the rebase stays in progress in its worktree) and it lands on the next pass, and a second conflict against the same main stops the lane for a person.
 - A refusal (exit 2) names its own remedy — print its stderr and do that.
 - Non-goals: no `/spec:plan` lane (a spec must already be hardened), no automatic answers beyond the
   host's policy.stops.

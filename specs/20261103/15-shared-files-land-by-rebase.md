@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: standard           # per ADR-0039 D3 the tier is a property of files touched: the spec-status.js and grounding-contract.md rows are § Risk Tiers surfaces, so every AC carries a literal example; the spec as a whole is standard
 area: fanout
 breaking: false
 depends_on: []
 brief: n/a
 open_markers: 0
+diff_base: 15a0c61480e37b6a7c817471c055640e8bedb8b8
 ---
 
 # Shared files land by rebase
@@ -48,6 +49,7 @@ and a lane whose branch conflicts with a moved main is handed back to its worker
 | D10 | Spec 14 is amended, not contradicted — `specs/20261103/14-the-fan-out-has-two-modes.md` is a File Plan row here: its frontmatter `depends_on` gains this spec's path (so it builds on this post-image); D2's `derives the batch with deriveBatch exactly as today` becomes `with deriveBatch as spec 15 leaves it (a brief-dependency boundary and the trailing queue-item boundary; no self-surface or critical boundary)`; D4's `a self-surface pick after another member, a critical pick sharing a § Risk Tiers path with an earlier member, and a pick whose brief depends on a member's brief each end the batch with today's reason` becomes `a pick whose brief depends on a member's brief ends the batch with today's reason`; the `08-s` option in D3's prose, the Contracts block and AC-14-4 reads `specs/20261102/08-s.md — brief 35; in the derived batch`; the Behavior table rows `x, s` and `x, c` become `L1 03-x planned, L2 08-s planned` / `L1 03-x planned, L2 08-c planned` with `stopBefore null`; AC-14-7's `selfSurface` and `critical` examples follow those rows (no `⏭` line, `stopBefore null`); AC-14-15's text becomes `stop before a blocked entry and a planning item with today's reasons and table a shared-brief member waiting (e.g. opt selfSurface → L1 03-x planned, L2 06-y waiting, L3 04-z planned, L4 08-s planned, stopBefore null)`, its pointer unchanged. Everything else in 14 stands. `[no-ac: spec-doc amendment — read by review]` | 14 locked the boundaries as worked examples, not as its goal; amending the examples before its build costs one edit, re-hosting its pins after would cost a build. |
 | D11 | Untouched neighbours: `--override-serial`, `--batch`, `--spec`, `--include-fixes`, `--ask` and the PLAN-side `options`/`ask` keys stay exactly as they are — spec 14 D1/D2 owns their removal; `spec/scripts/merge-back.sh` is not edited (`rebase-ff` and its exit alphabet already exist); `spec/scripts/spec-review-driver.js` is not edited (its `handleMergeStrategy` already-landed arm, `rev-list --count <target>..<source>` = 0, finishes promotion and cleanup after the fan-out's fast-forward); spec 11's and spec 12's files are not touched; the parked-worktree note and q32/q33 stay as they are. `[no-ac: scope boundary — no code changes]` | Two specs deleting one flag two ways collide at build; the critical scripts stay critical by not being touched. |
 | D12 | Tests are re-hosted, never weakened: `tests/spec-status.test.js` AC-20261103-06-2 becomes the negative pin (an overlapping briefless pair is parallel), AC-20261103-06-3's no-File-Plan case flips to `parallel: true`, AC-20261103-06-4's `10-c` becomes a third lane, AC-20260909-08-1's `🤷` assertion becomes `no parallelism-unknown line and 05-adhoc listed under the ⚡ lanes`; `tests/queue/queue-overlay.test.js` AC-20261103-06-5 keeps its subject (one shared branch line for a run of identical reasons) over three briefed siblings of the top pick's brief (`⛓️ shared brief 02`); `tests/host-config/policy-block.test.js` AC-20261103-06-7 becomes the unknown-key pin; `tests/host-config/contract-keys.test.js` drops its `selfSurfaces`/`overlapExempt` loop; in `tests/fanout/fanout-driver.test.js` AC-20261103-06-9 tables `08-s` as `L4 planned` with `the whole queue`, AC-20261103-06-10 and AC-20261103-06-11 are deleted (their subject is gone — tagged `[retired: specs/20261103/15-shared-files-land-by-rebase.md]` in spec 06), AC-20261103-06-18 uses opt `dependent` (`batch stopped before 07-d — blocked: brief 34 depends on 32`), AC-20261102-03-15's MERGE assertions follow D4's print, `SELF_REASON`/`SELF_SURFACE` constants go with their last use; `tests/fanout/fixture.js` gains opt `overlap: n` (n hardened `brief: n/a` specs `20-o01…20-o0n` whose File Plan names `spec/scripts/spec-status.js` and `spec/scripts/fanout-driver.js`) and `h.moveMain(file, text)` (one commit on main in the root), keeps `selfSurface`/`critical`/`dependent` (spec 14 reads them) and `mergeLane` (merging an already-landed branch is a no-op and the cleanup still applies). `[no-ac: test-maintenance rows; each file is named in the File Plan with the pins it re-hosts]` | A test that pinned a boundary dies with the boundary; one that pinned the batch keeps the batch. |
+| D13 | Scope widened at build: `tests/status/status-diet.test.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names no File Plan path] [no-ac: the gate line is the oracle] | The file's risk decides, never the spec's tier. |
 
 ## File Plan
 
@@ -68,6 +70,7 @@ and a lane whose branch conflicts with a moved main is handed back to its worker
 | tests/queue/queue-overlay.test.js | MODIFY | tests | AC-20261103-15-5 |
 | tests/host-config/policy-block.test.js | MODIFY | tests | AC-20261103-15-15 |
 | tests/host-config/contract-keys.test.js | MODIFY | tests | AC-20261103-15-17 (pin reuse; the title gains the AC-ID); D12 loop deletion |
+| tests/status/status-diet.test.js | MODIFY | tests | gate line — updated in place, never weakened [auto: out-of-plan-triage] |
 
 ## Contracts
 
@@ -159,7 +162,7 @@ must print nothing; `docs/canonical/` is rewritten from § Canonical Delta.
 - **AC-20261103-15-4**: WHEN `--all` renders a briefless runner-up THE SYSTEM SHALL list it under the `⚡` lanes and print no parallelism-unknown branch (e.g. the AC-20260909-08-1 fixture → stdout matches `/⚡ \d+ parallel lanes[\s\S]*\/spec:run @specs\/20260710\/05-adhoc\.md/` and contains no `🤷`; `02-billing-b` still sinks under `🕓 after that:` with `⛓️ shared brief 02`)
   → rewrites tests/spec-status.test.js :: AC-20260909-08-1: default
 - **AC-20261103-15-5**: WHEN `--all` meets a run of consecutive after-that entries with one reason THE SYSTEM SHALL CONTINUE TO print that reason on one shared branch line (e.g. a top pick on brief 02 and three hardened siblings `02-b`, `03-c`, `04-d` on brief 02 → exactly one line containing `⛓️ shared brief 02`)
-  → rewrites tests/queue/queue-overlay.test.js :: --all collapses a run of identical after-that reasons
+  → reuses tests/queue/queue-overlay.test.js :: --all collapses a run of identical after-that reasons
 - **AC-20261103-15-6**: WHEN a bare run plans over five hardened briefless specs whose File Plans all name `spec/scripts/spec-status.js` and `spec/scripts/fanout-driver.js` THE SYSTEM SHALL table all five planned, dispatch four and hold none waiting (e.g. opt `overlap: 5` → lanes `[['L1', '20-o01', 'planned'], …, ['L5', '20-o05', 'planned']]` by stem, `batch.stopBefore === null`, `--lanes --json`'s `serialized` is `[]`; `--mark planned` → stdout contains `## Step: dispatch 4 lanes`, names `20-o01`…`20-o04` and not `20-o05`; `h.lane('L5').state === 'planned'`; after `L1` lands the next bare run dispatches `L5`)
   → writes tests/fanout/fanout-driver.test.js
 - **AC-20261103-15-7**: WHEN the derived batch meets a spec whose File Plan names the driver, or a critical spec sharing a § Risk Tiers path with a member THE SYSTEM SHALL table it like any other (e.g. opt `selfSurface` → lanes `[['L1', S03, 'planned'], ['L2', S06, 'waiting'], ['L3', S04, 'planned'], ['L4', S08S, 'planned']]`, `batch` is `{ members: [S03, S06, S04, S08S], stopBefore: null, by: 'derived' }`, stdout contains `📌 Auto-picked batch: 03-x, 06-y, 04-z, 08-s — the whole queue`; opt `critical` → `S08C` among the members and `stopBefore === null`)
@@ -182,7 +185,7 @@ must print nothing; `docs/canonical/` is rewritten from § Canonical Delta.
   → writes tests/fanout/fanout-driver.test.js
 - **AC-20261103-15-15**: WHEN `policy(root)` is read or `validatePolicy` meets a `fanout` block THE SYSTEM SHALL carry no fanout key and report the block as unknown (e.g. `'fanout' in policy(root) === false`; `validatePolicy({ fanout: { selfSurfaces: [] } })` → `['unknown key fanout']`; `policy(root).stops.repairRound === 'repair'` still)
   → rewrites tests/host-config/policy-block.test.js :: AC-20261103-06-7:
-- **AC-20261103-15-16** `[oracle: literals]`: WHEN the File Plan's non-tests files are read THE SYSTEM SHALL carry none of the retired names and reasons: `selfSurfaces`, `overlapExempt`, `riskTierPaths`, `exemptSet`, `parallelism unknown`, `File Plan overlap:`, `touches pipeline self-surface`, `shares Risk Tiers path`
+- **AC-20261103-15-16** `[oracle: literals]`: WHEN the File Plan's non-tests files are read THE SYSTEM SHALL carry none of the retired code names `riskTierPaths` and `exemptSet`; the six retired policy keys and printed reasons (the self-surface glob key, the exempt-list key, the parallelism-unknown branch, the File-Plan-overlap reason, the self-surface reason and the Risk-Tiers-sharing reason) are checked by the Review checks grep above, over live surfaces only, because spec 06 — a File Plan row for its retire tags — keeps them as its history
 - **AC-20261103-15-17**: WHEN `spec/templates/grounding-contract.md` is edited THE SYSTEM SHALL CONTINUE TO carry a `contractHash` in `.claude/spec.config.json` equal to `spec-paths contract-hash` of the edited file (e.g. `JSON.parse(read('.claude/spec.config.json')).contractHash === runBash('bin/spec-paths', ['contract-hash']).stdout.trim()` after D7's edit and restamp)
   → reuses tests/host-config/contract-keys.test.js :: AC-20261103-04-2
 
@@ -264,6 +267,28 @@ name `File Plan overlap` as history in Out-of-scope prose (roadmap briefs are ne
 `tests/host-config/policy-block.test.js`'s `strategy derived` is the `mergeStrategy` enum's default, untouched
 here. Of the paths leg's `executes` hits outside the File Plan, `tests/status/status-diet.test.js` is the only
 one reading a parallelism word, and it pins the absence of a retired footer — unaffected.
+
+2026-11-04, review 1 fix: AC-20261103-15-16's literals oracle scans every non-tests File Plan row,
+and spec 06 is one (its retire tags) that keeps six of the retired words as history, so the AC as
+locked could never go green. The oracle keeps the two code names no spec doc spells; the six policy
+keys and reasons are covered by the Review checks grep, which already leaves `specs/**` out, and the
+review-1 reviewer ran that grep over the live surfaces with zero hits.
+
+Build deviations, folded at close (each already a class in pipeline rules § Gotchas, so no new entry):
+AC-15-11/12/13 use a conflict host whose base already holds `x.txt`, because an add/add conflict shows
+`AA`, never the `UU x.txt` the AC pins, and AC-15-13 checks the aborted worktree with
+`--untracked-files=no` since the fixture's review sidecar is untracked; AC-20261103-10-8, AC-20261103-10-17,
+AC-20261102-03-17, AC-20261102-03-21 and the `--next makes no parallel claim` test were re-hosted to D2/D4
+(path order `[03-x, 04-z, 06-y]`, a briefed fixture for the shared-brief hold, `cleanup: false` /
+`mergeLane` so the landing finds or clears the worktree), and contract-keys drops its `"fanout"` object
+match with D7; at RED_FINDINGS AC-15-5's pointer verb was amended `rewrites` → `reuses` (a CONTINUE-TO
+criterion) and AC-15-9's assertions were folded into the 03-15 case its pointer names; at REPAIR the
+lock-time closure's "unaffected" call on `tests/status/status-diet.test.js` proved wrong and it entered
+scope as D13, its fixture moved onto a shared brief so the solo branch stays pinned.
+
+### Advisory debt (review rv_044ec6bc2788)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac2dacd5a85444ad4/specs/20261103/15-shared-files-land-by-rebase.md:151 — The § Behavior Review-checks grep does not exclude `tests/**`, yet AC-20261103-15-1 and AC-20261103-15-15 require fixtures that spell `overlapExempt` and `selfSurfaces`; run as written it prints three lines. The review-1 fix re-routed the six policy keys/reasons from the oracle onto this grep ('over live surfaces only'), so the spec's only remaining check for them is one whose literal instruction cannot be satisfied. Add `':!tests/**'` (or word the check as live-surface-only) so the check matches the ACs that sanction those fixtures.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac2dacd5a85444ad4/spec/scripts/fanout-driver.js:412 — D4 says a mark that reaches MERGE 'runs no git', but printMerge evaluates `targetBranch()` (`git symbolic-ref --short HEAD`) before the `!apply` branch, so the mark path does run one read-only git command to print `<target>`. Harmless but the Decision wording and the code disagree.
 
 ## Canonical Delta
 

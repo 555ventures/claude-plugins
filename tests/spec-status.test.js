@@ -543,7 +543,7 @@ test('--next marks a runner-up serial on a shared brief or a brief dependency pa
   assert.match(reports.parallel_reason, /brief 03 depends on 02/)
 })
 
-test('--next makes no parallel claim (AC-20261103-06-5, AC-20261103-10-3) when a spec has no brief stamp, and --all names why parallelism is unknown', () => {
+test('--next marks a briefless runner-up parallel and --all lists it under the lanes with no parallelism-unknown line (AC-20261103-06-5, AC-20261103-10-3, AC-20261103-15-4)', () => {
   const dir = host({
     briefs: {},
     specs: {
@@ -555,19 +555,17 @@ test('--next makes no parallel claim (AC-20261103-06-5, AC-20261103-10-3) when a
   assert.strictEqual(r.status, 0, '--next --json must derive: ' + r.stderr)
   const j = JSON.parse(r.stdout)
   assert.strictEqual(j.next.length, 2, 'both hardened ad-hoc specs must be next entries: ' + r.stdout)
-  for (const e of j.next) {
+  for (const [i, e] of j.next.entries()) {
     assert.strictEqual(e.brief, null, 'an ad-hoc spec serializes brief null, or the frozen --json shape changed: ' + JSON.stringify(e))
-    assert.strictEqual(e.parallel, null, 'no brief = no declared surfaces to compare — silence beats a guessed parallel-ok: ' + JSON.stringify(e))
-    assert.strictEqual(e.parallel_reason, null, 'the unknown-parallelism reason is internal and must not leak into --json: ' + JSON.stringify(e))
+    assert.strictEqual(e.parallel, i === 0 ? null : true, 'the top pick has nothing to be parallel with and a briefless runner-up is parallel, or no File Plan row means a serial hold: ' + JSON.stringify(e))
+    assert.strictEqual(e.parallel_reason, null, 'a parallel entry carries no reason: ' + JSON.stringify(e))
     assert.deepStrictEqual(Object.keys(e).sort(), ['action', 'blockers', 'brief', 'note', 'parallel', 'parallel_reason', 'path', 'status'],
       'the --next --json entry key set is frozen for external consumers: ' + JSON.stringify(e))
   }
   const rAll = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(rAll.status, 0, rAll.stderr)
-  const unknown = rAll.stdout.split('\n').filter((l) => l.includes('🤷'))
-  assert.deepStrictEqual(unknown.map((l) => l.trim()), ['└─ 🤷 no brief — parallelism unknown (both ad-hoc; no File Plan rows)'],
-    'the --all branch line must print once, naming why parallelism is unknown, or the maintainer cannot tell a missing File Plan from a missing brief: ' + rAll.stdout)
-  assert.match(rAll.stdout, /\/spec:run @specs\/20260710\/06-also\.md\n\s+└─ 🤷/, 'the line sits under the runner-up: ' + rAll.stdout)
+  assert.ok(!rAll.stdout.includes('🤷'), 'no entry can reach a parallelism-unknown branch, or the retired line prints again: ' + rAll.stdout)
+  assert.match(rAll.stdout, /⚡ \d+ parallel lanes[\s\S]*\/spec:run @specs\/20260710\/06-also\.md/, 'the briefless runner-up is listed under the lanes: ' + rAll.stdout)
 })
 
 test('AC-20261103-10-5: an ad-hoc spec belongs to no roadmap brief and earns no orphan-stamp, while a stamp naming no brief still does', () => {
@@ -682,7 +680,7 @@ test('consecutive done briefs collapse to one range row with brief and spec coun
 
 // D1(b): the lane render is now the DEFAULT screen's own Next-block content — --all adds
 // nothing to it, only the 🕓/⛔ sections after it.
-test('AC-20260909-08-1: default render prints the ⚡ lane header + both lane commands inside the Next block; --all still sinks the serial/no-claim runner-ups under 🕓 and the blocked entry under ⛔', () => {
+test('AC-20260909-08-1 / AC-20261103-15-4: default render prints the ⚡ lane header + both lane commands inside the Next block; --all still sinks the serial/no-claim runner-ups under 🕓 and the blocked entry under ⛔', () => {
   // AC-20260909-08-1's own literal: 01 and 02 mutually independent, only 03 depends on 01 — a
   // different shape from PARALLEL_BRIEFS (whose 02 depends on 01, which would wrongly demote 02).
   const lit = host({
@@ -727,8 +725,8 @@ test('AC-20260909-08-1: default render prints the ⚡ lane header + both lane co
   assert.strictEqual(rAll.status, 0, rAll.stderr)
   assert.match(rAll.stdout, /🕓 after that:\n\/spec:run @specs\/20260710\/02-billing-b\.md\n\s+└─ ⛓️ shared brief 02/,
     'serial runner-up sinks below the lanes with its reason on a branch line — still only under --all')
-  assert.match(rAll.stdout, /\/spec:run @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
-    'briefless runner-up gets a no-claim branch')
+  assert.match(rAll.stdout, /⚡ \d+ parallel lanes[\s\S]*\/spec:run @specs\/20260710\/05-adhoc\.md/, 'the briefless runner-up is listed under the lanes (AC-20261103-15-4)')
+  assert.ok(!rAll.stdout.includes('🤷'), 'no parallelism-unknown line may print for a briefless runner-up (AC-20261103-15-4): ' + rAll.stdout)
   assert.match(rAll.stdout, /⛔ blocked:\n\/spec:run @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section')
 })
 
@@ -1357,23 +1355,21 @@ test('AC-20261103-06-1: --next --json marks a briefless runner-up parallel true 
     'the --next --json entry key set is frozen API, or external consumers break')
 })
 
-test('AC-20261103-06-2: --next --json serializes a briefless pair on File Plan overlap minus the pipelineRules file, and a policy.fanout.overlapExempt override changes the shared set', () => {
+test('AC-20261103-06-2 / AC-20261103-15-1: --next --json marks a briefless runner-up parallel with no reason whatever its File Plan shares with the top pick, with or without a host policy block', () => {
   const dir = host({ specs: {
     '20260701/01-a.md': adhoc(['src/a.js', 'src/shared.js', 'lib/x.js', 'lib/y.js', '.claude/rules/pipe.md', 'tests/a.test.js']),
     '20260701/02-b.md': adhoc(['src/a.js', 'src/shared.js', 'lib/x.js', 'lib/y.js', '.claude/rules/pipe.md']),
   } })
   writeCfg(dir, { pipelineRules: '.claude/rules/pipe.md' })
   let b = nextOf(dir)[1]
-  assert.strictEqual(b.parallel, false, 'real shared paths must serialize the pair, or two lanes collide at merge-back')
-  assert.strictEqual(b.parallel_reason, 'File Plan overlap: src/a.js, src/shared.js (+2 more)',
-    'the reason names the first two shared paths in the top pick\'s order and the count beyond them, with the rules file exempt')
-  writeCfg(dir, { pipelineRules: '.claude/rules/pipe.md', policy: { fanout: { overlapExempt: ['lib/**', 'src/shared.js'] } } })
+  assert.strictEqual(b.parallel, true, 'shared File Plan paths must not serialize a briefless pair, or every spec touching one central script runs alone')
+  assert.strictEqual(b.parallel_reason, null, 'a parallel entry carries no reason, or the dashboard prints a serial branch under a lane')
+  writeCfg(dir, { pipelineRules: '.claude/rules/pipe.md', policy: { fanout: { overlapExempt: ['lib/**'] } } })
   b = nextOf(dir)[1]
-  assert.strictEqual(b.parallel_reason, 'File Plan overlap: src/a.js',
-    'a host overlapExempt list must replace the default exempt set, or a host cannot name its own ceremony paths')
+  assert.deepStrictEqual([b.parallel, b.parallel_reason], [true, null], 'a leftover host fanout block changes nothing, or the retired exempt list still decides parallelism')
 })
 
-test('AC-20261103-06-3: --next --json marks a brief n/a runner-up with a disjoint File Plan parallel true beside a briefed top pick, and leaves one with no File Plan null', () => {
+test('AC-20261103-06-3 / AC-20261103-15-2: --next --json marks a brief n/a runner-up parallel true beside a briefed top pick, with a File Plan or without one', () => {
   const dir = host({
     briefs: PARALLEL_BRIEFS,
     specs: {
@@ -1385,10 +1381,10 @@ test('AC-20261103-06-3: --next --json marks a brief n/a runner-up with a disjoin
   })
   const by = Object.fromEntries(nextOf(dir).map(e => [e.path, e]))
   assert.strictEqual(by['specs/20260710/05-adhoc.md'].parallel, true, 'a briefless spec with a disjoint plan beside a briefed top pick must be parallel, or the annotation still gates on the top pick\'s brief')
-  assert.strictEqual(by['specs/20260710/06-bare.md'].parallel, null, 'a spec with no File Plan makes no claim, or the dashboard guesses from an empty table')
+  assert.strictEqual(by['specs/20260710/06-bare.md'].parallel, true, 'a spec with no File Plan rows is parallel too, or an empty table still serializes the fan-out')
 })
 
-test('AC-20261103-06-4 / AC-20261103-08-8: --lanes --json admits the disjoint briefless specs, serializes the one overlapping an admitted lane with the overlap reason, and the dashboard 🔶 line still names README.md', () => {
+test('AC-20261103-06-4 / AC-20261103-08-8 / AC-20261103-15-3: --lanes --json admits all three briefless specs as lanes though the third shares a path with the second, serializes none, and the dashboard 🔶 line still names README.md', () => {
   const specs = {
     '20261102/08-a.md': adhoc(['src/a.js', 'README.md']),
     '20261102/09-b.md': adhoc(['src/b.js', 'src/shared.js', 'README.md']),
@@ -1398,10 +1394,10 @@ test('AC-20261103-06-4 / AC-20261103-08-8: --lanes --json admits the disjoint br
   const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
   assert.strictEqual(r.status, 0, r.stderr)
   const out = JSON.parse(r.stdout)
-  assert.deepStrictEqual(out.lanes.map(l => l.path), ['specs/20261102/08-a.md', 'specs/20261102/09-b.md'],
-    'disjoint briefless specs must be lanes, or a repo of ad-hoc specs has one lane: ' + r.stdout)
-  assert.deepStrictEqual(out.serialized, [{ path: 'specs/20261102/10-c.md', brief: null, reason: 'File Plan overlap: src/shared.js' }],
-    'the spec overlapping an admitted lane must be held back with the overlap reason: ' + r.stdout)
+  assert.deepStrictEqual(out.lanes.map(l => l.path), ['specs/20261102/08-a.md', 'specs/20261102/09-b.md', 'specs/20261102/10-c.md'],
+    'briefless specs must all be lanes whatever their File Plans share, or a repo of ad-hoc specs has one lane: ' + r.stdout)
+  assert.deepStrictEqual(out.serialized, [],
+    'nothing is serialized on File Plan overlap, or the fan-out predicts a collision git answers at landing: ' + r.stdout)
   assert.deepStrictEqual(Object.keys(out.lanes[0]).sort(), ['action', 'branch', 'brief', 'note', 'path', 'status', 'worktree'], 'lane keys are frozen, or the driver reads a missing field')
   assert.deepStrictEqual(Object.keys(out).sort(), ['born', 'fixes', 'lanes', 'serialized'], 'top-level keys are frozen, or a consumer reads an unpinned shape')
   const bare = runNode(SCRIPT, ['--root', h.dir])

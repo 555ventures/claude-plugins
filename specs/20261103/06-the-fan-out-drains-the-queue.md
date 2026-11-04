@@ -220,12 +220,12 @@ too; the dashboard's 🔶 line for the two lanes still names `README.md`.
   `04-z` are done on main so `08-s` heads the queue THE SYSTEM SHALL table `08-s` alone as L1 and print
   `📌 Auto-picked batch: 08-s — stops before 08-p (self-surface runs alone) (veto: --batch <ids|all>)`,
   and WHEN only opt `selfSurface` is set under the same done specs THE SYSTEM SHALL print `📌 Auto-picked
-  batch: 08-s — the whole queue (veto: --batch <ids|all>)` → writes tests/fanout/fanout-driver.test.js
+  batch: 08-s — the whole queue (veto: --batch <ids|all>)` → writes tests/fanout/fanout-driver.test.js [retired: specs/20261103/15-shared-files-land-by-rebase.md]
 - **AC-20261103-06-11**: WHEN the fixture has opt `critical` (rules file § Risk Tiers naming
   `` `src/db.js` ``, `03-x` and the critical `08-c` both planning `src/db.js`) THE SYSTEM SHALL stop
   the batch before `08-c` with reason `critical: shares Risk Tiers path src/db.js with 03-x`, and WHEN
   the rules file has no `## Risk Tiers` section THE SYSTEM SHALL admit `08-c` as a member → writes
-  tests/fanout/fanout-driver.test.js
+  tests/fanout/fanout-driver.test.js [retired: specs/20261103/15-shared-files-land-by-rebase.md]
 - **AC-20261103-06-12**: WHEN the fixture has opt `blocked` THE SYSTEM SHALL stop before `08-k` with
   reason `blocked: specs/20261102/03-x.md (hardened)`, and WHEN it has opt `draft` THE SYSTEM SHALL
   stop before `08-p` with reason `/spec:plan item heads the queue` → writes

@@ -11,15 +11,8 @@ const { read, runBash, section, phrase, ROOT } = require('../helpers')
 // specs/20261103/04-predictable-stops-become-host-policy.md D2: AC-20261103-04-2 — the contract's § Policy
 // carries the stops block, its enums, and this repo's contractHash is restamped over it.
 
-test('AC-20261101-07-1 / AC-20261103-06-8: the contract carries ## Test tiers (optional) after Test expiry, names slowTestCommand there and in the optional key run, carries the fanout block with both lists and enums in § Policy, and its hash moved and equals the config stamp', () => {
-  const pol = section('spec/templates/grounding-contract.md', /^## Policy/, /^## (?!Policy)/)
-  const json = pol.slice(pol.indexOf('```json'), pol.indexOf('```', pol.indexOf('```json') + 7))
-  assert.match(json, /"fanout"\s*:\s*\{/, 'the § Policy JSON block must carry a fanout object, or hosts never learn the block exists')
-  for (const k of ['selfSurfaces', 'overlapExempt']) {
-    assert.match(json, new RegExp('"' + k + '"\\s*:\\s*\\['), 'the fanout block must carry ' + k + ', or init writes a different default than the drivers read')
-    assert.match(pol, phrase('`fanout.' + k + '`'), 'the Enums paragraph must name fanout.' + k + ', or a host cannot tell what shape the list takes')
-  }
-  const stamp = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8')).contractHash
+test('AC-20261101-07-1 / AC-20261103-06-8: the contract carries ## Test tiers (optional) after Test expiry, names slowTestCommand there and in the optional key run, and its hash moved and equals the config stamp', () => {
+  const stamp =JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8')).contractHash
   assert.strictEqual(stamp, runBash('bin/spec-paths', ['contract-hash']).stdout.trim(),
     'the config contractHash must equal spec-paths contract-hash, or /spec:doctor flags this repo as stale')
   const src = read('spec/templates/grounding-contract.md')
@@ -38,7 +31,7 @@ test('AC-20261101-07-1 / AC-20261103-06-8: the contract carries ## Test tiers (o
     'the contract hash must differ from the pre-spec stamp, or hosts never see their grounding as stale')
 })
 
-test('AC-20261103-04-2 / AC-20261103-09-2: the contract § Policy JSON block carries the six stops keys with their defaults, the Enums sentence names prototypeClose ask | keep | delete and rejectWithEvidence accept | ask, and this repo\'s contractHash equals the edited contract\'s hash', () => {
+test('AC-20261103-04-2 / AC-20261103-09-2 / AC-20261103-15-17: the contract § Policy JSON block carries the six stops keys with their defaults, the Enums sentence names prototypeClose ask | keep | delete and rejectWithEvidence accept | ask, and this repo\'s contractHash equals the edited contract\'s hash', () => {
   const pol = section('spec/templates/grounding-contract.md', /^## Policy/, /^## (?!Policy)/)
   const json = pol.slice(pol.indexOf('```json'), pol.indexOf('```', pol.indexOf('```json') + 7))
   assert.match(json, /"stops"\s*:\s*\{/, 'the JSON block must carry a stops object, or hosts never learn the block exists')
@@ -55,6 +48,7 @@ test('AC-20261103-04-2 / AC-20261103-09-2: the contract § Policy JSON block car
   assert.strictEqual(cfg.contractHash, expected, 'contractHash must equal the edited contract\'s hash, or /spec:doctor flags this repo\'s own grounding as stale')
 })
 
+// specs/20261103/15-shared-files-land-by-rebase.md D7: AC-20261103-15-17 — the restamped contractHash equals the edited contract's hash.
 // specs/20261103/12-one-suite-run-per-tree.md D4/D7: AC-20261103-12-19 — {testFiles} and closeSuite in the contract; this repo's config.
 test('AC-20261103-12-19: the contract names {testFiles} in § Required config keys and closeSuite auto with its Enums phrase in § Policy, this repo\'s config carries closeSuite always and a {testFiles} gateCommand, and contractHash equals the edited contract\'s hash', () => {
   const keys = section('spec/templates/grounding-contract.md', /^## Required config keys/, /^## (?!Required config keys)/)

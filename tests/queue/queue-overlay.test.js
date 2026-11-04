@@ -382,23 +382,25 @@ test('--all renders every open-work row on exactly one line: a long prose queue 
     'a queued row that IS a command stays bare and id-free — it must survive a double-click copy, and its spec path is already a valid spec-queue <ref>: ' + r.stdout)
 })
 
-// The reason branch under "after that" repeats verbatim for every briefless entry; saying
-// "no brief — parallelism unknown" three times in a row doubles the section height and adds
+// The reason branch under "after that" repeats verbatim for every sibling of the top pick's brief;
+// saying "shared brief 02" three times in a row doubles the section height and adds
 // nothing on the second repeat.
-test('--all collapses a run of identical after-that reasons onto one shared branch line (AC-20261103-06-5)', () => {
+test('--all collapses a run of identical after-that reasons onto one shared branch line (AC-20261103-15-5)', () => {
   const dir = host({
+    briefs: { '02-a.md': '# 02 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
     specs: {
-      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
-      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
-      '20260701/03-c.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 02',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 02',
+      '20260701/03-c.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 02',
+      '20260701/04-d.md': 'date: 2026-07-01\nstatus: hardened\nbrief: 02',
     },
   })
   const r = runNode(SCRIPT, ['--root', dir, '--all'])
   assert.strictEqual(r.status, 0, r.stderr)
-  const reasons = r.stdout.split('\n').filter(l => l.includes('no brief — parallelism unknown'))
+  const reasons = r.stdout.split('\n').filter(l => l.includes('⛓️ shared brief 02'))
   assert.strictEqual(reasons.length, 1,
     'consecutive entries sharing one reason get ONE branch line, not one per row: ' + JSON.stringify(reasons))
-  assert.match(r.stdout, /\/spec:run @specs\/20260701\/02-b\.md\n\/spec:run @specs\/20260701\/03-c\.md\n\s+└─ 🤷 no brief/,
+  assert.match(r.stdout, /\/spec:run @specs\/20260701\/02-b\.md\n\/spec:run @specs\/20260701\/03-c\.md\n\/spec:run @specs\/20260701\/04-d\.md\n\s+└─ ⛓️ shared brief 02/,
     'the shared branch line closes the run, so it still reads as covering every row above it: ' + r.stdout)
 })
 

@@ -66,10 +66,11 @@ test('AC-20260909-08-7 (⚡ clause retired, was AC-20260903-05-1): default rende
 
 test('AC-20260909-08-2 ("one command line" clause retired, was AC-20260903-05-2): default render prints the top pick plus a 🚦 solo branch and the reworded "N more open" wait clause', () => {
   const dir = host({
+    briefs: { '01-auth.md': BRIEFS['01-auth.md'] },
     specs: {
-      '20260701/01-billing.md': sp('implementing'),
-      '20260701/02-other.md': sp('hardened'),
-      '20260701/03-another.md': sp('hardened'),
+      '20260701/01-billing.md': sp('implementing', 'brief: 01'),
+      '20260701/02-other.md': sp('hardened', 'brief: 01'),
+      '20260701/03-another.md': sp('hardened', 'brief: 01'),
     },
   })
   const r = runNode(SCRIPT, ['--root', dir])

@@ -37,11 +37,11 @@ continue; nothing identifiable → ask for the symptom, the only unrecoverable i
 2. **Fix, with its test.** This session writes the contract change itself — types, signatures,
    the module that ties writer and reader together — plus one test that fails on the old
    behaviour (core § Incident Policy). Mechanical repairs that copy an existing pattern may go to
-   Sonnet workers, one file each, the host's `gateCommand` (or the one named test file) green
+   Sonnet workers, one file each, run only the one named test file green
    before any reports success; a blocked environment is reported as blocked with the error
    text, never worked around (core § Model Placement, § Worker Git Ban). A spike runs in
    `Agent {isolation: 'worktree'}` and returns evidence only — no migrations, no fixture writes,
-   no commits. A worker's green is a claim: run the `gateCommand` yourself before relying on it.
+   no commits. A worker's green is a claim over one file: the session runs the host's `gateCommand` once, at step 5, before anything is committed.
 3. **Decisions stop.** List every user-facing string this session or a worker authored and
    every display or policy choice made (what is hidden, reformatted, reordered, defaulted). ONE
    `AskUserQuestion`, items grouped into at most four questions, each answerable cold (core

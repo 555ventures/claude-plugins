@@ -1,0 +1,5 @@
+# Deviations — 12-one-suite-run-per-tree
+
+- tests/review/review-driver-close-suite-policy.test.js: AC-21 and AC-22 assert the always-run path D8 leaves byte-identical, so they pass against the pre-image (guards against D8 over-skipping); only AC-20 and AC-23 are red pre-change. AC-22 puts the overlay path in the File Plan test tests/foo.test.js (a separate reader file is out-of-plan and trips reconcile).
+  AC-20 asserts the close reached `state: DONE` rather than reading `marks.closed`, because the driver removes the review sidecar at DONE. AC-23 is two tests: the miss case asserts the close tree's key is written after one spawn; the hit case pre-seeds that key through `record()` after the close commit (a second `--mark closed` is impossible once the sidecar is gone).
+- D15 (build ruling on a blocked return): the scripts worker first added a default `ℹ tests (\d+)` count pattern for hosts declaring no `testCountPattern`; removed — fixtures for AC-20/23/24 declare the pattern instead, and AC-23 asserts the close tree's key rather than a single entry.

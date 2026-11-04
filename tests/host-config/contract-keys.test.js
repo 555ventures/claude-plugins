@@ -54,3 +54,19 @@ test('AC-20261103-04-2 / AC-20261103-09-2: the contract § Policy JSON block car
   assert.notStrictEqual(cfg.contractHash, 'e3fb765dadad', 'the pre-edit stamp must not survive the contract edit, or every host sees no staleness')
   assert.strictEqual(cfg.contractHash, expected, 'contractHash must equal the edited contract\'s hash, or /spec:doctor flags this repo\'s own grounding as stale')
 })
+
+// specs/20261103/12-one-suite-run-per-tree.md D4/D7: AC-20261103-12-19 — {testFiles} and closeSuite in the contract; this repo's config.
+test('AC-20261103-12-19: the contract names {testFiles} in § Required config keys and closeSuite auto with its Enums phrase in § Policy, this repo\'s config carries closeSuite always and a {testFiles} gateCommand, and contractHash equals the edited contract\'s hash', () => {
+  const keys = section('spec/templates/grounding-contract.md', /^## Required config keys/, /^## (?!Required config keys)/)
+  assert.ok(keys.includes('{testFiles}'), 'the Required config keys section must name {testFiles}, or hosts never learn the placeholder exists')
+  const pol = section('spec/templates/grounding-contract.md', /^## Policy/, /^## (?!Policy)/)
+  const json = pol.slice(pol.indexOf('```json'), pol.indexOf('```', pol.indexOf('```json') + 7))
+  assert.match(json, /"closeSuite"\s*:\s*"auto"/, 'the § Policy JSON block must carry "closeSuite": "auto", or init writes a different default than the drivers read')
+  assert.match(pol, phrase('`closeSuite` `always | auto`'), 'the Enums paragraph must name the closeSuite enum, or a host cannot tell always can replace the auto default')
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/spec.config.json'), 'utf8'))
+  assert.strictEqual(cfg.policy && cfg.policy.closeSuite, 'always', 'this repo must pin policy.closeSuite always, or its tests-read-doctrine close delta is skipped')
+  assert.ok(cfg.gateCommand.includes('{testFiles}'), 'the gateCommand must carry {testFiles}, or the scoped gate still runs whole directories')
+  assert.ok(!cfg.gateCommand.includes('{testDirs}'), 'the gateCommand must drop {testDirs}, or the scoped gate widens to directories')
+  const expected = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'spec/templates/grounding-contract.md'))).digest('hex').slice(0, 12)
+  assert.strictEqual(cfg.contractHash, expected, 'contractHash must equal the edited contract\'s hash, or /spec:doctor flags this repo\'s own grounding as stale')
+})

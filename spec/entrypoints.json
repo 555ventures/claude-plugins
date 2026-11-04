@@ -245,7 +245,8 @@
     "entryPoints": [
       "spec/scripts/spec-build-driver.js",
       "spec/scripts/review-legs.js",
-      "spec/scripts/init-gen.js"
+      "spec/scripts/init-gen.js",
+      "spec/scripts/spec-review-driver.js"
     ]
   },
   "spec/scripts/secrets-scan.js": {

@@ -523,18 +523,18 @@ if (apply && writes.length > 0) {
       dir = path.dirname(dir)
     }
   }
-  // A {testDirs}/{scopeDirs} gate points at the test files the sweep left in the directories it touched;
+  // A {testDirs}/{scopeDirs}/{testFiles} gate points at the test files the sweep left in the directories it touched;
   // a root-level test file ('.' dirname vs '' relPosix) must count as surviving.
   const touchedDirs = new Set(writes.map((w) => relPosix(path.dirname(w.abs)) || '.'))
   const emptiedSet = new Set(emptied)
   const surviving = testFiles.filter((f) => !emptiedSet.has(f) && touchedDirs.has(path.posix.dirname(f)))
   const declared = config && typeof config.gateCommand === 'string' ? config.gateCommand.trim() : ''
-  const placeholder = /\{testDirs\}|\{scopeDirs\}/.test(declared)
+  const placeholder = /\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(declared)
   const command = placeholder && surviving.length === 0 ? '' : resolveGateForFiles(declared, surviving)
   if (!command) {
     writeOut(2, (placeholder
       ? '⚠ the sweep left no test file in the directories it touched to point the gateCommand\'s ' +
-        '{testDirs}/{scopeDirs} at'
+        '{testDirs}/{scopeDirs}/{testFiles} at'
       : '⚠ no gateCommand in the host config') +
       ' — the applied sweep was not checked; run the host\'s gates before committing it')
   } else {

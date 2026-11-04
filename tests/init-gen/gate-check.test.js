@@ -119,3 +119,15 @@ test('AC-20261101-07-10: the invariants universe roots at the script a slowTestC
   assert.ok(res.roots.includes('scripts/slow.sh'),
     'configCommandStrings must carry slowTestCommand or expiry treats the slow tier script\'s guarding tests as expirable: ' + JSON.stringify(res.roots))
 })
+
+// specs/20261103/12-one-suite-run-per-tree.md D4: AC-20261103-12-11 — {testFiles} is a scoped gate.
+test('AC-20261103-12-11: gate-check reports a {testFiles} gate as scoped and generate prints no unscoped-gate warning for it', () => {
+  const a = gateCheck({ gateCommand: 'node --test {testFiles}', testCommand: 'npm test' })
+  assert.strictEqual(a.status, 0, 'gate-check reports, it never refuses: ' + a.stderr)
+  assert.match(a.stdout, /"scoped":true/,
+    'doctor would flag a {testFiles} gate as unscoped and tell the owner to change a correctly scoped gate: ' + a.stdout + a.stderr)
+  const b = generate('gc-testfiles', { gateCommand: 'npm run lint && node --test {testFiles}' })
+  assert.strictEqual(b.r.status, 0, 'a {testFiles} gate must generate cleanly: ' + b.r.stderr)
+  assert.ok(!b.r.stderr.includes('unscoped'),
+    'a false unscoped warning on {testFiles} teaches owners to ignore the warning: ' + b.r.stderr)
+})

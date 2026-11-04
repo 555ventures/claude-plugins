@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: standard           # caller-fixed at plan time (see D0); the host's § Risk Tiers names review-legs.js and grounding-contract.md — the build upgrades on mid-build evidence per core § Tiers
 area: gate-integrity
 breaking: false
@@ -8,6 +8,7 @@ depends_on: [specs/20261101/06-a-rerun-re-runs-only-what-went-red.md, specs/2026
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 0f1e8700fb0e365ea07e144caec143e22864a59d
 ---
 
 # One suite run per tree
@@ -60,6 +61,8 @@ of widening to their directories.
 | D11 | `spec/entrypoints.json` adds `spec/scripts/spec-review-driver.js` under `spec/scripts/scope-reconcile.js`'s entry points (D8's probe call). `[no-ac: tests/consistency/entrypoints.test.js is the standing guard]` | A new caller without a manifest row reddens the gate. |
 | D12 | `node scripts/plugin-bump.js --bump --plugin spec --changelog "…"`. `[no-ac: node scripts/plugin-bump.js --check in the gate is the oracle]` | Behaviour change under `spec/`. |
 | D13 | Header comments: `run-cache.js` opens with usage, owner (this spec), what it does not do (decide a verdict, cache a red, read env values) and `Exit codes: n/a`; `review-legs.js` names `--tree`, the `cache:<tree7>` provenance and the at-risk `reused:'suite'` shape in its row table; the build driver names `gateRuns[k].tree/cached`; the review driver names `cacheTree` and `closeSuite`. `[no-ac: script header prose; the behaviour is pinned by AC-20261103-12-12 and AC-20261103-12-6]` | The header is the script's contract. |
+| D15 | 📌 Auto-picked (build, blocked-return ruling): every record site observes `testsExecuted` through the host's declared `capabilities.testCountPattern` only — no default pattern; an undeclared or `none` pattern is a count-less green and is never recorded (D1). Fixtures whose ACs expect a recorded run declare `testCountPattern` themselves; AC-23's "writes the entry" is asserted for the close tree's key, since the legs iteration legitimately records its own gate under the judged tree. `[no-ac: tightens D1; exercised by AC-20261103-12-3, AC-20261103-12-20, AC-20261103-12-23, AC-20261103-12-24]` | A default pattern would invent a count for hosts that never declared one — the exact laundering D1 refuses. |
+| D16 | The installed plugin's gate-resolve does not know `{testFiles}`, so this spec's own build and review run on the repo's `spec/scripts/*` drivers, and D4's config switch ships as written `[asked: user picked "Switch now, use the repo's own scripts" — the merge is followed by pushing this version and updating the installed copy, since other lanes and the fan-out's post-merge gate fail on `{testFiles}` until then]`. `[no-ac: build-time routing ruling]` | The spec ships whole; the cross-lane cost is an operator step at merge, not a code change. |
 | D14 | Colliding pins enter the File Plan as fixes, never weakened: `tests/review/review-legs-at-risk-argv.test.js` keeps its spawn premise by declaring a `{file}` `testCommand` in its fixture (D6 then spawns); `tests/review/legs-verdict-pair.test.js` adds the `reused:'suite'` at-risk shape to its verdict pairs and keeps its contradiction pairs on fixtures whose suite is not green-with-count. `[no-ac: fixture currency; exercised by AC-20261103-12-16 and AC-20261103-12-17]` | A pin on "at-risk spawned while the suite was green" is the exact behaviour D6 retires. |
 
 ## File Plan

@@ -87,6 +87,7 @@ function declaredForge(root) {
 const POLICY_ENUMS = Object.freeze({
   mergeStrategy: Object.freeze(['derived', 'merge-commit', 'ff-only', 'squash', 'rebase-ff']),
   testExpiry: Object.freeze(['classify', 'off']),
+  closeSuite: Object.freeze(['always', 'auto']),
   reviewService: Object.freeze(['terminal', 'hosted']),
 })
 const STOP_ENUMS = Object.freeze({
@@ -108,6 +109,7 @@ const POLICY_DEFAULTS = Object.freeze({
   directLaneToMain: true,
   mergeStrategy: 'derived',
   testExpiry: 'classify',
+  closeSuite: 'auto',
   ledgerCommitted: true,
   reviewService: 'terminal',
   models: Object.freeze({

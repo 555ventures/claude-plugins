@@ -195,3 +195,17 @@ for (const [name, opts, expected] of [
       'one finding naming the cause, not one per tier blaming the tiers, or doctor 24 sends the owner to fix the wrong thing')
   })
 }
+
+// specs/20261103/12-one-suite-run-per-tree.md D7: AC-20261103-12-18 (the policy.closeSuite key).
+test('AC-20261103-12-18: policy(root) defaults closeSuite to auto, and validatePolicy accepts always and rejects never with the exact enum finding', () => {
+  const { policy, validatePolicy } = lib()
+  const bare = tmpdir('policy-closesuite-bare')
+  writeConfig(bare, {})
+  assert.strictEqual(policy(bare).closeSuite, 'auto', 'an absent closeSuite must default to auto, or a host that never answered is not offered the overlay-only close skip')
+  const set = tmpdir('policy-closesuite-set')
+  writeConfig(set, { policy: { closeSuite: 'always' } })
+  assert.strictEqual(policy(set).closeSuite, 'always', 'a set closeSuite must win over its default, or a host cannot keep the unconditional close-time suite')
+  assert.deepStrictEqual(validatePolicy({ closeSuite: 'never' }), ['closeSuite: expected one of always|auto'],
+    'a bad closeSuite value must yield exactly the one enum finding, or the owner cannot tell which key to fix')
+  assert.deepStrictEqual(validatePolicy({ closeSuite: 'always' }), [], 'always is a valid closeSuite, or this repo\'s own config is refused at generate')
+})

@@ -18,6 +18,14 @@
 // marks.legsTree[curN] and, when equal, pass review-legs `--reuse-from <prior manifest>`. A leg red
 // in the prior manifest and green in the new one over the same tree is recorded in marks.flaky[n].
 //
+// The run cache (lib/run-cache.js, specs/20261103/12-one-suite-run-per-tree.md): runLegs also records
+// marks.cacheTree[n] = cacheTree(repoRoot, [sidecarRel]) — the tree with the pipeline's own write
+// paths excluded — and passes it to review-legs as `--tree`. The close-time gate looks up and records
+// its resolved command over the close tree's cacheTree (`close-time gate: reused cache:<tree7>`), and
+// under `policy.closeSuite: auto` the close-time suite is skipped only when the close delta against
+// marks.judgedTree is overlay-only, scope-reconcile.js --probe-at-risk finds no test file naming a
+// changed path, and the judged tree's suite is cached green; `always` runs it every time.
+//
 // What this deliberately does NOT do: recommend a disposition, pick a merge strategy, or render
 // a user-facing report — it prints machine summaries plus which judgment is due and the
 // evidence paths; report assembly stays with the session via report-render.js. It never asserts
@@ -88,6 +96,8 @@ const crypto = require('crypto')
 const { runChild, runHost, writeOut, appendLedger: appendLedgerLib, loadSidecar, saveSidecar: saveSidecarLib } = require('./lib/driver-io')
 const { fmBlock, fmValue, fmMap } = require('./lib/frontmatter')
 const { readConfig, readPipelineRules, policy, agentCall, CONFIG_RELPATH } = require('./lib/host-config')
+const runCache = require('./lib/run-cache')
+const { computeTestsExecuted, computeSkips } = require('./lib/count-observation')
 // The close-time gate re-run shares review-legs.js's own {testDirs}/{scopeDirs} resolution.
 const { resolveGate, gateRunsSuite } = require('./lib/gate-resolve')
 // Model is derived at row-write time, never once at startup (a fresh /clear transcript has none).
@@ -479,45 +489,21 @@ function treeDirty() {
 // sidecar itself is excluded via a negative pathspec, or every driver write would appear in a fix's
 // delta and the scratch index would try to add its own lock file.
 function snapshotTree() {
-  fs.mkdirSync(sidecarDir, { recursive: true })
-  const indexFile = path.join(sidecarDir, 'snap-index')
-  const env = Object.assign({}, process.env, { GIT_INDEX_FILE: indexFile })
   try {
-    // A sidecar already gitignored makes the negative pathspec an ignored path, which `git add`
-    // refuses — the exclusion is carried only when the sidecar is NOT already ignored.
-    const ignoredR = runChild('git', ['-C', repoRoot, 'check-ignore', '-q', sidecarRel],
-      { encoding: 'utf8' }, 'git check-ignore (sidecar already ignored?)')
-    // Seeded from HEAD: against an empty index a tracked-but-gitignored file (a committed
-    // .claude/settings.local.json, an older committed *.review/ folder) reads as untracked and
-    // ignored, so `add -A` drops it and every diff against the snapshot counts it as deleted.
-    const seedR = runChild('git', ['-C', repoRoot, 'read-tree', 'HEAD'], { encoding: 'utf8', env },
-      'git read-tree HEAD (seed the scratch index)')
-    if (seedR.status !== 0) {
-      die('git read-tree HEAD into a scratch index failed (exit ' + seedR.status + '): ' +
-        (seedR.stderr || seedR.stdout).trim())
-    }
-    // A sidecar committed in HEAD would ride in on the seed, and an ignored sidecar carries no
-    // exclude pathspec — drop it so the driver's own writes never appear in a delta.
-    runChild('git', ['-C', repoRoot, 'rm', '--cached', '-r', '-q', '--ignore-unmatch', '--', sidecarRel],
-      { encoding: 'utf8', env }, 'git rm --cached (sidecar out of the scratch index)')
-    const addArgs = ['-C', repoRoot, 'add', '-A', '--', '.']
-    if (ignoredR.status !== 0) addArgs.push(':(exclude)' + sidecarRel)
-    const addR = runChild('git', addArgs,
-      { encoding: 'utf8', env }, 'git add -A (scratch-index tree snapshot)')
-    if (addR.status !== 0) {
-      die('git add -A into a scratch index failed (exit ' + addR.status + '): ' +
-        (addR.stderr || addR.stdout).trim())
-    }
-    const wtR = runChild('git', ['-C', repoRoot, 'write-tree'], { encoding: 'utf8', env },
-      'git write-tree (scratch-index tree snapshot)')
-    const sha = (wtR.stdout || '').trim()
-    if (wtR.status !== 0 || !SHA40_RE.test(sha)) {
-      die('git write-tree against the scratch index did not print a 40-hex tree sha (exit ' +
-        wtR.status + '): ' + (wtR.stderr || wtR.stdout).trim())
-    }
-    return sha
-  } finally {
-    fs.rmSync(indexFile, { force: true })
+    return runCache.treeSha(repoRoot, { exclude: [sidecarRel] })
+  } catch (e) {
+    die(e.message + ' — fix the repo state, then re-run this driver')
+  }
+}
+
+// The run-cache key tree: snapshotTree's derivation with the pipeline's own write paths (ledger,
+// retained evidence, agent memory) excluded as well, so a ledger row appended between two stages'
+// gates does not change it.
+function cacheTreeNow() {
+  try {
+    return runCache.cacheTree(repoRoot, [sidecarRel])
+  } catch (e) {
+    die(e.message + ' — fix the repo state, then re-run this driver')
   }
 }
 
@@ -610,6 +596,9 @@ function runLegs(n, opts = {}) {
   if (opts.reuseFrom) args.push('--reuse-from', opts.reuseFrom)
   marks.legsTree = marks.legsTree || {}
   marks.legsTree[String(n)] = opts.tree || snapshotTree()
+  marks.cacheTree = marks.cacheTree || {}
+  marks.cacheTree[String(n)] = cacheTreeNow()
+  args.push('--tree', marks.cacheTree[String(n)])
   saveSidecar()
   const r = runChild(process.execPath, [legsBin, ...args], { encoding: 'utf8' }, 'review-legs.js')
   if (r.status === 2) {
@@ -1496,18 +1485,30 @@ function runCloseTimeGate() {
       'Plan, then re-run `node ' + __filename + ' ' + specPath + ' --mark closed`')
   }
   // The resolved-gate re-run, then the testCommand re-run — skipped only when gateRunsSuite() proves
-  // the gate just ran it.
-  const r = runHost(resolved.gate, { cwd: repoRoot, encoding: 'utf8' },
-    'close-time host gate (' + resolved.gate + ')')
-  if (r.status !== 0) {
+  // the gate just ran it. The gate is looked up in the run cache over the close tree first.
+  const closeTree = cacheTreeNow()
+  const caps = gateConfig.capabilities || {}
+  const recordGreen = (cmd, output) => runCache.record(repoRoot, cmd, closeTree, {
+    exit: 0,
+    observed: { ...computeSkips(output, caps.skipReportPattern), testsExecuted: computeTestsExecuted(output, caps.testCountPattern) },
+  })
+  const gateHit = runCache.lookup(repoRoot, resolved.gate, closeTree)
+  if (gateHit && gateHit.observed && typeof gateHit.observed.testsExecuted === 'number') {
+    console.log('close-time gate: reused cache:' + closeTree.slice(0, 7))
+  } else {
+    const r = runHost(resolved.gate, { cwd: repoRoot, encoding: 'utf8' },
+      'close-time host gate (' + resolved.gate + ')')
     const output = (r.stdout || '') + (r.stderr || '')
-    die('gate red at close — ' + resolved.gate + ' exited ' + r.status + ' over the committed ' +
-      'close tree.\n' +
-      'Check WHICH path the gate names first: the pipeline\'s own artifacts under ' +
-      '.claude/ (ledger, retained evidence, config) are in the rule surface but this driver ' +
-      'wrote them — a finding against one is a plugin defect to report, never a file to edit.\n' +
-      'Fix the session-written files, commit the fix, then re-run `node ' + __filename + ' ' +
-      specPath + ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
+    if (r.status !== 0) {
+      die('gate red at close — ' + resolved.gate + ' exited ' + r.status + ' over the committed ' +
+        'close tree.\n' +
+        'Check WHICH path the gate names first: the pipeline\'s own artifacts under ' +
+        '.claude/ (ledger, retained evidence, config) are in the rule surface but this driver ' +
+        'wrote them — a finding against one is a plugin defect to report, never a file to edit.\n' +
+        'Fix the session-written files, commit the fix, then re-run `node ' + __filename + ' ' +
+        specPath + ' --mark closed`.\n--- last 40 lines of gate output ---\n' + tailLines(output, 40))
+    }
+    recordGreen(resolved.gate, output)
   }
   if (gateRunsSuite(gateConfig.gateCommand, resolved.gate, gateConfig.testCommand)) {
     console.log('close-time suite: reused the gate run (' + resolved.gate + ')')
@@ -1519,17 +1520,46 @@ function runCloseTimeGate() {
       ' under ' + repoRoot + ' — add testCommand to the host config, then re-run `node ' + __filename +
       ' ' + specPath + ' --mark closed`')
   }
+  if (closeSuiteSkippable(gateConfig.testCommand)) {
+    console.log('close-time suite: skipped — close delta is overlay-only and no test reads it (policy.closeSuite: auto)')
+    return
+  }
 
   const sr = runHost(gateConfig.testCommand, { cwd: repoRoot, encoding: 'utf8' },
     'close-time whole-suite (' + gateConfig.testCommand + ')')
-  if (sr.status === 0) return
-
   const output = (sr.stdout || '') + (sr.stderr || '')
+  if (sr.status === 0) { recordGreen(gateConfig.testCommand, output); return }
+
   die('suite red at close — ' + gateConfig.testCommand + ' exited ' + sr.status + ' over the ' +
     'committed close tree.\n' +
     'The files written at CLOSE (canonical doc, rules fold) are inside ' +
     'the host\'s rule surface; fix them, commit the fix, then re-run `node ' + __filename + ' ' +
     specPath + ' --mark closed`.\n--- last 40 lines of suite output ---\n' + tailLines(output, 40))
+}
+
+// policy.closeSuite: auto — true only when every leg of the conjunction holds: the close delta
+// against the judged tree is read (refuseCloseTreeDrift already proved every path in it is overlay
+// or skipped), scope-reconcile's stem scan finds no test file naming a changed path, and the judged
+// tree's suite is green in the run cache. Any probe failure or miss answers false (the suite runs).
+function closeSuiteSkippable(testCommand) {
+  if (policy(repoRoot).closeSuite !== 'auto') return false
+  const judged = marks.judgedTree
+  const cached = marks.cacheTree && marks.cacheTree[String(marks.iteration)]
+  if (!SHA40_RE.test(judged || '') || !SHA40_RE.test(cached || '')) return false
+  const hit = runCache.lookup(repoRoot, testCommand, cached)
+  if (!hit || !hit.observed || typeof hit.observed.testsExecuted !== 'number') return false
+  const d = runChild('git', ['-C', repoRoot, 'diff', '--name-only', judged, 'HEAD'], { encoding: 'utf8' },
+    'git diff --name-only (close delta against the judged tree)')
+  if (d.status !== 0) return false
+  fs.mkdirSync(sidecarDir, { recursive: true })
+  const listFile = path.join(sidecarDir, 'close-overlay.txt')
+  fs.writeFileSync(listFile, d.stdout)
+  const probe = runChild(process.execPath, [path.join(PLUGIN, 'scripts/scope-reconcile.js'),
+    '--probe-at-risk', listFile, '--root', repoRoot], { encoding: 'utf8' }, 'scope-reconcile.js --probe-at-risk')
+  if (probe.status !== 0) return false
+  let refs
+  try { refs = JSON.parse(probe.stdout).refs } catch { return false }
+  return refs === 0
 }
 
 // ---- re-stamp the build row's deviations count at close ----

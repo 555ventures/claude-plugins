@@ -202,7 +202,7 @@ if (sub === 'policy-check') {
 if (sub === 'gate-check') {
   const cfg = readConfig(root)
   const raw = cfg.gateCommand
-  const scoped = typeof raw === 'string' && /\{testDirs\}|\{scopeDirs\}/.test(raw)
+  const scoped = typeof raw === 'string' && /\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(raw)
   const resolved = typeof raw === 'string' ? resolveGate('', cfg) : { gate: null }
   const out = {
     scoped,
@@ -329,7 +329,7 @@ try {
 
 validateProfile(profile)
 
-if (!/\{testDirs\}|\{scopeDirs\}/.test(profile.config.gateCommand)) {
+if (!/\{testDirs\}|\{scopeDirs\}|\{testFiles\}/.test(profile.config.gateCommand)) {
   console.error('init-gen: gateCommand is unscoped — every build iteration and the review gate run the whole suite; put {testDirs} where the test runner takes its paths, or accept this when the runner takes none')
 }
 

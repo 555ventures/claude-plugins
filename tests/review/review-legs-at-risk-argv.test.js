@@ -86,7 +86,9 @@ function makeHost({ exitCode = 0 } = {}) {
     `process.exit(${exitCode})\n`)
   fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify({
     gateCommand: 'node --test {testDirs}',
-    testCommand: `node ${JSON.stringify(path.join(dir, 'bin/recorder.js'))}`,
+    // specs/20261103/12-one-suite-run-per-tree.md D14: a {file} testCommand has no bare suite run,
+    // so the at-risk leg keeps spawning the recorder (a green counted suite would be reused instead).
+    testCommand: `node ${JSON.stringify(path.join(dir, 'bin/recorder.js'))} {file}`,
     runtime: { inert: 'plugin repo — nothing boots' },
     capabilities: { forge: 'none', skipReportPattern: 'ℹ skipped (\\d+)' },
   }))

@@ -34,6 +34,8 @@ const { parseFilePlan } = require('./lib/file-plan')
 const { extractSection } = require('./lib/spec-sections')
 const { fmValue } = require('./lib/frontmatter')
 const { resolveGate } = require('./lib/gate-resolve')
+const runCache = require('./lib/run-cache')
+const { computeTestsExecuted, computeSkips } = require('./lib/count-observation')
 const { readLaneExit } = require('./pending-question')
 const { originLine } = require('./lib/queue')
 const { parseBrief, relateBriefs, briefNum } = require('./lib/brief')
@@ -450,10 +452,27 @@ function runGate(l) {
     if (!gate) why = `gate unavailable — ${r.reason}; run it by hand`
   }
   if (!gate) return { result: null, log: null, why }
-  const r = runHost(gate, { cwd: root, encoding: 'utf8' }, `the gate after merging ${l.id}`)
   fs.mkdirSync(WORK_DIR, { recursive: true })
   const log = path.join(WORK_DIR, `${l.id}.gate.log`)
-  fs.writeFileSync(log, `$ ${gate}\n${r.stdout || ''}${r.stderr || ''}`)
+  // The merged main tree may be one a lane's review already judged green: reuse that run (a red is
+  // never recorded), else spawn and record a green counted one (specs/20261103/12 D9).
+  let tree = null
+  try { tree = runCache.cacheTree(root, []) } catch (e) { tree = null }
+  const hit = tree ? runCache.lookup(root, gate, tree) : null
+  if (hit) {
+    fs.writeFileSync(log, `$ ${gate}\n== reused cache:${tree.slice(0, 7)}\n`)
+    return { result: 'green', log, why: null }
+  }
+  const r = runHost(gate, { cwd: root, encoding: 'utf8' }, `the gate after merging ${l.id}`)
+  const output = `${r.stdout || ''}${r.stderr || ''}`
+  fs.writeFileSync(log, `$ ${gate}\n${output}`)
+  if (tree && r.status === 0) {
+    const caps = cfg.capabilities || {}
+    runCache.record(root, gate, tree, {
+      exit: 0,
+      observed: { ...computeSkips(output, caps.skipReportPattern), testsExecuted: computeTestsExecuted(output, caps.testCountPattern) },
+    })
+  }
   return { result: r.status === 0 ? 'green' : 'red', log, why: null }
 }
 

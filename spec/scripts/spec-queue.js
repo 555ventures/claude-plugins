@@ -31,6 +31,12 @@
 //   groom                         read-only: duplicates · cites done · gate met · stale buckets
 //   add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>]
 //                  [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--distinct]
+//                  [--origin <spec path> --stage build|review|fanout|plan]
+//                  [--trigger red-leg|repair-separate|close-followup|stopped|gate-red|gap]
+//                  --origin/--stage travel together and stamp who queued the item; `batch` is
+//                  stamped from a live fan-out table; a bare add inside a fan-out lane derives
+//                  --origin from the table
+//                  ; --trigger is never derived
 //                  --lane is required for free text and refused for a brief/spec; the lane
 //                  writes the command, so a free-text payload never opens with one
 //   move <ref> <n>                n counts pending positions as `list` prints them
@@ -49,7 +55,8 @@
 //   on add (names `spec-queue move <ref> <n>`), a missing --after-spec/--after-brief target,
 //   a removed verb/flag (names its replacement), an unknown --flag on any subcommand, a
 //   near-duplicate prompt on add (names the matching id and `--distinct`), `move`/`done` on an
-//   archived id, or a corrupt queue file (remove <git-common-dir>/spec-queue.json, re-run
+//   archived id, an --origin naming no spec file, --origin without --stage or the reverse, an
+//   unknown --stage/--trigger (each names the accepted words), or a corrupt queue file (remove <git-common-dir>/spec-queue.json, re-run
 //   `next`) or archive file (remove or repair <git-common-dir>/spec-queue-done.json)
 //   · 3 not a git repository (run inside it).
 
@@ -61,7 +68,9 @@ const {
   normBrief, isSupersededBriefText, isItemDone, isItemReady, makeCtx,
   dedupeItems, reconcileMissingBriefs,
   promptDupScore, citesDoneSpec, LANES, promptAction,
+  STAGES, TRIGGERS, originLine,
 } = require('./lib/queue')
+const { isDelegated } = require('./pending-question')
 
 const SPEC_STATUS = path.join(__dirname, 'spec-status.js')
 
@@ -69,6 +78,7 @@ function usage() {
   console.error('usage: spec-queue.js <next|list|groom|add|move|done|show> [args]')
   console.error('  next | list | groom')
   console.error('  add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--distinct]')
+  console.error('      [--origin <spec path> --stage build|review|fanout|plan] [--trigger red-leg|repair-separate|close-followup|stopped|gate-red|gap]')
   console.error('  move <ref> <n> | done <ref> | show <ref>')
 }
 
@@ -146,6 +156,27 @@ const ARCHIVE_PATH = path.join(common, 'spec-queue-done.json')
 const DUP_THRESHOLD = 0.35
 const STALE_DAYS = 14
 
+// The live fan-out table (<git-common-dir>/spec-fanout.json), or null when absent/unparseable.
+function fanoutTable() {
+  try {
+    const t = JSON.parse(fs.readFileSync(path.join(common, 'spec-fanout.json'), 'utf8'))
+    return t && typeof t === 'object' ? t : null
+  } catch (_) { return null }
+}
+
+// A bare add inside a fan-out lane names the lane's own spec; the stage is read off the
+// lane's disk (a review sidecar means the review stage). Never derives a trigger.
+function laneOrigin(table) {
+  if (!table || !Array.isArray(table.lanes) || !isDelegated(root)) return null
+  const br = spawnSync('git', ['-C', root, 'rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' })
+  const branch = br.status === 0 ? br.stdout.trim() : null
+  const lane = branch && table.lanes.find(l => l && l.branch === branch && typeof l.spec === 'string')
+  if (!lane) return null
+  const stem = lane.spec.replace(/\.md$/, '')
+  const review = fs.existsSync(path.join(root, `${stem}.review`, 'review-state.json'))
+  return { spec: lane.spec, stage: review ? 'review' : 'build' }
+}
+
 function readSpecStatusJson() {
   const r = spawnSync(process.execPath, [SPEC_STATUS, '--root', root, '--json'], { encoding: 'utf8' })
   if (r.error || r.status !== 0) {
@@ -216,6 +247,12 @@ const { writeOut: syncWrite } = require('./lib/sync-write')
 // stdout for payloads: spec/scripts/lib/sync-write.js's header explains the pipe truncation and EPIPE handling.
 function out(text) {
   syncWrite(1, text + '\n')
+}
+
+// `show`'s provenance line: the origin line plus the batch stamp; null for an old item.
+function originText(it) {
+  const l = originLine(it)
+  return l ? l + (it.batch ? ` · batch ${it.batch}` : '') : null
 }
 
 function archivedItem(ref) {
@@ -475,7 +512,7 @@ switch (sub) {
   }
 
   case 'add': {
-    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null, distinct: false, lane: null }
+    const flags = { when: null, top: false, at: null, afterSpec: null, afterBrief: null, distinct: false, lane: null, origin: null, stage: null, trigger: null }
     const payloadParts = []
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i]
@@ -486,16 +523,40 @@ switch (sub) {
       else if (a === '--after-brief') flags.afterBrief = rest[++i]
       else if (a === '--when') flags.when = rest[++i]
       else if (a === '--lane') flags.lane = rest[++i]
+      else if (a === '--origin') flags.origin = rest[++i]
+      else if (a === '--stage') flags.stage = rest[++i]
+      else if (a === '--trigger') flags.trigger = rest[++i]
       // An unrecognized --flag never folds into the payload: that silently turns a spec path into a
       // free-text prompt item (observed: `add specs/x.md --root /abs` landed as kind "prompt").
       // spec-queue takes no --root — the queue is keyed off the cwd's git common dir; run it from the repo root.
-      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --lane <lane> | --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args> | --distinct`); process.exit(2) }
+      else if (/^--/.test(a)) { console.error(`spec-queue: add: unknown flag ${a} — spec-queue takes no --root (run from the repo root); flags: --lane <lane> | --top | --at <n> | --after-spec <path> | --after-brief NN | --when <type>:<args> | --distinct | --origin <spec path> --stage ${STAGES.join('|')} | --trigger ${TRIGGERS.join('|')}`); process.exit(2) }
       else payloadParts.push(a)
     }
     const payload = payloadParts.join(' ')
     if (!payload) { console.error('spec-queue: add needs a payload (a brief number, a spec path, or free text)'); process.exit(2) }
     if (flags.top && flags.at !== null) { console.error('spec-queue: add takes --top or --at <n>, never both'); process.exit(2) }
     if (flags.afterSpec && flags.afterBrief) { console.error('spec-queue: add takes --after-spec or --after-brief, never both'); process.exit(2) }
+
+    // Provenance flags — every refusal happens before any write.
+    if ((flags.origin === null) !== (flags.stage === null)) {
+      console.error('spec-queue: --origin and --stage travel together — pass both or neither')
+      process.exit(2)
+    }
+    if (flags.stage !== null && !STAGES.includes(flags.stage)) {
+      console.error(`spec-queue: --stage "${flags.stage}" — one of ${STAGES.join('|')}`)
+      process.exit(2)
+    }
+    if (flags.trigger !== null && !TRIGGERS.includes(flags.trigger)) {
+      console.error(`spec-queue: --trigger "${flags.trigger}" — one of ${TRIGGERS.join('|')}`)
+      process.exit(2)
+    }
+    if (flags.origin !== null && !fs.existsSync(path.join(root, flags.origin))) {
+      console.error(`spec-queue: --origin ${flags.origin}: no such spec file`)
+      process.exit(2)
+    }
+    const table = fanoutTable()
+    const origin = flags.origin !== null ? { spec: flags.origin, stage: flags.stage } : laneOrigin(table)
+    const batch = table && typeof table.startedAt === 'string' ? table.startedAt : null
 
     const statusJson = readSpecStatusJson() // read-only — never touches the queue file
 
@@ -610,6 +671,9 @@ switch (sub) {
       }
     }
     if (after) newItem.after = after
+    if (origin) newItem.origin = origin
+    if (flags.trigger) newItem.trigger = flags.trigger
+    if (batch) newItem.batch = batch
 
     let placed
     if (flags.top) placed = [newItem, ...items]
@@ -675,7 +739,8 @@ switch (sub) {
     if (!ref) { console.error('spec-queue: show needs a <ref>'); process.exit(2) }
     const archived = archivedItem(ref)
     if (archived) {
-      out(`${archived.id}  ${archived.kind} · done (archived)\n\n${archived.kind === 'prompt' ? promptAction(archived) : itemDesc(archived, new Map())}`)
+      const aot = originText(archived)
+      out(`${archived.id}  ${archived.kind} · done (archived)\n${aot ? aot + '\n' : ''}\n${archived.kind === 'prompt' ? promptAction(archived) : itemDesc(archived, new Map())}`)
       process.exit(0)
     }
     const statusJson = readSpecStatusJson()
@@ -691,6 +756,8 @@ switch (sub) {
       const r = isItemReady(item, ctx)
       console.log(r.ready ? '⏳ gate met' : `⏳ after ${r.target} (${r.state})`)
     }
+    const ot = originText(item)
+    if (ot) console.log(ot)
     console.log('')
     console.log(item.kind === 'prompt' ? promptAction(item) : itemDesc(item, briefNameByNum))
     process.exit(0)

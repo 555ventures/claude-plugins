@@ -1277,12 +1277,12 @@ function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null, config = 
   return { dir, wt, git }
 }
 
-test('AC-20261102-03-1: --lanes --json prints the admitted run lanes with branch and worktree, holds back the shared-brief spec with its reason, and resolves a top-ranked spec\'s linked worktree', () => {
+test('AC-20261102-03-1 / AC-20261103-08-8: --lanes --json prints the admitted run lanes with branch and worktree, holds back the shared-brief spec with its reason, and resolves a top-ranked spec\'s linked worktree', () => {
   const h = lanesHost()
   const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
   assert.strictEqual(r.status, 0, '--lanes --json must be a mode of spec-status, or the fan-out has no machine surface for the lanes: ' + r.stderr)
   const out = JSON.parse(r.stdout)
-  assert.deepStrictEqual(Object.keys(out).sort(), ['fixes', 'lanes', 'serialized'], 'the mode prints exactly lanes, serialized and fixes, or a consumer reads a shape nobody pinned')
+  assert.deepStrictEqual(Object.keys(out).sort(), ['born', 'fixes', 'lanes', 'serialized'], 'the mode prints exactly lanes, serialized, fixes and born, or a consumer reads a shape nobody pinned')
   assert.deepStrictEqual(out.lanes.map(l => [l.path, l.brief, l.branch, l.worktree]), [
     ['specs/20261102/03-x.md', '32', 'spec/03-x', null],
     ['specs/20261102/04-z.md', '33', 'spec/04-z', null],
@@ -1413,7 +1413,7 @@ test('AC-20261103-06-3: --next --json marks a brief n/a runner-up with a disjoin
   assert.strictEqual(by['specs/20260710/06-bare.md'].parallel, null, 'a spec with no File Plan makes no claim, or the dashboard guesses from an empty table')
 })
 
-test('AC-20261103-06-4: --lanes --json admits the disjoint briefless specs, serializes the one overlapping an admitted lane with the overlap reason, and the dashboard 🔶 line still names README.md', () => {
+test('AC-20261103-06-4 / AC-20261103-08-8: --lanes --json admits the disjoint briefless specs, serializes the one overlapping an admitted lane with the overlap reason, and the dashboard 🔶 line still names README.md', () => {
   const specs = {
     '20261102/08-a.md': adhoc(['src/a.js', 'README.md']),
     '20261102/09-b.md': adhoc(['src/b.js', 'src/shared.js', 'README.md']),
@@ -1428,12 +1428,12 @@ test('AC-20261103-06-4: --lanes --json admits the disjoint briefless specs, seri
   assert.deepStrictEqual(out.serialized, [{ path: 'specs/20261102/10-c.md', brief: null, reason: 'File Plan overlap: src/shared.js' }],
     'the spec overlapping an admitted lane must be held back with the overlap reason: ' + r.stdout)
   assert.deepStrictEqual(Object.keys(out.lanes[0]).sort(), ['action', 'branch', 'brief', 'note', 'path', 'status', 'worktree'], 'lane keys are frozen, or the driver reads a missing field')
-  assert.deepStrictEqual(Object.keys(out).sort(), ['fixes', 'lanes', 'serialized'], 'top-level keys are frozen, or a consumer reads an unpinned shape')
+  assert.deepStrictEqual(Object.keys(out).sort(), ['born', 'fixes', 'lanes', 'serialized'], 'top-level keys are frozen, or a consumer reads an unpinned shape')
   const bare = runNode(SCRIPT, ['--root', h.dir])
   assert.match(bare.stdout, /🔶[^\n]*README\.md/, 'the heads-up reports raw overlap including exempt paths, or the real merge-back conflict goes unannounced: ' + bare.stdout)
 })
 
-test('AC-20261103-06-6: --lanes --json fixes entries carry exactly action, path, note, queue_id, after, with the after-spec path for a queued item and null otherwise', () => {
+test('AC-20261103-06-6 / AC-20261103-08-8: --lanes --json fixes entries carry exactly action, path, note, queue_id, after and the six provenance, files, overlaps and blocker keys, with the after-spec path for a queued item and null otherwise', () => {
   const h = lanesHost({
     extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
     ledgerSpec: 'specs/20261102/01-base.md',
@@ -1445,10 +1445,63 @@ test('AC-20261103-06-6: --lanes --json fixes entries carry exactly action, path,
   const out = JSON.parse(runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json']).stdout)
   assert.strictEqual(out.fixes.length, 3, 'two queued fixes and one CI escape must all be listed: ' + JSON.stringify(out.fixes))
   for (const f of out.fixes) {
-    assert.deepStrictEqual(Object.keys(f).sort(), ['action', 'after', 'note', 'path', 'queue_id'], 'every fixes entry carries the after key, or the driver must open the queue file itself')
+    assert.deepStrictEqual(Object.keys(f).sort(), ['action', 'after', 'batch', 'blocker', 'files', 'note', 'origin', 'overlaps', 'path', 'queue_id', 'trigger'], 'every fixes entry carries the after key and the provenance, files, overlaps and blocker keys, or the driver must open the queue file itself')
   }
   const by = (id) => out.fixes.find(f => f.queue_id === id)
   assert.strictEqual(by('q107').after, null, 'a queued fix with no after is null, or the driver admits it behind a lane it never waited on')
   assert.strictEqual(by('q108').after, 'specs/20261102/03-x.md', 'a queued fix names its after-spec path, or born fixes cannot join the batch')
   assert.strictEqual(by(null).after, null, 'a CI escape has no after, or it is admitted as a born fix')
+})
+
+// specs/20261103/08-queue-items-remember-their-origin.md D4/D13/D15: `--lanes --json` fixes[]
+// carry provenance, named files, overlaps and the gate blocker; `born` lists every item carrying provenance.
+
+test('AC-20261103-08-8: --lanes --json fixes carry origin, trigger and batch (null for an unmarked item and a CI escape) and born lists exactly the provenance-carrying undone items in queue order', () => {
+  const batch = '2026-11-02T12:00:00.000Z'
+  const h = lanesHost({
+    extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
+    ledgerSpec: 'specs/20261102/01-base.md',
+    queue: [
+      { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
+      { id: 'q120', kind: 'prompt', lane: 'fix', payload: 'repair the export after review', origin: { spec: 'specs/20261102/03-x.md', stage: 'review' }, trigger: 'close-followup', batch, added: '2026-11-02T10:03:00Z' },
+      { id: 'q121', kind: 'prompt', lane: 'plan', payload: 'split the render', origin: { spec: 'specs/20261102/03-x.md', stage: 'plan' }, trigger: 'gap', batch, added: '2026-11-02T10:04:00Z' },
+    ],
+  })
+  const out = JSON.parse(runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json']).stdout)
+  assert.deepStrictEqual(Object.keys(out).sort(), ['born', 'fixes', 'lanes', 'serialized'], 'the top level grows exactly born, or a consumer reads an unpinned shape')
+  assert.deepStrictEqual(Object.keys(out.lanes[0]).sort(), ['action', 'branch', 'brief', 'note', 'path', 'status', 'worktree'], 'lane keys stay unchanged, or the fan-out reads a field that moved')
+  for (const f of out.fixes) {
+    assert.deepStrictEqual(Object.keys(f).sort(), ['action', 'after', 'batch', 'blocker', 'files', 'note', 'origin', 'overlaps', 'path', 'queue_id', 'trigger'],
+      'every fixes entry carries exactly the eleven keys, or the driver must open the queue file itself: ' + JSON.stringify(f))
+  }
+  const by = (id) => out.fixes.find((f) => f.queue_id === id)
+  for (const f of [by('q107'), by(null)]) {
+    assert.deepStrictEqual([f.origin, f.trigger, f.batch], [null, null, null], 'an unmarked item and a CI escape read origin unknown, or an old item is admitted as a birth: ' + JSON.stringify(f))
+  }
+  assert.deepStrictEqual([by('q120').origin, by('q120').trigger, by('q120').batch],
+    [{ spec: 'specs/20261102/03-x.md', stage: 'review' }, 'close-followup', batch], 'a born fix carries its provenance verbatim, or the driver cannot admit it by origin')
+  assert.strictEqual(by('q121'), undefined, 'a plan item is never a fix entry, or a planner birth joins a fix lane')
+  assert.deepStrictEqual(out.born, [
+    { id: 'q120', action: out.born[0] && out.born[0].action, origin: { spec: 'specs/20261102/03-x.md', stage: 'review' }, trigger: 'close-followup', batch },
+    { id: 'q121', action: out.born[1] && out.born[1].action, origin: { spec: 'specs/20261102/03-x.md', stage: 'plan' }, trigger: 'gap', batch },
+  ], 'born lists every provenance-carrying item in queue order and omits q107, or REPORT cannot head the queue with the births: ' + JSON.stringify(out.born))
+  assert.ok(/^\/spec:fix /.test(out.born[0].action) && /^\/spec:plan /.test(out.born[1].action), 'born carries each item paste line, or the REPORT prints no command: ' + JSON.stringify(out.born))
+})
+
+test('AC-20261103-08-20: --lanes --json derives each fix item named files, the open specs whose File Plan names them, and the unmet after-gate blocker', () => {
+  const h = lanesHost({
+    extraSpecs: { '20261102/03-x.md': { fm: 'date: 2026-11-02\nstatus: hardened\nbrief: 32', body: planBody(['src/a.js', 'src/shared.js']) } },
+    queue: [
+      { id: 'q130', kind: 'prompt', lane: 'fix', payload: 'repair src/shared.js after the export change', added: '2026-11-02T10:00:00Z' },
+      { id: 'q131', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:01:00Z' },
+      { id: 'q132', kind: 'prompt', lane: 'fix', payload: 'tidy src/b.js', after: { spec: 'specs/20261102/03-x.md' }, added: '2026-11-02T10:02:00Z' },
+    ],
+  })
+  fs.mkdirSync(path.join(h.dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(h.dir, 'src/b.js'), '// b\n')
+  const out = JSON.parse(runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json']).stdout)
+  const triple = (id) => { const f = out.fixes.find((x) => x.queue_id === id); return [f.files, f.overlaps, f.blocker] }
+  assert.deepStrictEqual(triple('q130'), [['src/shared.js'], ['specs/20261102/03-x.md'], null], 'a fix naming a planned file overlaps the open spec that plans it, or it runs beside a lane that edits the same file')
+  assert.deepStrictEqual(triple('q131'), [null, [], null], 'a fix naming no file has files null and no overlaps, or it is mistaken for a free lane')
+  assert.deepStrictEqual(triple('q132'), [['src/b.js'], [], 'after specs/20261102/03-x.md (hardened)'], 'a gated fix carries its unmet gate as the blocker, or the driver dispatches it early')
 })

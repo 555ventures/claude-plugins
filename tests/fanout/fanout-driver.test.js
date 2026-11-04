@@ -10,6 +10,7 @@ const { fanoutHost, askBlocks, specRel, LANE_AGENT, repairRoundDoc, dispositions
 // fanout-driver.js is driven end to end against a synthetic host (tests/fanout/fixture.js); every
 // state is reached through the driver's own marks and read back from its state file.
 // specs/20261103/06-the-fan-out-drains-the-queue.md D4-D7, D12: the derived batch, --batch, born fixes, the REPORT after a batch and the RELAY/MERGE-before-DISPATCH order.
+// specs/20261103/08-queue-items-remember-their-origin.md D5-D6, D9-D10, D12, D14-D17: a fix is admitted by the origin and batch its item carries, the batch walk, files-aware fix dispatch, gated fixes, the repair lane and the dirty-root refusal.
 // q28: a lane's laneExit outlives the sidecar delete its own step prints (pending-question.js lane-exit record).
 
 const S03 = specRel('03-x')
@@ -378,7 +379,7 @@ test('AC-20261102-03-16: --mark merged refuses a branch that is not contained in
   assert.deepStrictEqual([h.lane('L1').gate, h.lane('L1').state], ['green', 'merged'], 'a green gate lands the lane as merged')
 })
 
-test('AC-20261102-03-17: a red gate after a merge enters MERGE_RED, queues the fix, refuses every further merge, and gate-repaired clears it', () => {
+test('AC-20261102-03-17: a red gate after a merge enters MERGE_RED, queues the fix, refuses every further merge, and gate-repaired clears it, AC-20261103-08-14', () => {
   const h = fanoutHost()
   h.dispatchedPair()
   for (const stem of ['03-x', '04-z']) {
@@ -396,6 +397,7 @@ test('AC-20261102-03-17: a red gate after a merge enters MERGE_RED, queues the f
   assert.ok(r.stdout.includes('## MERGE_RED — main gate red after L1'), 'the red gate stops the queue with its own header: ' + r.stdout + r.stderr)
   assert.ok(r.stdout.includes(log), 'the log path is printed: ' + r.stdout)
   assert.ok(r.stdout.includes('node "$(spec-paths spec-queue)" add "main gate red after merging L1: ' + log + '" --lane fix --top'), 'the repair is queued on top: ' + r.stdout)
+  assert.ok(r.stdout.includes('--top --origin ' + S03 + ' --stage fanout --trigger gate-red'), 'the printed add line must carry the red lane\'s origin, the fanout stage and the gate-red trigger, or the birth cannot be tied to this run: ' + r.stdout)
   assert.strictEqual(h.lane('L1').gate, 'red', 'the lane records the red gate')
   assert.deepStrictEqual(h.state().lastGate, { lane: 'L1', result: 'red', log }, 'lastGate drives MERGE_RED on every later run')
   const second = h.run(['--mark', 'merged', '--lane', 'L2'])
@@ -531,13 +533,16 @@ function fixMergedHost() {
   return h
 }
 
-test('fanout: a red gate after merging a fix lane (AC-20261103-06-21) prints MERGE_RED on that same mark, never a dispatch block for the next planned fix lane', () => {
+test('fanout: a red gate after merging a fix lane (AC-20261103-06-21 / AC-20261103-08-15) prints MERGE_RED on that same mark, never a dispatch block for the next planned fix lane', () => {
   const h = fixMergedHost()
   h.gateRed(true)
   const r = h.run(['--mark', 'merged', '--lane', 'F1'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.ok(r.stdout.includes('## MERGE_RED — main gate red after F1'), 'a red main must stop the queue at once: ' + r.stdout)
   assert.ok(!r.stdout.includes('## Step: dispatch'), 'F2 must never be dispatched onto a red main: ' + r.stdout)
+  assert.match(r.stdout, /--top --trigger gate-red$/m, 'a queued fix lane has no spec, so its add line carries the trigger only: ' + r.stdout)
+  const addLine = r.stdout.split('\n').find((x) => x.includes('add "main gate red after merging F1'))
+  assert.ok(addLine && !addLine.includes('--stage') && !addLine.includes('--origin'), 'a spec-less lane passes neither --origin nor --stage: ' + addLine)
   assert.match(h.must([]).stdout, /state: MERGE_RED/, 'the bare run agrees')
 })
 
@@ -651,36 +656,276 @@ test('AC-20261103-06-13: --batch all tables every unblocked entry with no bounda
   assert.ok(!fs.existsSync(none.stateFile), 'a refused --batch must write no state file')
 })
 
-test('AC-20261103-06-15: a green merge appends the fix queued after the merged member and promotes the waiting lane, leaving the fix queued after an outside spec alone', () => {
+const BORN = { origin: S03, stage: 'review', trigger: 'close-followup' }
+
+test('AC-20261103-06-15 / AC-20261103-08-9: a green merge appends the fix born of the merged member and promotes the waiting lane, leaving the fix queued after it and the one queued after an outside spec alone', () => {
   const h = fanoutHost({ bornFix: true })
   h.must([])
   h.must(['--mark', 'planned'])
   const [l1, l2] = [idOf(h, S03), idOf(h, S06)]
+  const born = h.born('fix export after x', BORN)
   h.dispatch(l1, 'lane-one')
   landLane(h, '03-x', l1)
   const lanes = h.state().lanes
   const f1 = lanes.find((l) => l.id === 'F1')
-  assert.ok(f1, 'the fix queued after the merged member must join the batch on that merge: ' + JSON.stringify(lanes.map((l) => [l.id, l.queueId])))
-  assert.deepStrictEqual([f1.kind, f1.branch, f1.queueId, f1.state], ['fix', 'fix/q108', 'q108', 'planned'], 'the born fix is a planned fix lane on its own branch: ' + JSON.stringify(f1))
-  assert.ok(!lanes.some((l) => l.queueId === 'q109'), 'a fix queued after a spec that is no lane here must wait for --include-fixes or the next batch: ' + JSON.stringify(lanes))
+  assert.ok(f1, 'the fix born of the merged member must join the batch on that merge: ' + JSON.stringify(lanes.map((l) => [l.id, l.queueId])))
+  assert.deepStrictEqual([f1.kind, f1.branch, f1.queueId, f1.state], ['fix', 'fix/' + born, born, 'planned'], 'the born fix is a planned fix lane on its own branch: ' + JSON.stringify(f1))
+  assert.deepStrictEqual(lanes.filter((l) => l.kind === 'fix').map((l) => l.queueId), [born], 'q108 (after met, no origin), q109, q110 (another run) and q111 must join nothing: ' + JSON.stringify(lanes))
   assert.strictEqual(h.lane(l2).state, 'planned', 'the same merge must promote the waiting shared-brief lane: ' + JSON.stringify(h.lane(l2)))
 })
 
-test('AC-20261103-06-16: a born fix is appended once across later merges and is dispatched alone once every run lane is terminal', () => {
+test('AC-20261103-06-16 / AC-20261103-08-9: a born fix is appended once across later merges, is dispatched alone once every run lane is terminal, and joins a --spec run the same way', () => {
   const h = fanoutHost({ bornFix: true })
   h.must([])
   h.must(['--mark', 'planned'])
   const [l1, l2, l3] = [idOf(h, S03), idOf(h, S06), idOf(h, S04)]
+  const born = h.born('fix export after x', BORN)
   h.dispatch(l1, 'lane-one')
   h.dispatch(l3, 'lane-three')
   landLane(h, '03-x', l1)
-  assert.strictEqual(h.state().lanes.filter((l) => l.queueId === 'q108').length, 1, 'the first landing must append the born fix: ' + JSON.stringify(h.state().lanes))
+  assert.strictEqual(h.state().lanes.filter((l) => l.queueId === born).length, 1, 'the first landing must append the born fix: ' + JSON.stringify(h.state().lanes))
   h.dispatch(l2, 'lane-two')
   landLane(h, '04-z', l3)
-  assert.strictEqual(h.state().lanes.filter((l) => l.queueId === 'q108').length, 1, 'a later merge must not append the same queue item a second time: ' + JSON.stringify(h.state().lanes))
+  assert.strictEqual(h.state().lanes.filter((l) => l.queueId === born).length, 1, 'a later merge must not append the same queue item a second time: ' + JSON.stringify(h.state().lanes))
   landLane(h, '06-y', l2)
   const r = h.must([])
-  assert.ok(r.stdout.includes('## Step: dispatch 1 lanes') && r.stdout.includes('fix q108'), 'with every run lane terminal the born fix is the one lane dispatched: ' + r.stdout)
+  assert.ok(r.stdout.includes('## Step: dispatch 1 lanes') && r.stdout.includes('fix ' + born), 'with every run lane terminal the born fix is the one lane dispatched: ' + r.stdout)
+  assert.ok(!r.stdout.includes('fix q108'), 'q108 holds an after gate and no origin, so it is never dispatched: ' + r.stdout)
+  const s = fanoutHost({ bornFix: true })
+  s.plan(['--spec', S03])
+  const sb = s.born('fix export after x', BORN)
+  s.dispatch('L1', 'lane-one')
+  landLane(s, '03-x', 'L1')
+  assert.deepStrictEqual(s.state().lanes.filter((l) => l.kind === 'fix').map((l) => [l.branch, l.queueId, l.state]), [['fix/' + sb, sb, 'planned']],
+    'a --spec run admits a birth by its origin exactly as a bare run does: ' + JSON.stringify(s.state().lanes))
+})
+
+test('AC-20261103-08-10: a birth by a lane still running, another run\'s birth and a birth by a fix lane all wait, while the birth of a landed member joins once', () => {
+  const h = fanoutHost({ bornFix: true })
+  h.plan()
+  const first = h.born('fix export after x', BORN)
+  h.dispatch('L1', 'lane-one')
+  h.dispatch('L2', 'lane-two')
+  landLane(h, '03-x', 'L1')
+  h.startFixLane(first)
+  const a = h.born('after z', { origin: S04, stage: 'review', trigger: 'close-followup' })
+  const c = h.born('from the fix lane', { cwd: h.wt(first) })
+  const r = landLane(h, '04-z', 'L2')
+  assert.deepStrictEqual(h.state().lanes.filter((l) => l.kind === 'fix').map((l) => l.queueId), [first, a],
+    'only A (born of 04-z, merged now) joins; q110, q111 and the fix lane\'s own birth wait: ' + JSON.stringify(h.state().lanes))
+  const f2 = h.state().lanes.find((l) => l.queueId === a)
+  assert.deepStrictEqual([f2.kind, f2.branch, f2.queueId, f2.state], ['fix', 'fix/' + a, a, 'planned'], 'A is a planned fix lane: ' + JSON.stringify(f2))
+  for (const id of ['q110', c]) assert.ok(!r.stdout.includes(id), 'a birth that waits is left in the queue with no note naming ' + id + ': ' + r.stdout)
+  const item = JSON.parse(bytes(path.join(h.common, 'spec-queue.json'))).items.find((i) => i.id === c)
+  assert.ok(item && item.batch && !('origin' in item), 'a birth by a spec-less fix lane carries the batch and no origin: ' + JSON.stringify(item))
+})
+
+test('AC-20261103-08-11: a green gate-repaired ticks this run\'s gate-red birth, leaves another run\'s gate-red item pending, and prints no failed-tick warning', () => {
+  const h = fanoutHost({ bornFix: true })
+  h.plan()
+  h.dispatch('L1', 'lane-one')
+  h.startLane('03-x')
+  h.commitInLane('03-x', 'x.txt', 'x\n')
+  h.sidecar('03-x', 'review', { closed: true })
+  h.must(['--mark', 'returned', '--lane', 'L1'])
+  h.mergeLane('03-x', { markDone: true })
+  h.gateRed(true)
+  const red = h.run(['--mark', 'merged', '--lane', 'L1'])
+  assert.ok(red.stdout.includes('## MERGE_RED'), 'the setup needs a red main: ' + red.stdout)
+  const id = h.born('main gate red after merging L1: ' + h.state().lastGate.log, { origin: S03, stage: 'fanout', trigger: 'gate-red' })
+  h.gateRed(false)
+  const r = h.must(['--mark', 'gate-repaired'])
+  const show = runNode('scripts/spec-queue.js', ['show', id], { cwd: h.root })
+  assert.match(show.stdout, /done \(archived\)/, 'the green gate must tick this run\'s gate-red birth, or the next run reads a repaired main as still broken: ' + show.stdout + show.stderr)
+  const live = JSON.parse(bytes(path.join(h.common, 'spec-queue.json'))).items.filter((i) => i.lane === 'fix').map((i) => i.id)
+  assert.deepStrictEqual(live, ['q108', 'q109', 'q110', 'q111'], 'another run\'s gate-red item q111 must stay pending: ' + JSON.stringify(live))
+  assert.ok(!(r.stdout + r.stderr).includes('spec-queue done'), 'a clean tick prints no warning: ' + r.stdout + r.stderr)
+})
+
+test('AC-20261103-08-18: REPORT leads queued with this run\'s births, a plan birth first, drops the st.queued string a birth duplicates, and equals st.queued when nothing was born', () => {
+  const SUBJECT = S03 + ': review stopped, repair round spent'
+  const stage = (h) => {
+    h.plan()
+    h.dispatch('L1', 'lane-one')
+    h.dispatch('L2', 'lane-two')
+    h.startLane('03-x')
+    h.sidecar('03-x', 'review', { laneExit: { reason: 'review stopped, repair round spent', queued: SUBJECT, at: '2026-11-03T10:00:00Z' } })
+    h.must(['--mark', 'returned', '--lane', 'L1'])
+  }
+  const h = fanoutHost()
+  stage(h)
+  const f = h.born(SUBJECT, { origin: S03, stage: 'review', trigger: 'red-leg' })
+  const p = h.born('split the queue render', { lane: 'plan', origin: S03, stage: 'plan', trigger: 'gap' })
+  h.must(['--mark', 'returned', '--lane', 'L2', '--stopped', 'worker gone'])
+  assert.ok(h.must([]).stdout.includes('## Step: report'), 'every lane terminal means REPORT')
+  assert.deepStrictEqual(JSON.parse(bytes(h.reportFile)).queued, [
+    p + '  /spec:plan split the queue render  ↳ from ' + S03 + ' (gap)',
+    f + '  /spec:fix ' + SUBJECT + '  ↳ from ' + S03 + ' (red-leg)',
+  ], 'births must lead the slot, plan first, with the duplicate st.queued string dropped, or the REPORT hides why each item exists')
+  const n = fanoutHost()
+  stage(n)
+  n.must(['--mark', 'returned', '--lane', 'L2', '--stopped', 'worker gone'])
+  n.must([])
+  assert.deepStrictEqual(JSON.parse(bytes(n.reportFile)).queued, [SUBJECT], 'with no births the slot must stay byte-identical to st.queued')
+})
+
+const PLAN_REASON = '/spec:plan item heads the queue'
+
+test('AC-20261103-08-21: a queue plan item ends the batch after every startable spec, is named first in REPORT with its origin line, and holds no spec back', () => {
+  const h = fanoutHost({ planItem: true })
+  const r = h.must([])
+  assert.ok(r.stdout.includes(pinLine('03-x, 06-y, 04-z', 'stops before q112 (' + PLAN_REASON + ')')), 'the batch must hold every startable spec and stop before the plan item: ' + r.stdout)
+  assert.deepStrictEqual(h.state().lanes.map((l) => [l.id, l.spec, l.state]), [['L1', S03, 'planned'], ['L2', S06, 'waiting'], ['L3', S04, 'planned']], 'a plan item at the head must hold no spec back: ' + JSON.stringify(h.state().lanes))
+  assert.deepStrictEqual(batchOf(h).stopBefore, { path: 'q112', reason: PLAN_REASON }, 'the boundary is the item id: ' + JSON.stringify(h.state().batch))
+  h.must(['--mark', 'planned'])
+  h.dispatch('L1', 'lane-one')
+  h.dispatch('L3', 'lane-three')
+  landLane(h, '03-x', 'L1')
+  h.dispatch('L2', 'lane-two')
+  h.must(['--mark', 'returned', '--lane', 'L2', '--stopped', 'worker gone'])
+  landLane(h, '04-z', 'L3')
+  assert.ok(h.must([]).stdout.includes('## Step: report'), 'every lane terminal means REPORT')
+  const slots = JSON.parse(bytes(h.reportFile))
+  assert.strictEqual(slots.bullets[0], 'q112  /spec:plan re-plan ' + specRel('01-base') + ': the export contract heads the queue — ' + PLAN_REASON + '; run it attended', 'the attended item heads the bullets: ' + JSON.stringify(slots.bullets))
+  assert.strictEqual(slots.bullets[1], '   ↳ from ' + specRel('01-base') + ' (gap)', 'its origin line follows it: ' + JSON.stringify(slots.bullets))
+  assert.ok(slots.warns.includes('batch stopped before q112 — ' + PLAN_REASON + '; the next bare run starts the next batch'), 'the warn names the item the batch stopped before: ' + JSON.stringify(slots.warns))
+})
+
+const fixLane = (h, q) => h.state().lanes.find((l) => l.queueId === q)
+
+test('AC-20261103-08-22: a fix naming files runs beside the run lanes it does not overlap and after the one it does, and a fix naming none waits for every lane', () => {
+  const h = fanoutHost({ fixFiles: true })
+  h.must(['--include-fixes'])
+  const first = h.must(['--mark', 'planned'])
+  assert.deepStrictEqual([fixLane(h, 'q113').files, fixLane(h, 'q113').overlaps], [['src/b.js'], []], 'q113 names a file no open spec plans: ' + JSON.stringify(fixLane(h, 'q113')))
+  assert.deepStrictEqual([fixLane(h, 'q114').files, fixLane(h, 'q114').overlaps], [['src/shared.js'], [S03]], 'q114 names a file 03-x plans: ' + JSON.stringify(fixLane(h, 'q114')))
+  assert.strictEqual(fixLane(h, 'q107').files, null, 'q107 names no file: ' + JSON.stringify(fixLane(h, 'q107')))
+  assert.ok(first.stdout.includes('## Step: dispatch 3 lanes') && first.stdout.includes(S03) && first.stdout.includes(S04) && first.stdout.includes('fix q113'), 'the disjoint fix is dispatched beside the run lanes: ' + first.stdout)
+  assert.ok(!first.stdout.includes('fix q114') && !first.stdout.includes('fix q107'), 'the overlapping fix and the file-less fix wait: ' + first.stdout)
+  const [l1, l2, l3] = [idOf(h, S03), idOf(h, S06), idOf(h, S04)]
+  const [f13, f14] = [fixLane(h, 'q113').id, fixLane(h, 'q114').id]
+  h.dispatch(l1, 'lane-one')
+  h.dispatch(l3, 'lane-three')
+  h.dispatch(f13, 'fix-one')
+  const after = landLane(h, '03-x', l1)
+  assert.ok(after.stdout.includes('## Step: dispatch 2 lanes') && after.stdout.includes(S06) && after.stdout.includes('fix q114'), 'once 03-x has merged its overlapping fix is free: ' + after.stdout)
+  assert.ok(!after.stdout.includes('fix q107'), 'the file-less fix still waits for every lane: ' + after.stdout)
+  h.dispatch(l2, 'lane-two')
+  h.dispatch(f14, 'fix-two')
+  landLane(h, '04-z', l3)
+  landLane(h, '06-y', l2)
+  assert.match(h.must([]).stdout, /state: WAIT/, 'run lanes terminal and fix lanes active means WAIT, never a file-less dispatch: ' + JSON.stringify(h.state().lanes.map((l) => l.state)))
+  const mid = h.must(['--mark', 'returned', '--lane', f13, '--stopped', 'done by hand'])
+  assert.ok(!mid.stdout.includes('fix q107'), 'one fix lane still active, so q107 still waits: ' + mid.stdout)
+  const last = h.must(['--mark', 'returned', '--lane', f14, '--stopped', 'done by hand'])
+  assert.ok(last.stdout.includes('fix q107'), 'the mark that makes every fix lane terminal dispatches q107: ' + last.stdout)
+})
+
+test('AC-20261103-08-23: a gated fix is tabled waiting under --include-fixes, never dispatched, reported as not started when its gate stopped, and promoted when its gate is met', () => {
+  const stage = () => {
+    const h = fanoutHost({ gatedFix: true })
+    h.must(['--include-fixes'])
+    const planned = h.must(['--mark', 'planned'])
+    const q = fixLane(h, 'q115')
+    assert.deepStrictEqual(q && [q.kind, q.branch, q.queueId, q.state, q.waitingOn], ['fix', 'fix/q115', 'q115', 'waiting', 'after ' + S04 + ' (hardened)'], 'the unmet gate tables the fix waiting: ' + JSON.stringify(h.state().lanes))
+    assert.ok(!planned.stdout.includes('fix q115'), 'a waiting fix is never printed under dispatch: ' + planned.stdout)
+    return h
+  }
+  const stopped = stage()
+  const [a, b, c] = [idOf(stopped, S03), idOf(stopped, S06), idOf(stopped, S04)]
+  stopped.dispatch(a, 'lane-one')
+  stopped.dispatch(c, 'lane-three')
+  landLane(stopped, '03-x', a)
+  stopped.dispatch(b, 'lane-two')
+  landLane(stopped, '06-y', b)
+  stopped.must(['--mark', 'returned', '--lane', c, '--stopped', 'worker gone'])
+  assert.ok(stopped.must([]).stdout.includes('## Step: report'), 'a gate that stopped leaves the fix waiting and the run at REPORT')
+  const bullets = JSON.parse(bytes(stopped.reportFile)).bullets
+  assert.ok(bullets.includes('fix/q115: not started — waited on ' + S04 + ', which stopped'), 'REPORT names why the fix never started: ' + JSON.stringify(bullets))
+  const met = stage()
+  const [a2, b2, c2] = [idOf(met, S03), idOf(met, S06), idOf(met, S04)]
+  met.dispatch(a2, 'lane-one')
+  met.dispatch(c2, 'lane-three')
+  landLane(met, '03-x', a2)
+  met.dispatch(b2, 'lane-two')
+  landLane(met, '06-y', b2)
+  const r = landLane(met, '04-z', c2)
+  assert.deepStrictEqual([fixLane(met, 'q115').state, fixLane(met, 'q115').waitingOn], ['planned', null], 'the mark that merges the gate promotes the fix: ' + JSON.stringify(fixLane(met, 'q115')))
+  assert.ok(r.stdout.includes('fix q115'), 'with every run lane terminal the promoted fix is dispatched: ' + r.stdout)
+})
+
+test('AC-20261103-08-24: a birth whose after gate is unmet joins only at the merge that meets the gate', () => {
+  const h = fanoutHost({ bornFix: true })
+  h.plan()
+  const id = h.born('after z', { ...BORN, after: S04 })
+  h.dispatch('L1', 'lane-one')
+  h.dispatch('L2', 'lane-two')
+  landLane(h, '03-x', 'L1')
+  assert.deepStrictEqual(h.state().lanes.filter((l) => l.queueId === id), [], 'its gate (04-z) is unmet, so it must not join: ' + JSON.stringify(h.state().lanes))
+  landLane(h, '04-z', 'L2')
+  const lanes = h.state().lanes.filter((l) => l.queueId === id)
+  assert.strictEqual(lanes.length, 1, 'exactly one lane once the gate is met: ' + JSON.stringify(h.state().lanes))
+  assert.deepStrictEqual([lanes[0].kind, lanes[0].branch, lanes[0].queueId, lanes[0].state], ['fix', 'fix/' + id, id, 'planned'], 'the joined lane is planned: ' + JSON.stringify(lanes[0]))
+})
+
+test('AC-20261103-08-25: a red main is repaired by a lane tabled from the gate-red birth, dispatched alone, merged and re-gated, and a still-red repair prints a fresh add line', () => {
+  const redHost = () => {
+    const h = fanoutHost({ bornFix: true })
+    h.plan()
+    h.dispatch('L1', 'lane-one')
+    h.startLane('03-x')
+    h.commitInLane('03-x', 'x.txt', 'x\n')
+    h.sidecar('03-x', 'review', { closed: true })
+    h.must(['--mark', 'returned', '--lane', 'L1'])
+    h.mergeLane('03-x', { markDone: true })
+    h.gateRed(true)
+    h.git('add', '.gate-red')
+    h.git('commit', '-q', '-m', 'main goes red')
+    const red = h.run(['--mark', 'merged', '--lane', 'L1'])
+    assert.ok(red.stdout.includes('then re-run the driver bare: the item is tabled as the repair lane and dispatched onto the red main — the one lane a red main admits'), 'MERGE_RED names the repair lane: ' + red.stdout)
+    assert.ok(red.stdout.includes('--mark gate-repaired'), 'and the other way out: ' + red.stdout)
+    const id = h.born('main gate red after merging L1: ' + h.state().lastGate.log, { origin: S03, stage: 'fanout', trigger: 'gate-red' })
+    return { h, id }
+  }
+  const { h, id } = redHost()
+  const d = h.must([])
+  const lane = h.state().lanes.find((l) => l.queueId === id)
+  assert.deepStrictEqual(lane && [lane.kind, lane.branch, lane.queueId, lane.repairs, lane.state], ['fix', 'fix/' + id, id, 'L1', 'planned'], 'the gate-red birth is tabled as the repair lane: ' + JSON.stringify(h.state().lanes))
+  assert.ok(d.stdout.includes('## Step: dispatch 1 lanes') && d.stdout.includes('fix ' + id) && /state: DISPATCH/.test(d.stdout), 'the repair lane is the one lane dispatched onto the red main: ' + d.stdout)
+  h.dispatch(lane.id, 'fix-repair')
+  h.startFixLane(id)
+  fs.rmSync(path.join(h.wt(id), '.gate-red'))
+  h.commitInLane(id, 'repair.txt', 'repair\n')
+  h.must(['--mark', 'returned', '--lane', lane.id])
+  h.git('merge', '-q', '--no-ff', '-m', 'merge fix/' + id, 'fix/' + id)
+  h.must(['--mark', 'merged', '--lane', lane.id])
+  const st = h.state()
+  assert.strictEqual(st.lastGate, null, 'a green re-gate of the repaired lane clears the red gate: ' + JSON.stringify(st.lastGate))
+  assert.strictEqual(h.lane('L1').gate, 'green', 'the repaired lane records the green gate')
+  assert.deepStrictEqual([h.lane(lane.id).state, h.lane(lane.id).gate], ['merged', 'green'], 'the repair lane lands merged and green')
+  assert.ok(!st.queued.some((q) => q.startsWith('main gate red after merging L1')), 'the queued repair line is dropped: ' + JSON.stringify(st.queued))
+  const show = runNode('scripts/spec-queue.js', ['show', id], { cwd: h.root })
+  assert.match(show.stdout, /done \(archived\)/, 'the repair item is ticked: ' + show.stdout)
+  const again = redHost()
+  again.h.must([])
+  const l2 = again.h.state().lanes.find((l) => l.queueId === again.id)
+  again.h.dispatch(l2.id, 'fix-repair')
+  again.h.startFixLane(again.id)
+  again.h.commitInLane(again.id, 'repair.txt', 'repair\n')
+  again.h.must(['--mark', 'returned', '--lane', l2.id])
+  again.h.git('merge', '-q', '--no-ff', '-m', 'merge fix/' + again.id, 'fix/' + again.id)
+  const red = again.h.run(['--mark', 'merged', '--lane', l2.id])
+  assert.strictEqual(again.h.state().lastGate.result, 'red', 'a repair that leaves main red keeps the gate red: ' + red.stdout + red.stderr)
+  assert.ok(red.stdout.includes('## MERGE_RED — main gate red after L1') && red.stdout.includes('spec-queue)" add "main gate red after merging L1:'), 'and prints a fresh add line on that mark: ' + red.stdout)
+})
+
+test('AC-20261103-08-26: MERGE exits 2 naming the stray file and the session scratchpad when the main root is dirty, and prints no merge step', () => {
+  const h = mergeReadyHost()
+  fs.writeFileSync(path.join(h.root, 'notes.md'), 'x')
+  const r = h.run([])
+  assert.strictEqual(r.status, 2, 'a dirty main root must stop the MERGE step before merge-back refuses it: ' + r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('the main root is dirty') && r.stderr.includes('notes.md') && r.stderr.includes('session scratchpad'), 'stderr names the file and the remedy: ' + r.stderr)
+  assert.ok(!r.stdout.includes('## Step: merge'), 'no merge step is printed over a dirty root: ' + r.stdout)
 })
 
 test('AC-20261103-06-18: REPORT after a derived batch names where the batch stopped, and the next bare run after the reported mark starts the next batch with the stopped spec startable again', () => {

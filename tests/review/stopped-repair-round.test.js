@@ -171,3 +171,34 @@ test('AC-20261103-04-8: the ESCALATE step on a host with stops.reviewEscalate as
   assert.deepStrictEqual([...at].sort((a, b) => a - b), at, 'the options must print in the order queue, disposer, abandon, re-plan: ' + step)
   assert.doesNotMatch(step, /📌 Auto-picked/, 'an ask host must not also auto-pick: ' + step)
 })
+
+// specs/20261103/08-queue-items-remember-their-origin.md D7 — AC-20261103-08-12, AC-20261103-08-13:
+// every driver-printed add line carries --origin/--stage/--trigger after --top/--lane.
+
+const specRelOf = (host) => path.relative(host.root, host.spec)
+
+test('AC-20261103-08-12: the STOPPED step with the repair round spent prints the queue add line ending --top --origin <specRel> --stage review --trigger red-leg', () => {
+  const { host } = redGateHost('stopped-rr-origin-spent', ASK_REPAIR)
+  run(host.root, host.spec, '--mark', 'repair-round')
+  const step = run(host.root, host.spec).stdout
+  const rel = specRelOf(host)
+  assert.ok(step.includes('"' + rel + ': review stopped, repair round spent" --lane fix --top --origin ' + rel + ' --stage review --trigger red-leg'),
+    'without the origin flags the born queue item cannot name the spec whose repair round was spent: ' + step)
+})
+
+test('AC-20261103-08-12: the STOPPED step with stops.repairRound ask and the round unspent prints the blocking-leg-red add line with the same three flags', () => {
+  const { host, first } = redGateHost('stopped-rr-origin-ask', ASK_REPAIR)
+  const rel = specRelOf(host)
+  assert.ok(first.stdout.includes('"' + rel + ': review stopped, blocking leg red" --lane fix --top --origin ' + rel + ' --stage review --trigger red-leg'),
+    'without the origin flags the queued red-leg item loses its origin: ' + first.stdout)
+})
+
+test('AC-20261103-08-13: the ESCALATE step prints the queue line ending --lane fix --top --origin <specRel> --stage review --trigger repair-separate and the re-plan line ending --lane plan --origin <specRel> --stage review --trigger gap', () => {
+  const host = escalateWithTwoHard('stopped-rr-origin-esc', ASK_ESCALATE)
+  const step = run(host.root, host.spec).stdout
+  const rel = specRelOf(host)
+  assert.ok(step.includes('open findings" --lane fix --top --origin ' + rel + ' --stage review --trigger repair-separate'),
+    'the escalate queue line must carry its origin flags or the capped review is queued without provenance: ' + step)
+  assert.ok(step.includes('--lane plan --origin ' + rel + ' --stage review --trigger gap'),
+    'the re-plan line must carry its origin flags or the re-plan item is born without provenance: ' + step)
+})

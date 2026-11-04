@@ -18,7 +18,7 @@ The script derives and writes; you do the one judgment step it prints.
   the driver line. A member blocked by a dependency or held back for a shared brief waits and is
   dispatched when the lane it waits on has merged. With none, the driver derives the batch — the queue's startable specs in order, stopping before a spec that touches a pipeline self-surface (policy.fanout.selfSurfaces), a critical spec sharing a § Risk Tiers file with an unmerged lane, a dependency the batch cannot meet, or a planning item — prints it as one 📌 Auto-picked batch line, and runs it to the end; the next bare run after --mark reported starts the next batch.
 - `--batch <ids|all>` — the veto of the derived batch; ids are spec stems or paths.
-- `--include-fixes` — pre-existing red-CI and queued `/spec:fix` items become one serial fix group after the run lanes (fixes born of the batch join without the flag).
+- `--include-fixes` — pre-existing red-CI and queued `/spec:fix` items become one serial fix group after the run lanes (fixes born of the batch join without the flag); a fix whose after gate is unmet waits in the table until the gate is met.
 - `--override-serial` — admit shared-brief specs the queue held back (never a `depends on` hold).
 - `--ask <key|all>` — repeatable, on the planning run: relay that `policy.stops` stop (`repairRound`,
   `buildEscalate`, `reviewEscalate`, `redFindings`, `rejectWithEvidence`) to you for this fan-out instead of the host's auto-pick.
@@ -49,7 +49,8 @@ The script derives and writes; you do the one judgment step it prints.
 - Never edit `spec-fanout.json` or a lane's `.claude/pending-question.json` by hand; to change the lane
   set, delete the state file the driver names.
 - Four lanes run at once — a resource constant, not a flag.
-- A fix the batch's own lanes queued (after-spec a member) joins the batch once that member merges; --include-fixes adds the fixes that existed before the run.
+- A fix born of a member lane (its origin names the member, its batch is this run) joins the batch once that member merges; --include-fixes adds the fixes that existed before the run; a fix whose after gate is unmet waits in the table until the gate is met; a fix born of a fix, and anything a /spec:plan queues, waits for the next batch and heads the REPORT; a fix whose text names files runs beside the run lanes it does not overlap, one whose text names none runs after them.
+- Plan and fix work never touches the main checkout: a fix lane runs in its own worktree on fix/<queue_id> and lands only through the MERGE step with the gate after — the main-gate repair included — never by committing on main; no lane or planner leaves an untracked file in the main root (merge-back refuses a dirty root by design; a planner's scratch goes to the session scratchpad, core § On-Disk Handoff).
 - A spec whose lane stopped in this run is never re-admitted — resume it by hand or start the next batch.
 - A merge-ready lane lands before any new lane is dispatched.
 - Two briefless specs that share only policy.fanout.overlapExempt paths run in parallel.

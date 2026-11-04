@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical           # spec/scripts/spec-status.js — `--lanes --json` grows a key and `fixes[]` grows six (§ Risk Tiers: the sole "what's next" derivation and a machine surface the fan-out consumes); fanout-driver.js dispatches a fix lane onto a red main (D16)
 area: pipeline
 breaking: false
 depends_on: [specs/20261103/06-the-fan-out-drains-the-queue.md]
 brief: n/a
 open_markers: 0
+diff_base: 85be4cbe550ba0292aec67a76e866a3259bd40ae
 ---
 
 # Queue items remember their origin
@@ -663,6 +664,29 @@ gate that went red, not the fix lane's test command, because that gate is the fa
 a `directLaneToMain: false` host); D6's tick covers that path. D17 keeps merge-back's refusal and
 names the files one step earlier; the planner's half of the rule already exists (core § On-Disk
 Handoff), so fanout.md cites it rather than plan.md growing a second copy.
+
+Build deviations (2026-11-03, folded from the sidecar at close; all one-offs):
+- AC-11's example lists q107 among the live fix ids, but opt `bornFix` carries no q107; the test pins
+  the real set q108, q109, q110, q111.
+- Opt `bornFix`'s queue seq was raised 109 → 111 so a born item gets q112 or later and never collides
+  with q110/q111.
+- `tests/spec-status.test.js` AC-20261103-06-4 also pinned the three-key `--lanes --json` top level;
+  extended in place to four keys (`born`) and retagged — D10's sanctioned class, one pin more than D10
+  enumerated.
+- `printWait` lists only active lanes (dispatched, pending, merge-ready): a planned fix lane D14 holds
+  back is not running, and AC-22 requires `fix q107` absent from the WAIT print.
+- The batch walk parses a queue prompt's `stopBefore.path` from the entry's note (`queue item q<n>`),
+  since `--next --json` strips the private queue id; REPORT reads the prompt's action by the same note.
+- `h.born` passes `--distinct` (the writer's near-duplicate refusal otherwise rejects a born item against
+  a fixture prompt) and returns the one new prompt whose payload equals the subject (a first add on a
+  queue-less host also seeds briefs); opt `fixes` commits `.claude/spec-runs.jsonl` after writing it,
+  and AC-25 commits `.gate-red` on main before the red merge so the repair lane commits its deletion —
+  both keep D17's dirty-root check quiet in the fixture, A14's if-false arm.
+
+### Advisory debt (review rv_e76c77115575)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a6583a36a6d3ca875/spec/scripts/spec-status.js:422 — `born[].action` for a brief-kind item is rendered as `brief ${it.brief}` rather than through `itemDesc` (which appends ` (<name>)` when the brief name is known), so D4's "`action` = the item's paste line, `promptAction`/`itemDesc`" is approximated for brief items that plan.md's `add NN --top --origin … --stage plan --trigger gap` line will now create.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a6583a36a6d3ca875/spec/scripts/spec-review-driver.js:2908 — Four near-identical driver-printed add lines in spec-review-driver.js now each splice `--lane fix --top --origin ${specRel} --stage review --trigger red-leg` inline (lines 2908, 2916, 2922 plus the ESCALATE pair at 2828/2834); Review Checks' duplication calibration names the extraction — one `queueAdd(subject, trigger)` helper so a future flag lands once.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a6583a36a6d3ca875/spec/scripts/fanout-driver.js:651 — D16 says `--mark merged` runs the reduced `rolling` under a red gate, but the non-repair branch of `doMerged` that first turns the gate red sets `st.lastGate` and pushes the queued line without calling `rolling(st)`; only the repair-lane branch, `--mark returned`, and the bare run do.
 
 ## Canonical Delta
 

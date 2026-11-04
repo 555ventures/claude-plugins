@@ -66,6 +66,29 @@ test('fix.md names the two delegated question kinds it writes', () => {
   }
 })
 
+// specs/20261103/08-queue-items-remember-their-origin.md D8/D17 — AC-20261103-08-17, AC-20261103-08-27:
+// the command text prints the queue flags and the never-touches-main rule verbatim.
+
+test('AC-20261103-08-17: stage-review Rules, plan Lock and queue.md print the --origin/--stage/--trigger protocol tokens a session copies', () => {
+  const rules = section('spec/doctrine/stages/stage-review.md', /^## Rules/, /^## /)
+  assert.ok(rules.includes('--trigger close-followup'), 'stage-review § Rules must print --trigger close-followup, or the close add line is queued without its trigger')
+  const lock = section('spec/commands/plan.md', /^## Lock/, /^## /)
+  for (const tok of ['--trigger gap', '--trigger close-followup']) {
+    assert.ok(lock.includes(tok), 'plan.md § Lock must print ' + tok + ', or a planner queues the line without it')
+  }
+  const queue = whole('spec/commands/queue.md')
+  for (const tok of ['--origin', '--stage', '--trigger']) {
+    assert.ok(queue.includes(tok), 'queue.md must name ' + tok + ', or a session invents the flag value')
+  }
+})
+
+test('AC-20261103-08-27: fanout.md Rules names the fix worktree branch, the no-commit-on-main rule, the session scratchpad and the unmet after gate', () => {
+  const rules = section('spec/commands/fanout.md', /^## Rules/, /^## /)
+  for (const tok of ['fix/<queue_id>', 'never by committing on main', 'session scratchpad', 'after gate is unmet']) {
+    assert.ok(rules.includes(tok), 'fanout.md § Rules must keep "' + tok + '", or the session follows no rule for it')
+  }
+})
+
 // specs/20261102/03-one-session-runs-the-lanes.md D11 — the fanout command keeps the driver key,
 // the flags and the two never-lines, and its section list serves the contracts it relies on.
 

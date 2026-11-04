@@ -2825,13 +2825,13 @@ function acPinDriftLine() {
 function escalatePoolBlock() {
   const { survivors, legs } = dispositionPools(currentN)
   const open = survivors.length + legs.length
-  const queueAdd = `node "$(spec-paths spec-queue)" add "${specRel}: review escalated at the fix cap \u2014 ${open} open findings" --lane fix --top`
+  const queueAdd = `node "$(spec-paths spec-queue)" add "${specRel}: review escalated at the fix cap \u2014 ${open} open findings" --lane fix --top --origin ${specRel} --stage review --trigger repair-separate`
   const listing = `open findings (${open}):\n` +
     survivors.map((sv, i) => `  s${i} [hard] ${sv.file}:${sv.line} \u2014 ${sv.claim}`).join('\n') +
     (survivors.length && legs.length ? '\n' : '') +
     legs.map((r) => `  leg:${r.leg} exit=${r.exit} count=${countLegFinding(r)}`).join('\n') +
     (open ? '\n' : '')
-  const replanAdd = `node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan`
+  const replanAdd = `node "$(spec-paths spec-queue)" add "re-plan ${specRel}: <reason>" --lane plan --origin ${specRel} --stage review --trigger gap`
   const qPick = pickOnce('reviewEscalate', { queue: 'abandon and queue /spec:fix' })
   if (qPick) {
     setLaneExit(`review escalated at the fix cap — ${open} open findings`, `${specRel}: review escalated at the fix cap — ${open} open findings`)
@@ -2905,7 +2905,7 @@ const STEPS = {
               { label: 'run one in-session repair round (Recommended)', description: 'The lane fixes the failing leg through the review fix seat and re-runs the legs; red again lands here with the round spent',
                 resume: `node ${__filename} ${specPath} --mark repair-round` },
               { label: 'queue /spec:fix and stop', description: 'The review ends; the repair becomes the queue\'s top item',
-                resume: 'stop', then: `node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top` },
+                resume: 'stop', then: `node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top --origin ${specRel} --stage review --trigger red-leg` },
               { label: 'abandon the review', description: 'The review sidecar is deleted and the run ends; the GATE_RED row stays on the ledger',
                 resume: 'stop', then: `delete ${sidecarDir}; the GATE_RED row stays on the ledger` },
             ],
@@ -2913,13 +2913,13 @@ const STEPS = {
         }, marks) + '\n'
       : (marks.repairRounds || 0) >= REPAIR_ROUND_CAP
         ? `repair round spent (${REPAIR_ROUND_CAP} of ${REPAIR_ROUND_CAP}) \u2014 two exits:\n` +
-          `  queue /spec:fix \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top\n` +
+          `  queue /spec:fix \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, repair round spent" --lane fix --top --origin ${specRel} --stage review --trigger red-leg\n` +
           `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n`
         : `Ask ONE AskUserQuestion \u2014 options, consequences in each description:\n` +
           `  run one in-session repair round (Recommended) \u2014 fix the failing leg(s) above through the review fix seat ` +
           `(the host's agentMap; ${policy(repoRoot).models.workers.model} at effort: ${policy(repoRoot).models.workers.effort}), commit, then the mark re-runs legs at this iteration; green continues to REVIEWER, ` +
           `red lands here again with the round spent\n` +
-          `  queue /spec:fix and stop \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top; this review ends\n` +
+          `  queue /spec:fix and stop \u2014 node "$(spec-paths spec-queue)" add "${specRel}: review stopped, blocking leg red" --lane fix --top --origin ${specRel} --stage review --trigger red-leg; this review ends\n` +
           `  abandon the review \u2014 delete ${sidecarDir}; the GATE_RED row stays on the ledger\n` +
           `Then: node ${__filename} ${specPath} --mark repair-round\n`)
   },

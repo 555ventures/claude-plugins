@@ -1,6 +1,6 @@
 ---
 description: The session queue's command surface — wraps spec-queue.js's next/list/add/move/done subcommands in one script run per invocation; stores the one thing the pipeline cannot derive, the user's intended work order across briefs, ad-hoc specs, and free-text items plus their gates and done-when predicates, so /spec:status's --next stays queue-aware with zero hand reconstruction
-argument-hint: "[subcommand] [args…] — next|list|add|move|done|show|groom; bare invocation defaults to next. add takes a payload, --lane plan|prototype|fix|decide for free text, plus optional --top | --at <n>, --after-spec <path> | --after-brief NN, --when <type>:<args>. move takes a <ref> and a pending position <n>. done takes a <ref>"
+argument-hint: "[subcommand] [args…] — next|list|add|move|done|show|groom; bare invocation defaults to next. add takes a payload, --lane plan|prototype|fix|decide for free text, plus optional --top | --at <n>, --after-spec <path> | --after-brief NN, --when <type>:<args>, plus --origin <spec> --stage build|review|fanout|plan and --trigger <one of six>. move takes a <ref> and a pending position <n>. done takes a <ref>"
 allowed-tools: Bash(spec-paths:*), Bash(node:*), Read, Agent, AskUserQuestion
 ---
 
@@ -16,10 +16,9 @@ derives and writes, you render; the only judgment is `groom`'s, and agents do th
 
 - `next` — reconcile+write, print the pick; the default when `$ARGUMENTS` is empty.
 - `list` — pending items only, numbered exactly as `move`/`--at` count them.
-- `add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>]`
+- `add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--origin <spec> --stage build|review|fanout|plan] [--trigger <one of six>]`
   — refuses a brief/spec already queued. Free text needs `--lane` (`plan` spec-sized, `prototype`
-  changes screens, `fix` root-cause repair, `decide` the user's yes) and carries the subject only:
-  the lane writes the command. Small fixes land in-session; other repos' work never queues here.
+  changes screens, `fix` root-cause repair, `decide` the user's yes) and carries the subject only: the lane writes the command. Inside a lane, a bare add derives --origin from the fan-out table. Small fixes land in-session; other repos' work never queues here.
 - `move <ref> <n>` — reorder: `<n>` counts pending positions the way `list` prints them.
 - `done <ref>` — manual tick.
 - `show <ref>` — the item's full, untruncated payload plus its id, kind and gate.
@@ -50,5 +49,6 @@ ask only `keep`/ambiguous items (`AskUserQuestion`, ≤ 4/call); never tick with
 ## Rules
 
 - Never edit `spec-queue.json` directly — every mutation is a `spec-queue.js` subcommand.
+- Never type an --origin, --stage or --trigger value a driver did not print — the flags come from the step that queues.
 - Never hand-derive readiness, position, or the top pick — a misplaced-looking `add`/`move` is
   reported with the script's own output, never silently corrected by a second write.

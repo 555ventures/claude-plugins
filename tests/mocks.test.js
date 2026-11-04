@@ -31,10 +31,11 @@ const screen = (to) => ({
   },
 })
 
+let lastGit
 function host(config) {
   const root = tmpdir('mocks')
   if (config) { fs.mkdirSync(path.join(root, '.claude')); fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(config)) }
-  gitRepo(root)
+  lastGit = gitRepo(root)
   return root
 }
 const drive = (root, args = []) => runNode('scripts/mocks.js', [...args, '--root', root])
@@ -57,7 +58,9 @@ test('terminal mode: SEED → SCREENS → APPROVED', () => {
   r = drive(root, ['--mark', 'seed-done'])
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /SEED → SCREENS/)
-  assert.match(drive(root).stdout, /journey-drawn --journey invite-teammate/)
+  r = drive(root)
+  assert.match(r.stdout, /journey-drawn --journey invite-teammate/)
+  assert.match(r.stdout, /"root": "page"[\s\S]*"action": "navigate"/, 'the screen shape is printed, not pointed at')
   assert.strictEqual(drive(root, ['--mark', 'approved']).status, 2, 'nothing drawn yet')
 
   write(root, 'design/mocks/screens/home.json', screen('invite-sent')) // wrong target: no control to roster
@@ -80,6 +83,11 @@ test('terminal mode: SEED → SCREENS → APPROVED', () => {
   assert.match(r.stdout, /✅ wireframe approved — 1 journeys/)
   assert.match(r.stdout, /Next: \/spec:genesis/)
   assert.strictEqual(JSON.parse(fs.readFileSync(path.join(root, 'design/mocks/status.json'), 'utf8')).marks.approved.length > 0, true)
+  const g = lastGit
+  assert.strictEqual(g('log', '-1', '--format=%s'), 'chore(mocks): approved\n')
+  assert.strictEqual(g('status', '--porcelain', '--', 'design').trim(), '', 'design/mocks/ is committed whole')
+  fs.mkdirSync(path.join(root, 'specs'))
+  assert.match(drive(root).stdout, /Next: \/spec:plan$/m, 'a repo with specs/ is not greenfield: no genesis')
 })
 
 test('editing a drawn journey\'s beats makes it pending again', () => {

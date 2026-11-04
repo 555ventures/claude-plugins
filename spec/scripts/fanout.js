@@ -95,8 +95,9 @@ function derivePlan(ctx) {
 
 // The Agent tool takes no working directory, so the lane's prompt points run.js at its worktree.
 function agentLine(root, config, lane) {
-  const model = (config.seats.orchestrator || {}).model || 'opus'
-  return `Agent({ subagent_type: "claude", model: "${model}", description: "lane ${lane.id}: ${lane.stem}", ` +
+  const seat = config.seats.orchestrator || {}
+  const model = seat.model || 'opus'
+  return `Agent({ subagent_type: "claude", model: "${model}", effort: "${seat.effort || 'medium'}", description: "lane ${lane.id}: ${lane.stem}", ` +
     `prompt: ${JSON.stringify(`/spec:run ${lane.spec} --root ${shq(wtAbs(root, lane))}`)} })`
 }
 

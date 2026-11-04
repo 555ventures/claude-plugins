@@ -23,7 +23,7 @@ function allSpecs(root) {
 }
 
 function roadmap(root, specs) {
-  return ls(path.join(root, 'docs', 'roadmap')).filter((f) => /^\d+[a-z]?-.*\.md$/.test(f)).sort().map((f) => {
+  return ls(path.join(root, 'docs', 'roadmap')).filter((f) => /^\d+[a-z]?-.*\.md$/.test(f) && f !== '00-overview.md').sort().map((f) => {
     const nn = f.split('-')[0]
     const text = fs.readFileSync(path.join(root, 'docs', 'roadmap', f), 'utf8')
     const title = ((/^# +(.+)$/m.exec(text) || [])[1] || f).replace(/^\d+[a-z]?\s*[—–-]\s*/, '')
@@ -66,7 +66,8 @@ function build(root) {
 
 function render(r) {
   const icon = { done: '✅', implementing: '🔶', open: '⬜', superseded: '⛔' }
-  const L = ['🗺️ Roadmap', ...r.roadmap.map((b) => `  ${icon[b.state]} ${b.brief}  ${b.title}`), '', '🎯 Next']
+  const L = r.roadmap.length ? ['🗺️ Roadmap', ...r.roadmap.map((b) => `  ${icon[b.state]} ${b.brief}  ${b.title}`), ''] : []
+  L.push('🎯 Next')
   L.push(r.next ? `  ${r.next}` : '  queue empty')
   if (r.lanes.length > 1) L.push(`  ⚡ ${r.lanes.length} parallel lanes ready`, ...r.lanes.map((s) => `    /spec:run @${s}`))
   if (r.questions.length) L.push('', '⚠️ Pending questions', ...r.questions.map((x) => `  ${x.lane || 'root'}: ${x.question}`))

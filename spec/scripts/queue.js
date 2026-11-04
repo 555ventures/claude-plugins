@@ -31,14 +31,24 @@ function pasteLine(root, it) {
 
 const pending = (q) => q.items.filter((i) => !i.done)
 
+// `added` may be ISO or an epoch number (seconds or ms); normalised to ISO, written with the next write.
+function toIso(v) {
+  const n = typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : NaN
+  const t = Number.isFinite(n) ? (n < 1e12 ? n * 1000 : n) : Date.parse(v)
+  return Number.isFinite(t) ? new Date(t).toISOString() : v
+}
+
 // A spec item whose spec is done counts as done; the timestamp is written with the next write.
 function reconcile(root, q) {
+  for (const i of q.items) if (i.added !== undefined) i.added = toIso(i.added)
   for (const i of q.items) if (!i.done && i.kind === 'spec' && specStatus(root, i.payload) === 'done') i.done = new Date().toISOString()
   return q
 }
 
 function age(iso) {
-  const m = Math.max(0, (Date.now() - Date.parse(iso)) / 60000)
+  const t = Date.parse(toIso(iso))
+  if (!Number.isFinite(t)) return '?'
+  const m = Math.max(0, (Date.now() - t) / 60000)
   return m < 60 ? Math.floor(m) + 'm' : m < 1440 ? Math.floor(m / 60) + 'h' : Math.floor(m / 1440) + 'd'
 }
 

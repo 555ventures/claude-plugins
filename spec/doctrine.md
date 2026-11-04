@@ -2,7 +2,7 @@
 
 ## What this plugin does
 
-It turns a feature idea into merged code. `/spec:plan` writes and locks a spec with the user
+It turns an idea into merged code. `/spec:plan` writes and locks a spec with the user
 (`draft → hardened`). `/spec:run`, or `/spec:fanout` for several, has one builder write it
 test-first in a worktree, gates on the host's `testCommand`, has a fresh reviewer read the diff
 against the spec's Intent, and merges (`implementing → done`). New projects start with
@@ -24,12 +24,13 @@ scripts write state: `<spec>.run/`, the queue and fanout files in the git common
 | builder | sonnet; opus from the second attempt | high |
 | reviewer | opus | low |
 
-Config `seats` overrides these. Dispatch with the model the driver prints.
+Config `seats` overrides these. Dispatch with the model the driver prints. Installed, agents
+are namespaced: `spec:builder`, `spec:reviewer`.
 
 ## How to drive a driver
 
-Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/<x>.js <args>`, do the one step it prints, run the
-printed `--mark` line, and re-run the driver until it prints the final report. After a
+Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/<x>.js <args>`, do the printed step, run its `--mark`
+line, and repeat until the final report. After a
 `✅ checkpoint` line `/clear` is safe and the same command resumes. Exit 2 is a refusal naming
 its remedy. Every command ends with one report rendered by `lib/report.js`.
 
@@ -37,7 +38,7 @@ its remedy. Every command ends with one report rendered by `lib/report.js`.
 
 Only before anything irreversible (production promote, deleting unmerged work, destructive
 git), for a yes on an Intent that changes architecture or behaviour, or when a step says to.
-Use AskUserQuestion, recommended option first. Otherwise decide and print
+Use AskUserQuestion, recommended option first. Otherwise decide; print
 `📌 Auto-picked <choice> — <reason> (veto anytime)`. A lane never asks: its driver writes the
 question to `.claude/pending-question.json` for the orchestrator to relay.
 

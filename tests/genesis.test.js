@@ -80,6 +80,12 @@ test('genesis walks idea to GROUNDED', () => {
   assert.match(end.stdout, /✅ architected \+ grounded — scaffold green, 1 ADRs, roadmap of 3 briefs/)
   assert.match(end.stdout, /Next: \/spec:plan docs\/roadmap\/01-first-light\.md/)
   assert.strictEqual(g.step(), 'GROUNDED')
+  const git = (...a) => require('child_process').execFileSync('git', ['-C', g.dir, ...a], { encoding: 'utf8' })
+  const ignore = fs.readFileSync(path.join(g.dir, '.gitignore'), 'utf8').split('\n')
+  for (const e of ['specs/**/*.run/', '.claude/worktrees/', '.claude/pending-question.json', '.claude/settings.local.json']) assert.ok(ignore.includes(e), e)
+  assert.strictEqual(git('log', '-1', '--format=%s'), 'chore(genesis): grounded\n')
+  assert.strictEqual(git('status', '--porcelain'), '', 'genesis and the scaffold are committed whole')
+  assert.ok(git('ls-files').includes('docs/roadmap/01-first-light.md'))
 })
 
 test('genesis refuses a first run without an idea', () => {

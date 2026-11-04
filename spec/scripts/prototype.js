@@ -9,12 +9,13 @@
 //
 // States OPEN → ROUND (×N) → APPROVED → CONTRACTED → CLOSED. Marks: opened, round-done, approved,
 // contracted, closed (accepted from any resting state). State: design/prototypes/<stem>/status.json
-// (marks, rounds, branch, worktree, pinsPort); pins.json is the pin endpoint's; contract.json is
-// written at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
+// (marks, rounds completed, handled pin ids, branch, worktree, pinsPort); pins.json is the pin
+// endpoint's; contract.json is written and the stem's dir committed on trunk at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
 const path = require('path')
 const http = require('http')
+const { spawnSync } = require('child_process')
 const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
 const state = require('./lib/state')
 const git = require('./lib/git')
@@ -25,6 +26,8 @@ const KINDS = ['behaviour', 'look']
 const now = () => new Date().toISOString()
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/, '')
 const pinsPort = (stem) => 4700 + ([...stem].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 200)
+const STOP = new Set(['a', 'an', 'the', 'with', 'for'])
+const ideaStem = (words) => slug(words.split(/\s+/).filter((w) => w && !STOP.has(w.toLowerCase())).slice(0, 4).join(' '))
 const statusFile = (root, stem) => path.join(root, 'design', 'prototypes', stem, 'status.json')
 
 // ---- input: brief path | existing stem | idea words ---------------------------------------
@@ -34,7 +37,7 @@ function resolveStem(ctx) {
   let stem, brief = null, auto = false
   if (/\.md$/.test(arg)) { brief = arg; stem = path.basename(arg, '.md') }
   else if (fs.existsSync(statusFile(ctx.root, arg))) stem = arg
-  else { stem = slug(arg); auto = true }
+  else { stem = ideaStem(arg); auto = true }
   if (ctx.flags.stem && ctx.flags.stem !== true) { stem = String(ctx.flags.stem); auto = false }
   if (!STEM_RE.test(stem)) refuse(`'${stem}' is not a usable stem — pass --stem <lowercase-name>`)
   return { stem, brief, auto, idea: brief || fs.existsSync(statusFile(ctx.root, stem)) ? null : arg }
@@ -73,10 +76,31 @@ function setup(s, ctx) {
   s.ready = true
 }
 
+// The overlay is an ES module the browser loads: the entry must be a browser file the html loads.
+function entryProblem(ctx) {
+  const o = ctx.config.prototype.overlay
+  if (!o || typeof o !== 'string') return 'config.prototype.overlay is not set'
+  if (!/^src\/.+\.(tsx|jsx|ts|js)$/.test(o)) return `${o} is not a .tsx/.jsx/.ts/.js file under src/`
+  const text = state.readText(path.join(ctx.root, o))
+  if (text === null) return `${o} does not exist`
+  if (!['index.html', 'public/index.html', 'src/index.html'].some((h) => fs.existsSync(path.join(ctx.root, h)))) return 'no index.html (root, public/ or src/) loads it'
+  if (/(?:require\(\s*|from\s+|import\(\s*)['"](?:node:)?https?['"]/.test(text)) return `${o} is a server file (it requires node:http)`
+  return null
+}
+
+// Any HTTP answer within 2 s counts as listening.
+const listening = (url) => spawnSync(process.execPath, ['-e',
+  'fetch(process.argv[1], { signal: AbortSignal.timeout(2000) }).then(() => process.exit(0), () => process.exit(1))', url],
+{ timeout: 5000 }).status === 0
+
 const entryWired = (s, ctx) => {
   const text = state.readText(path.join(ctx.root, s.worktree, ctx.config.prototype.overlay), '')
   return /proto-overlay/.test(text)
 }
+
+const pinIds = (ctx) => (state.readProto(ctx.root, ctx.stem).pins || []).map((p) => p.id)
+const unhandled = (s, ctx) => pinIds(ctx).filter((id) => !(s.handled || []).includes(id))
+const planItem = (stem) => `/spec:plan design/prototypes/${stem}/contract.json`
 
 function derive(s, ctx) {
   const p = ctx.config.prototype
@@ -88,6 +112,12 @@ function derive(s, ctx) {
   ]
   switch (phase(s)) {
     case 'OPEN':
+      if (entryProblem(ctx)) {
+        return {
+          name: 'OPEN', mark: 'opened', accepts: ['closed'],
+          body: `⚠️ ${entryProblem(ctx)}. The overlay needs the browser entry file. Ask the user which file their index.html loads first (do not guess), set it as prototype.overlay in .claude/spec.config.json, then re-run.`,
+        }
+      }
       if (!s.ready) return { name: 'OPEN', auto: setup }
       return {
         name: 'OPEN', mark: 'opened', accepts: ['closed'],
@@ -105,8 +135,9 @@ function derive(s, ctx) {
         body: [
           `Round ${s.rounds + 1}. If the app or pin endpoint is not running:`, ...startLines.map((l) => '- ' + l),
           `Print exactly: 🎨 ready for pins — ${p.url}   then END YOUR TURN.`,
-          `On the user's reply: a literal \`approve\` → ${cmd('approved')}`,
-          'Anything else is a change: apply it in the worktree, commit on the prototype branch, then mark round-done.',
+          `On the user's reply: a literal \`approve\` ends the loop → ${cmd('approved')}`,
+          `Anything else: read design/prototypes/${ctx.stem}/pins.json and act on every pin whose id is not in status.json \`handled\`` +
+            ` (now: ${unhandled(s, ctx).join(', ') || 'none'}) plus the reply itself; commit on ${s.branch}, then mark round-done (it records those ids as handled).`,
         ].join('\n'),
       }
     case 'APPROVED':
@@ -116,31 +147,38 @@ function derive(s, ctx) {
         name: 'CONTRACTED', mark: 'closed',
         body: render({
           outcome: `✅ contract written — design/prototypes/${ctx.stem}/contract.json`,
-          bullets: 'Commit design/prototypes/' + ctx.stem + '/ on trunk. Worktree and branch stay until the specs built from this are done; then mark closed.',
-          queued: `/spec:plan design/prototypes/${ctx.stem}/contract.json`,
-          next: `/spec:plan design/prototypes/${ctx.stem}/contract.json`,
+          bullets: `design/prototypes/${ctx.stem}/ committed on trunk. Worktree and branch stay until the specs built from this are done; then mark closed.`,
+          queued: planItem(ctx.stem),
+          next: planItem(ctx.stem),
         }),
       }
     default:
-      return { name: 'CLOSED', body: render({ outcome: `✅ prototype closed — ${ctx.stem}`, bullets: 'worktree and branch removed', next: 'nothing needs you — the contract carries on' }) }
+      return { name: 'CLOSED', body: render({ outcome: `✅ prototype closed — ${ctx.stem}`, bullets: 'worktree and branch removed', warns: s.closeWarn, next: 'nothing needs you — the contract carries on' }) }
   }
 }
 
 const steps = {
   opened(s, _f, ctx) {
+    if (entryProblem(ctx)) refuse(`${entryProblem(ctx)} — ask the user for the browser entry file and set prototype.overlay`)
     if (!entryWired(s, ctx)) refuse(`${ctx.config.prototype.overlay} in ${s.worktree} does not import proto-overlay.js yet — add the dev-only import, commit it, then mark opened`)
+    const url = ctx.config.prototype.url
+    if (!listening(url)) refuse(`nothing answers at ${url} — start the app from ${s.worktree} (${ctx.config.prototype.bootCommand || 'the host boot command'}), or fix prototype.url in .claude/spec.config.json, then mark opened`)
     s.marks.opened = now()
   },
-  'round-done'(s) { s.rounds += 1; s.marks.lastRound = now() },
-  approved(s) { s.marks.approved = now() },
+  'round-done'(s, _f, ctx) { s.rounds += 1; s.handled = pinIds(ctx); s.marks.lastRound = now() },
+  // The approving round is a completed round too: "Round 2" then approve reads "after 2 round(s)".
+  approved(s) { s.rounds += 1; s.marks.approved = now() },
   contracted(s, _f, ctx) {
+    const trunk = git.trunk(ctx.config)
+    const on = git.raw(['symbolic-ref', '--short', 'HEAD'], ctx.root).stdout.trim()
+    if (on !== trunk) refuse(`${ctx.root} is on ${on || 'a detached HEAD'}, not ${trunk} — check out ${trunk} there, then mark contracted`)
     const pins = state.readProto(ctx.root, ctx.stem).pins || []
     if (!pins.length) refuse('no pins were recorded — a prototype that changed nothing is the direct lane; nothing to contract')
     const rec = ({ id, kind, route, selector, note }) => ({
-      id, kind, route, ...(selector ? { selector } : {}), note, sentence: `When ${route}, ${String(note).trim().replace(/\.$/, '')}.`,
+      id, kind, route, ...(selector ? { selector } : {}), note, sentence: `On ${route}: ${String(note).trim()}`,
     })
     state.writeProto(ctx.root, ctx.stem, { contract: { stem: ctx.stem, rounds: s.rounds, pins: pins.map(rec) } })
-    const payload = `/spec:plan design/prototypes/${ctx.stem}/contract.json`
+    const payload = planItem(ctx.stem)
     const q = state.readQueue(ctx.root)
     if (!q.items.some((i) => i.payload === payload && !i.done)) {
       q.seq += 1
@@ -148,8 +186,14 @@ const steps = {
       state.writeQueue(ctx.root, q)
     }
     s.marks.contracted = now()
+    save(s, ctx) // the committed status.json already carries the contracted mark
+    const dir = path.join('design', 'prototypes', ctx.stem)
+    git.sh(['add', '--', dir], ctx.root)
+    if (git.raw(['diff', '--cached', '--quiet', '--', dir], ctx.root).status !== 0) git.sh(['commit', '-q', '-m', `chore(proto): contract ${ctx.stem}`, '--', dir], ctx.root)
   },
   closed(s, _f, ctx) {
+    const queued = state.readQueue(ctx.root).items.find((i) => i.payload === planItem(ctx.stem) && !i.done)
+    if (queued) s.closeWarn = `${planItem(ctx.stem)} is still pending in the queue (${queued.id}) — plan it, or drop it with /spec:queue done ${queued.id}`
     git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch })
     s.marks.closed = now()
   },

@@ -18,7 +18,7 @@ function synthetic() {
   w('.claude/spec.config.json', JSON.stringify({ generatedBy: 'spec@7', contractHash: 'x', trunk: 'main', gateCommand: 'g {testFiles}', testCommand: 'true', postGateCommand: '{testCommand}', patternsScript: 'p', layerGroups: {}, release: { deployCommand: 'd' }, policy: { mergeStrategy: 'squash', worktreePerSpec: false, models: { workers: 'haiku', reviewer: 'opus' } } }))
   w('.claude/spec-runs.jsonl', '{}\n'); w('.claude/spec-runs/rp_1.json', '{}'); w('.claude/spec-session.json', '{}'); w('.claude/spec-manifest.json', '{}')
   w('.claude/rules/enforcement.json', '{}'); w('.claude/rules/conventions/a.md', 'a'); w('scripts/spec-patterns.sh', '#!/bin/sh\n')
-  w('.claude/skills/run/SKILL.md', 's'); w('.claude/agents/gen.md', '## Worker Contract (spec pipeline)\n'); w('.claude/agents/mine.md', 'mine')
+  w('.claude/skills/run/SKILL.md', 'reads .claude/spec-runs.jsonl'); w('.claude/skills/spec-verify/SKILL.md', 'host own verify'); w('.claude/skills/other/SKILL.md', 'x'); w('.claude/agents/gen.md', '## Worker Contract (spec pipeline)\n'); w('.claude/agents/mine.md', 'mine')
   w('.claude/rules/spec-pipeline.md', '---\npaths:\n  - "specs/**"\n---\n\n# T\n\n## Risk Tiers\n- r1\n\n## Build\nb\n\n## Gotchas (evidence-cited)\n- g1\n')
   w('.gitattributes', '.claude/spec-runs.jsonl merge=union\n'); w('.gitignore', '.claude/worktrees/\n.claude/settings.local.json\n')
   w('.claude/settings.local.json', '{}')
@@ -31,7 +31,7 @@ function synthetic() {
   fs.writeFileSync(path.join(c, 'spec-queue.json'), JSON.stringify({ version: 1, seq: 9, items: [
     { id: 'q1', kind: 'brief', brief: '33' }, { id: 'q2', kind: 'spec', spec: 'specs/20260101/01-a.md' },
     { id: 'q3', kind: 'prompt', lane: 'fix', payload: 'do it', added: 't', when: { type: 'ledger', stage: 'review', min: 1 } },
-    { id: 'q4', kind: 'prompt', payload: 'plain', added: 't' }] }))
+    { id: 'q4', kind: 'prompt', payload: 'plain', added: 1730000000 }, { id: 'q5', kind: 'prompt', payload: 'ms', added: 1730000000000 }] }))
   for (const f of ['spec-fanout.json', 'spec-wave-open']) fs.writeFileSync(path.join(c, f), '{}')
   fs.mkdirSync(path.join(c, 'spec-run-cache')); fs.writeFileSync(path.join(c, 'spec-queue-done.json'), '{"items":[]}')
   g('update-ref', 'refs/spec-review/rv_1/judged', 'HEAD'); g('branch', 'plan/x')
@@ -49,7 +49,13 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.ok(p.listed.includes('branch plan/x'))
   assert.ok(p.warns.some((x) => /settings\.local\.json/.test(x)))
 
-  mig(d, '--apply')
+  assert.ok(p.owned.includes('.claude/agents/mine.md') && p.owned.includes('.claude/skills/spec-verify') && p.owned.includes('.claude/skills/other'))
+  const head = g('rev-parse', 'HEAD').trim()
+  const applied = mig(d, '--apply')
+  assert.match(applied.commit, /^[0-9a-f]{40}$/)
+  assert.strictEqual(g('log', '-1', '--format=%s').trim(), 'chore(spec): migrate v7 → v8')
+  assert.strictEqual(g('rev-parse', 'HEAD~1').trim(), head)
+  assert.strictEqual(g('status', '--porcelain').trim(), '')
   const e = (f) => fs.existsSync(path.join(d, f))
   assert.ok(g('tag', '-l', 'spec-v7-final').trim())
   const cfg = JSON.parse(fs.readFileSync(path.join(d, '.claude/spec.config.json'), 'utf8'))
@@ -59,12 +65,13 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.strictEqual(cfg.worktreePerSpec, false)
   const q = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8'))
   assert.strictEqual(q.version, 2); assert.strictEqual(q.seq, 9)
-  assert.deepStrictEqual(q.items.map((i) => [i.id, i.kind, i.payload]), [['q1', 'brief', 'docs/roadmap/33-x.md'], ['q2', 'spec', 'specs/20260101/01-a.md'], ['q3', 'prompt', 'do it'], ['q4', 'prompt', 'plain']])
+  assert.deepStrictEqual(q.items.map((i) => [i.id, i.kind, i.payload]), [['q1', 'brief', 'docs/roadmap/33-x.md'], ['q2', 'spec', 'specs/20260101/01-a.md'], ['q3', 'prompt', 'do it'], ['q4', 'prompt', 'plain'], ['q5', 'prompt', 'ms']])
+  assert.deepStrictEqual(q.items.slice(3).map((i) => i.added), ['2024-10-27T03:33:20.000Z', '2024-10-27T03:33:20.000Z'])
   for (const f of ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-session.json', '.claude/spec-manifest.json', '.claude/rules/enforcement.json',
     '.claude/rules/conventions', '.claude/skills/run', '.claude/agents/gen.md', '.claude/rules/spec-pipeline.md', 'scripts/spec-patterns.sh',
     'specs/20260101/01-a.deviations.md', 'specs/20260101/01-a.build', 'specs/20260101/01-a.review', '.git/spec-fanout.json', '.git/spec-wave-open', '.git/spec-run-cache', '.git/spec-queue-done.json']) assert.ok(!e(f), f + ' still present')
   for (const f of ['spec-runs.jsonl', 'spec-runs/rp_1.json', 'rules/enforcement.json', 'rules/conventions/a.md', 'agents/gen.md', 'rules/spec-pipeline.md', 'scripts/spec-patterns.sh', 'deviations/20260101/01-a.deviations.md', 'spec-queue-done.json', 'skills/run/SKILL.md']) assert.ok(e('docs/archive/v7/' + f), f + ' not archived')
-  assert.ok(e('.claude/agents/mine.md')); assert.ok(e('docs/adr/0001-a.md')); assert.ok(e('docs/roadmap/33-x.md')); assert.ok(e('specs/20260101/01-a.md'))
+  assert.ok(e('.claude/agents/mine.md') && e('.claude/skills/spec-verify/SKILL.md') && e('.claude/skills/other/SKILL.md') && !e('docs/archive/v7/skills/spec-verify')); assert.ok(e('docs/adr/0001-a.md')); assert.ok(e('docs/roadmap/33-x.md')); assert.ok(e('specs/20260101/01-a.md'))
   const gotchas = fs.readFileSync(path.join(d, '.claude/rules/spec-gotchas.md'), 'utf8')
   assert.ok(gotchas.includes('paths:') && gotchas.includes('g1') && gotchas.includes('r1') && !gotchas.includes('## Build'))
   assert.ok(!/merge=union/.test(fs.existsSync(path.join(d, '.gitattributes')) ? fs.readFileSync(path.join(d, '.gitattributes'), 'utf8') : ''))
@@ -75,6 +82,23 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.strictEqual(mig(d, '--apply').ops.length, 0)
   assert.strictEqual(git(d, 'status', '--porcelain'), snap)
   assert.match(runNode('scripts/migrate.js', ['--root', d, '--apply']).stdout, /\/spec:doctor/)
+})
+
+test('apply refuses a dirty tree, naming the files', () => {
+  const { d } = synthetic()
+  fs.writeFileSync(path.join(d, 'stray.txt'), 'x')
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(r.status, 2)
+  assert.match(r.stderr, /stray\.txt/)
+  assert.ok(fs.existsSync(path.join(d, '.claude/spec-runs.jsonl')))
+})
+
+test('seats: mapped from policy.models; absent writes none; existing v8 seats kept', () => {
+  const { trimConfig } = require('../spec/scripts/migrate')
+  assert.strictEqual(trimConfig('/nonexistent', { testCommand: 't', policy: {} }).seats, undefined)
+  assert.ok(!('seats' in trimConfig('/nonexistent', { testCommand: 't' })))
+  const kept = { builder: { model: 'x' }, reviewer: { model: 'y' } }
+  assert.deepStrictEqual(trimConfig('/nonexistent', { testCommand: 't', seats: kept, policy: { models: { workers: 'haiku' } } }).seats, kept)
 })
 
 test('real v7 host copy: plan, apply, idempotent', { skip: !real, timeout: 120000 }, () => {

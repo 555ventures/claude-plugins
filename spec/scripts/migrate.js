@@ -15,7 +15,9 @@ const ARCH = 'docs/archive/v7'
 const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design']
 const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-runs.stopped.jsonl', '.claude/spec-session.json',
   '.claude/spec-preimage', '.claude/spec-manifest.json', '.claude/release-manifest.json', '.claude/rules/enforcement.json',
-  '.claude/rules/conventions', '.claude/skills/run', '.claude/skills/spec-verify', 'scripts/spec-patterns.sh']
+  '.claude/rules/conventions', 'scripts/spec-patterns.sh']
+const SKILLS = ['run', 'spec-verify']
+const LABEL = { ref: 'git-dir refs/spec-review/* (v7 review bookkeeping, deleted)' }
 const SIDECAR = /\.(build|review|design)$/
 
 const exists = (p) => { try { fs.lstatSync(p); return true } catch { return false } }
@@ -54,6 +56,14 @@ function trimConfig(root, cfg) {
 }
 
 // ---- queue ----------------------------------------------------------------------------------
+function isoAdded(v) {
+  let t = NaN
+  if (typeof v === 'number') t = v < 1e11 ? v * 1000 : v
+  else if (typeof v === 'string' && /^\d+$/.test(v.trim())) { const n = Number(v); t = n < 1e11 ? n * 1000 : n }
+  else if (typeof v === 'string') t = Date.parse(v)
+  return new Date(Number.isFinite(t) ? t : 0).toISOString()
+}
+
 function convertQueue(root, q) {
   const lost = []
   const briefFile = (n) => {
@@ -64,7 +74,7 @@ function convertQueue(root, q) {
     const payload = it.kind === 'brief' ? briefFile(it.brief) : it.kind === 'spec' ? it.spec : it.payload
     const kind = it.kind === 'brief' || it.kind === 'spec' ? it.kind : 'prompt'
     if (it.when && it.when.type === 'ledger') lost.push(it.id)
-    const o = { id: it.id, kind: it.when && it.when.type === 'ledger' ? 'prompt' : kind, payload, added: it.added || new Date(0).toISOString() }
+    const o = { id: it.id, kind: it.when && it.when.type === 'ledger' ? 'prompt' : kind, payload, added: isoAdded(it.added) }
     if (it.ticked || it.done) o.done = true
     return o
   })
@@ -112,10 +122,20 @@ function plan(root) {
     add('extract', '.claude/rules/spec-pipeline.md', '.claude/rules/spec-gotchas.md', 'Gotchas + Risk Tiers')
     add('archive', '.claude/rules/spec-pipeline.md', path.posix.join(ARCH, 'rules/spec-pipeline.md'))
   }
+  const owned = []
   const agents = path.join(root, '.claude/agents')
   if (exists(agents)) for (const n of fs.readdirSync(agents)) {
     const f = path.join(agents, n)
     if (n.endsWith('.md') && fs.readFileSync(f, 'utf8').includes('## Worker Contract (spec pipeline)')) add('archive', rel(f), path.posix.join(ARCH, 'agents', n))
+    else owned.push('.claude/agents/' + n)
+  }
+  const skills = path.join(root, '.claude/skills')
+  if (exists(skills)) for (const n of fs.readdirSync(skills)) {
+    const dir = path.join(skills, n)
+    let body = ''
+    try { body = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8') } catch { /* none */ }
+    if (SKILLS.includes(n) && /spec-paths|spec-runs/.test(body)) add('archive', '.claude/skills/' + n, path.posix.join(ARCH, 'skills', n))
+    else owned.push('.claude/skills/' + n)
   }
   if (exists(path.join(common, 'spec-queue-done.json'))) add('archive', path.join(common, 'spec-queue-done.json'), path.posix.join(ARCH, 'spec-queue-done.json'))
   // git dir leftovers
@@ -143,7 +163,9 @@ function plan(root) {
   for (const b of br) listed.push('branch ' + b)
   const warns = []
   if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) warns.push('.claude/settings.local.json is tracked and may hold a token — run: git rm --cached .claude/settings.local.json')
-  return { ops, dropped, lost, listed, warns }
+  const wts = git.worktreeList(root).slice(1).filter((w) => path.relative(fs.realpathSync(root), w).startsWith('..'))
+  if (wts.length) warns.push('git worktree entries outside this repo (copied repo?) — never touched: ' + wts.join('; '))
+  return { ops, dropped, lost, listed, owned, warns }
 }
 
 // ---- apply ----------------------------------------------------------------------------------
@@ -154,6 +176,14 @@ function archive(root, src, dst, warns) {
   const tracked = git.raw(['ls-files', '--', s], root).stdout.trim()
   if (tracked && git.raw(['mv', s, d], root).status === 0) return
   fs.renameSync(s, d)
+}
+
+function commit(root, warns) {
+  git.raw(['add', '-A'], root)
+  if (git.raw(['diff', '--cached', '--quiet'], root).status === 0) return null
+  const r = git.raw(['commit', '-q', '-m', 'chore(spec): migrate v7 → v8'], root)
+  if (r.status !== 0) { warns.push('migration commit failed: ' + (r.stderr || r.stdout).trim()); return null }
+  return git.headSha(root)
 }
 
 function apply(root, p) {
@@ -185,15 +215,25 @@ function main(argv) {
   const root = i >= 0 ? path.resolve(argv[i + 1]) : process.cwd()
   const doApply = argv.includes('--apply')
   const p = plan(root)
+  if (doApply && p.ops.length) {
+    const dirty = git.raw(['status', '--porcelain'], root).stdout.split('\n').filter(Boolean)
+    if (dirty.length) {
+      process.stderr.write(`migrate: refusing --apply on a dirty tree — commit or stash first so the migration commit holds only migration changes:\n${dirty.map((l) => '  ' + l).join('\n')}\n`)
+      return 2
+    }
+  }
   const applyWarns = doApply ? apply(root, p) : []
+  const sha = doApply && p.ops.length ? commit(root, applyWarns) : null
   const counts = {}
   for (const o of p.ops) counts[o.op] = (counts[o.op] || 0) + 1
-  if (argv.includes('--json')) { process.stdout.write(JSON.stringify({ applied: doApply, counts, ...p, warns: [...p.warns, ...applyWarns] }) + '\n'); return 0 }
-  const bullets = Object.entries(counts).map(([k, n]) => `${k}: ${n}`)
+  if (argv.includes('--json')) { process.stdout.write(JSON.stringify({ applied: doApply, commit: sha, counts, ...p, warns: [...p.warns, ...applyWarns] }) + '\n'); return 0 }
+  const bullets = Object.entries(counts).map(([k, n]) => `${LABEL[k] || k}: ${n}`)
+  if (sha) bullets.push(`commit ${sha}: chore(spec): migrate v7 → v8`)
   if (!doApply) bullets.push(...p.ops.map((o) => `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}`))
   const warns = [...p.warns, ...applyWarns]
   if (p.dropped.length) warns.push('dropped config keys: ' + p.dropped.join(', '))
   if (p.lost.length) warns.push('queue items now plain prompts (ledger predicate dropped): ' + p.lost.join(', '))
+  if (p.owned.length) warns.push('left alone (user-owned): ' + p.owned.join(', '))
   if (p.listed.length) warns.push('left in place, review them: ' + p.listed.join('; '))
   process.stdout.write(render({
     outcome: !p.ops.length ? '✅ nothing to migrate' : doApply ? `✅ migrated — ${p.ops.length} steps applied` : `plan — ${p.ops.length} steps, nothing changed`,

@@ -67,6 +67,7 @@ test('two disjoint lanes are planned, merged into trunk, ticked, cleaned; then P
     assert.ok(pending.isLane(h.wt(stem)), 'each lane worktree is marked as a lane')
     assert.ok(disp.stdout.includes(`/spec:run ${specPath(stem)}`) && disp.stdout.includes(h.wt(stem)), 'dispatch names the prompt and the worktree root per lane')
   }
+  assert.match(disp.stdout, /model: "opus", effort: "medium"/, 'each Agent call carries the orchestrator seat effort')
   assert.strictEqual(h.step(), 'WAIT')
 
   assert.strictEqual(h.run('--mark', 'returned', '--lane', '1').status, 2, 'a lane that has not reached MERGE_READY cannot return done')

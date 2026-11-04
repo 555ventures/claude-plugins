@@ -39,7 +39,7 @@ function lock(root, arg, confirmed) {
     git.sh(['add', '--', rel], root)
     git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel], root)
   }
-  return `✅ spec hardened & locked — ${rel}`
+  return `✅ spec hardened & locked — ${rel}\nNext: /spec:queue add ${rel}`
 }
 
 function main(argv) {

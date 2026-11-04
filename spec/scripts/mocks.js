@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // mocks.js — /spec:mocks driver: SEED → SCREENS → APPROVED. The wireframe settles structure (screens,
-// navigation, content order), never look or wording.
+// navigation, content order), not look. `approved` commits design/mocks/ on the root's branch.
 //
 //   node mocks.js [--mark seed-done | journey-drawn --journey <j> | approved]
 //   node mocks.js push | pull     review-service helpers (service mode)
@@ -18,6 +18,7 @@ const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
 const state = require('./lib/state')
 const wt = require('./lib/walkthrough')
 const { render } = require('./lib/report')
+const git = require('./lib/git')
 
 const BEAT = /^(\d+)\.\s+"(.+)"\s*->\s*([\w][\w-]*)(?:@([\w][\w-]*))?\s*$/
 const ID = /^[\w][\w-]*$/
@@ -25,6 +26,13 @@ const now = () => new Date().toISOString()
 const screensDir = (root) => path.join(root, 'design', 'mocks', 'screens')
 const target = (b) => b.screen + (b.state ? '@' + b.state : '')
 const screenFile = (root, b) => path.join(screensDir(root), target(b) + '.json')
+// The json-render shape, printed at the draw step (the seed's comment is overwritten by then).
+const SHAPE = `{ "root": "page", "elements": {
+    "page":  { "type": "Stack", "props": { "gap": 16 }, "children": ["title", "go"] },
+    "title": { "type": "Heading", "props": { "text": "Invite your team", "level": 1 }, "children": [] },
+    "go":    { "type": "Button", "props": { "label": "Send invite" }, "children": [],
+               "on": { "press": { "action": "navigate", "params": { "to": "invite-sent" } } } } } }
+Components: Stack Row Grid Card Divider Heading Text Badge Alert Button Field Select Checkbox Tabs Nav List Table Image Avatar.`
 const beatHash = (beats) => crypto.createHash('sha256').update(beats.map((b) => `${b.beat} -> ${target(b)}`).join('\n')).digest('hex').slice(0, 12)
 
 // seed.md → {journeys: [{id, story, beats: [{beat, screen, state}]}], errors: [string]}
@@ -96,7 +104,9 @@ function derive(s, ctx) {
   const { journeys } = parseSeed(mocks.seed)
   if (s.marks.approved) {
     const counts = journeys.map((j) => `${j.id}: ${new Set(j.beats.map(target)).size} screen(s)`)
-    return { name: 'APPROVED', body: render({ outcome: `✅ wireframe approved — ${journeys.length} journeys`, bullets: counts, next: '/spec:genesis' }) }
+    // Genesis is greenfield only: a repo that already has specs/ goes straight to planning.
+    const next = fs.existsSync(path.join(ctx.root, 'specs')) ? '/spec:plan' : '/spec:genesis'
+    return { name: 'APPROVED', body: render({ outcome: `✅ wireframe approved — ${journeys.length} journeys`, bullets: [...counts, 'design/mocks/ committed'], next }) }
   }
   const pending = pendingOf(s, journeys)
   if (pending.length) {
@@ -106,7 +116,7 @@ function derive(s, ctx) {
       name: 'SCREENS', mark: 'journey-drawn --journey ' + j.id, accepts: ['journey-drawn'],
       body: [
         `Draw journey '${j.id}' (${pending.length} journey(s) still to draw).`, j.story, ...j.beats.map((b, i) => `${i + 1}. "${b.beat}" -> ${target(b)}`),
-        'One gray json-render file per screen (shape: the comment at the top of design/mocks/seed.md):', ...files,
+        'One gray json-render file per screen:', ...files, 'Shape:', SHAPE,
         'Each move between two screens is a control whose on.press navigates there. Copy the beat sentences into the screens as content. Then mark journey-drawn.',
       ].join('\n'),
     }
@@ -151,6 +161,10 @@ const steps = {
       if (open.length) refuse(`not confirmed on their current beats: ${open.map((j) => j.id).join(', ')} — run pull, then fix or wait for the client`)
     }
     s.marks.approved = now()
+    save(s, ctx) // the committed status.json already carries the approved mark
+    const dirs = ['design/mocks', ...(fs.existsSync(wt.roundsDir(ctx.root)) ? ['design/rounds'] : [])]
+    git.sh(['add', '--', ...dirs], ctx.root)
+    if (git.raw(['diff', '--cached', '--quiet', '--', ...dirs], ctx.root).status !== 0) git.sh(['commit', '-q', '-m', 'chore(mocks): approved', '--', ...dirs], ctx.root)
   },
 }
 

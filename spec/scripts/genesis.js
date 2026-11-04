@@ -67,7 +67,17 @@ const ROADMAP = `Write docs/roadmap/00-overview.md (${path.join(TPL, 'roadmap-ov
 whole stack. Honour the ADRs. The driver queues every brief on --mark roadmap-written.`
 
 const HANDOFF = `The driver writes .claude/spec.config.json (testCommand, setupCommand, trunk) from the descriptor, merged over any
-existing config. Nothing for you to write.`
+existing config, adds the pipeline's .gitignore entries, and commits everything as chore(genesis): grounded. Nothing for you to write.`
+
+// The same entries init.js ensures; kept here so genesis does not reach into init.
+const IGNORE = ['specs/**/*.run/', '.claude/worktrees/', '.claude/pending-question.json', '.claude/settings.local.json']
+function ensureGitignore(root) {
+  const file = path.join(root, '.gitignore')
+  const text = S.readText(file, '')
+  const have = new Set(text.split('\n').map((l) => l.trim()))
+  const add = IGNORE.filter((e) => !have.has(e))
+  if (add.length) fs.writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + add.join('\n') + '\n')
+}
 
 function derive(s) {
   switch (s.phase) {
@@ -156,6 +166,9 @@ const steps = {
       queued: bs.map((b) => 'docs/roadmap/' + b),
       next: `/spec:plan docs/roadmap/${bs[0]}`,
     })
+    ensureGitignore(ctx.root)
+    S.writeGenesis(ctx.root, s) // the committed status already reads GROUNDED
+    git.commitAll(ctx.root, 'chore(genesis): grounded')
   },
 }
 

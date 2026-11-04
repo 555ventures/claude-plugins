@@ -30,7 +30,7 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   fs.writeFileSync(f, text)
   const r = plan(d, 'lock', f)
   assert.strictEqual(r.status, 0)
-  assert.match(r.stdout, /^✅ spec hardened & locked — specs\/\d{8}\/01-first\.md/)
+  assert.match(r.stdout, /^✅ spec hardened & locked — specs\/\d{8}\/01-first\.md\nNext: \/spec:queue add specs\/\d{8}\/01-first\.md\n/)
   assert.strictEqual(status(f), 'hardened')
 })
 

@@ -9,6 +9,7 @@
 //     auto     (state, ctx) → state; the driver runs it, saves, and re-derives (no session work)
 //   steps[verb](state, flags, ctx) → state (or mutate in place and return nothing)
 //   save(state, ctx)
+//   after(verb, state, ctx) → line?   optional; printed under the checkpoint (e.g. the gate result)
 // Refusals: throw {exit: 2, message} (or call die). Exit 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
@@ -59,7 +60,7 @@ function parseArgv(argv) {
   return out
 }
 
-function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script }) {
+function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after }) {
   const scriptPath = script || (require.main && require.main.filename) || name
   const MAX_AUTO = 50
 
@@ -106,9 +107,12 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     if (!allowed.includes(verb)) refuse(`mark '${verb}' is not accepted at ${cur.step.name} — expected ${allowed.join(' | ') || 'no mark'}; re-run without --mark to see the step`)
     state = steps[verb](state, a.flags, ctx) || state
     save(state, ctx)
-    const next = settle(state, ctx).step
+    const settled = settle(state, ctx)
+    const next = settled.step
     const arg = ctx.arg ? ' ' + ctx.arg : ''
     writeOut(1, `✅ checkpoint — ${cur.step.name} → ${next.name}; safe to /clear and re-run /spec:${name}${arg}\n`)
+    const extra = after && !ctx.json && after(verb, settled.state, ctx)
+    if (extra) writeOut(1, extra + '\n')
     // A terminal step (no mark) is shown now: its state may already be cleared, so a re-run cannot.
     if (!next.mark && next.body && !ctx.json) writeOut(1, '\n' + render(next, ctx))
   }

@@ -12,6 +12,7 @@ const queue = (d, ...a) => runNode('scripts/queue.js', [...a, '--root', d])
 
 test('roadmap states: done, implementing, open, superseded', () => {
   const d = tmpdir('status'); gitRepo(d)
+  w(d, 'docs/roadmap/00-overview.md', '# Overview\n')
   for (const n of ['01-a', '02-b', '03-c', '04-d']) w(d, `docs/roadmap/${n}.md`, `# ${n.slice(0, 2)} — T${n}\n` + (n === '04-d' ? '\n> Superseded by 01\n' : ''))
   w(d, 'specs/20261104/01-x.md', spec('done', '01', ['a.js']))
   w(d, 'specs/20261104/02-y.md', spec('implementing', '02', ['b.js']))
@@ -24,6 +25,7 @@ test('roadmap states: done, implementing, open, superseded', () => {
 test('empty queue verdict; next ready verdict', () => {
   const d = tmpdir('status'); gitRepo(d)
   assert.match(JSON.parse(run(d).stdout).verdict, /^⚪/)
+  assert.ok(!runNode('scripts/status.js', ['--root', d]).stdout.includes('Roadmap'), 'no briefs → no roadmap header')
   queue(d, 'add', 'do a thing')
   const r = JSON.parse(run(d).stdout)
   assert.strictEqual(r.next, 'do a thing')

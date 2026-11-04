@@ -7,6 +7,7 @@ const fs = require('fs')
 const path = require('path')
 const { readJson, configPath } = require('./lib/state')
 const { run } = require('./lib/host')
+const git = require('./lib/git')
 const { IGNORE } = require('./init')
 
 function walkRuns(dir, out, depth = 0) {
@@ -32,8 +33,13 @@ function check(root) {
     else if (!cfg.testCommand) f.push('config: testCommand is not set — run /spec:init')
   }
   if (cfg && cfg.testCommand) {
-    const r = run(cfg.testCommand, { cwd: root, timeoutMs: 600000 })
-    if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
+    const cap = Number(process.env.SPEC_DOCTOR_PROBE_MS) || 120000
+    process.stderr.write(`running testCommand: ${cfg.testCommand} …\n`)
+    const t0 = Date.now()
+    const r = run(cfg.testCommand, { cwd: root, timeoutMs: cap })
+    process.stderr.write(`testCommand finished in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`)
+    if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand}`)
+    else if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
     else if (r.status > 1) f.push(`testCommand: exited ${r.status}, expected 0 or 1`)
   }
   let ig = ''
@@ -45,6 +51,12 @@ function check(root) {
   try { for (const n of fs.readdirSync(wt)) f.push(`leftover worktree: .claude/worktrees/${n}`) } catch { /* none */ }
   for (const base of [root, ...(fs.existsSync(wt) ? fs.readdirSync(wt).map((n) => path.join(wt, n)) : [])]) {
     if (fs.existsSync(path.join(base, '.claude', 'pending-question.json'))) f.push(`pending question: ${path.relative(root, path.join(base, '.claude', 'pending-question.json')) || '.claude/pending-question.json'}`)
+  }
+  if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) f.push('token file is tracked — run: git rm --cached .claude/settings.local.json')
+  if (fs.existsSync(path.join(root, 'docs/archive/v7'))) {
+    const tracked = git.raw(['ls-files', '--', 'docs/archive/v7'], root).stdout.trim()
+    const pending = git.raw(['status', '--porcelain', '--', 'docs/archive/v7'], root).stdout.trim()
+    if (!tracked || pending) f.push('uncommitted migration: docs/archive/v7/ is untracked or staged — commit it (git add -A && git commit -m "chore(spec): migrate v7 → v8")')
   }
   const plugin = readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {}) || {}
   return { findings: f, version: plugin.version || null }

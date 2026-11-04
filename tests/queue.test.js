@@ -95,3 +95,15 @@ test('add stores @-prefixed, ./ and absolute spec paths root-relative, as a spec
   assert.strictEqual(add('./' + f).status, 2, './ form is the same spec: a duplicate')
   assert.strictEqual(add(path.join(dir, f)).status, 2, 'the absolute form is the same spec: a duplicate')
 })
+
+test('list ages accept an epoch-number added and the next write stores ISO', () => {
+  const d = repo()
+  q(d, 'add', 'a thing')
+  const S = require('../spec/scripts/lib/state')
+  const doc = S.readQueue(d)
+  doc.items[0].added = Date.now() - 2 * 3600e3
+  S.writeQueue(d, doc)
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}2h {2}a thing$/m)
+  q(d, 'add', 'another')
+  assert.match(S.readQueue(d).items[0].added, /^\d{4}-\d\d-\d\dT/)
+})

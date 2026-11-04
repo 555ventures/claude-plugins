@@ -130,10 +130,12 @@ function redCheck(state, wt) {
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx)
   const wt = wtOf(state, ctx)
+  const t0 = Date.now()
   const g = host.gate(wt, cfg)
+  const ms = Date.now() - t0
   const red = g.status !== 0
   const tail = red && cfg.testFileCommand ? g.tail + '\n' + redCheck(state, wt) : g.tail
-  state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, output_tail: tail }
+  state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail }
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   st.writeText(runFile(ctx, 'diff.patch'), git.diff(state.base, wt) + '\n')
   fs.rmSync(runFile(ctx, 'findings.json'), { force: true }) // never re-read an earlier round's findings
@@ -386,7 +388,21 @@ const steps = {
   },
 }
 
-const main = makeDriver({ name: 'run', specArg: 'spec path', load, save, derive, steps })
+// One line under the checkpoint so the session sees what the mark led to.
+function afterMark(verb, state) {
+  const g = state.gate
+  if (['built', 'repaired', 'fixed'].includes(verb) && g) {
+    if (g.status === 'red') return `gate: red — ${(g.output_tail || '').split('\n').find((l) => l.trim()) || 'no output'}`
+    return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}`
+  }
+  if (verb === 'reviewed' && state.review) {
+    const n = state.review.findings.filter((f) => f.severity === 'blocking').length
+    return n ? `review: ${n} blocking → ${state.review.verdict === 'fix' ? 'FIX' : 'ESCALATE'}` : 'review: clean'
+  }
+  return null
+}
+
+const main = makeDriver({ name: 'run', specArg: 'spec path', load, save, derive, steps, after: afterMark })
 
 if (require.main === module) {
   const argv = process.argv.slice(2)

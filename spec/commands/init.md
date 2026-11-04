@@ -5,7 +5,5 @@ allowed-tools: Bash(node *), Read, Grep, Glob, AskUserQuestion
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
-`node ${CLAUDE_PLUGIN_ROOT}/scripts/init.js`. Treat `$ARGUMENTS` as hints.
-
-Fold the repo's lint and typecheck into `testCommand` so one command is the whole gate. Ask
-only what the code can't answer, in one question round.
+`node ${CLAUDE_PLUGIN_ROOT}/scripts/init.js`, with `$ARGUMENTS` as hints. `testCommand` is the
+whole gate, lint and typecheck included. Ask only what the code can't answer, in one round.

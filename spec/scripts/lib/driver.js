@@ -106,6 +106,8 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const next = settle(state, ctx).step
     const arg = ctx.arg ? ' ' + ctx.arg : ''
     writeOut(1, `✅ checkpoint — ${cur.step.name} → ${next.name}; safe to /clear and re-run /spec:${name}${arg}\n`)
+    // A terminal step (no mark) is shown now: its state may already be cleared, so a re-run cannot.
+    if (!next.mark && next.body && !ctx.json) writeOut(1, '\n' + render(next, ctx))
   }
 
   return function main(argv = process.argv.slice(2)) {

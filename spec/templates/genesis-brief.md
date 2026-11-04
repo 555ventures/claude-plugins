@@ -14,8 +14,8 @@
 
 ## Constraints
 
-<platform (web/mobile), data sensitivity, auth, payments, hosting preference, must-use tech — one line each, user's words>
+<platform, data sensitivity, auth, payments, hosting, must-use tech — one line each, user's words>
 
 ## Open dimensions
 
-<one per line, `- <dimension>`: language-runtime, framework, persistence, auth, hosting, ... Only what the user did not already fix.>
+<one `- <dimension>` per line for each stack choice the user has not fixed>

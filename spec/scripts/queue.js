@@ -31,6 +31,12 @@ function pasteLine(root, it) {
 
 const pending = (q) => q.items.filter((i) => !i.done)
 
+// A spec item whose spec is done counts as done; the timestamp is written with the next write.
+function reconcile(root, q) {
+  for (const i of q.items) if (!i.done && i.kind === 'spec' && specStatus(root, i.payload) === 'done') i.done = new Date().toISOString()
+  return q
+}
+
 function age(iso) {
   const m = Math.max(0, (Date.now() - Date.parse(iso)) / 60000)
   return m < 60 ? Math.floor(m) + 'm' : m < 1440 ? Math.floor(m / 60) + 'h' : Math.floor(m / 1440) + 'd'
@@ -50,13 +56,13 @@ function main(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--json' || a === '--top') flags[a.slice(2)] = true
-    else if (a === '--root' || a === '--at') flags[a.slice(2)] = argv[++i]
+    else if (a === '--root') flags.root = argv[++i]
     else pos.push(a)
   }
   const root = path.resolve(flags.root || process.cwd())
   const cmd = pos[0] || 'next'
   const arg = pos.slice(1).join(' ')
-  const q = readQueue(root)
+  const q = reconcile(root, readQueue(root))
   const out = (text, json) => console.log(flags.json ? JSON.stringify(json ?? text) : text)
   const fail = (msg, code = 1) => { console.error('queue: ' + msg); return code }
   const list = pending(q)
@@ -74,8 +80,7 @@ function main(argv) {
     if (q.items.some((i) => !i.done && i.payload === arg)) return fail(`duplicate payload already queued: ${arg}`, 2)
     q.seq += 1
     const it = { id: 'q' + q.seq, kind: kindOf(arg), payload: arg, added: new Date().toISOString() }
-    const at = flags.top ? 0 : flags.at ? Math.max(0, Number(flags.at) - 1) : list.length
-    const before = list[at]
+    const before = flags.top ? list[0] : null
     q.items.splice(before ? q.items.indexOf(before) : q.items.length, 0, it)
     writeQueue(root, q)
     out(`queued ${it.id} (${it.kind}): ${arg}`, it)
@@ -100,5 +105,5 @@ function main(argv) {
   return 0
 }
 
-module.exports = { kindOf, pasteLine, pending, main }
+module.exports = { kindOf, pasteLine, pending, reconcile, main }
 if (require.main === module) process.exitCode = main(process.argv.slice(2))

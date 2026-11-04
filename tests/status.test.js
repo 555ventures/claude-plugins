@@ -51,16 +51,3 @@ test('pending questions in root and worktrees turn the verdict yellow', () => {
   assert.strictEqual(r.questions.length, 1)
   assert.match(r.verdict, /^🟡/)
 })
-
-test('--all lists stale sidecars and leftover worktrees', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'specs/20261104/01-a.md', spec('done', 'n/a', ['x.js']))
-  w(d, 'specs/20261104/01-a.run/state.json', '{}')
-  w(d, 'specs/20261104/02-live.md', spec('implementing', 'n/a', ['y.js']))
-  w(d, 'specs/20261104/02-live.run/state.json', '{}')
-  fs.mkdirSync(path.join(d, '.claude/worktrees/spec-old'), { recursive: true })
-  const r = JSON.parse(run(d, '--all').stdout)
-  assert.deepStrictEqual(r.hygiene.staleSidecars, ['specs/20261104/01-a.run'])
-  assert.deepStrictEqual(r.hygiene.worktrees, ['.claude/worktrees/spec-old'])
-  assert.strictEqual(JSON.parse(run(d).stdout).hygiene, undefined)
-})

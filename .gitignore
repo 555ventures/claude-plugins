@@ -14,3 +14,7 @@ specs/**/*.build/
 # spike screenshots are look-and-see artifacts, never tracked (tracked-text-purity pin; re-added three times)
 docs/spikes/**/*.png
 .DS_Store
+
+# spec v8 host files (never committed)
+specs/**/*.run/
+.claude/pending-question.json

@@ -43,15 +43,14 @@ test('duplicate payload refused with exit 2', () => {
   assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 1)
 })
 
-test('add --top / --at, move, list footer', () => {
+test('add --top, move, list footer', () => {
   const d = repo()
   for (const p of ['one', 'two', 'three']) q(d, 'add', p)
   q(d, 'add', 'top', '--top')
-  q(d, 'add', 'second', '--at', '2')
   const order = () => JSON.parse(q(d, 'list', '--json').stdout).items.map((i) => i.payload)
-  assert.deepStrictEqual(order(), ['top', 'second', 'one', 'two', 'three'])
+  assert.deepStrictEqual(order(), ['top', 'one', 'two', 'three'])
   q(d, 'move', 'three', '1')
-  assert.deepStrictEqual(order(), ['three', 'top', 'second', 'one', 'two'])
+  assert.deepStrictEqual(order(), ['three', 'top', 'one', 'two'])
   q(d, 'done', 'two')
   const out = q(d, 'list').stdout
   assert.match(out, /^1 {2}q\d+ {2}\d+m {2}three$/m)
@@ -69,4 +68,15 @@ test('refs: id, position, basename, substring; ambiguous or unknown fails', () =
   assert.strictEqual(show('task').stdout.trim(), 'alpha task')
   assert.strictEqual(show('alpha').status, 1)
   assert.strictEqual(show('nope').status, 1)
+})
+
+test('a spec item whose spec is done counts as done, and the next write records it', () => {
+  const d = repo()
+  q(d, 'add', 'specs/20261104/01-a.md'); q(d, 'add', 'later')
+  const f = path.join(d, 'specs/20261104/01-a.md')
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('hardened', 'done'))
+  assert.strictEqual(q(d, 'next').stdout.trim(), 'later')
+  q(d, 'add', 'more')
+  const stored = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items
+  assert.ok(stored.find((i) => i.payload === 'specs/20261104/01-a.md').done, 'the done timestamp is written back')
 })

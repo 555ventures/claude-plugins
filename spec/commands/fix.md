@@ -4,13 +4,12 @@ argument-hint: "[symptom in plain words]"
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once. Fix `$ARGUMENTS`, or the symptom under
-discussion. Ask only if there is neither.
+discussion; ask only if there is neither.
 
-1. Reproduce it. Before the first edit, state the root cause in one sentence.
+1. Reproduce it and state the root cause in one sentence before the first edit.
 2. Write a regression test that fails for that reason.
-3. Fix the cause, then run the config's `testCommand` until green.
+3. Fix the cause and run the config's `testCommand` until green.
 4. Commit with `/git:commit`.
 
-If the root cause needs an architecture or behaviour change, offer `/spec:plan` with the
-diagnosis instead. End with one report rendered by `lib/report.js`:
-`✅ fixed — <symptom>`, with the root cause and the guarding test.
+If the cause needs an architecture or behaviour change, offer `/spec:plan` with the diagnosis
+instead. Report `✅ fixed — <symptom>` with the root cause and the guarding test.

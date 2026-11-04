@@ -7,50 +7,38 @@ const { tmpdir, runNode } = require('./helpers')
 
 const plan = (d, ...a) => runNode('scripts/plan.js', [...a, '--root', d])
 const status = (f) => /^status:\s*(\S+)/m.exec(fs.readFileSync(f, 'utf8'))[1]
+const fresh = (d, slug) => { const r = plan(d, 'new', slug); assert.strictEqual(r.status, 0, r.stderr); return path.join(d, r.stdout.trim()) }
 
 test('new numbers per date and creates a draft', () => {
   const d = tmpdir('plan')
-  const a = plan(d, 'new', 'first', '--date', '20261104')
-  assert.strictEqual(a.stdout.trim(), 'specs/20261104/01-first.md')
-  assert.strictEqual(plan(d, 'new', 'second', '--date', '20261104').stdout.trim(), 'specs/20261104/02-second.md')
-  assert.strictEqual(plan(d, 'new', 'other', '--date', '20261105').stdout.trim(), 'specs/20261105/01-other.md')
-  assert.strictEqual(status(path.join(d, 'specs/20261104/01-first.md')), 'draft')
+  const a = fresh(d, 'first')
+  assert.match(path.relative(d, a), /^specs\/\d{8}\/01-first\.md$/)
+  assert.strictEqual(path.basename(fresh(d, 'second')), '02-second.md')
+  assert.strictEqual(status(a), 'draft')
   assert.strictEqual(plan(d, 'new', 'Bad Slug').status, 2)
 })
 
-test('check reports missing sections and markers; lock refuses then locks', () => {
+test('lock refuses a missing section or an open marker, then locks', () => {
   const d = tmpdir('plan')
-  const f = path.join(d, 'specs/20261104/01-first.md')
-  plan(d, 'new', 'first', '--date', '20261104')
-  const ok = JSON.parse(plan(d, 'check', f).stdout)
-  assert.deepStrictEqual([ok.ok, ok.missing, ok.markers, ok.architecture], [true, [], 0, false])
-
+  const f = fresh(d, 'first')
   const text = fs.readFileSync(f, 'utf8')
-  fs.writeFileSync(f, text.replace('## Assumptions', '## Notes').replace('<assumption>', 'x [NEEDS CLARIFICATION: y]'))
-  const bad = JSON.parse(plan(d, 'check', f).stdout)
-  assert.deepStrictEqual(bad.missing, ['Assumptions'])
+  fs.writeFileSync(f, text.replace('## Assumptions', '## Notes'))
   assert.strictEqual(plan(d, 'lock', f).status, 2)
-
   fs.writeFileSync(f, text.replace('<bullets>', 'x [NEEDS CLARIFICATION: y]'))
-  assert.strictEqual(JSON.parse(plan(d, 'check', f).stdout).markers, 1)
   assert.strictEqual(plan(d, 'lock', f).status, 2)
   assert.strictEqual(status(f), 'draft')
-
   fs.writeFileSync(f, text)
   const r = plan(d, 'lock', f)
   assert.strictEqual(r.status, 0)
-  assert.match(r.stdout, /^✅ spec hardened & locked — specs\/20261104\/01-first\.md/)
+  assert.match(r.stdout, /^✅ spec hardened & locked — specs\/\d{8}\/01-first\.md/)
   assert.strictEqual(status(f), 'hardened')
 })
 
 test('architecture: true needs --confirmed', () => {
   const d = tmpdir('plan')
-  const f = path.join(d, 'specs/20261104/01-arch.md')
-  plan(d, 'new', 'arch', '--date', '20261104')
+  const f = fresh(d, 'arch')
   fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('architecture: false', 'architecture: true'))
-  assert.strictEqual(JSON.parse(plan(d, 'check', f).stdout).architecture, true)
-  const r = plan(d, 'lock', f)
-  assert.strictEqual(r.status, 2)
+  assert.strictEqual(plan(d, 'lock', f).status, 2)
   assert.strictEqual(status(f), 'draft')
   assert.strictEqual(plan(d, 'lock', f, '--confirmed').status, 0)
   assert.strictEqual(status(f), 'hardened')

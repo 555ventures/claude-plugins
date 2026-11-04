@@ -4,8 +4,8 @@
 # this worktree's branch clean. Copy-trim of v7.
 #   same worktree as cwd                                  → allow
 #   this repo's git metadata, owned by another tree       → block (marker forgery)
-#   same repo, other tree whose PRIVATE git dir carries
-#   the `scratch-worktree` marker (target side only)      → allow (scratch sink)
+#   a plugin worktree under <cwd tree>/.claude/worktrees/ → allow (agents run from the main
+#                                                           checkout: the Agent tool has no cwd)
 #   same repo, other tree                                 → block
 #   another repo, or outside any repo                     → allow
 # Fail-open on any git/parse error. Exit 0 allow · 2 block.
@@ -48,8 +48,7 @@ tgt_common="$(absdir "$(git -C "$probe" rev-parse --git-common-dir 2>/dev/null)"
 [ "$tgt_common" = "$cur_common" ] || exit 0
 [ "$tgt_top" = "$cur_top" ] && exit 0
 
-tgt_gitdir="$(absdir "$(git -C "$probe" rev-parse --git-dir 2>/dev/null)" "$probe")" && \
-  case "$tgt_gitdir" in */worktrees/*) [ -f "$tgt_gitdir/scratch-worktree" ] && exit 0 ;; esac
+case "$tgt_top/" in "$cur_top"/.claude/worktrees/*) exit 0 ;; esac
 
 {
   echo "BLOCKED: write escapes the current worktree into another working tree of the same repo."

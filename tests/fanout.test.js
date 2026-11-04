@@ -65,7 +65,7 @@ test('two disjoint lanes are planned, merged into trunk, ticked, cleaned; then P
   for (const stem of ['01-alpha', '02-beta']) {
     assert.ok(fs.existsSync(h.wt(stem)), 'the driver creates each lane worktree before dispatch')
     assert.ok(pending.isLane(h.wt(stem)), 'each lane worktree is marked as a lane')
-    assert.ok(disp.stdout.includes(`/spec:run ${specPath(stem)}`) && disp.stdout.includes(h.wt(stem)), 'dispatch names the prompt and cwd per lane')
+    assert.ok(disp.stdout.includes(`/spec:run ${specPath(stem)}`) && disp.stdout.includes(h.wt(stem)), 'dispatch names the prompt and the worktree root per lane')
   }
   assert.strictEqual(h.step(), 'WAIT')
 
@@ -163,11 +163,11 @@ test('an empty queue prints the drained report and no mark', () => {
   assert.match(j.body, /queue drained/)
 })
 
-test('explicit spec paths and --batch limit the plan; the mark line carries them', () => {
+test('explicit spec paths limit the plan; the mark line carries them', () => {
   const h = host()
-  const r = h.ok(specPath('03-gamma'), specPath('02-beta'), '--batch', '1', '--json')
+  const r = h.ok(specPath('03-gamma'), specPath('01-alpha'), '--json')
   const j = JSON.parse(r.stdout)
-  assert.ok(j.body.includes('02-beta.md waits'), 'the second explicit spec waits on the lane cap')
+  assert.ok(j.body.includes('01-alpha.md waits'), 'the second explicit spec waits on the File Plan overlap')
   const mark = j.mark.replace(/^node /, '').split(' ')
   const m = runNode(mark[0], mark.slice(1))
   assert.strictEqual(m.status, 0, m.stderr)

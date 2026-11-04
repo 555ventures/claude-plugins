@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-// fanout.js [<spec path>…] [--batch <n|all>] [--root <dir>] [--mark <verb> …]
+// fanout.js [<spec path>…] [--root <dir>] [--mark <verb> …]
 //
 // Runs several hardened specs as parallel lanes from one session. Steps:
 // PLAN → DISPATCH → WAIT → RELAY → MERGE (MERGE_RED) → REPORT → PLAN … until nothing is runnable.
@@ -18,7 +18,6 @@ const host = require('./lib/host')
 const pending = require('./lib/pending')
 const { render } = require('./lib/report')
 
-const PENDING_CLI = path.join(__dirname, 'lib', 'pending.js')
 const FINISHED = ['MERGE_READY', 'DONE']
 let EXPLICIT = [] // positional spec paths of this invocation
 
@@ -45,17 +44,9 @@ function candidates(root) {
   return [...new Set(list.map((p) => rel(root, p)))]
 }
 
-function laneCap(config, batch) {
-  if (batch === undefined || batch === true) return config.lanes
-  if (batch === 'all') return Infinity
-  const n = Number(batch)
-  if (!Number.isInteger(n) || n < 1) refuse(`--batch '${batch}' is not a lane count — pass a positive number or all`)
-  return n
-}
-
 // First come wins: a spec whose File Plan shares a path with an already-picked one waits.
-function plan(root, config, batch) {
-  const cap = laneCap(config, batch)
+function plan(root, config) {
+  const cap = config.lanes
   const picked = []
   const waited = []
   const taken = new Map()
@@ -81,26 +72,26 @@ function derivePlan(ctx) {
   const config = st.readConfig(root)
   const branch = git.currentBranch(root)
   if (branch !== config.trunk) refuse(`${root} is on ${branch}, not trunk ${config.trunk} — run /spec:fanout from the main checkout`)
-  const { picked, waited } = plan(root, config, ctx.flags.batch)
+  const { picked, waited } = plan(root, config)
   if (!picked.length) {
     return {
       name: 'PLAN',
       body: render({ outcome: '✅ queue drained — no hardened spec is runnable', warns: waitLines(waited), next: 'nothing needs you — queue drained' }),
     }
   }
-  const batchFlag = ctx.flags.batch !== undefined && ctx.flags.batch !== true ? ` --batch ${ctx.flags.batch}` : ''
   const lines = [`${picked.length} lane(s) — File Plans do not overlap:`, ...picked.map((p, i) => `  lane ${i + 1}: ${p}`)]
   if (waited.length) lines.push('', 'Waiting:', ...waitLines(waited).map((w) => '  ' + w))
   lines.push('', 'Mark planned; the driver then creates the worktrees and prints the dispatch.')
-  return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...EXPLICIT.slice(1)].join(' ') + batchFlag }
+  return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...EXPLICIT.slice(1)].join(' ') }
 }
 
 // ---- DISPATCH ---------------------------------------------------------------------------------
 
+// The Agent tool takes no working directory, so the lane's prompt points run.js at its worktree.
 function agentLine(root, config, lane) {
   const model = (config.seats.orchestrator || {}).model || 'opus'
   return `Agent({ subagent_type: "claude", model: "${model}", description: "lane ${lane.id}: ${lane.stem}", ` +
-    `prompt: "/spec:run ${lane.spec}", cwd: "${wtAbs(root, lane)}" })`
+    `prompt: "/spec:run ${lane.spec} --root ${wtAbs(root, lane)}" })`
 }
 
 function dispatchBody(root, lanes, intro) {
@@ -108,7 +99,7 @@ function dispatchBody(root, lanes, intro) {
   return [
     intro,
     'Run all lanes in one message so they go in parallel; do not wait on them one by one.',
-    'Each lane is one Agent call with cwd = its worktree. Do NOT use isolation: "worktree" — the driver already made the worktree and branch.',
+    'Each lane is one Agent call whose prompt runs /spec:run in its worktree. Do NOT use isolation: "worktree" — the driver already made the worktree and branch.',
     '',
     ...lanes.flatMap((l) => [`lane ${l.id} — ${l.stem} (${l.branch})`, '  ' + agentLine(root, config, l)]),
   ].join('\n')
@@ -151,12 +142,10 @@ function deriveRelay(s, ctx) {
   }
   const lines = ['Ask the user these lane questions as ONE batch (one AskUserQuestion call, at most 4 per call), then record each answer.', '']
   for (const l of stopped) {
-    const wt = wtAbs(root, l)
     lines.push(`lane ${l.id} — ${l.stem}`)
     if (l.question) {
       lines.push(`  Q: ${l.question.question}`, ...l.question.options.map((o) => `   - ${o.label}${o.description ? ' — ' + o.description : ''}`))
       lines.push(`  answer: node ${ctx.script} --root ${root} --mark answered --lane ${l.id} --label "<label>"`)
-      lines.push(`     (same as: node ${PENDING_CLI} answer --label "<label>" --root ${wt}, then mark answered --lane ${l.id})`)
     } else {
       lines.push(`  stopped: ${l.reason || 'no reason given'}`, `  answer: node ${ctx.script} --root ${root} --mark answered --lane ${l.id}`)
     }
@@ -286,7 +275,7 @@ function derive(s, ctx) {
 
 const steps = {
   planned(s, flags, ctx) {
-    const { picked, waited } = plan(ctx.root, st.readConfig(ctx.root), flags.batch)
+    const { picked, waited } = plan(ctx.root, st.readConfig(ctx.root))
     if (!picked.length) refuse('nothing is runnable — re-run without --mark')
     const batch = picked.map((spec, i) => {
       const stem = stemOf(spec)
@@ -310,7 +299,7 @@ const steps = {
       return
     }
     const step = laneRunStep(ctx.root, lane)
-    if (!FINISHED.includes(step)) refuse(`lane ${lane.id} (${lane.stem}) is at ${step}, not MERGE_READY — re-dispatch it, or mark returned --lane ${lane.id} --stopped "<reason>"`)
+    if (!FINISHED.includes(step)) refuse(`lane ${lane.id} (${lane.stem}) is at ${step}, not MERGE_READY — re-dispatch it, mark returned --lane ${lane.id} --stopped "<reason>", or mark dismissed --lane ${lane.id}`)
     lane.status = 'done'
   },
   answered(s, flags, ctx) {

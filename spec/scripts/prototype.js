@@ -6,7 +6,6 @@
 //
 //   node prototype.js <idea words | docs/roadmap/NN-*.md | stem> [--stem <name>] [--mark <verb>]
 //   node prototype.js serve --stem <s> --port <n>    pin endpoint: POST /pin {pins:[…]}, GET /pins
-//   node prototype.js check --stem <s> [--json]      is the prototype wired and consistent?
 //
 // States OPEN → ROUND (×N) → APPROVED → CONTRACTED → CLOSED. Marks: opened, round-done, approved,
 // contracted, closed (accepted from any resting state). State: design/prototypes/<stem>/status.json
@@ -203,31 +202,13 @@ function serve(a) {
   server.listen(port, '127.0.0.1', () => writeOut(1, `pin endpoint http://127.0.0.1:${port} (stem ${stem})\n`))
 }
 
-// ---- check ---------------------------------------------------------------------------------
-
-function check(a) {
-  const stem = String(a.flags.stem)
-  const s = state.readProto(a.root, stem).status
-  if (!s) refuse(`no prototype '${stem}' — run /spec:prototype first`)
-  const ctx = { root: a.root, config: state.readConfig(a.root) }
-  const problems = []
-  const wt = path.resolve(a.root, s.worktree)
-  if (!fs.existsSync(wt) || !git.worktreeList(a.root).includes(fs.realpathSync(wt))) problems.push(`worktree ${s.worktree} is missing`)
-  else if (!entryWired(s, ctx)) problems.push(`${ctx.config.prototype.overlay} does not import proto-overlay.js`)
-  const pins = (state.readProto(a.root, stem).pins || []).length
-  const out = { stem, step: phase(s), rounds: s.rounds, pins, problems }
-  writeOut(1, a.json ? JSON.stringify(out) + '\n' : `${stem}: ${out.step}, ${s.rounds} round(s), ${pins} pin(s)${problems.length ? '\n' + problems.map((p) => '✗ ' + p).join('\n') : ' — ok'}\n`)
-  return problems.length ? 1 : 0
-}
-
 // ---- entry ---------------------------------------------------------------------------------
 
 function main(argv) {
-  const sub = ['serve', 'check'].includes(argv[0]) && argv.includes('--stem') ? argv[0] : null
+  const sub = argv[0] === 'serve' && argv.includes('--stem') ? 'serve' : null
   try {
     const a = parseArgv(sub ? argv.slice(1) : argv)
     if (sub === 'serve') return void serve(a)
-    if (sub === 'check') return check(a)
     // `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
     const out = [a.pos.join(' '), '--root', a.root].filter(Boolean)
     if (a.mark) out.push('--mark', a.mark)

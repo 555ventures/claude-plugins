@@ -5,20 +5,18 @@ model: fable
 effort: high
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once. Turn `$ARGUMENTS` into a locked spec. A
+Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once. Turn `$ARGUMENTS` into a locked spec; a
 prototype contract's behaviour pins become acceptance criteria.
 
 1. Explore the code until you can name every file the change touches.
-2. For a new spec, `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js new <slug>` prints its path.
-   Write it from `${CLAUDE_PLUGIN_ROOT}/templates/spec.md`, with "You asked" in the user's
-   own words.
-3. Mark open gaps `[NEEDS CLARIFICATION: …]`. Close them by reading code or running a
-   throwaway experiment. Ask the user only about real forks they would care
-   about.
-4. If the Intent says architecture or behaviour changes, set `architecture: true` and get the
-   user's yes before locking.
-5. Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js lock <path>`, which refuses while gaps
-   remain, then `node ${CLAUDE_PLUGIN_ROOT}/scripts/queue.js add <path>`.
+2. For a new spec, `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js new <slug>` writes the template
+   and prints its path. Fill it in, "You asked" in the user's own words.
+3. Mark gaps `[NEEDS CLARIFICATION: …]` and close them by reading code or running a throwaway
+   experiment. Ask the user only about real forks they would care about.
+4. If the Intent changes architecture or behaviour, set `architecture: true` and get the
+   user's yes.
+5. `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js lock <path>` (add `--confirmed` after that yes)
+   refuses while gaps remain, then locks and commits the spec. Then `node ${CLAUDE_PLUGIN_ROOT}/scripts/queue.js add <path>`.
 
-A brief may become several specs; use `depends_on` when one must land first. End with one
-report rendered by `lib/report.js`, Next: `/spec:run <path>`.
+A brief may become several specs; use `depends_on` when one must land first. Report Next:
+`/spec:run <path>`.

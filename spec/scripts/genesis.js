@@ -10,6 +10,8 @@ const S = require('./lib/state')
 const host = require('./lib/host')
 const report = require('./lib/report')
 
+const TPL = path.join(__dirname, '..', 'templates')
+
 const gdir = (root) => path.join(root, '.claude', 'genesis')
 const briefPath = (root) => path.join(gdir(root), 'brief.md')
 const descPath = (root) => path.join(gdir(root), 'stack-descriptor.json')
@@ -51,15 +53,15 @@ and ask the user only the real forks, in ONE AskUserQuestion. Then --mark menus-
 
 const DECIDE = (s, ctx) => `Write .claude/genesis/stack-descriptor.json:
 {"name","language","framework","db","auth","hosting","testCommand","setupCommand","decided":[{"dimension","choice","why"}]}
-from the menus and the user's picks. For every non-obvious choice write an ADR from spec/templates/adr.md to
+from the menus and the user's picks. For every non-obvious choice write an ADR from ${path.join(TPL, 'adr.md')} to
 docs/adr/NNNN-<slug>.md (next number: ${String(adrs(ctx.root).length + 1).padStart(4, '0')}), status accepted, dated ${new Date().toISOString().slice(0, 10)}.`
 
 const SCAFFOLD = (s, ctx) => `${s.tail ? `The scaffold gate is RED — fix it, then re-mark. Tail:\n${s.tail}\n\n` : ''}Create the app per ${path.relative(ctx.root, descPath(ctx.root))}: project files, dependencies installed (setupCommand),
 a test runner wired to testCommand, and ONE passing test. Nothing beyond the thinnest runnable skeleton.
 The driver then runs testCommand as the gate; green moves on to ROADMAP.`
 
-const ROADMAP = `Write docs/roadmap/00-overview.md (spec/templates/roadmap-overview.md) and 3-8 briefs docs/roadmap/NN-<slug>.md
-(spec/templates/roadmap-brief.md: header "Phase: <P> · Depends on: <NN|—> · Primary workspaces: <areas>", then ## Result,
+const ROADMAP = `Write docs/roadmap/00-overview.md (${path.join(TPL, 'roadmap-overview.md')}) and 3-8 briefs docs/roadmap/NN-<slug>.md
+(${path.join(TPL, 'roadmap-brief.md')}: header "Phase: <P> · Depends on: <NN|—> · Primary workspaces: <areas>", then ## Result,
 ## Scope, ## Out of scope), numbered from 01. Brief 01 is the "first light": the thinnest end-to-end slice through the
 whole stack. Honour the ADRs. The driver queues every brief on --mark roadmap-written.`
 
@@ -159,7 +161,7 @@ function load(ctx) {
   if (!ctx.arg) refuse('usage: /spec:genesis "<project idea — what, for whom>" [--root <dir>]')
   const s = { idea: ctx.arg, phase: 'DISCOVERY', menus: [], tail: '' }
   if (!fs.existsSync(briefPath(ctx.root))) {
-    const tpl = S.readText(path.join(__dirname, '..', 'templates', 'genesis-brief.md'), '## Idea\n\n<idea>\n\n## Open dimensions\n')
+    const tpl = S.readText(path.join(TPL, 'genesis-brief.md'))
     S.writeText(briefPath(ctx.root), tpl.replace('<idea>', s.idea))
   }
   S.writeGenesis(ctx.root, s)

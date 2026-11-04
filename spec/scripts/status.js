@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 const { readQueue, readSpec, readConfig, readJson } = require('./lib/state')
-const { pasteLine, pending } = require('./queue')
+const { pasteLine, pending, reconcile } = require('./queue')
 
 const ls = (d) => { try { return fs.readdirSync(d) } catch { return [] } }
 
@@ -54,30 +54,13 @@ function questions(root) {
     .map((d) => ({ lane: d.lane, question: d.question }))
 }
 
-function hygiene(root, specs) {
-  const stale = []
-  const walk = (rel) => {
-    for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
-      if (!e.isDirectory()) continue
-      const p = rel + '/' + e.name
-      if (e.name.endsWith('.run')) {
-        const s = specs.find((x) => x.path === p.replace(/\.run$/, '.md'))
-        if (!s || s.spec.frontmatter.status === 'done') stale.push(p)
-      } else walk(p)
-    }
-  }
-  if (fs.existsSync(path.join(root, 'specs'))) walk('specs')
-  return { staleSidecars: stale, worktrees: ls(path.join(root, '.claude', 'worktrees')).map((n) => '.claude/worktrees/' + n) }
-}
-
-function build(root, all) {
-  const specs = allSpecs(root); const q = readQueue(root); const head = pending(q)[0]
+function build(root) {
+  const specs = allSpecs(root); const q = reconcile(root, readQueue(root)); const head = pending(q)[0]
   const parallel = lanes(root, q, readConfig(root).lanes)
   const qs = questions(root)
   const verdict = qs.length ? `🟡 waiting on you — ${qs.length} pending question${qs.length > 1 ? 's' : ''}`
     : head ? `🟢 next is ready · ${pasteLine(root, head)}` : '⚪ queue empty'
   const res = { roadmap: roadmap(root, specs), next: head ? pasteLine(root, head) : null, lanes: parallel, questions: qs, verdict }
-  if (all) res.hygiene = hygiene(root, specs)
   return res
 }
 
@@ -87,18 +70,13 @@ function render(r) {
   L.push(r.next ? `  ${r.next}` : '  queue empty')
   if (r.lanes.length > 1) L.push(`  ⚡ ${r.lanes.length} parallel lanes ready`, ...r.lanes.map((s) => `    /spec:run @${s}`))
   if (r.questions.length) L.push('', '⚠️ Pending questions', ...r.questions.map((x) => `  ${x.lane || 'root'}: ${x.question}`))
-  if (r.hygiene) {
-    const h = r.hygiene
-    L.push('', '🧹 Hygiene', ...h.staleSidecars.map((s) => `  stale sidecar ${s}/`), ...h.worktrees.map((w) => `  worktree ${w}`))
-    if (!h.staleSidecars.length && !h.worktrees.length) L.push('  clean')
-  }
   return ['```', ...L, '', r.verdict, '```'].join('\n')
 }
 
 function main(argv) {
   const ri = argv.indexOf('--root')
   const root = path.resolve(ri >= 0 ? argv[ri + 1] : process.cwd())
-  const r = build(root, argv.includes('--all'))
+  const r = build(root)
   console.log(argv.includes('--json') ? JSON.stringify(r, null, 2) : render(r))
   return 0
 }

@@ -16,9 +16,17 @@ cmd="${parsed#*$'\n'}"
 [ "$cmd" != "$parsed" ] && [ -n "$cmd" ] || exit 0
 [ -n "$cwd" ] || cwd="$PWD"
 
-gd="$(git -C "$cwd" rev-parse --git-dir 2>/dev/null)" || exit 0
-case "$gd" in /*) ;; *) gd="$cwd/$gd" ;; esac
-[ -f "$gd/spec-lane-open" ] || exit 0
+# Agents run from the main checkout (the Agent tool has no cwd), so `cd <dir>` and `git -C <dir>`
+# targets count as well as cwd.
+marked=""
+while IFS= read -r d; do
+  [ -n "$d" ] || continue
+  case "$d" in /*) ;; *) d="$cwd/$d" ;; esac
+  gd="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)" || continue
+  if [ -f "$gd/spec-lane-open" ]; then marked="$gd"; break; fi
+done < <(printf '%s\n' "$cwd"; printf '%s\n' "$cmd" | grep -oE '(^|[;&|(]|[[:space:]])(cd|-C)[[:space:]]+[^[:space:];&|)]+' | sed -E 's/.*(cd|-C)[[:space:]]+//' | tr -d "\"'")
+[ -n "$marked" ] || exit 0
+gd="$marked"
 
 BLOCK='commit|push|merge|rebase|reset|checkout'
 RE='(^|[;&|(`]|[[:space:]])git([[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+|--[a-z-]+(=[^[:space:]]+)?))*[[:space:]]+[a-z][a-z-]*'
@@ -30,7 +38,7 @@ done < <(printf '%s\n' "$cmd" | grep -oE "$RE")
 [ -n "$verb" ] || exit 0
 
 {
-  echo "BLOCKED: git $verb inside a spec lane worktree ($cwd) — agents never run git here; /spec:run commits and merges at its own steps."
+  echo "BLOCKED: git $verb inside a spec lane worktree (${gd%/.git*}) — agents never run git here; /spec:run commits and merges at its own steps."
   echo "  stale marker (no run in flight)? remove $gd/spec-lane-open"
 } >&2
 exit 2

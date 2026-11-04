@@ -4,7 +4,7 @@
 // navigation, content order), never look or wording.
 //
 //   node mocks.js [--mark seed-done | journey-drawn --journey <j> | approved]
-//   node mocks.js push | pull | reply --note <id> --text <t>     review-service helpers (service mode)
+//   node mocks.js push | pull     review-service helpers (service mode)
 //
 // State: design/mocks/status.json {marks:{seedDone, approved}, drawn:{journey: beats-hash}, pushed?}.
 // A journey whose beats change after it was drawn is pending again. Service mode when
@@ -86,7 +86,6 @@ function drawnProblems(root, j) {
 
 function derive(s, ctx) {
   const mocks = state.readMocks(ctx.root)
-  const mark = (v) => `node ${ctx.script} --root ${ctx.root} --mark ${v}`
   if (mocks.seed === null) return { name: 'SEED', auto: (st, c) => { state.writeMocks(c.root, { seed: fs.readFileSync(path.join(__dirname, '..', 'templates', 'mocks-seed.md'), 'utf8') }) } }
   if (!s.marks.seedDone) {
     return {
@@ -106,8 +105,8 @@ function derive(s, ctx) {
     return {
       name: 'SCREENS', mark: 'journey-drawn --journey ' + j.id, accepts: ['journey-drawn'],
       body: [
-        `Draw journey '${j.id}' (${pending.length} journey(s) still to draw). Load the mock-authoring skill first.`, j.story, ...j.beats.map((b, i) => `${i + 1}. "${b.beat}" -> ${target(b)}`),
-        'One gray json-render file per screen (shape: see the comment in design/mocks/seed.md template, spec/templates/mocks-seed.md):', ...files,
+        `Draw journey '${j.id}' (${pending.length} journey(s) still to draw).`, j.story, ...j.beats.map((b, i) => `${i + 1}. "${b.beat}" -> ${target(b)}`),
+        'One gray json-render file per screen (shape: the comment at the top of design/mocks/seed.md):', ...files,
         'Each move between two screens is a control whose on.press navigates there. Copy the beat sentences into the screens as content. Then mark journey-drawn.',
       ].join('\n'),
     }
@@ -176,7 +175,6 @@ async function service(sub, a) {
     state.writeMocks(a.root, { status: { ...s, pushed: { round: r.round, at: now() } } })
     return `round ${r.round} ${r.already ? 'already on the service' : 'pushed'}\n🎨 ready for review — ${c.baseUrl}/p/${c.project}\n`
   }
-  if (sub === 'reply') { await wt.reply(c, a.flags.note, a.flags.text); return 'replied\n' }
   await wt.pullNotes(c)
   const { approvals } = await wt.pullApprovals(c)
   const notes = (state.readJson(path.join(wt.roundsDir(a.root), String(wt.highestRound(a.root)), 'notes.json'), {}).notes) || []
@@ -187,7 +185,7 @@ async function service(sub, a) {
 }
 
 function main(argv) {
-  if (['push', 'pull', 'reply'].includes(argv[0])) {
+  if (['push', 'pull'].includes(argv[0])) {
     const a = parseArgv(argv.slice(1))
     service(argv[0], a).then((out) => writeOut(1, out), (e) => {
       writeOut(2, e instanceof wt.Refusal ? e.line() + '\n' : `mocks: ${e.message}\n`)

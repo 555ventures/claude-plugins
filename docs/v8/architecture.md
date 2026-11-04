@@ -117,8 +117,8 @@ Builder agent brief must include the Intent block verbatim and the line
 PLAN → DISPATCH → WAIT → RELAY → MERGE → REPORT, then back to PLAN until the queue is
 empty. PLAN picks up to `lanes` queue items whose specs are `hardened` and whose File Plans
 do not overlap (path set intersection); overlapping ones wait. DISPATCH prints one Agent
-call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec>`
-inside `.claude/worktrees/spec-<stem>`. WAIT: lanes return; the driver reads each lane's
+call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec> --root
+.claude/worktrees/spec-<stem>` (absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
 run state. RELAY: all `pending-question.json` batched into one message; `answered --lane`.
 MERGE: lanes in queue order, gate after each, stop on red (`MERGE_RED` → `gate-repaired`).
 REPORT: one report, queue items ticked `done`.
@@ -228,8 +228,7 @@ Later builders: use these, do not re-derive them.
   the v8 API.
 - `pending.js`: `writePending(root, {lane, question, options})` → `{path, written, doc}` and never
   overwrites a pending question; `readPending`, `answerPending(root, label)` (unknown label → exit 2),
-  `consumePending` (returns the doc), `stopLine(root)` starts with `PENDING_QUESTION`. CLI:
-  `node spec/scripts/lib/pending.js show|answer --label <l>|consume|mark --root <dir>`.
+  `consumePending` (returns the doc), `stopLine(root)` starts with `PENDING_QUESTION`. No CLI.
 - Tests: `tests/helpers.js` exports `ROOT, SPEC, RUN_ROOT, tmpdir, gitRepo, runNode, runBash,
   freePort`; `runNode(script)` resolves `script` against `spec/` (or takes an absolute path).
   `npm test` = `node --test --test-timeout=45000 'tests/**/*.test.js'` (no stdout preload).
@@ -282,3 +281,18 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   `makeDriver` parses argv. `--in-place` is taken out of argv so it never swallows the spec path.
   `conflicts-resolved` refuses while a file the merge reported still holds `<<<<<<<`/`>>>>>>>`
   lines, then commits the merge in the main checkout.
+
+### integration notes
+
+- The Agent tool takes no working directory: every agent runs from the main checkout. Lanes get
+  `/spec:run <spec> --root <worktree>`; builders are told to `cd <worktree> && …`.
+  `block-cross-worktree-writes.sh` allows writes from a checkout into its own `.claude/worktrees/*`;
+  `block-worker-git.sh` also checks `cd <dir>` / `git -C <dir>` targets for the lane marker.
+- `plan.js lock` commits the spec (`chore(spec): lock YYYYMMDD/NN`) so lane worktrees branch with it.
+- `lib/driver.js`: when a mark settles on a terminal step (no mark), its body is printed after the
+  checkpoint (the run sidecar is already cleared, so a re-run would refuse).
+- `queue.js` reconciles: a spec item whose spec is `done` counts as done (written on the next
+  write); `run.js` DONE also ticks it and sets Next to the queue head. The REVIEW brief lists
+  `Files changed outside the File Plan`.
+- Removed as unused by any prose: fanout `--batch`, queue `--at`, status `--all`, plan `check`/`--date`,
+  pending.js CLI, prototype `check`, mocks `reply`, walkthrough `reply`/`mark`, the `scratch-worktree` sink.

@@ -84,9 +84,7 @@ test('full chain: words → OPEN → ROUND → pins → approve → contract + q
   assert.strictEqual(mark(root, stem, 'contracted').status, 2, 'a second contracted is out of step')
   assert.strictEqual(drive(root, [stem, '--state']).stdout.trim(), 'CONTRACTED')
 
-  // check sees a healthy prototype, then close removes worktree and branch
-  const chk = JSON.parse(drive(root, ['check', '--stem', stem, '--json']).stdout)
-  assert.deepStrictEqual([chk.step, chk.pins, chk.problems], ['CONTRACTED', 3, []])
+  // close removes worktree and branch
   r = mark(root, stem, 'closed')
   assert.strictEqual(r.status, 0, r.stderr)
   assert.ok(!fs.existsSync(wt))

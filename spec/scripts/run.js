@@ -17,6 +17,7 @@ const host = require('./lib/host')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
 const { render } = require('./lib/report')
+const queue = require('./queue')
 
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2
@@ -177,6 +178,11 @@ function finish(state, ctx) {
   if (st.readSpec(s.abs).frontmatter.status !== 'done') st.writeStatus(s.abs, 'done')
   if (state.marked) pending.unmarkLane(wt)
   if (!state.inPlace) git.worktreeRemove(ctx.root, wt, { deleteBranch: state.mergeSha ? state.branch : undefined })
+  // Tick this spec's queue item; Next is whatever the queue holds after it.
+  const q = st.readQueue(ctx.root)
+  const mine = queue.pending(q).filter((i) => i.kind === 'spec' && path.resolve(ctx.root, i.payload) === s.abs)
+  if (mine.length) { for (const i of mine) i.done = new Date().toISOString(); st.writeQueue(ctx.root, q) }
+  const head = queue.pending(q)[0]
   const tg = state.trunkGate
   const findings = (state.review && state.review.findings) || []
   state.report = render({
@@ -190,7 +196,7 @@ function finish(state, ctx) {
     warns: findings.filter((f) => f.severity !== 'blocking').map((f) => `advisory: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`),
     blocks: tg && tg.status === 'red' ? `trunk gate red after the merge:\n${tg.output_tail}` : null,
     artifacts: s.rel,
-    next: tg && tg.status === 'red' ? `/spec:fix trunk gate red after merging ${s.rel}` : undefined,
+    next: tg && tg.status === 'red' ? `/spec:fix trunk gate red after merging ${s.rel}` : head ? queue.pasteLine(ctx.root, head) : undefined,
   })
   return go(state, 'DONE', { ended: true })
 }
@@ -227,6 +233,14 @@ function builderBrief(state, ctx, kind) {
   return out.join('\n')
 }
 
+// The builder may list these in its summary; the reviewer decides whether they block.
+function outsidePlan(state, ctx, spec) {
+  const planned = new Set(spec.filePlan.map((r) => r.path))
+  const own = state.spec.split(path.sep).join('/')
+  const run = own.replace(/\.md$/, '.run/')
+  return git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planned.has(f) && f !== own && !f.startsWith(run))
+}
+
 function reviewerBrief(state, ctx) {
   const cfg = cfgOf(ctx)
   const specPath = specIn(state, ctx)
@@ -235,10 +249,12 @@ function reviewerBrief(state, ctx) {
   return [
     `Dispatch ONE \`reviewer\` agent (spec:reviewer, ${PLUGIN}/agents/reviewer.md) — model ${seat.model}, effort ${seat.effort}, in ${wtOf(state, ctx)}. Give it this brief:`,
     '',
+    `Worktree: ${wtOf(state, ctx)}`,
     `Base: ${state.base}`,
     `Diff (working tree vs base): ${runFile(ctx, 'diff.patch')}`,
     `Spec: ${specPath}`,
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
+    `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec).join(', ') || 'none'}`,
     '',
     '## Intent', sectionText(spec, 'Intent'), '',
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`),

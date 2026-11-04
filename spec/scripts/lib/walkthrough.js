@@ -3,7 +3,7 @@
 // round files they write under design/rounds/<n>/. No CLI.
 //
 //   const c = openContext(root, process.env)      // null when config.walkthrough.baseUrl is unset
-//   await probe(c) | push(c, round) | pullNotes(c) | pullApprovals(c) | reply(c, note, text) | mark(c, n, status)
+//   await probe(c) | push(c, round) | pullNotes(c) | pullApprovals(c)
 //
 // Rules: no request without baseUrl + project + a token (stored in .claude/settings.local.json env
 // first, else process env); baseUrl must be https or loopback http; redirects are refused; the token
@@ -24,9 +24,7 @@ const CALLS = {
   hello: ['GET', '/v1', false],
   pushRound: ['POST', '/v1/projects/{project}/rounds'],
   pullNotes: ['GET', '/v1/projects/{project}/notes'],
-  replyNote: ['POST', '/v1/projects/{project}/notes/{note}/reply'],
   pullApprovals: ['GET', '/v1/projects/{project}/approvals'],
-  markRound: ['POST', '/v1/projects/{project}/rounds/{round}/mark'],
 }
 const REMEDY = {
   'bad-token': (c) => `issue a new token for ${c.project} (run /spec:connect)`,
@@ -169,10 +167,10 @@ function highestRound(root) {
 }
 
 // round = {journeys: [{id, title, persona?, beats, steps: [{beat, screen, state?}]}], screens: [{name, state?, spec}]}.
-// Numbers it as the next round (or opts.round), pushes it, records design/rounds/<n>/round.json.
+// Numbers it as the next round, pushes it, records design/rounds/<n>/round.json.
 // An identical round already on the service is accepted; a different one under the same number refuses.
-async function push(c, round, opts = {}) {
-  const n = opts.round || highestRound(c.root) + 1
+async function push(c, round) {
+  const n = highestRound(c.root) + 1
   const body = { round: n, kind: 'wireframe', journeys: round.journeys, screens: round.screens }
   body.contentHash = sha256(JSON.stringify(body))
   await gate(c)
@@ -183,7 +181,7 @@ async function push(c, round, opts = {}) {
   } catch (e) {
     const d = e instanceof Refusal && e.service && e.service.code === 'round-exists' ? e.service.detail : null
     if (!isObj(d)) throw e
-    if (d.contentHash !== body.contentHash) throw new Refusal('round-exists', `round ${n} already holds different content on the service`, `push under the next free number (--round ${n + 1})`)
+    if (d.contentHash !== body.contentHash) throw new Refusal('round-exists', `round ${n} already holds different content on the service`, `restore design/rounds/${n}/ from git, then push again`)
     status = d.status
     already = true
   }
@@ -194,17 +192,17 @@ async function push(c, round, opts = {}) {
   return { round: n, status, already }
 }
 
-function localRound(c, arg) {
-  const n = arg === undefined ? highestRound(c.root) : Number(arg)
-  if (!Number.isInteger(n) || n < 1 || !fs.existsSync(roundFile(c.root, n, 'round.json'))) throw new Refusal('no-round', 'no pushed round to pull for', 'push a round first', 2)
+function localRound(c) {
+  const n = highestRound(c.root)
+  if (n < 1 || !fs.existsSync(roundFile(c.root, n, 'round.json'))) throw new Refusal('no-round', 'no pushed round to pull for', 'push a round first', 2)
   return n
 }
 
 const byAt = (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1)
 
 // Merges new notes into design/rounds/<n>/notes.json using the stored cursor.
-async function pullNotes(c, opts = {}) {
-  const n = localRound(c, opts.round)
+async function pullNotes(c) {
+  const n = localRound(c)
   await gate(c)
   const file = roundFile(c.root, n, 'notes.json')
   const stored = readJson(file, null)
@@ -218,8 +216,8 @@ async function pullNotes(c, opts = {}) {
 }
 
 // Writes design/rounds/<n>/approvals.json; returns the approvals.
-async function pullApprovals(c, opts = {}) {
-  const n = localRound(c, opts.round)
+async function pullApprovals(c) {
+  const n = localRound(c)
   await gate(c)
   const got = await send(c, 'pullApprovals')
   const approvals = (got.approvals || []).slice().sort((a, b) => (a.journey + a.by < b.journey + b.by ? -1 : 1))
@@ -227,21 +225,7 @@ async function pullApprovals(c, opts = {}) {
   return { round: n, approvals }
 }
 
-async function reply(c, note, text) {
-  const t = String(text || '').trim()
-  if (!t || t.length > 4000) throw new Refusal('bad-request', 'a reply is 1 to 4000 characters', 'fix the reply text', 1)
-  await gate(c)
-  await send(c, 'replyNote', { params: { note }, body: { text: t } })
-  return { note }
-}
-
-async function mark(c, round, status) {
-  await gate(c)
-  await send(c, 'markRound', { params: { round }, body: { status } })
-  return { round, status }
-}
-
 module.exports = {
   Refusal, storedToken, resolveToken, nameOk, configProblem, contextFromBlock, openContext,
-  gate, probe, push, pullNotes, pullApprovals, reply, mark, highestRound, roundsDir,
+  gate, probe, push, pullNotes, pullApprovals, highestRound, roundsDir,
 }

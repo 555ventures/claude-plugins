@@ -252,3 +252,33 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   `/spec:run <spec>` after fanout records the answer, run.js reads `readPending(<worktree>).answer`,
   `consumePending`s it, and continues. fanout treats a pending doc with `answer: null` as "stopped".
 - run.js must not refuse a re-run in a lane whose state is already MERGE_READY (no-op exit 0).
+
+### run.js notes
+
+- **Where things live.** State, `diff.patch` and `findings.json` sit in `<spec>.run/` next to the
+  spec under `--root` (the main checkout, or the lane worktree in a lane). `load` refuses (exit 2)
+  unless `git check-ignore` says that sidecar is ignored.
+- **In place** when `--in-place` is given, when `worktreePerSpec: false`, when the root is already on
+  `spec/<stem>`, or when `isLane(root)` (fanout lane). Each case prints a `📌 Auto-picked in place —`
+  line in the BUILD brief. Otherwise OPEN makes `.claude/worktrees/spec-<stem>` on `spec/<stem>` from
+  trunk. `setupCommand` runs in a new worktree and in a lane.
+- **Spec status.** OPEN writes `implementing` to the root copy. With a worktree, the branch copy is
+  synced from root and set to `done` at OPEN, so the gated tree is the tree that merges and the trunk
+  gate after an unchanged merge is a cache hit. Before `mergeBack`, the root copy is reset to HEAD
+  (if tracked) or deleted (if untracked), but only when it matches the branch copy apart from the
+  status line. In place (not a lane), `done` is written at COMMIT.
+- **Lane mode** follows the fanout notes above. `lane` is read once at OPEN and kept in the run
+  state, because a non-lane run also marks its own worktree (or the root, in place) for
+  `block-worker-git.sh`. The marker comes off at DONE, park and amend, and only when run.js set
+  it. A lane's park/amend keeps its sidecar at `PARKED`/`AMENDED`. A lane at ESCALATE with an
+  answered pending doc applies the answer as an auto step.
+- **Attempts.** `attempts = {repair, fix}`. The builder attempt is `1 + repair + fix`, plus 1 for
+  REPAIR/FIX briefs. Attempt 2 and up, or `escalate retry`, uses opus. Retry clears both counters
+  and returns to REPAIR (gate escalation) or FIX (review escalation).
+- **Extra terminal names** beyond §4: `PARKED`, `AMENDED`, and `MERGE_READY` (lane only). A
+  trunk gate that goes red after the merge still ends at DONE, with a 🚫 block and
+  `Next: /spec:fix …`. A ff-only divergence is a refusal.
+- **CLI shim.** `--mark escalate <choice>` is rewritten to `--choice <choice>` before
+  `makeDriver` parses argv. `--in-place` is taken out of argv so it never swallows the spec path.
+  `conflicts-resolved` refuses while a file the merge reported still holds `<<<<<<<`/`>>>>>>>`
+  lines, then commits the merge in the main checkout.

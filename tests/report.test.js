@@ -24,3 +24,17 @@ test('empty sections are omitted and Next never ends in a question mark', () => 
   assert.match(render({ outcome: '✅ x' }), /Next: nothing needs you — /, 'a missing next must still say nothing needs you')
   assert.throws(() => render({}), /outcome/, 'a report without an outcome has no verdict')
 })
+
+test('the --slots CLI prints the rendered report and refuses a bad slots file', () => {
+  const fs = require('fs')
+  const { tmpdir, runNode } = require('./helpers')
+  const dir = tmpdir('report-cli')
+  const slots = { outcome: '✅ done', bullets: ['one'], next: '/spec:run x' }
+  fs.writeFileSync(path.join(dir, 's.json'), JSON.stringify(slots))
+  const r = runNode('scripts/lib/report.js', ['--slots', path.join(dir, 's.json')])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stdout, render(slots), 'command prose relies on the CLI matching render()')
+  fs.writeFileSync(path.join(dir, 'bad.json'), '{}')
+  assert.strictEqual(runNode('scripts/lib/report.js', ['--slots', path.join(dir, 'bad.json')]).status, 2, 'a slots file without outcome is a refusal')
+  assert.strictEqual(runNode('scripts/lib/report.js', ['--slots', path.join(dir, 'missing.json')]).status, 2, 'a missing slots file is a refusal')
+})

@@ -1,7 +1,8 @@
 'use strict'
 // lib/report.js — the one end-of-command report, in the fixed order:
 // **outcome** · bullets · 📌 pins · ⚠️ warns · 🚫 blocks · 📦 artifacts · 📋 queued · Next:
-// render({outcome, bullets, pins, warns, blocks, artifacts, queued, next}) → string. No CLI.
+// render({outcome, bullets, pins, warns, blocks, artifacts, queued, next}) → string.
+// CLI: node lib/report.js --slots <json file> → prints the rendered report (exit 2 on a bad file).
 
 const SECTIONS = [
   ['bullets', '- '],
@@ -37,3 +38,14 @@ function render({ outcome, bullets, pins, warns, blocks, artifacts, queued, next
 }
 
 module.exports = { render }
+
+if (require.main === module) {
+  const i = process.argv.indexOf('--slots')
+  const file = i > 0 ? process.argv[i + 1] : null
+  let slots = null
+  try { slots = JSON.parse(require('fs').readFileSync(file, 'utf8')) } catch { /* reported below */ }
+  if (!slots || !slots.outcome) {
+    process.stderr.write('report: usage: report.js --slots <json file with at least {"outcome": "…"}>\n')
+    process.exitCode = 2
+  } else process.stdout.write(render(slots))
+}

@@ -201,10 +201,13 @@ main root. (specs/20261102/02)
 `/spec:fanout` runs the lanes from one session: `fanout-driver.js` over `<git-common-dir>/spec-fanout.json`,
 worktree-isolated sub-agents on the `lanes` seat, no standing sheet — the host's `policy.stops` answers the predictable stops and `--ask <key>` relays one for a
 run; a lane's parked build, spent repair round or `stop` answer lands as a recorded `laneExit`,
-serialized merge through the review driver's MERGE step with the gate re-run on main after each. (specs/20261102/03)
-A bare run derives the batch (the queue's startable specs in order up to the first
-self-surface spec per `policy.fanout.selfSurfaces`, critical spec sharing a § Risk Tiers file with an
-unmerged lane, blocked entry or planning item), prints it as one `📌 Auto-picked batch` line
+one landing at a time: the fan-out's MERGE step rebases the
+lane onto main and fast-forwards it (merge-back's rebase-ff), the review driver's MERGE step finds the landed branch
+and finishes promotion and cleanup, and the gate re-runs on main after each; a rebase conflict hands the lane
+back to its worker with the rebase in progress in its worktree, and a second conflict against the same main
+stops the lane for a person (specs/20261103/15-shared-files-land-by-rebase.md). (specs/20261102/03)
+A bare run derives the batch (the queue's startable specs in order up to the first brief dependency, blocked entry or planning
+item — shared files hold nothing back), prints it as one `📌 Auto-picked batch` line
 (`--batch <ids|all>` is the veto, four lanes run at once), re-queries `spec-status --lanes --json`
 after every green merge, green repair and lane end to dispatch waiting members and the fixes the
 batch's own lanes queued after a member, and reports when the batch is done; the next bare run starts

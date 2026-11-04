@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: standard           # per ADR-0039 D3 the tier is a property of files touched: the spec-status.js and grounding-contract.md rows are § Risk Tiers surfaces, so every AC carries a literal example; the spec as a whole is standard
 area: fanout
 breaking: false
@@ -273,6 +273,22 @@ and spec 06 is one (its retire tags) that keeps six of the retired words as hist
 locked could never go green. The oracle keeps the two code names no spec doc spells; the six policy
 keys and reasons are covered by the Review checks grep, which already leaves `specs/**` out, and the
 review-1 reviewer ran that grep over the live surfaces with zero hits.
+
+Build deviations, folded at close (each already a class in pipeline rules § Gotchas, so no new entry):
+AC-15-11/12/13 use a conflict host whose base already holds `x.txt`, because an add/add conflict shows
+`AA`, never the `UU x.txt` the AC pins, and AC-15-13 checks the aborted worktree with
+`--untracked-files=no` since the fixture's review sidecar is untracked; AC-20261103-10-8, AC-20261103-10-17,
+AC-20261102-03-17, AC-20261102-03-21 and the `--next makes no parallel claim` test were re-hosted to D2/D4
+(path order `[03-x, 04-z, 06-y]`, a briefed fixture for the shared-brief hold, `cleanup: false` /
+`mergeLane` so the landing finds or clears the worktree), and contract-keys drops its `"fanout"` object
+match with D7; at RED_FINDINGS AC-15-5's pointer verb was amended `rewrites` → `reuses` (a CONTINUE-TO
+criterion) and AC-15-9's assertions were folded into the 03-15 case its pointer names; at REPAIR the
+lock-time closure's "unaffected" call on `tests/status/status-diet.test.js` proved wrong and it entered
+scope as D13, its fixture moved onto a shared brief so the solo branch stays pinned.
+
+### Advisory debt (review rv_044ec6bc2788)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac2dacd5a85444ad4/specs/20261103/15-shared-files-land-by-rebase.md:151 — The § Behavior Review-checks grep does not exclude `tests/**`, yet AC-20261103-15-1 and AC-20261103-15-15 require fixtures that spell `overlapExempt` and `selfSurfaces`; run as written it prints three lines. The review-1 fix re-routed the six policy keys/reasons from the oracle onto this grep ('over live surfaces only'), so the spec's only remaining check for them is one whose literal instruction cannot be satisfied. Add `':!tests/**'` (or word the check as live-surface-only) so the check matches the ACs that sanction those fixtures.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac2dacd5a85444ad4/spec/scripts/fanout-driver.js:412 — D4 says a mark that reaches MERGE 'runs no git', but printMerge evaluates `targetBranch()` (`git symbolic-ref --short HEAD`) before the `!apply` branch, so the mark path does run one read-only git command to print `<target>`. Harmless but the Decision wording and the code disagree.
 
 ## Canonical Delta
 

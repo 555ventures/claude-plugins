@@ -20,10 +20,13 @@ const REPAIR = 'run one in-session repair round (Recommended)'
 
 const LANE_AGENT = 'Agent {subagent_type: "general-purpose", model: opus, effort: medium, isolation: "worktree", run_in_background: true}'
 
+// specs/20261103/10-two-missing-briefs-are-not-the-same-brief.md D8: the default specs are ad-hoc
+// (brief n/a) and carry File Plan rows that keep the lane topology (06-y overlaps 03-x on
+// src/shared.js); `briefed: true` writes the brief stamps instead and no File Plan rows.
 const SPECS = {
-  '03-x': { brief: '32', status: 'hardened' },
-  '06-y': { brief: '32', status: 'hardened' },
-  '04-z': { brief: '33', status: 'hardened' },
+  '03-x': { brief: '32', status: 'hardened', rows: ['src/x.js', 'src/shared.js'] },
+  '06-y': { brief: '32', status: 'hardened', rows: ['src/y.js', 'src/shared.js'] },
+  '04-z': { brief: '33', status: 'hardened', rows: ['src/z.js'] },
 }
 
 // The fixture's spec rows as repo-relative paths, by the names the tests use.
@@ -53,6 +56,8 @@ const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Laye
 // born of it; fixFiles — src/b.js and src/shared.js committed, 03-x planning src/a.js and src/shared.js, fix items
 // q107, q113 (names src/b.js) and q114 (names src/shared.js); gatedFix — fix item q115 after 04-z.
 function fanoutHost(opts = {}) {
+  const briefed = opts.briefed === true
+  if (opts.dependent && !briefed) throw new Error('fixture: dependent needs briefed: true (the ad-hoc analogue is opt blocked)')
   const root = fs.realpathSync(tmpdir('fanout'))
   const git = gitRepo(root)
   const brief = (n, name, dep) => fs.writeFileSync(path.join(root, 'docs/roadmap', n + '-' + name + '.md'),
@@ -63,19 +68,22 @@ function fanoutHost(opts = {}) {
   brief('31', 'base')
   brief('32', 'fan')
   brief('33', 'solo')
-  const specs = { ...SPECS }
-  if (opts.dependent) { brief('34', 'after', '32'); specs['07-d'] = { brief: '34', status: 'hardened' } }
+  const specs = {}
+  for (const [stem, row] of Object.entries(SPECS)) {
+    specs[stem] = briefed ? { brief: row.brief, status: row.status } : { brief: 'n/a', status: row.status, body: filePlan(...row.rows) }
+  }
+  if (opts.dependent) { brief('34', 'after', '32'); specs['07-d'] = { brief: briefed ? '34' : 'n/a', status: 'hardened' } }
   if (opts.parked || opts.blocked || opts.draft || opts.selfSurface || opts.critical) brief('35', 'park')
-  if (opts.parked) specs['05-p'] = { brief: '35', status: 'hardened' }
-  if (opts.blocked) specs['08-k'] = { brief: '35', status: 'hardened', fm: 'depends_on: [' + specRel('03-x') + ']' }
-  if (opts.draft) specs['08-p'] = { brief: '35', status: 'draft' }
-  if (opts.selfSurface) specs['08-s'] = { brief: '35', status: 'hardened', body: filePlan('spec/scripts/fanout-driver.js') }
+  if (opts.parked) specs['05-p'] = { brief: briefed ? '35' : 'n/a', status: 'hardened' }
+  if (opts.blocked) specs['08-k'] = { brief: briefed ? '35' : 'n/a', status: 'hardened', fm: 'depends_on: [' + specRel('03-x') + ']' }
+  if (opts.draft) specs['08-p'] = { brief: briefed ? '35' : 'n/a', status: 'draft' }
+  if (opts.selfSurface) specs['08-s'] = { brief: briefed ? '35' : 'n/a', status: 'hardened', body: filePlan('spec/scripts/fanout-driver.js') }
   if (opts.critical) {
     specs['03-x'] = { ...specs['03-x'], body: filePlan('src/db.js') }
-    specs['08-c'] = { brief: '35', status: 'hardened', fm: 'tier: critical', body: filePlan('src/db.js') }
+    specs['08-c'] = { brief: briefed ? '35' : 'n/a', status: 'hardened', fm: 'tier: critical', body: filePlan('src/db.js') }
   }
   if (opts.fixFiles) specs['03-x'] = { ...specs['03-x'], body: filePlan('src/a.js', 'src/shared.js') }
-  if (opts.fixes || opts.bornFix || opts.planItem) specs['01-base'] = { brief: '31', status: 'done' }
+  if (opts.fixes || opts.bornFix || opts.planItem) specs['01-base'] = { brief: briefed ? '31' : 'n/a', status: 'done' }
   for (const [stem, s] of Object.entries(specs)) writeSpec(root, stem, s.brief, s.status, { fm: s.fm, body: s.body })
   fs.mkdirSync(path.join(root, '.claude/rules'), { recursive: true })
   const config = { gateCommand: 'bash ./gate.sh', testCommand: 'bash ./gate.sh' }
@@ -97,9 +105,11 @@ function fanoutHost(opts = {}) {
   git('add', '-A')
   git('commit', '-q', '-m', 'seed fan-out host')
   if (opts.fixes) {
+    const heads = briefed
+      ? [{ id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' }, { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' }]
+      : [{ id: 'q1', kind: 'spec', spec: specRel('03-x'), added: '2026-11-02T10:00:00Z' }, { id: 'q2', kind: 'spec', spec: specRel('04-z'), added: '2026-11-02T10:01:00Z' }]
     fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 116, items: [
-      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
-      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
+      ...heads,
       { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
       { id: 'q116', kind: 'prompt', lane: 'fix', payload: 'repair the import', added: '2026-11-02T10:03:00Z' },
     ] }))

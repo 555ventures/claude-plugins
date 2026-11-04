@@ -170,7 +170,7 @@ test('AC-20260903-03-5: a queue file holding a brief item and a spec item twice 
     'an auto_placed key is an ordinary unknown key — a reconcile that strips it is a path for a key nothing writes: ' + JSON.stringify(q.items))
 })
 
-test('AC-20260903-03-6 / AC-20261013-02-10: spec-queue add refuses a brief already queued, naming its pending position and the move remedy, and writes nothing', () => {
+test('AC-20260903-03-6 / AC-20261013-02-10: spec-queue add refuses a brief already queued, naming its pending position and the move remedy, and writes nothing (AC-20261103-10-10)', () => {
   const dir = host({
     queue: [
       { id: 'q1', kind: 'prompt', payload: 'ship the landing page', added: '2026-08-23T10:00:00Z' },

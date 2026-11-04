@@ -331,6 +331,11 @@
       "spec/commands/doctor.md"
     ]
   },
+  "spec/scripts/variant-lint.js": {
+    "entryPoints": [
+      "tests/consistency/variant-lint-gate.test.js"
+    ]
+  },
   "spec/scripts/verdict.js": {
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",

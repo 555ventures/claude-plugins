@@ -202,7 +202,7 @@ failCount(text, pattern?) -> number | null
   never `transient` → writes tests/release-legs/release-legs.test.js
 - **AC-20261102-01-13**: WHEN `ci-query.js` runs with `forge: "github"` declared and a fake `gh` that
   exits 1 THE SYSTEM SHALL CONTINUE TO print `{"available":false,"transient":true}`
-  → reuses tests/review/ci-query.test.js :: AC-20260805-02-10 / AC-20260810-07-4: a fake gh exiting non-zero prints transient:true
+  → reuses tests/review/ci-query.test.js :: AC-20260805-02-10 / AC-20260810-07-4: a fake gh exiting non-zero prints transient:true [retired: specs/20261103/10-two-missing-briefs-are-not-the-same-brief.md]
 - **AC-20261102-01-14**: WHEN `init-gen generate` reads a profile whose `config.capabilities.forge`
   is `"gitlab"`, or whose `config.trunk` is `""`, or whose `config.capabilities.failCountPattern` is
   `"no group"` or `"(unclosed"` THE SYSTEM SHALL exit 2 with stderr naming the field (e.g.

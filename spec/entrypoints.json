@@ -151,6 +151,13 @@
       "spec/templates/grounding-contract.md"
     ]
   },
+  "spec/scripts/out-of-plan-triage.js": {
+    "entryPoints": [
+      "spec/doctrine/stages/stage-build.md",
+      "spec/scripts/spec-build-driver.js",
+      "spec/agents/reviewer.md"
+    ]
+  },
   "spec/scripts/pending-question.js": {
     "entryPoints": [
       "spec/scripts/spec-review-driver.js",

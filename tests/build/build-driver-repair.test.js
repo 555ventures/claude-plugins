@@ -40,3 +40,23 @@ test('field report 2026-09-02 (empty waves): WHEN layerGroups declares groups wi
   assert.strictEqual(stateOf(host.root, host.spec), 'INTEGRATION', 'no wave remains after other: ' + r2.stdout)
 })
 
+// specs/20261103/07-the-file-decides-not-the-tier.md D4: REPAIR names the out-of-plan triage script.
+test('AC-20261103-07-6: WHEN a build reaches REPAIR THE SYSTEM prints the out-of-plan-triage line between the rows-by-layer block and the Route-each-failing-file line, carrying the driver\'s own spec path', () => {
+  const host = makeNoTestsHost()
+  fs.writeFileSync(path.join(host.root, 'FAIL_FLAG'), '')
+  host.g('add', '-A'); host.g('commit', '-q', '-m', 'fail flag')
+  run(host.root, host.spec)
+  run(host.root, host.spec, '--mark', 'wave-done', '--wave', 'doctrine+scripts', '--workers', '1')
+  run(host.root, host.spec, '--mark', 'integrated')
+  const r = run(host.root, host.spec)
+  assert.strictEqual(stateOf(host.root, host.spec), 'REPAIR', 'setup precondition: a red gate lands REPAIR: ' + r.stdout + r.stderr)
+  const line = 'a failing file outside the File Plan: node "$(spec-paths out-of-plan-triage)" --spec ' + host.spec +
+    ' --file <path> — exit 0 prints the two rows to paste, exit 1 asks (add to scope / file separately / pause)'
+  const lines = r.stdout.split('\n')
+  const at = lines.indexOf(line)
+  assert.ok(at > 0, 'REPAIR must print the triage line verbatim or a lane relays the add-to-scope question to the user: ' + r.stdout)
+  const layerAt = lines.findIndex((l) => /^ {2}(doctrine\+scripts|scripts|doctrine):/.test(l))
+  assert.ok(layerAt >= 0 && layerAt < at && lines[at + 1].startsWith('Route each failing file'),
+    'the triage line must sit after the rows-by-layer block and directly before "Route each failing file": ' + r.stdout)
+})
+

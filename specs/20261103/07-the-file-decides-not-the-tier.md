@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical           # adds a key to spec/bin/spec-paths (rules § Risk Tiers: "a wrong key breaks commands silently")
 area: build-stage
 breaking: false
@@ -8,6 +8,7 @@ depends_on: []
 brief: n/a
 spiked: 2026-11-03
 open_markers: 0
+diff_base: 4e19cf5b20dabd3019d013a40435546a0426ac27
 ---
 
 # The file decides, not the tier
@@ -199,6 +200,9 @@ usage pin asserts named keys are present, which an addition keeps) and D4 adds o
 after the only substring pin (A5) — additive on every observed string; waived. The `likely` hits
 on `entrypoints.json`/`plugin.json` are the exhaustive-pin class the build's whole-suite check
 adjudicates (D8).
+
+### Advisory debt (review rv_6f3c81ac13ae)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a2a1ccab48459b3eb/spec/scripts/out-of-plan-triage.js:141 — `--gate-line` text is spliced raw into the printed Markdown Decisions row; a `|` in the gate line splits the table cell so the pasted row gains extra columns and the Decisions parsers (decision-lint, promise-sweep, nextDecision scan) read a malformed row.
 
 ## Canonical Delta
 

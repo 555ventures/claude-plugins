@@ -126,6 +126,15 @@ re-running red-check on a post-image tree. Build rows are script-written and car
 `build.md` is the judgment shell. Both drivers share `lib/driver-io.js` for the fail-closed
 child runner, the synchronous stdout writer, the ledger append, and sidecar I/O.
 
+A gate failure in a file outside the File Plan is triaged by the file's risk, never by the
+spec's tier. `out-of-plan-triage.js` (`spec-paths out-of-plan-triage`) takes the backtick path
+spans on the host rules' § Risk Tiers bullet lines plus the config's `orchestratorOnly` globs
+as the surfaces that earn a question (exit 1: add to scope / file separately / pause); every
+other file is added to scope (exit 0) with a printed auto-pick, a File Plan row and a
+Decisions row tagged `[auto: out-of-plan-triage]` whose reason names the planned paths the
+failing test's source cites. The REPAIR step prints the command; the reviewer re-runs it on
+every tagged row and treats exit 1 as hard.
+
 Before the gate child is spawned, the driver adds every File Plan path that is untracked and
 not git-ignored to the index with intent-to-add (`git add -N`). A host check whose inventory is
 the git index — a size or duplication baseline, a file manifest — therefore counts the files

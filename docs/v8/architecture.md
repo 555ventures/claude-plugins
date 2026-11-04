@@ -48,11 +48,12 @@ per file; writes are atomic (tmp + rename).
 | File | API | Notes |
 |---|---|---|
 | `.claude/spec.config.json` | `readConfig(root)` | Keys in §3. Missing file → `{}` with defaults applied. |
-| `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, sections, intent, filePlan, acs}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. |
-| `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | One sidecar per in-flight spec. Gitignored. Shape in §4. |
+| `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, title, sections, intent, filePlan, acs, markers}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. |
+| `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | `<spec>` = spec path minus `.md`. One sidecar per in-flight spec. Gitignored (`specs/**/*.run/`). Shape in §4. |
 | `<git-common-dir>/spec-queue.json` | `readQueue(root)`, `writeQueue(root, q)` | `{version: 2, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?}`. |
 | `<git-common-dir>/spec-fanout.json` | `readFanout`, `writeFanout` | `{step, batch: [{spec, worktree, branch, status, question?}], started}` |
-| `.claude/pending-question.json` | in `lib/pending.js` | Lane question relay (copy-trim of v7). |
+| `.claude/pending-question.json` | in `lib/pending.js` | Lane question relay. Doc `{lane, question, options: [{label, description?}], writtenAt, answer: {label, by, at} \| null}`. |
+| `<git-dir>/spec-lane-open` | `isLane`, `markLane`, `unmarkLane` in `lib/pending.js` | Lane marker (private git dir of the lane worktree); read by `block-worker-git.sh`. |
 | `design/prototypes/<stem>/{status,pins,contract}.json` | `readProto`, `writeProto` | Owner: prototype.js via state.js. |
 | `design/mocks/{status.json,seed.md}` | `readMocks`, `writeMocks` | |
 | `.claude/genesis/status.json` | `readGenesis`, `writeGenesis` | |
@@ -185,3 +186,50 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 Headings: What this plugin does · Files it reads · Lifecycle · Seats · How to drive a driver
 · When to ask (irreversible, architecture: yes, lane questions) · Glossary (lane, mark, pin,
 seat, checkpoint). Maintainer rules live in this repo's CLAUDE.md, not in the plugin.
+
+## 11. Foundation APIs as built (`spec/scripts/lib/`)
+
+Later builders: use these, do not re-derive them.
+
+- `state.js`: everything in §2 plus `writeConfig(root, cfg)`, `DEFAULTS`, `gitCommonDir(root)`,
+  `writeJson/writeText/readJson/readText` (atomic tmp+rename). `readConfig` merges defaults key by
+  key, objects one level deep. `intent` = `{asked, build[], notTouch[], architecture: false | true |
+  '<what>'}`; `filePlan` rows `{path, action (upper-case), summary}` found by header name;
+  `acs` = `[{id, text}]`; `markers` = count of `[NEEDS CLARIFICATION:` in the body. `readQueue` of
+  an absent file → `{version: 2, seq: 0, items: []}`; `readFanout`/`readRun`/`readGenesis` → `null`.
+  `readProto(root, stem)` → `{status, pins, contract}` (each `null` when absent); `writeProto` and
+  `writeMocks(root, {status?, seed?})` write only the keys given.
+- `driver.js`: `makeDriver({name, specArg, load, save, derive, steps, script?})` returns
+  `main(argv) → exit code` (script does `process.exitCode = main()`). `derive(state, ctx)` returns
+  `{name, body?, mark?, accepts?, auto?}`: `mark` is the verb line the session replies with
+  (`'reviewed --file <json>'`); its first word plus `accepts[]` are the verbs allowed at that step;
+  `auto(state, ctx) → state` is a driver-only step (OPEN, GATE, COMMIT, MERGE…) run, saved and
+  re-derived without the session — after a mark too, so the checkpoint names the next session step.
+  `ctx = {root, arg, json, flags, script}`. Printed block: `▶ <STEP>`, body, `▶ when done: node
+  <script> <arg> --root <root> --mark <mark>`. `--json` → `{step, body, mark}`. Refuse with
+  `refuse(msg)` (or throw `{exit: 2, message}`); stderr is `<name>: <msg>`. Also `die`, `writeOut`.
+- `host.js`: `run(cmd, {cwd, env, timeoutMs})` runs under bash, timeout → status 124, `tail` = last
+  40 lines of stdout+stderr. `gate(root, config)` → `{status, cached, runId, tail}`; throws
+  `{exit: 2}` without `testCommand`. Cache key = sha256(cmd, working-tree git tree sha); the tree
+  comes from a HEAD-seeded scratch index with `add -A`, minus `**/*.run/**` and
+  `.claude/pending-question.json`; only green runs are recorded; cache dir
+  `<git-common-dir>/spec-run-cache/` is shared by every worktree, so the trunk gate after an
+  unchanged merge is a hit. `detectTestCommand(root)` → `npm|pnpm|yarn test`, `bun run test`,
+  `pytest`, `go test ./...`, `cargo test`, or `null`.
+- `git.js`: `sh(args, cwd)` throws on non-zero. `worktreeAdd` is idempotent and attaches an
+  existing branch. `worktreeRemove(root, path, {deleteBranch})`. `commitAll` → sha or `null` when
+  clean. `mergeBack(root, branch, strategy, {message})` merges into the branch checked out at root →
+  `{merged, conflicts[], sha?, reason?}` (ff-only divergence → `merged: false` + `reason`; conflicts
+  are left in the root tree for `conflicts-resolved`); a root with tracked uncommitted changes or an
+  unknown strategy throws `{exit: 2}`. `diff(base, cwd)` / `changedFiles(base, cwd)` compare the
+  WORKING TREE (incl. untracked) with base via a scratch index, because REVIEW runs before COMMIT.
+- `report.js`: `render(...)` per §8; empty sections omitted; a trailing `?` on `next` is stripped;
+  missing `next` → `nothing needs you — all done`. The interface contract's `✨ found` line is not in
+  the v8 API.
+- `pending.js`: `writePending(root, {lane, question, options})` → `{path, written, doc}` and never
+  overwrites a pending question; `readPending`, `answerPending(root, label)` (unknown label → exit 2),
+  `consumePending` (returns the doc), `stopLine(root)` starts with `PENDING_QUESTION`. CLI:
+  `node spec/scripts/lib/pending.js show|answer --label <l>|consume|mark --root <dir>`.
+- Tests: `tests/helpers.js` exports `ROOT, SPEC, RUN_ROOT, tmpdir, gitRepo, runNode, runBash,
+  freePort`; `runNode(script)` resolves `script` against `spec/` (or takes an absolute path).
+  `npm test` = `node --test --test-timeout=45000 'tests/**/*.test.js'` (no stdout preload).

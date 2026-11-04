@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: critical           # spec/scripts/spec-status.js — the --next/--lanes derivation changes shape internally (§ Risk Tiers: the sole "what's next" derivation; its --json surfaces are frozen); spec/bin/spec-paths gains a key
 area: pipeline
 breaking: false
@@ -322,6 +322,21 @@ Executes-tier hits outside the plan (`tests/ceiling/*`, `tests/frontmatter/*`, `
 `tests/init-gen/*`, `tests/mocks/*`, `tests/commit/*`, `tests/ac-matrix/*`, `tests/host-config/*`,
 `tests/prose-debt/*`) read `spec-status`, `spec-queue` or `spec-paths` output whose external shape D2 and D4 keep
 byte-identical and whose fixtures hold no two ad-hoc specs beside each other; the build's whole-suite check adjudicates.
+
+Build departures (2026-11-03, folded from the deviations sidecar): four more existing `fanoutHost(` calls than D8
+named (spec 06 AC 9 and AC 13, spec 08 AC 21 and AC 22) went red on the ad-hoc flip because pin order follows path
+order for ad-hoc specs, and took `briefed: true` unrewritten. D9's `--lanes --json` top-level key list omitted the
+pre-existing `born` key (spec 08); the smoke pins `born, fixes, lanes, serialized`, byte-identical to the base.
+`variant-lint`'s `files=` counts skipped foreign files and excludes only the helper — AC-13's own fixture demands
+`files=2`, so the AC, not D5's prose, is the oracle. Reuse retags sit at the end of each test title so the done
+specs' prefix-matched `reuses` pointers keep resolving; AC-4's pointer was corrected to the title's real prefix
+(`AC-20261102-03-1 / AC-20261103-08-8: --lanes`). D12: the mechanical trim on main (commit 2b4735a9, no spec)
+deleted the ci-query `--branch` test with `--branch` mode itself, leaving spec 20261102/01 AC 13 uncovered and
+`ac-drift` red on main; this build, the first to gate after the trim, tagged it retired.
+
+### Advisory debt (review rv_b6a6d1f9317b)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac226712ab224e25f/spec/scripts/spec-status.js:879 — The --all 🤷 branch line falls back to the literal reason 'no File Plan rows' whenever an entry reaches the 🤷 branch without a parallelUnknown set (an entry the annotation loop skipped via `continue` — a /spec:fix runner-up, or any entry whose parallel stayed undefined for a reason other than relateBriefs 'unknown'); the fallback can print a File Plan claim the derivation never made.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ac226712ab224e25f/tests/spec-status.test.js:601 — Two new asserts in tests/spec-status.test.js carry only the raw stderr as their message with no consequence-of-failure sentence: `assert.strictEqual(rAll.status, 0, rAll.stderr)` (AC-10-3 test) and `assert.strictEqual(r.status, 0, r.stderr)` (AC-10-5 test).
 
 ## Canonical Delta
 

@@ -62,15 +62,12 @@ test('AC-20261103-08-27: fanout.md Rules names the fix worktree branch, the no-c
 })
 
 // specs/20261102/03-one-session-runs-the-lanes.md D11 — the fanout command keeps the driver key,
-// the flags and the two never-lines, and its section list serves the contracts it relies on.
+// the --pick flag and the two never-lines, and its section list serves the contracts it relies on.
 
-test('fanout.md (AC-20261103-06-24) names the driver key, the three flags and no --lanes, the two never-lines, and the fanout section list in spec-paths serves its contracts', () => {
+test('fanout.md (AC-20261103-06-24) names the driver key, the --pick flag, the two never-lines, and the fanout section list in spec-paths serves its contracts', () => {
   const fanout = whole('spec/commands/fanout.md')
   assert.match(fanout, phrase('spec-paths fanout-driver'), 'fanout.md must resolve the driver through its spec-paths key, or the command runs a wrong path silently')
-  for (const flag of ['--batch', '--include-fixes', '--override-serial']) {
-    assert.ok(fanout.includes(flag), 'fanout.md must name ' + flag + ', or the session cannot pass the user\'s veto or overrides on')
-  }
-  assert.doesNotMatch(fanout, /--lanes\b/, 'fanout.md must not name --lanes, or the session passes a flag the driver refuses')
+  assert.ok(fanout.includes('--pick'), 'fanout.md must name --pick, or the session cannot pass the user\'s choice to pick the batch on to the driver')
   assert.match(fanout, phrase("never answer a lane's question yourself", 'i'), 'without the first never-line the session answers a worker\'s question and the user\'s decision is taken from them')
   assert.match(fanout, phrase("never run a lane's driver except the MERGE step", 'i'), 'without the second never-line the session drives a lane the worker still owns')
   const paths = whole('spec/bin/spec-paths')

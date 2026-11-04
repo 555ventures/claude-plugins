@@ -173,7 +173,7 @@ its repo root through `pending-question.js`, prints `PENDING_QUESTION`, and stop
 session writes an answer — `by: user` from a live `AskUserQuestion` it asked; the worker never
 does. A stop whose answer the host's `policy.stops` names is never written — the lane's own driver
 prints `📌 Auto-picked <label> — host policy stops.<key>: <value> (veto anytime)` and continues; the
-fan-out's `--ask <key>` relays that stop for one run. A dismissal is a STOP exactly as
+a host that wants that stop asked sets the key to `ask`. A dismissal is a STOP exactly as
 § Decisions. A delegated review ends at `MERGE_READY` and the parent merges from the main root.
 
 ## Question Style (every `AskUserQuestion`, every stage)

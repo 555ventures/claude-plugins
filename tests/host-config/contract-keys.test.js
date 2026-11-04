@@ -31,7 +31,7 @@ test('AC-20261101-07-1 / AC-20261103-06-8: the contract carries ## Test tiers (o
     'the contract hash must differ from the pre-spec stamp, or hosts never see their grounding as stale')
 })
 
-test('AC-20261103-04-2 / AC-20261103-09-2 / AC-20261103-15-17: the contract § Policy JSON block carries the six stops keys with their defaults, the Enums sentence names prototypeClose ask | keep | delete and rejectWithEvidence accept | ask, and this repo\'s contractHash equals the edited contract\'s hash', () => {
+test('AC-20261103-04-2 / AC-20261103-14-13 / AC-20261103-09-2 / AC-20261103-15-17: the contract § Policy JSON block carries the six stops keys with their defaults, the Enums sentence names prototypeClose ask | keep | delete and rejectWithEvidence accept | ask, and this repo\'s contractHash equals the edited contract\'s hash', () => {
   const pol = section('spec/templates/grounding-contract.md', /^## Policy/, /^## (?!Policy)/)
   const json = pol.slice(pol.indexOf('```json'), pol.indexOf('```', pol.indexOf('```json') + 7))
   assert.match(json, /"stops"\s*:\s*\{/, 'the JSON block must carry a stops object, or hosts never learn the block exists')

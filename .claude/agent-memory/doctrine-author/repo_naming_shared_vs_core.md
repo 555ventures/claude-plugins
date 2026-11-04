@@ -3,7 +3,7 @@ name: repo-naming-shared-vs-core
 description: This repo's doctrine invariants file is spec/doctrine/core.md, not shared.md — my own agent instructions reference "shared.md" but that's stale/wrong for this repo
 metadata:
   type: project
-  reviewed: 2026-11-03
+  reviewed: 2026-11-04
 ---
 
 `spec/doctrine/` holds `core.md`, `design.md`, `genesis.md`, `mocks.md` and `stages/` — there is no

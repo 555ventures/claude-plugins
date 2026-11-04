@@ -1,6 +1,6 @@
 ---
 date: 2026-11-03
-status: implementing
+status: done
 tier: standard           # per ADR-0039 D3 the tier is a property of files touched: the spec-status.js and grounding-contract.md rows are § Risk Tiers surfaces, so their ACs carry literal examples; the spec as a whole is standard
 area: pipeline
 breaking: false
@@ -264,6 +264,19 @@ whole-suite check; the literals leg's three doctrine hits entered the File Plan
 Tier: `standard` under D5's own rule. `spec-status.js` and `grounding-contract.md` are § Risk
 Tiers surfaces, so AC-9 and the contract-hash restamp carry literal examples and the `--json`
 shapes are pinned untouched; nothing irreversible is touched.
+
+Build deviations (folded at close 2026-11-04; one-offs, none recurring-shaped):
+- spec/scripts/spec-review-driver.js: the `slow red at close` refusal is written straight to stderr + exit 2 instead of through `die()`, because AC-13-5 anchors `^slow red at close` at a line start and `die()` prefixes `spec-review-driver: `.
+- spec/scripts/expire-tests.js: Contracts lists `--keep-on-red`, a flag the script never had; not added (no behaviour specified) — usage line carries `--apply [--no-gate]` only.
+- Integration: A10 was false — `tests/review/review-driver-policy.test.js` (classify arm's 🧹 wording) and `tests/expiry/invariants.test.js` (spec 05 AC-7's kept-by-reach clause, whose subject D10 deletes) entered the File Plan via out-of-plan triage (D18, D19); the reach clause was removed from that case, its launcher-listing assertions stay. The reach-only "whole name" case in `tests/expiry/test-expiry.test.js` was deleted with the rule.
+- Integration: spec 05 (20261101) AC-9's reuse pointed at a case D17 retires; the AC-13-3 case now also carries that criterion's ID in its title (it closes a green tree through the gate and suite).
+- Integration: `review-driver.fixtures.js` `makeHost` gained a `config` option so AC-13-5's slow-tier key is committed in the base rather than reconciled as out-of-plan.
+
+### Advisory debt (review rv_aa8bde430d22)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a940b38b09ae4884a/spec/scripts/collision-closure.js:270 — The overlap leg selects siblings purely by `stage:"plan"` row age and never by spec status, so on this host every lock lists every spec locked in the last 7 days including ones already `done` — 25 hits, exit 1, and a remedy (fold / `depends_on`) that cannot be followed for a closed spec. The code matches D3 verbatim (D3 names no status filter), so this is a plan-level gap surfaced by the cold walk for the planner journey ('fold into it or declare depends_on before two builds race the same lines' — a done spec's build cannot race), not a code-vs-spec contradiction.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a940b38b09ae4884a/specs/20261103/05-tests-that-earn-their-keep.md:116 — specs/20261103/05 AC-20261103-05-7 still promises '…and keep a tagged done-spec case whose reach is `spawnSync('bash', ['tools/bin/launch'])` as `invariant`', but D10 deleted the reach rule and the D19 in-place update of tests/expiry/invariants.test.js removed the three asserts (and the title clause) that pinned it. The AC-ID is still cited, so neither ac-drift nor the base-minus-now AC-ID derivation surfaces it; the bullet now overclaims a behaviour with no test and no code. The retired clause should be struck or tagged `[retired: specs/20261103/13…]` on that bullet, the way D17 did for AC-4/5/6 of the same spec.
+- a2 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a940b38b09ae4884a/spec/templates/grounding-contract.md:273 — The host policy enum value `testExpiry: "classify"` (the default) now means apply-and-delete at close, since D11 passes `--apply --no-gate` for every value other than `off`; the enum name in the contract, host-config.js and the review-driver-policy test ('the classify arm') now misdescribes what the close does. D11 did not rename it and the contract has already spent its one edit, so this is naming drift to carry forward, not a code defect.
+- a3 /home/jj/projects/claude-plugins/.claude/worktrees/agent-a940b38b09ae4884a/spec/doctrine/stages/stage-review.md:82 — File Plan row for spec/doctrine/stages/stage-review.md promises 'D13 slow runs at `--mark closed`' in its Summary, but the diff to that file adds only the D11 sentence (expiry applied at CLOSE, `[invariant]` for fix-round tests); the Close bullet says nothing about the slow tier running at `--mark closed`. D13's own text does not require stage-review.md, so this is a File Plan summary not fully delivered rather than a Decision violation.
 
 ## Canonical Delta
 

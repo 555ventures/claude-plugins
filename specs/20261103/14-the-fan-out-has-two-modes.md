@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: done
 tier: critical           # spec/templates/grounding-contract.md loses its `/spec:fanout --ask <key>` sentence (§ Risk Tiers: hash-stamped into every host) — one edit, contractHash restamped
 area: fanout
 breaking: true           # the user-facing flags --batch, --include-fixes, --override-serial, --ask and positional spec paths are refused after this lands (D1, asked: q39)
 depends_on: [specs/20261103/06-the-fan-out-drains-the-queue.md, specs/20261103/08-queue-items-remember-their-origin.md, specs/20261103/09-an-executed-repro-answers-the-reject.md, specs/20261103/15-shared-files-land-by-rebase.md]
 brief: n/a
 open_markers: 0
+diff_base: ee596648236673cd1457459a0b5f697aac2ea13c
 ---
 
 # The fan-out has two modes
@@ -75,7 +76,6 @@ more lines than it adds.
 | tests/fanout/fanout-driver.test.js | MODIFY | tests | AC-20261103-14-1, AC-20261103-14-2, AC-20261103-14-3, AC-20261103-14-4, AC-20261103-14-5, AC-20261103-14-6, AC-20261103-14-7, AC-20261103-14-8, AC-20261103-14-9, AC-20261103-14-10, AC-20261103-14-15, AC-20261103-14-16; D9 re-hosts and deletions |
 | tests/delegated/pending-question.test.js | MODIFY | tests | AC-20261103-14-11; D9 |
 | tests/consistency/prose-pins.test.js | MODIFY | tests | D9: `fanout.md` guard pins `--pick` |
-| tests/consistency/policy-readers.test.js | MODIFY | tests | D9: the two fanout `--ask` assertions dropped |
 | tests/host-config/contract-keys.test.js | MODIFY | tests | AC-20261103-14-13 (pin reuse; the title gains the AC-ID) |
 
 ## Contracts
@@ -164,7 +164,7 @@ then brief 35's `08-s` / `08-c` / `07-d` as the opt provides):
 **Review checks (reviewer-run, both hard findings when red):**
 
 ```
-git grep -nE -- "--batch <ids|--include-fixes|--override-serial|includeFixes|overrideSerial|--ask <key|ASK_KEYS|readFanoutTable|table\.ask|arg\.specs|options\.specs|batch-flag|spec-flags|retired --lanes|\[--lanes N\]|fanout \[--lanes" -- . ':!specs/**' ':!.claude/spec-runs*' ':!spec/.claude-plugin/plugin.json'
+git grep -nE -- "--batch <ids|--include-fixes|--override-serial|includeFixes|overrideSerial|--ask <key|ASK_KEYS|readFanoutTable|table\.ask|arg\.specs|options\.specs|batch-flag|spec-flags|retired --lanes|\[--lanes N\]|fanout \[--lanes" -- . ':!specs/**' ':!.claude/spec-runs*' ':!spec/.claude-plugin/plugin.json' | grep -v 'retired-flag probe'
 ```
 must print nothing (the removed-flag grep, D11; `--batch` and `--lanes` are matched with their fan-out context
 because `docs/adr/0007` names a walkthrough `--batch` and `spec-status --lanes --json` is a live flag), and
@@ -192,7 +192,7 @@ are outside the File Plan and outside the literals oracle, inside the reviewer g
   `[['L1', S03, 'planned'], ['L2', S06, 'waiting'], ['L3', S04, 'planned'], ['F1', 'fix/q107'], ['F2', 'fix/ci-deadbee']]`;
   stdout contains `📌 Auto-picked batch: 03-x, 06-y, 04-z — the whole queue (veto: /spec:fanout --pick)`;
   `'options' in state === false && 'ask' in state === false`)
-  → rewrites tests/fanout/fanout-driver.test.js :: AC-20261102-03-7: --include-fixes appends
+  → rewrites tests/fanout/fanout-driver.test.js :: AC-20261102-03-7: the fix group appends
 - **AC-20261103-14-3**: WHEN a bare run plans on the fixture with opt `bornFix` THE SYSTEM SHALL table every
   pending fix item at PLAN — the gated one waiting — and promote it at the landing that meets its gate while a fix
   born during the run still joins by provenance (e.g. after PLAN the fix lanes, in `--lanes --json` order, are
@@ -278,10 +278,11 @@ are outside the File Plan and outside the literals oracle, inside the reviewer g
   blocked entry and a planning item with today's reasons and table a shared-brief member waiting (e.g. opt
   `selfSurface` → `L1 03-x planned, L2 06-y waiting, L3 04-z planned, L4 08-s planned, stopBefore null`)
   → reuses tests/fanout/fanout-driver.test.js :: AC-20261103-06-9
-- **AC-20261103-14-16**: WHEN a fix item names files THE SYSTEM SHALL CONTINUE TO run it beside the run lanes it
-  does not overlap and after the one it does, and a fix naming none after every lane (e.g. opt `fixFiles` bare
-  run → `## Step: dispatch 3 lanes` naming `03-x`, `04-z` and `fix q113`, never `fix q114` or `fix q107` first)
-  → reuses tests/fanout/fanout-driver.test.js :: AC-20261103-08-22
+- **AC-20261103-14-16**: WHEN a fix item names files THE SYSTEM SHALL run it beside the run lanes it
+  does not overlap and after the one it does, and a fix naming none after every lane, on a bare run with no flag
+  (e.g. opt `fixFiles` bare run → `## Step: dispatch 3 lanes` naming `03-x`, `04-z` and `fix q113`, never
+  `fix q114` or `fix q107` first)
+  → rewrites tests/fanout/fanout-driver.test.js :: AC-20261103-08-22
 
 ## Assumptions (escalation triggers)
 
@@ -351,6 +352,27 @@ File Plan row except three recorded waives — `spec/scripts/spec-queue.js` and 
 read `spec-fanout.json`'s `lanes` and `startedAt`, keys this spec leaves byte-identical;
 `spec/scripts/spec-review-driver.js` calls `stopPolicy`, whose signature and return shape are unchanged (D6);
 `docs/canonical/pipeline.md` is rewritten by the review stage from § Canonical Delta.
+
+Build and review departures (2026-11-04, folded from the deviations sidecar; each class already has a § Gotchas
+entry, so none was added at the 15/15 cap):
+- The `tests/consistency/policy-readers.test.js` MODIFY row was dropped from the File Plan: an earlier test trim
+  had already deleted the file and its two fanout `--ask` assertions, so D9's intent for the row held.
+- AC-14-16 moved from `CONTINUE TO … reuses` to `SHALL … rewrites`: D9's bare-run setup is red on the pre-image
+  (red-check `broken-reuse`). AC-14-11's test was retitled so its `AC-20261103-04-3: stopPolicy` pointer resolves.
+- AC-14-2 and AC-14-9's `fix/ci-deadbee` example cannot be produced by the fixture's `fixes` opt; the tests pin
+  `F2 = fix/q116` (advisory a1).
+- Review round 1: § Behavior's removed-flag grep hit the spec's own AC-14-1 refusal probe and AC-14-2's
+  pointer-forced title. The probe line is tagged `// retired-flag probe` and filtered from the grep; the title and
+  pointer now read `the fix group appends`. D10 was +34 after the build. Trimming duplicated test setup
+  (fixture `closeLane`/`dispatchAll`/`pickPlan`/`admit`, `resumedConflict`) and driver code (`tickQueued`, `isRun`
+  reuse, header rewrap) brought it to net -17 (508+/525-).
+- AC-14-7's lead sentence, the Goal and the Rationale paragraph on `--pick` still name self-surface and
+  critical-file boundaries, which spec 15 removed. The build followed D2/D4 and AC-14-7's examples, where both
+  picks are planned and `stopBefore` is null. The locked prose was left as written.
+
+### Advisory debt (review rv_efc485bd5ae7)
+- a0 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ad427852a98e3ce01/tests/fanout/fanout-gate-cache.test.js:29 — A retired-token residue outside the fix-delta range: tests/fanout/fanout-gate-cache.test.js:29 still calls `h.plan(['--spec', S03])`; the trimmed fixture `h.plan = () => (fs.existsSync(h.stateFile) ? h.admit() : h.pickPlan())` now takes no parameters at all, so the argument is silently discarded and the test runs the default pick pair while spelling a flag the driver refuses. Not in the fix-delta file list; unchanged from iteration 1.
+- a1 /home/jj/projects/claude-plugins/.claude/worktrees/agent-ad427852a98e3ce01/specs/20261103/14-the-fan-out-has-two-modes.md:192 — AC-14-2 and AC-14-9's worked examples still name a red-CI lane `F2 fix/ci-deadbee` that the fixture's `fixes` opt cannot produce; the test pins `F2 = fix/q116` and the deviation is recorded. Unchanged from iteration 1 (the fix round retargeted only the pointer suffix on this AC).
 
 ## Canonical Delta
 

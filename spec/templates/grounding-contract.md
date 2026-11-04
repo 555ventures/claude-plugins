@@ -299,7 +299,7 @@ other `--prototype` value as the veto; `delete` (the default) also prints the br
 command — the contract, pictures and tests already live under `design/prototypes/<stem>/` — while
 `ask` asks. `stops.reviewEscalate` `queue` also answers a review STOPPED whose repair round is spent,
 printing `📌 Auto-picked queue /spec:fix — host policy stops.reviewEscalate: queue (veto anytime)`. `stops.rejectWithEvidence` `accept` → `--mark dispositions` accepts a disposer `reject` whose `repro` names the command it ran and the output it observed, printing `📌 Auto-picked accept reject on executed repro: <refs> — host policy stops.rejectWithEvidence: accept (veto anytime)`, while a `waive` and a repro-less `reject` are asked whatever the value. Any `stops` key set to
-`ask` brings its question back; `/spec:fanout --ask <key>` brings it back for one fan-out.
+`ask` brings its question back.
 `closeSuite` `auto` → the close-time whole-suite run is skipped when the close delta against the judged tree is overlay-only, no test file references an overlay path, and the judged tree's suite is green in the run cache, printing `close-time suite: skipped — close delta is overlay-only and no test reads it (policy.closeSuite: auto)`; `always` → the close-time suite runs whenever `gateRunsSuite` does not already cover it.
 
 **Absent or partial block = the defaults above, key by key** — a host that predates the block

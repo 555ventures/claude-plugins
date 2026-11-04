@@ -20,10 +20,9 @@
 // form for prose commands (exit 0 = a lane, 1 = not), so no command re-derives the rule.
 //
 // `stopPolicy(root)` / `policyPick(root, key, labelByValue, marks)` are the
-// one reader of the host's policy.stops overlaid by the fan-out table's `ask` list, and the one
-// builder of the printed auto-pick line; a policy pick never writes a pending file. `stop-policy`
-// is their query form for prose commands (prints the key's effective value, the overlay applied),
-// so a prose reader of a stop never re-reads the config by hand or misses a fan-out --ask.
+// one reader of the host's policy.stops, and the one builder of the printed auto-pick line; a
+// policy pick never writes a pending file. `stop-policy` is their query form for prose commands
+// (prints the key's host value), so a prose reader of a stop never re-reads the config by hand.
 //
 // `recordLaneExit(root, marks, exit)` / `clearLaneExit(root, marks)` / `readLaneExit(root)` are the one
 // writer and reader of a lane's exit: the exit lands on marks.laneExit AND,
@@ -84,24 +83,8 @@ function isDelegated(root) {
   return !!(branch && table && Array.isArray(table.lanes) && table.lanes.some((l) => l && l.branch === branch))
 }
 
-function readFanoutTable(root) {
-  const common = gitCommonDir(root)
-  if (!common) return null
-  try {
-    return JSON.parse(fs.readFileSync(path.join(common, 'spec-fanout.json'), 'utf8'))
-  } catch {
-    return null
-  }
-}
-
-// The host's policy.stops with the fan-out table's `ask` list overlaid ('all' = every key).
-function stopPolicy(root) {
-  const stops = { ...policy(root).stops }
-  const table = readFanoutTable(root)
-  const ask = table && Array.isArray(table.ask) ? table.ask : []
-  for (const k of Object.keys(stops)) if (ask.includes('all') || ask.includes(k)) stops[k] = 'ask'
-  return stops
-}
+// The host's policy.stops, the one reader: a key set to `ask` brings its question back.
+const stopPolicy = (root) => ({ ...policy(root).stops })
 
 // null when the stop is asked (or has no label for its value); else the vetoable pick, recorded
 // onto marks.policyPicks.

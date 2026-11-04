@@ -1,33 +1,32 @@
 #!/usr/bin/env node
 'use strict'
-// fanout-driver.js [--root <dir>] [--spec <path>]… [--batch <id>[,<id>…]|all] [--include-fixes] [--override-serial] [--ask <key|all>] [--state]
-// fanout-driver.js --root <dir> --mark <planned|dispatched|returned|answered|dismissed|resumed|merged|gate-repaired|reported> [flags]
+// fanout-driver.js [--root <dir>] [--pick] [--state]
+// fanout-driver.js --root <dir> --mark <planned|picked|dispatched|returned|answered|dismissed|resumed|merged|gate-repaired|reported> [--lane <id>] [--agent <name>] [--stopped "<reason>"] [--id <qid>] [--label "<label>"]…
 //
 // Owner: specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/06-the-fan-out-drains-the-queue.md,
-// specs/20261103/15-shared-files-land-by-rebase.md — the driver behind
-// /spec:fanout: one session dispatches a worktree-isolated sub-agent per lane, relays the questions
-// the lanes write, merges each finished lane one at a time with the host gate re-run on main, and
-// renders one report; a bare run derives the batch (the queue's startable specs up to the first
-// boundary), re-queries after every landing, and reports when the batch is done. State lives in <git-common-dir>/spec-fanout.json; every step is re-derived
-// from that file and the lanes' own disks, so /clear loses nothing. Prints exactly one step per run. States: PLAN, DISPATCH,
-// RELAY, REBASE, MERGE, MERGE_RED, WAIT, REPORT. Lanes run in parallel whatever their File Plans share: the
-// MERGE step rebases the lane onto the root's branch and fast-forwards it (merge-back rebase-ff); a conflict
-// leaves the rebase in progress in the lane's worktree and sends the lane back to its worker (REBASE,
-// `--mark resumed`), and a second conflict against the same main aborts it and stops the lane.
+// specs/20261103/15-shared-files-land-by-rebase.md, specs/20261103/14-the-fan-out-has-two-modes.md — the driver
+// behind /spec:fanout: one session dispatches a worktree-isolated sub-agent per lane, relays the questions
+// the lanes write, merges each finished lane one at a time with the host gate re-run on main, and renders one
+// report. Two modes: a bare run (AUTO) derives the batch — the queue's startable specs up to the first
+// boundary — and tables the pending fixes as the serial fix group; --pick (SELF-PICK) prints one checkbox
+// round and --mark picked routes the picks through the same boundary validation. State lives in
+// <git-common-dir>/spec-fanout.json; every step is re-derived from it and the lanes' disks, so /clear loses
+// nothing. Prints one step per run: PICK, PLAN, DISPATCH, RELAY, REBASE, MERGE, MERGE_RED, WAIT, REPORT.
+// Lanes run in parallel whatever their File Plans share: MERGE rebases the lane onto the root's branch and
+// fast-forwards it (merge-back rebase-ff); a conflict goes back to the lane's worker (REBASE, `--mark resumed`),
+// a second one against the same main stops the lane.
 //
-// Does NOT ask for a repair on main (a red main is repaired by a lane in its own worktree), open the queue
-// file (spec-status --lanes --json is the only queue reader), answer a lane's question itself (the host's policy.stops auto-picks are printed by the
-// lane's own driver; `--ask <key|all>` on the planning run relays them for one run), run a lane's driver, dispatch an agent (it prints the Agent line; the session
-// issues it), derive lanes (spec-status --lanes --json does), or re-admit a spec whose lane stopped in this run
-// (the next bare run after --mark reported starts the next batch), dispatch a fix lane that names no file
-// beside a run lane; four lanes at once is a constant, not a flag. A bare run applies RELAY's side
-// effects; a mark only records its fact and prints the next step.
+// Does NOT ask for a repair on main (a lane repairs it in its own worktree), open the queue file
+// (spec-status --lanes --json is the only queue reader), answer a lane's question itself, run a lane's driver,
+// dispatch an agent (it prints the Agent line), derive lanes, admit a pick the bare run would refuse, or
+// re-admit a spec whose lane stopped in this run; four lanes at once is a constant, not a flag. A bare run
+// applies RELAY's side effects; a mark only records its fact and prints the next step.
 //
-// Exit codes: 0 step, mark or --state printed · 2 refused (run outside the main worktree, unknown
-// mark, mark outside its state, a lane that is not in the table or not merged, a gate-red main, an
-// unknown --ask key, a lane id missing, an unknown argument such as the retired --lanes, a --batch id
-// matching no startable spec, a dirty main root at the MERGE step — merge-back refuses it by design, a merge-ready lane with no recorded
-// worktree, a merge-back exit other than 0 or 3) — stderr names the remedy.
+// Exit codes: 0 step, mark or --state printed · 2 refused (run outside the main worktree, unknown argument
+// or mark, mark outside its state, a lane not in the table or not merged, a gate-red main, a lane id missing,
+// a pick with no label or a label matching no candidate, --pick on a running fan-out, a dirty main root at
+// the MERGE step, a merge-ready lane with no recorded worktree, a merge-back exit other than 0 or 3) —
+// stderr names the remedy.
 
 const fs = require('fs')
 const path = require('path')
@@ -45,8 +44,7 @@ const { parseBrief, relateBriefs, briefNum } = require('./lib/brief')
 const SELF = __filename
 const DIR = __dirname
 const die = makeDie('fanout-driver')
-const MARKS = ['planned', 'dispatched', 'returned', 'answered', 'dismissed', 'resumed', 'merged', 'gate-repaired', 'reported']
-const ASK_KEYS = ['repairRound', 'buildEscalate', 'reviewEscalate', 'redFindings', 'rejectWithEvidence', 'all']
+const MARKS = ['planned', 'picked', 'dispatched', 'returned', 'answered', 'dismissed', 'resumed', 'merged', 'gate-repaired', 'reported']
 const LANE_CAP = 4
 const ACTIVE = ['dispatched', 'pending', 'conflicted', 'merge-ready']
 const TERMINAL = ['merged', 'stopped', 'done']
@@ -58,24 +56,19 @@ const out = (lines) => writeOut(1, (Array.isArray(lines) ? lines.join('\n') : li
 
 // ---- argv ------------------------------------------------------------------------------------
 
-const VALUE_FLAGS = ['--root', '--spec', '--batch', '--mark', '--lane', '--agent', '--stopped', '--id', '--label', '--ask']
-const BOOL_FLAGS = ['--include-fixes', '--override-serial', '--state']
-const arg = { specs: [], ask: [] }
+const USAGE = 'fanout-driver.js [--root <dir>] [--pick] | --mark <m> [flags] | --state'
+const VALUE_FLAGS = ['--root', '--mark', '--lane', '--agent', '--stopped', '--id', '--label']
+const BOOL_FLAGS = ['--pick', '--state']
+const arg = { labels: [] }
 {
   const argv = process.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (VALUE_FLAGS.includes(a)) {
-      if (argv[i + 1] === undefined) die(`${a} needs a value — usage: fanout-driver.js [--root <dir>] [--spec <path>]… [--batch <ids|all>] [--include-fixes] [--override-serial] [--ask <key|all>] | --mark <m> [flags] | --state`)
-      if (a === '--spec') arg.specs.push(argv[++i])
-      else if (a === '--ask') {
-        const k = argv[++i]
-        if (!ASK_KEYS.includes(k)) die(`--ask "${k}" is not a stop key — use one of ${ASK_KEYS.join(', ')}`)
-        arg.ask.push(k)
-      }
-      else arg[a.slice(2)] = argv[++i]
+      if (argv[i + 1] === undefined) die(`${a} needs a value — usage: ${USAGE}`)
+      if (a === '--label') arg.labels.push(argv[++i]); else arg[a.slice(2)] = argv[++i]
     } else if (BOOL_FLAGS.includes(a)) arg[a.slice(2)] = true
-    else die(`unknown argument ${a} — usage: fanout-driver.js [--root <dir>] [--spec <path>]… [--batch <ids|all>] [--include-fixes] [--override-serial] [--ask <key|all>] | --mark <m> [flags] | --state`)
+    else die(`unknown argument ${a} — usage: ${USAGE}`)
   }
 }
 const root = path.resolve(arg.root || process.cwd())
@@ -103,10 +96,7 @@ const mainRoot = worktrees()[0].dir
   const inLinked = top.status === 0 && worktrees().slice(1).some((w) => real(w.dir) === real(top.stdout.trim()))
   if (inLinked || real(root) !== real(mainRoot)) die(`run from the main worktree — cd ${mainRoot}`)
 }
-const common = (() => {
-  const r = git(['rev-parse', '--git-common-dir'])
-  return path.resolve(root, r.stdout.trim())
-})()
+const common = path.resolve(root, git(['rev-parse', '--git-common-dir']).stdout.trim())
 const STATE_FILE = path.join(common, 'spec-fanout.json')
 const WORK_DIR = path.join(common, 'spec-fanout')
 const REPORT_FILE = path.join(WORK_DIR, 'report.json')
@@ -144,7 +134,7 @@ function dispatchable(st) {
 }
 
 function deriveState(st) {
-  if (!st || !st.admitted) return 'PLAN'
+  if (!st || !st.admitted) return st && st.pick && !st.batch ? 'PICK' : 'PLAN'
   const pending = st.lanes.some((l) => l.state === 'pending')
   // A red main outranks DISPATCH, so no lane but its repair lane is dispatched onto it; a pending question still relays;
   // a landing precedes a new dispatch so the lane branches from the newest main.
@@ -165,11 +155,7 @@ function deriveState(st) {
 
 const header = (state) => `[fanout-driver] state: ${state}  root: ${root}`
 const cmd = (rest) => `node ${SELF} --root ${root} ${rest}`
-const laneOf = (st, id) => {
-  const l = st.lanes.find((x) => x.id === id)
-  if (!l) die(`no lane ${id} in the table — lanes are ${st.lanes.map((x) => x.id).join(', ') || '(none)'}`)
-  return l
-}
+const laneOf = (st, id) => st.lanes.find((x) => x.id === id) || die(`no lane ${id} in the table — lanes are ${st.lanes.map((x) => x.id).join(', ') || '(none)'}`)
 const labelOf = (l) => l.kind === 'fix' ? `fix ${l.queueId || 'ci-' + l.ci}` : l.spec
 
 // ---- spec-status -----------------------------------------------------------------------------
@@ -203,8 +189,7 @@ function deriveBatch(nextJson, startable, serialized) {
   const entries = nextJson.filter((e) => !(e.action === '/spec:fix' || String(e.action).startsWith('/spec:fix ')))
   for (const e of entries) {
     const stop = (reason) => ({ path: e.path, reason })
-    if (e.action !== '/spec:run' || (e.blockers && e.blockers.length)) continue
-    if (!startable.has(e.path)) continue
+    if (!isRun(e) || !startable.has(e.path)) continue
     // A brief that depends on a member's brief is a dependency the batch cannot meet in one wave.
     const dep = serialized.find((x) => x.path === e.path && /^brief \S+ depends on /.test(x.reason))
     if (dep) return { members, stopBefore: stop('blocked: ' + dep.reason) }
@@ -212,7 +197,7 @@ function deriveBatch(nextJson, startable, serialized) {
   }
   const cmdWord = (e) => (String(e.action).match(/^\/\S+/) || ['queue'])[0]
   for (const e of entries) {
-    if (e.action === '/spec:run' && !(e.blockers && e.blockers.length)) continue
+    if (isRun(e)) continue
     if (e.queue) {
       const id = (String(e.note).match(/^queue item (q\d+)$/) || [])[1] || e.path
       return { members, stopBefore: { path: id, reason: `${cmdWord(e)} item heads the queue` } }
@@ -223,81 +208,87 @@ function deriveBatch(nextJson, startable, serialized) {
   return { members, stopBefore: null }
 }
 
-function plan() {
-  const lanesJson = statusJson(['--lanes', '--json'])
-  const notes = []
+const isRun = (e) => e.action === '/spec:run' && !(e.blockers && e.blockers.length)
+
+function parkedNote(e, notes) {
+  const wt = worktreeOf('spec/' + stemOf(e.path))
+  if (wt) notes.push(`⏸ ${e.path} parked in ${wt} — finish it there in-session`)
+  return !!wt
+}
+
+// Tables the batch the entries derive (deriveBatch — the one boundary validation, AUTO's and a pick's), then the
+// fix group (queued items first, then red-CI rows; a gated item waits on its blocker), and saves.
+function makeState(entries, by, notes, lanesJson, pick) {
   const table = []
-  let batch = null
-  const asLane = (e, state, waitingOn) => newLane('', 'run', { spec: e.path, brief: e.brief, branch: 'spec/' + stemOf(e.path), state, waitingOn: waitingOn || null })
-  const parked = (e) => {
-    const wt = worktreeOf('spec/' + stemOf(e.path))
-    if (wt) notes.push(`⏸ ${e.path} parked in ${wt} — finish it there in-session`)
-    return !!wt
+  const asLane = (e, state, waitingOn) => table.push(newLane('', 'run', { spec: e.path, brief: e.brief, branch: 'spec/' + stemOf(e.path), state, waitingOn: waitingOn || null }))
+  const tableRun = (e) => {
+    const lane = lanesJson.lanes.find((x) => x.path === e.path)
+    const ser = lanesJson.serialized.find((x) => x.path === e.path)
+    if (lane) { if (!parkedNote(lane, notes)) asLane(lane, 'planned') }
+    else if (ser) asLane(ser, 'waiting', ser.reason)
   }
-  // One member tabled as --spec tables it: planned when in lanes, waiting with the reason when serialized
-  // (--override-serial keeps admitting shared-brief members as planned); a blocked member waits on its blockers.
-  const tableMember = (e, ser, lane) => {
-    if (lane) { if (!parked(lane)) table.push(asLane(lane, 'planned')) }
-    else if (ser && arg['override-serial'] && /^shared brief/.test(ser.reason)) { if (!parked(ser)) table.push(asLane(ser, 'planned')) }
-    else if (ser) table.push(asLane(ser, 'waiting', ser.reason))
-    else if (e && e.blockers && e.blockers.length) table.push(asLane(e, 'waiting', e.blockers.join('; ')))
-    else return false
-    return true
-  }
-  const nextJson = statusJson(['--next', '--json']).next
-  if (arg.specs.length && arg.batch) die('--spec and --batch both pick the batch — pass one of them, or neither to derive it')
-  if (arg.specs.length) {
-    for (const raw of arg.specs) {
-      const p = raw.replace(/^\.\//, '').replace(root + '/', '')
-      if (table.some((l) => l.spec === p)) continue
-      const lane = lanesJson.lanes.find((e) => e.path === p)
-      const ser = lanesJson.serialized.find((e) => e.path === p)
-      const nxt = nextJson.find((e) => e.path === p)
-      if (nxt && nxt.action !== '/spec:run' && !lane && !ser) notes.push(`⛔ ${p} — next step is ${nxt.action}, not /spec:run`)
-      else if (!tableMember(nxt && nxt.action === '/spec:run' ? nxt : null, ser, lane)) notes.push(`⛔ ${p} — not a startable lane`)
-    }
-    batch = { members: table.map((l) => l.spec), stopBefore: null, by: 'spec-flags' }
-  } else {
-    const runs = nextJson.filter((e) => e.action === '/spec:run' && !(e.blockers && e.blockers.length))
-    const tableRun = (e) => tableMember(e, lanesJson.serialized.find((x) => x.path === e.path), lanesJson.lanes.find((x) => x.path === e.path))
-    if (arg.batch) {
-      let picked = runs
-      if (arg.batch !== 'all') {
-        picked = []
-        for (const raw of arg.batch.split(',').filter(Boolean)) {
-          const id = raw.replace(/^\.\//, '').replace(/\.md$/, '')
-          const hits = runs.filter((e) => e.path === id + '.md' || stemOf(e.path) === stemOf(id))
-          if (!hits.length) die(`--batch ${raw} matches no startable spec — startable: ${runs.map((e) => stemOf(e.path)).join(', ') || '(none)'}; check \`node "$(spec-paths spec-status)" --next\``)
-          if (hits.length > 1) die(`--batch ${raw} matches more than one spec (${hits.map((e) => e.path).join(', ')}) — pass the full path`)
-          if (!picked.includes(hits[0])) picked.push(hits[0])
-        }
-      }
-      picked.forEach(tableRun)
-      batch = { members: table.map((l) => l.spec), stopBefore: null, by: 'batch-flag' }
-    } else {
-      const b = deriveBatch(nextJson, new Set(runs.map((e) => e.path)), lanesJson.serialized)
-      b.members.forEach(tableRun)
-      batch = { members: table.map((l) => l.spec), stopBefore: b.stopBefore, by: 'derived' }
-    }
-  }
+  const b = deriveBatch(entries, new Set(entries.filter(isRun).map((e) => e.path)), lanesJson.serialized)
+  b.members.forEach(tableRun)
+  const left = pick ? entries.filter((e) => !b.members.includes(e)) : []
+  if (left.length) notes.push(`⏭ left for a later run: ${left.map((e) => stemOf(e.path)).join(', ')}`)
+  const batch = { members: table.map((l) => l.spec), stopBefore: b.stopBefore, by }
   table.forEach((l, i) => { l.id = 'L' + (i + 1) })
-  if (arg['include-fixes']) {
-    const fixes = [...lanesJson.fixes.filter((f) => f.queue_id), ...lanesJson.fixes.filter((f) => !f.queue_id)]
-    fixes.forEach((f, i) => {
-      const sha = f.queue_id ? null : ((String(f.note).match(/@([0-9a-f]{7,40})/) || [])[1] || 'unknown').slice(0, 7)
-      table.push(newLane('F' + (i + 1), 'fix', {
-        spec: f.path, branch: f.queue_id ? 'fix/' + f.queue_id : 'fix/ci-' + sha, queueId: f.queue_id || undefined, ci: sha || undefined, note: f.note,
-        ...fixFields(f),
-        ...(f.queue_id && f.blocker ? { state: 'waiting', waitingOn: f.blocker } : {}),
-      }))
-    })
-  }
-  const st = { version: 1, startedAt: nowIso(), admitted: false,
-    options: { includeFixes: !!arg['include-fixes'], overrideSerial: !!arg['override-serial'], specs: arg.specs },
-    batch, ask: [...new Set(arg.ask)], notes, queued: [], lanes: table, lastGate: null }
+  const fixes = [...lanesJson.fixes.filter((f) => f.queue_id), ...lanesJson.fixes.filter((f) => !f.queue_id)]
+  fixes.forEach((f, i) => {
+    const sha = f.queue_id ? null : ((String(f.note).match(/@([0-9a-f]{7,40})/) || [])[1] || 'unknown').slice(0, 7)
+    table.push(newLane('F' + (i + 1), 'fix', {
+      spec: f.path, branch: f.queue_id ? 'fix/' + f.queue_id : 'fix/ci-' + sha, queueId: f.queue_id || undefined, ci: sha || undefined, note: f.note,
+      ...fixFields(f),
+      ...(f.queue_id && f.blocker ? { state: 'waiting', waitingOn: f.blocker } : {}),
+    }))
+  })
+  const st = { version: 1, startedAt: nowIso(), admitted: false, batch, ...(pick ? { pick } : {}), notes, queued: [], lanes: table, lastGate: null }
   if (!table.length) { out([header('PLAN'), '## Step: plan the lanes', ...notes, 'no startable lanes — nothing to fan out; check `node "$(spec-paths spec-status)" --next`']); process.exit(0) }
   save(st)
   return st
+}
+
+// A bare run derives the batch; --pick writes the PICK state, or — with fewer than two candidates — tables the one
+// spec (or the fix group alone) under a 📌 line, there being nothing to choose.
+function plan(pickMode) {
+  const lanesJson = statusJson(['--lanes', '--json'])
+  const nextJson = statusJson(['--next', '--json']).next
+  const notes = []
+  if (!pickMode) return makeState(nextJson, 'derived', notes, lanesJson)
+  const cands = nextJson.filter(isRun).filter((e) => !parkedNote(e, notes))
+  if (cands.length < 2) return makeState(cands, 'pick', notes, lanesJson)
+  const words = (e) => stemOf(e.path).replace(/^\d+-/, '').replace(/-/g, ' ')
+  const label = (e) => cands.filter((x) => words(x) === words(e)).length > 1 ? stemOf(e.path) : words(e)
+  const shown = Math.min(cands.length, 16)
+  const st = { version: 1, startedAt: nowIso(), admitted: false, batch: null,
+    pick: { candidates: cands.slice(0, shown).map((e) => ({ path: e.path, brief: e.brief, label: label(e) })), shown, startable: cands.length },
+    notes, queued: [], lanes: [], lastGate: null }
+  save(st)
+  return st
+}
+
+// PICK: ceil(shown / 4) multiSelect questions of balanced size; each option says where the derived batch puts it.
+function printPick(st) {
+  const lanesJson = statusJson(['--lanes', '--json'])
+  const nextJson = statusJson(['--next', '--json']).next
+  const b = deriveBatch(nextJson, new Set(nextJson.filter(isRun).map((e) => e.path)), lanesJson.serialized)
+  const where = (p) => {
+    const ser = lanesJson.serialized.find((x) => x.path === p)
+    if (b.stopBefore && b.stopBefore.path === p) return `the derived batch stops here: ${b.stopBefore.reason}`
+    return !b.members.some((e) => e.path === p) ? 'after the derived boundary' : ser ? `waits: ${ser.reason}` : 'in the derived batch'
+  }
+  const { candidates, shown, startable } = st.pick
+  const g = Math.ceil(shown / 4)
+  const questions = []
+  for (let i = 0, at = 0; i < g; i++) {
+    const n = Math.floor(shown / g) + (i < shown % g ? 1 : 0)
+    questions.push({ question: `Which of these specs should this fan-out run? Tick any — group ${i + 1} of ${g}.`, header: `Pick ${i + 1}/${g}`, multiSelect: true,
+      options: candidates.slice(at, at += n).map((c) => ({ label: c.label, description: `${c.path} — brief ${briefLabel(c.brief)}; ${where(c.path)}` })) })
+  }
+  out([header('PICK'), '## Step: pick the batch', ...st.notes, 'Ask ONE AskUserQuestion:', 'AskUserQuestion ' + JSON.stringify({ questions }, null, 2),
+    `Then: ${cmd('--mark picked --label "<label>" [--label "<label>"…]')}`,
+    ...(startable > shown ? [`${shown} of ${startable} startable specs shown — the rest come after this run`] : []),
+    `(to switch to the derived batch, delete ${STATE_FILE} and run bare)`])
 }
 
 // The state file keeps the --lanes --json string-or-null; parse at read.
@@ -310,9 +301,11 @@ function printPlan(st) {
     return `${l.id.padEnd(3)} ${what}  ${tail}${l.branch}${l.state === 'waiting' ? `  (waiting: ${l.waitingOn})` : ''}`
   })
   const b = st.batch
-  const pin = b && b.by === 'derived'
-    ? [`📌 Auto-picked batch: ${b.members.map(stemOf).join(', ')} — ${b.stopBefore ? `stops before ${stemOf(b.stopBefore.path || '')} (${b.stopBefore.reason})` : 'the whole queue'} (veto: --batch <ids|all>)`]
-    : []
+  const stems = b.members.map(stemOf).join(', ')
+  const stop = b.stopBefore ? `stops before ${stemOf(b.stopBefore.path || '')} (${b.stopBefore.reason})` : null
+  const pin = b.by === 'derived' ? [`📌 Auto-picked batch: ${stems} — ${stop || 'the whole queue'} (veto: /spec:fanout --pick)`]
+    : st.pick ? [`✅ Picked batch: ${stems} — ${stop || 'the whole pick'}`]
+    : [`📌 Auto-picked ${b.members.length ? 'the one startable spec ' + stems + ' — nothing else to choose' : 'the fix group alone — no startable spec'} (veto anytime)`]
   out([header('PLAN'), '## Step: plan the lanes', ...pin, ...rows, ...st.notes,
     `Then: ${cmd('--mark planned')}`, `(to change the set, delete ${STATE_FILE} and re-run)`])
 }
@@ -320,9 +313,8 @@ function printPlan(st) {
 // ---- DISPATCH --------------------------------------------------------------------------------
 
 function workerPrompt(l) {
-  const first = l.kind === 'fix'
-    ? `/spec:fix ${l.queueId || '@' + l.spec}` : `/spec:run ${l.spec}`
-  const lines = [
+  const first = l.kind === 'fix' ? `/spec:fix ${l.queueId || '@' + l.spec}` : `/spec:run ${l.spec}`
+  return [
     `Lane ${l.id} — run ${l.kind === 'fix' ? first : l.spec} to its next stop. You are in your own worktree; first run`,
     `\`git switch ${l.branch} 2>/dev/null || git switch -c ${l.branch}\`, then`,
     `\`node "$(spec-paths pending-question)" mark --root .\` (marks this worktree as a lane), then \`${first}\`.`,
@@ -333,8 +325,7 @@ function workerPrompt(l) {
     'A mark prints the next step — act on that print, never re-run the driver bare to see it again. Write',
     'files with the Write tool and run each driver line as one plain command (the worktree guard refuses',
     'a heredoc combined with a driver call).',
-  ]
-  return lines.join('\n')
+  ].join('\n')
 }
 
 function printDispatch(st) {
@@ -352,9 +343,7 @@ function printDispatch(st) {
 function py(script, args) { return spawnSync(process.execPath, [path.join(DIR, script), ...args], { encoding: 'utf8' }) }
 
 function relay(st, apply) {
-  const resume = []
-  const ask = []
-  const lines = []
+  const resume = [], ask = [], lines = []
   let changed = false
   for (const l of st.lanes.filter((x) => x.state === 'pending')) {
     const doc = readJson(l.question)
@@ -410,9 +399,7 @@ function printMerge(st, apply) {
   if (dirty.length) die(`the main root is dirty — merge-back refuses a dirty root by design: ${dirty.join('\n')}; commit them on a branch or move them to the session scratchpad (core § On-Disk Handoff), then re-run`)
   const l = st.lanes.find((x) => x.state === 'merge-ready' && (!isRed(st) || x.repairs === st.lastGate.lane))
   const target = targetBranch()
-  if (!apply) {
-    return out([header('MERGE'), `## Step: merge ${l.id}`, `Then: ${cmd('').trim()} — lands ${l.branch} (rebase onto ${target}, fast-forward)`])
-  }
+  if (!apply) return out([header('MERGE'), `## Step: merge ${l.id}`, `Then: ${cmd('').trim()} — lands ${l.branch} (rebase onto ${target}, fast-forward)`])
   if (!l.worktree) die(`lane ${l.id} has no recorded worktree — run ${cmd(`--mark returned --lane ${l.id}`)}, then re-run the driver bare`)
   const r = spawnSync('bash', [path.join(DIR, 'merge-back.sh'), 'merge', '--root', root, '--target', target, '--source', l.branch, '--strategy', 'rebase-ff', '--worktree', l.worktree], { encoding: 'utf8' })
   if (r.status === 3) return conflicted(st, l, target)
@@ -460,8 +447,7 @@ function gateOf(l) {
   let gate = null
   let why = null
   if (l.kind === 'fix') {
-    gate = typeof cfg.testCommand === 'string' && cfg.testCommand ? cfg.testCommand
-      : typeof cfg.postGateCommand === 'string' && cfg.postGateCommand ? cfg.postGateCommand : null
+    gate = [cfg.testCommand, cfg.postGateCommand].find((c) => typeof c === 'string' && c) || null
     if (!gate) why = 'gate unavailable for a fix lane — run it by hand'
   } else if (typeof cfg.gateCommand !== 'string' || !cfg.gateCommand) why = 'no gateCommand declared — run the gate by hand'
   else {
@@ -540,9 +526,7 @@ function rolling(st) {
       continue
     }
     const e = j.lanes.find((x) => x.path === l.spec)
-    const s = j.serialized.find((x) => x.path === l.spec)
-    const ok = (e && !e.worktree) || (s && st.options.overrideSerial && /^shared brief/.test(s.reason))
-    if (ok) { l.state = 'planned'; l.waitingOn = null; changed = true }
+    if (e && !e.worktree) { l.state = 'planned'; l.waitingOn = null; changed = true }
   }
   const landed = new Set(st.lanes.filter((l) => l.kind === 'run' && (l.state === 'merged' || l.state === 'done')).map((l) => l.spec))
   for (const f of j.fixes) {
@@ -553,13 +537,14 @@ function rolling(st) {
   return changed
 }
 
+function tickQueued(id) {
+  const q = spawnSync(process.execPath, [path.join(DIR, 'spec-queue.js'), 'done', id], { cwd: root, encoding: 'utf8' })
+  if (q.status !== 0) writeOut(1, `⚠️ spec-queue done ${id} failed: ${((q.stderr || '') + (q.stdout || '')).trim()} — tick it by hand: node "$(spec-paths spec-queue)" done ${id}\n`)
+}
+
 // A green gate means the repair is on main: this run's gate-red births are ticked.
 function tickGateRed(st) {
-  for (const f of statusJson(['--lanes', '--json']).fixes) {
-    if (!f.queue_id || f.trigger !== 'gate-red' || f.batch !== st.startedAt) continue
-    const q = spawnSync(process.execPath, [path.join(DIR, 'spec-queue.js'), 'done', f.queue_id], { cwd: root, encoding: 'utf8' })
-    if (q.status !== 0) writeOut(1, `⚠️ spec-queue done ${f.queue_id} failed: ${((q.stderr || '') + (q.stdout || '')).trim()} — tick it by hand: node "$(spec-paths spec-queue)" done ${f.queue_id}\n`)
-  }
+  for (const f of statusJson(['--lanes', '--json']).fixes) if (f.queue_id && f.trigger === 'gate-red' && f.batch === st.startedAt) tickQueued(f.queue_id)
 }
 
 function printReport(st) {
@@ -613,6 +598,7 @@ function printStep(st, apply) {
   let state = deriveState(st)
   // A bare run at REPORT admits what the last landing left promotable or born before reporting.
   if ((state === 'REPORT' || state === 'MERGE_RED') && apply && rolling(st)) { save(st); state = deriveState(st) }
+  if (state === 'PICK') return printPick(st)
   if (state === 'PLAN') return printPlan(st)
   if (state === 'MERGE_RED') return printMergeRed(st)
   if (state === 'DISPATCH') return printDispatch(st)
@@ -677,12 +663,8 @@ function doMerged(st, l) {
   l.state = 'merged'
   l.gate = g.result
   if (pre.length) writeOut(1, pre.join('').trimEnd() + '\n')
-  // The queued item is ticked whatever the gate colour: its work is on main either way, and a red
-  // gate is queued as its own repair below.
-  if (l.kind === 'fix' && l.queueId) {
-    const q = spawnSync(process.execPath, [path.join(DIR, 'spec-queue.js'), 'done', l.queueId], { cwd: root, encoding: 'utf8' })
-    if (q.status !== 0) writeOut(1, `⚠️ spec-queue done ${l.queueId} failed: ${((q.stderr || '') + (q.stdout || '')).trim()} — tick it by hand: node "$(spec-paths spec-queue)" done ${l.queueId}\n`)
-  }
+  // Ticked whatever the gate colour: its work is on main either way; a red gate is queued as its own repair below.
+  if (l.kind === 'fix' && l.queueId) tickQueued(l.queueId)
   if (repaired) {
     // The gate that went red is the fact being repaired: re-run it, not the fix lane's own command.
     const rg = runGate(repaired)
@@ -707,22 +689,33 @@ function doMerged(st, l) {
   }
 }
 
+// The picks, in queue order, go through the same makeState (deriveBatch + tableRun) the bare run uses.
+function markPicked(st) {
+  if (!(st.pick && !st.batch)) die(`no pick is pending — run ${cmd('--pick')} to start one`)
+  const labels = st.pick.candidates.map((c) => c.label)
+  if (!arg.labels.length) die(`nothing picked — tick at least one box, or delete ${STATE_FILE} and run bare for the derived batch`)
+  const bad = arg.labels.find((l) => !labels.includes(l))
+  if (bad !== undefined) die(`label "${bad}" matches no candidate — labels are: ${labels.join(', ')}`)
+  const chosen = st.pick.candidates.filter((c) => arg.labels.includes(c.label))
+  const nextJson = statusJson(['--next', '--json']).next
+  const entries = chosen.map((c) => nextJson.find((e) => e.path === c.path)).filter(Boolean)
+  printStep(makeState(entries, 'pick', st.notes, statusJson(['--lanes', '--json']), { ...st.pick, chosen: chosen.map((c) => c.label) }), false)
+}
+
 function doMark(st, mark) {
   if (!MARKS.includes(mark)) die(`unknown mark "${mark}" — marks are ${MARKS.join(', ')}`)
   if (!st) die(`--mark ${mark} needs a plan — run ${cmd('').trim()} (no mark) first`)
+  if (mark === 'picked') return markPicked(st)
   if (mark === 'planned') {
-    if (!st.admitted) {
-      st.admitted = true
-      save(st)
-    }
+    if (st.pick && !st.batch) die('the batch is not picked yet — answer the pick question, then run --mark picked')
+    if (!st.admitted) { st.admitted = true; save(st) }
     return printStep(st, false)
   }
   if (!st.admitted) die(`the table is not admitted yet — run ${cmd('--mark planned')} first`)
   if (mark === 'gate-repaired') {
     if (!st.lastGate) die('no red gate to repair — run the driver bare to see the current step')
     const g = runGate(laneOf(st, st.lastGate.lane))
-    // The gate runs for minutes; marks for other lanes may land meanwhile, so only its outcome is
-    // applied, onto the state as it is now.
+    // The gate runs for minutes: only its outcome is applied, onto the state as it is now.
     const fresh = load()
     if (!fresh || !fresh.lastGate) die('the fan-out state changed while the gate ran — run the driver bare to see the current step')
     const l = laneOf(fresh, fresh.lastGate.lane)
@@ -764,8 +757,8 @@ function doMark(st, mark) {
     if (l.state === 'stopped' || l.state === 'done' || isRed(st)) rolling(st)
   } else if (mark === 'answered') {
     needState(l, ['pending'], mark)
-    if (!arg.id || !arg.label) die('--mark answered needs --id <question id> and --label <chosen label>')
-    const a = py('pending-question.js', ['answer', '--root', l.worktree, '--id', arg.id, '--label', arg.label, '--by', 'user'])
+    if (!arg.id || arg.labels.length !== 1) die('--mark answered needs --id <question id> and exactly one --label <chosen label>')
+    const a = py('pending-question.js', ['answer', '--root', l.worktree, '--id', arg.id, '--label', arg.labels[0], '--by', 'user'])
     if (a.status !== 0) die(`the answer was refused: ${(a.stderr || '').trim()} — use a label exactly as the question offered it`)
   } else if (mark === 'dismissed') {
     needState(l, ['pending'], mark)
@@ -793,12 +786,9 @@ function doMark(st, mark) {
   const st = load()
   if (arg.state) { out(header(deriveState(st))); process.exit(0) }
   if (arg.mark !== undefined) doMark(st, arg.mark)
-  else if (!st) printPlan(plan())
   else {
-    const planFlags = arg.specs.length || arg.batch || arg['include-fixes'] || arg['override-serial']
-    if (planFlags && st.admitted) die(`a fan-out is already running — delete ${STATE_FILE} to start over`)
-    if (planFlags && !st.admitted) printPlan(plan())
-    else printStep(st, true)
+    if (arg.pick && st && st.admitted) die(`a fan-out is already running — delete ${STATE_FILE} to start over`)
+    printStep(!st || (arg.pick && !st.admitted) ? plan(arg.pick) : st, true)
   }
   process.exit(0)
 }

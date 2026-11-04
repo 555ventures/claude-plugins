@@ -4,7 +4,7 @@ const path = require('node:path')
 const assert = require('node:assert')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md and specs/20261103/08-queue-items-remember-their-origin.md and specs/20261103/15-shared-files-land-by-rebase.md File Plan: the synthetic host shared by the
+// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md and specs/20261103/08-queue-items-remember-their-origin.md and specs/20261103/15-shared-files-land-by-rebase.md and specs/20261103/14-the-fan-out-has-two-modes.md File Plan: the synthetic host shared by the
 // fan-out driver tests — a roadmap, hardened specs, optional parked and dependent specs, a queued
 // fix and a red-CI row, plus helpers that stand a lane's worktree up the way the harness does
 // (a linked worktree on spec/<stem>) and write the fake pending question and review sidecar a
@@ -56,7 +56,7 @@ const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Laye
 // born of it; fixFiles — src/b.js and src/shared.js committed, 03-x planning src/a.js and src/shared.js, fix items
 // q107, q113 (names src/b.js) and q114 (names src/shared.js); gatedFix — fix item q115 after 04-z; overlap: n —
 // replaces the default specs with n hardened `brief: n/a` specs 20-o01..20-o0n whose File Plan names
-// spec/scripts/spec-status.js and spec/scripts/fanout-driver.js.
+// spec/scripts/spec-status.js and spec/scripts/fanout-driver.js; many: n — adds n hardened specs 20-m01.. on briefs 40.. (a pick step past sixteen).
 function fanoutHost(opts = {}) {
   const briefed = opts.briefed === true
   if (opts.dependent && !briefed) throw new Error('fixture: dependent needs briefed: true (the ad-hoc analogue is opt blocked)')
@@ -78,6 +78,10 @@ function fanoutHost(opts = {}) {
   }
   for (const [stem, row] of opts.overlap ? [] : Object.entries(SPECS)) {
     specs[stem] = briefed ? { brief: row.brief, status: row.status } : { brief: 'n/a', status: row.status, body: filePlan(...row.rows) }
+  }
+  for (let i = 1; i <= (opts.many || 0); i++) {
+    brief(String(39 + i), 'm' + i)
+    specs['20-m' + String(i).padStart(2, '0')] = { brief: String(39 + i), status: 'hardened' }
   }
   if (opts.dependent) { brief('34', 'after', '32'); specs['07-d'] = { brief: briefed ? '34' : 'n/a', status: 'hardened' } }
   if (opts.parked || opts.blocked || opts.draft || opts.selfSurface || opts.critical) brief('35', 'park')
@@ -111,9 +115,10 @@ function fanoutHost(opts = {}) {
   }
   git('add', '-A')
   git('commit', '-q', '-m', 'seed fan-out host')
+  const briefItems = [{ id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' }, { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' }]
   if (opts.fixes) {
     const heads = briefed
-      ? [{ id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' }, { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' }]
+      ? briefItems
       : [{ id: 'q1', kind: 'spec', spec: specRel('03-x'), added: '2026-11-02T10:00:00Z' }, { id: 'q2', kind: 'spec', spec: specRel('04-z'), added: '2026-11-02T10:01:00Z' }]
     fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 116, items: [
       ...heads,
@@ -123,8 +128,7 @@ function fanoutHost(opts = {}) {
   }
   if (opts.bornFix) {
     fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 111, items: [
-      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
-      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
+      ...briefItems,
       { id: 'q108', kind: 'prompt', lane: 'fix', payload: 'repair what 03-x left', after: { spec: specRel('03-x') }, added: '2026-11-02T10:02:00Z' },
       { id: 'q109', kind: 'prompt', lane: 'fix', payload: 'repair what 01-base left', after: { spec: specRel('01-base') }, added: '2026-11-02T10:03:00Z' },
       { id: 'q110', kind: 'prompt', lane: 'fix', payload: 'repair what another run left of 03-x', added: '2026-11-02T10:04:00Z',
@@ -134,15 +138,11 @@ function fanoutHost(opts = {}) {
     ] }))
   }
   if (opts.planItem || opts.fixFiles || opts.gatedFix) {
-    const briefs = [
-      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
-      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
-    ]
     const prompt = (id, payload, extra = {}) => ({ id, kind: 'prompt', lane: 'fix', payload, added: '2026-11-02T10:02:00Z', ...extra })
     const items = []
     if (opts.planItem) items.push(prompt('q112', 're-plan ' + specRel('01-base') + ': the export contract',
       { lane: 'plan', origin: { spec: specRel('01-base'), stage: 'review' }, trigger: 'gap' }))
-    items.push(...briefs)
+    items.push(...briefItems)
     if (opts.fixFiles) items.push(prompt('q107', 'repair the flaky export'), prompt('q113', 'tidy src/b.js'), prompt('q114', 'repair src/shared.js'))
     if (opts.gatedFix) items.push(prompt('q115', 'tidy the export', { after: { spec: specRel('04-z') } }))
     fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 115, items }))
@@ -208,6 +208,12 @@ function fanoutHost(opts = {}) {
       execGit(wt(stem), 'add', '-A')
       execGit(wt(stem), 'commit', '-q', '-m', 'lane work ' + stem)
     },
+    // A lane finished the way a closed review leaves it: worktree stood up if absent, one commit, a closed review sidecar.
+    closeLane(stem) {
+      if (!fs.existsSync(wt(stem))) h.startLane(stem)
+      h.commitInLane(stem, stem + '.txt', stem + '\n')
+      h.sidecar(stem, 'review', { closed: true })
+    },
     // What a finished review leaves on main: the branch merged with a merge commit, the worktree and
     // the branch removed. markDone also flips the spec to done on the branch first.
     // cleanup: false leaves both, as when the review driver died after the merge landed.
@@ -243,21 +249,23 @@ function fanoutHost(opts = {}) {
     assert.strictEqual(r.status, 0, 'the driver step ' + (what || args.join(' ')) + ' must exit 0 for the rest of the test to mean anything: ' + r.stderr + r.stdout)
     return r
   }
-  // No --spec and no --batch plans the default two lanes 03-x and 04-z; a test of the derived batch calls
-  // h.must([...]) then h.must(['--mark', 'planned']) itself.
-  h.plan = (args = []) => {
-    const explicit = args.includes('--spec') || args.includes('--batch') || fs.existsSync(h.stateFile)
-    const planArgs = explicit ? args : ['--spec', specRel('03-x'), '--spec', specRel('04-z'), ...args]
-    h.must(planArgs, 'plan')
-    return h.must(['--mark', 'planned'], '--mark planned')
+  // Two-mode entry: --pick prints the checkbox round, then --mark picked ticks the box of every listed spec
+  // path (the label of the option whose description starts with that path) and returns that mark's result.
+  h.pick = (paths = [ROWS.S03, ROWS.S04]) => {
+    const r = h.must(['--pick'], '--pick')
+    const options = askBlocks(r.stdout).flatMap((b) => b.questions.flatMap((q) => q.options))
+    if (!options.length) return r
+    const labels = paths.map((x) => (options.find((o) => o.description.startsWith(x + ' ')) || {}).label).filter(Boolean)
+    return h.must(['--mark', 'picked', ...labels.flatMap((l) => ['--label', l])], '--mark picked ' + labels.join(','))
   }
+  // pickPlan picks the listed specs (default 03-x and 04-z: L1, L2) and admits the table; admit does the same for the derived batch.
+  h.pickPlan = (paths) => { h.pick(paths); return h.must(['--mark', 'planned'], '--mark planned') }
+  h.plan = () => (fs.existsSync(h.stateFile) ? h.admit() : h.pickPlan())
+  h.admit = () => { h.must([]); return h.must(['--mark', 'planned']) }
   h.dispatch = (id, agent) => h.must(['--mark', 'dispatched', '--lane', id, '--agent', agent], '--mark dispatched ' + id)
+  h.dispatchAll = (...ids) => ids.forEach((id) => h.dispatch(id, { L1: 'lane-one', L2: 'lane-two', L3: 'lane-three' }[id]))
   // plan + dispatch of the default two lanes: L1 = 03-x (agent lane-one), L2 = 04-z (agent lane-two).
-  h.dispatchedPair = (planArgs = []) => {
-    h.plan(planArgs)
-    h.dispatch('L1', 'lane-one')
-    h.dispatch('L2', 'lane-two')
-  }
+  h.dispatchedPair = () => { h.plan(); h.dispatchAll('L1', 'L2') }
   return h
 }
 

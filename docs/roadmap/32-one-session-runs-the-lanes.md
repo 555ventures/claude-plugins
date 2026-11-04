@@ -30,7 +30,7 @@ finished lanes into main one at a time with the gate re-run after each, and rend
   with the file answered prints the resume step, dismissed prints STOP, unanswered waits.
 - **Merge-ready stop** — a delegated review stops at MERGE with `MERGE_READY` instead of printing the
   merge-strategy mark; the orchestrator runs that mark from the main root, one lane at a time.
-- **Lane dispatch** — `/spec:fanout [--lanes N] [--include-fixes] [--override-serial]` reads a new
+- **Lane dispatch** — `/spec:fanout [--pick]` reads a new
   `spec-status --lanes --json` surface, excludes lanes parked in a linked worktree, harvests the
   standing answers in one question round, prints one `Agent {…, isolation: "worktree"}` dispatch per
   lane with the lane's branch and the run command, and keeps the dispatch table in the git common

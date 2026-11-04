@@ -199,8 +199,8 @@ answer (`by: user`; a stop the host policy answers is never written — the lane
 dismissal, and waits otherwise. A delegated review ends at `MERGE_READY`; the parent merges from the
 main root. (specs/20261102/02)
 `/spec:fanout` runs the lanes from one session: `fanout-driver.js` over `<git-common-dir>/spec-fanout.json`,
-worktree-isolated sub-agents on the `lanes` seat, no standing sheet — the host's `policy.stops` answers the predictable stops and `--ask <key>` relays one for a
-run; a lane's parked build, spent repair round or `stop` answer lands as a recorded `laneExit`,
+worktree-isolated sub-agents on the `lanes` seat, no standing sheet — the host's `policy.stops` answers the predictable stops; a host that wants one asked sets that key to
+`ask`; a lane's parked build, spent repair round or `stop` answer lands as a recorded `laneExit`,
 one landing at a time: the fan-out's MERGE step rebases the
 lane onto main and fast-forwards it (merge-back's rebase-ff), the review driver's MERGE step finds the landed branch
 and finishes promotion and cleanup, and the gate re-runs on main after each; a rebase conflict hands the lane
@@ -208,7 +208,8 @@ back to its worker with the rebase in progress in its worktree, and a second con
 stops the lane for a person (specs/20261103/15-shared-files-land-by-rebase.md). (specs/20261102/03)
 A bare run derives the batch (the queue's startable specs in order up to the first brief dependency, blocked entry or planning
 item — shared files hold nothing back), prints it as one `📌 Auto-picked batch` line
-(`--batch <ids|all>` is the veto, four lanes run at once), re-queries `spec-status --lanes --json`
+(`/spec:fanout --pick` is the veto — a checkbox over the startable specs, at most sixteen per round, routed
+through the same boundary rules; four lanes run at once), re-queries `spec-status --lanes --json`
 after every green merge, green repair and lane end to dispatch waiting members and the fixes the
 batch's own lanes queued after a member, and reports when the batch is done; the next bare run starts
 the next batch. A pending question, then a merge-ready lane, outrank a new dispatch; a red main
@@ -218,13 +219,18 @@ is met and its `origin.spec` is a member lane that has merged; a fix born of a f
 another run, and anything `/spec:plan` queues wait for the next batch. The batch walk admits every
 startable spec before it meets a queue prompt, so a `/spec:plan` item ends the batch without holding a
 spec back and heads the REPORT with its `↳ from` line. A fix whose text names repo files runs beside the
-run lanes whose File Plans it does not overlap; one naming none runs after them as before. A gated fix
-under `--include-fixes` waits in the table until its gate is met. A red main is repaired by a lane: the
+run lanes whose File Plans it does not overlap; one naming none runs after them as before. Every pending
+queued fix and red-CI row is tabled at PLAN as the serial fix group in both modes; a gated one waits in the
+table until its gate is met. A red main is repaired by a lane: the
 run's gate-red item is tabled as the repair lane, dispatched onto the red main alone, and its merge
 re-runs the gate that was red; a green `--mark gate-repaired` still ticks the item for a repair landed
 another way. MERGE refuses a dirty main root naming the stray files. The REPORT's `queued` slot leads
 with this run's births, `/spec:plan` births first, each with its `↳ from` line.
 (specs/20261103/08-queue-items-remember-their-origin.md)
+The driver has two modes and no other flag: a bare run (AUTO) and `--pick` (SELF-PICK, the `PICK` step and
+the `picked` mark); the former veto, fix-group, serial-override and stop-override flags and positional spec
+paths are refused with the usage line, and the per-run overlay on `policy.stops` is gone — `stopPolicy` reads
+the host block alone. (specs/20261103/14-the-fan-out-has-two-modes.md)
 
 ## The question gate asks product facts, never derives them (2026-09-02, specs/20260902/06)
 

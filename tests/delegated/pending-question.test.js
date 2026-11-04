@@ -193,18 +193,19 @@ test('AC-20261103-04-3: answer --by standing exits 2 naming user, and write refu
   assert.ok((w.stdout + w.stderr).includes('kind "fix-dirty-tree" is not in the closed set'), 'the finding must name the kind: ' + w.stdout + w.stderr)
 })
 
-test('AC-20261103-04-3: stopPolicy overlays the fan-out table ask list so policyPick returns null, and without it policyPick returns the 📌 line and records the pick', () => {
+test('AC-20261103-04-3: stopPolicy (AC-20261103-14-11) returns the host\'s own stops whatever the fan-out table lists, so policyPick still picks, and without a table policyPick returns the 📌 line and records the pick', () => {
   const m = pq()
-  assert.strictEqual(typeof m.stopPolicy, 'function', 'pending-question.js must export stopPolicy, or no driver has one reader of the per-run override')
+  assert.strictEqual(typeof m.stopPolicy, 'function', 'pending-question.js must export stopPolicy, or no driver has one reader of the stops')
   assert.strictEqual(typeof m.policyPick, 'function', 'pending-question.js must export policyPick, or every driver re-derives the auto-pick line')
   const asked = policyHost('pq-stops-ask', { repairRound: 'repair' }, { version: 1, lanes: [], ask: ['repairRound'] })
-  assert.strictEqual(m.stopPolicy(asked).repairRound, 'ask', 'a key in the table ask list must read as ask, or --ask relays nothing')
+  assert.strictEqual(m.stopPolicy(asked).repairRound, 'repair', 'a table ask list must not overlay the host value, or a per-run key nobody can see from the host config still changes the answer')
   const marks = {}
-  assert.strictEqual(m.policyPick(asked, 'repairRound', REPAIR, marks), null, 'an ask stop must return null so the driver asks')
-  assert.ok(!('policyPicks' in marks), 'a null pick must record nothing, or the report lists a pick that was never made')
+  const kept = m.policyPick(asked, 'repairRound', REPAIR, marks)
+  assert.strictEqual(kept && kept.line, '📌 Auto-picked run one in-session repair round — host policy stops.repairRound: repair (veto anytime)',
+    'the host value must still auto-pick with the table ask list present, or the retired overlay still silences the pick: ' + JSON.stringify(kept))
+  assert.strictEqual(marks.policyPicks && marks.policyPicks.length, 1, 'the pick must be recorded, or the fan-out report has no trail')
   const all = policyHost('pq-stops-all', {}, { version: 1, lanes: [], ask: ['all'] })
-  const keys = Object.keys(require(path.join(SPEC, 'scripts/lib/host-config')).POLICY_DEFAULTS.stops)
-  assert.deepStrictEqual(m.stopPolicy(all), Object.fromEntries(keys.map((k) => [k, 'ask'])), 'the word all must turn every stops key to ask')
+  assert.deepStrictEqual(m.stopPolicy(all), require(path.join(SPEC, 'scripts/lib/host-config')).POLICY_DEFAULTS.stops, 'the word all must turn nothing to ask, or the retired overlay still reads the table')
   const plain = policyHost('pq-stops-plain', { repairRound: 'repair' }, { version: 1, lanes: [] })
   const pm = {}
   const pick = m.policyPick(plain, 'repairRound', REPAIR, pm)
@@ -218,14 +219,14 @@ test('AC-20261103-04-3: stopPolicy overlays the fan-out table ask list so policy
   assert.strictEqual(m.policyPick(plain, 'repairRound', {}, {}), null, 'a value with no label must return null so the driver asks')
 })
 
-test('AC-20261103-09-9: stopPolicy reads rejectWithEvidence as ask when the fan-out table lists it and policyPick returns null, and without it policyPick returns the accept pick line', () => {
+test('AC-20261103-09-9 / AC-20261103-14-11: stopPolicy reads rejectWithEvidence as the host value whatever the fan-out table lists, and policyPick returns the accept pick line either way', () => {
   const m = pq()
   const REJ = { accept: 'accept reject on executed repro: s0' }
   const asked = policyHost('pq-rwe-ask', undefined, { version: 1, lanes: [], ask: ['rejectWithEvidence'] })
-  assert.strictEqual(m.stopPolicy(asked).rejectWithEvidence, 'ask', 'a rejectWithEvidence entry in the table ask list must read as ask, or --ask relays nothing')
+  assert.strictEqual(m.stopPolicy(asked).rejectWithEvidence, 'accept', 'a table ask entry must not overlay the host value, or the retired overlay still reaches the reject stop')
   const marks = {}
-  assert.strictEqual(m.policyPick(asked, 'rejectWithEvidence', REJ, marks), null, 'an ask stop must return null so the driver asks')
-  assert.ok(!('policyPicks' in marks), 'a null pick must record nothing')
+  const pick = m.policyPick(asked, 'rejectWithEvidence', REJ, marks)
+  assert.ok(pick && pick.value === 'accept', 'the host accept must still auto-pick beside a table ask entry: ' + JSON.stringify(pick))
   const plain = policyHost('pq-rwe-plain', undefined, { version: 1, lanes: [] })
   assert.deepStrictEqual(m.policyPick(plain, 'rejectWithEvidence', REJ, {}), { value: 'accept', label: 'accept reject on executed repro: s0',
     line: '📌 Auto-picked accept reject on executed repro: s0 — host policy stops.rejectWithEvidence: accept (veto anytime)' },
@@ -246,14 +247,14 @@ test('AC-20261103-04-14: bareRun sets marks.laneExit.reason to the chosen label 
 })
 
 // queue item q29 (/spec:fix): stop-policy is the prose commands' query form of stopPolicy.
-test('stop-policy prints a stops key\'s effective value — the host default, the host\'s own value, ask under the fan-out table — and refuses an unknown key', () => {
+test('stop-policy (AC-20261103-14-11) prints a stops key\'s effective value — the host default, the host\'s own value whatever the fan-out table lists — and refuses an unknown key', () => {
   const val = (root, key) => runNode(SCRIPT, ['stop-policy', '--root', root, '--key', key])
   const def = val(policyHost('pq-sp-default', {}), 'rejectWithEvidence')
   assert.strictEqual(def.status + ':' + def.stdout.trim(), '0:accept', 'an unset key must print its default, or /spec:fix asks about a reject the review driver accepts: ' + def.stderr)
   const own = val(policyHost('pq-sp-ask', { rejectWithEvidence: 'ask' }), 'rejectWithEvidence')
   assert.strictEqual(own.stdout.trim(), 'ask', 'the host value must win, or a host that wants the question back never gets it')
   const lane = val(policyHost('pq-sp-lane', { rejectWithEvidence: 'accept' }, { version: 1, lanes: [], ask: ['rejectWithEvidence'] }), 'rejectWithEvidence')
-  assert.strictEqual(lane.stdout.trim(), 'ask', 'the fan-out --ask overlay must apply, or a fix lane auto-accepts what the run asked to relay')
+  assert.strictEqual(lane.stdout.trim(), 'accept', 'the host value wins whatever the table says, or a per-run overlay nobody can see from the host config still changes a fix lane\'s answer')
   const bad = val(policyHost('pq-sp-bad', {}), 'noSuchStop')
   assert.strictEqual(bad.status, 2, 'an unknown key must exit 2, or a typo in a prose reader reads as a value: ' + bad.stdout)
   assert.ok(bad.stderr.includes('rejectWithEvidence'), 'the refusal must list the valid keys: ' + bad.stderr)

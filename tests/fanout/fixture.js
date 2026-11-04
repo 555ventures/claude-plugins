@@ -4,7 +4,7 @@ const path = require('node:path')
 const assert = require('node:assert')
 const { tmpdir, runNode, gitRepo } = require('../helpers')
 
-// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md File Plan: the synthetic host shared by the
+// specs/20261102/03-one-session-runs-the-lanes.md, specs/20261103/04-predictable-stops-become-host-policy.md and specs/20261103/06-the-fan-out-drains-the-queue.md and specs/20261103/08-queue-items-remember-their-origin.md File Plan: the synthetic host shared by the
 // fan-out driver tests — a roadmap, hardened specs, optional parked and dependent specs, a queued
 // fix and a red-CI row, plus helpers that stand a lane's worktree up the way the harness does
 // (a linked worktree on spec/<stem>) and write the fake pending question and review sidecar a
@@ -48,7 +48,10 @@ const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Laye
 // depends on 03-x; draft — a draft 08-p (brief 35); selfSurface — hardened 08-s (brief 35) whose File
 // Plan names spec/scripts/fanout-driver.js; critical — a rules file whose Risk Tiers names src/db.js
 // (config pipelineRules), 03-x planning src/db.js and a hardened critical 08-c (brief 35) planning it;
-// bornFix — queue items q108 (fix, after 03-x) and q109 (fix, after the done 01-base).
+// bornFix — queue items q108 (fix, after 03-x), q109 (fix, after the done 01-base), q110 (fix born of 03-x by
+// another run) and q111 (gate-red birth of another run); planItem — done 01-base and a queue-head plan item q112
+// born of it; fixFiles — src/b.js and src/shared.js committed, 03-x planning src/a.js and src/shared.js, fix items
+// q107, q113 (names src/b.js) and q114 (names src/shared.js); gatedFix — fix item q115 after 04-z.
 function fanoutHost(opts = {}) {
   const root = fs.realpathSync(tmpdir('fanout'))
   const git = gitRepo(root)
@@ -71,7 +74,8 @@ function fanoutHost(opts = {}) {
     specs['03-x'] = { ...specs['03-x'], body: filePlan('src/db.js') }
     specs['08-c'] = { brief: '35', status: 'hardened', fm: 'tier: critical', body: filePlan('src/db.js') }
   }
-  if (opts.fixes || opts.bornFix) specs['01-base'] = { brief: '31', status: 'done' }
+  if (opts.fixFiles) specs['03-x'] = { ...specs['03-x'], body: filePlan('src/a.js', 'src/shared.js') }
+  if (opts.fixes || opts.bornFix || opts.planItem) specs['01-base'] = { brief: '31', status: 'done' }
   for (const [stem, s] of Object.entries(specs)) writeSpec(root, stem, s.brief, s.status, { fm: s.fm, body: s.body })
   fs.mkdirSync(path.join(root, '.claude/rules'), { recursive: true })
   const config = { gateCommand: 'bash ./gate.sh', testCommand: 'bash ./gate.sh' }
@@ -82,6 +86,14 @@ function fanoutHost(opts = {}) {
   }
   fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify(config, null, 2) + '\n')
   fs.writeFileSync(path.join(root, 'gate.sh'), '#!/usr/bin/env bash\n[ -e .gate-red ] && exit 1\npwd > .gate-cwd\nexit 0\n')
+  // The gate writes .gate-cwd into the root after every merge; it is ignored so MERGE's dirty-root check stays quiet.
+  const ignorePath = path.join(root, '.gitignore')
+  fs.writeFileSync(ignorePath, (fs.existsSync(ignorePath) ? fs.readFileSync(ignorePath, 'utf8').replace(/\n?$/, '\n') : '') + '.gate-cwd\n')
+  if (opts.fixFiles) {
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'src/b.js'), '// b\n')
+    fs.writeFileSync(path.join(root, 'src/shared.js'), '// shared\n')
+  }
   git('add', '-A')
   git('commit', '-q', '-m', 'seed fan-out host')
   if (opts.fixes) {
@@ -89,6 +101,9 @@ function fanoutHost(opts = {}) {
       ts: '2026-11-02', stage: 'observe', spec: specRel('01-base'), branch: 'main', ci: 'red',
       sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-11-02T09:00:00Z',
     }) + '\n')
+    // The run log is tracked in a real host; committing it keeps the main root clean for MERGE's dirty-root check.
+    git('add', '.claude/spec-runs.jsonl')
+    git('commit', '-q', '-m', 'record the red CI row')
     fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 107, items: [
       { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
       { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
@@ -96,12 +111,30 @@ function fanoutHost(opts = {}) {
     ] }))
   }
   if (opts.bornFix) {
-    fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 109, items: [
+    fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 111, items: [
       { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
       { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
       { id: 'q108', kind: 'prompt', lane: 'fix', payload: 'repair what 03-x left', after: { spec: specRel('03-x') }, added: '2026-11-02T10:02:00Z' },
       { id: 'q109', kind: 'prompt', lane: 'fix', payload: 'repair what 01-base left', after: { spec: specRel('01-base') }, added: '2026-11-02T10:03:00Z' },
+      { id: 'q110', kind: 'prompt', lane: 'fix', payload: 'repair what another run left of 03-x', added: '2026-11-02T10:04:00Z',
+        origin: { spec: specRel('03-x'), stage: 'review' }, trigger: 'close-followup', batch: '2000-01-01T00:00:00.000Z' },
+      { id: 'q111', kind: 'prompt', lane: 'fix', payload: 'main gate red after merging L9: /tmp/elsewhere/L9.gate.log', added: '2026-11-02T10:05:00Z',
+        trigger: 'gate-red', batch: '2000-01-01T00:00:00.000Z' },
     ] }))
+  }
+  if (opts.planItem || opts.fixFiles || opts.gatedFix) {
+    const briefs = [
+      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
+      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
+    ]
+    const prompt = (id, payload, extra = {}) => ({ id, kind: 'prompt', lane: 'fix', payload, added: '2026-11-02T10:02:00Z', ...extra })
+    const items = []
+    if (opts.planItem) items.push(prompt('q112', 're-plan ' + specRel('01-base') + ': the export contract',
+      { lane: 'plan', origin: { spec: specRel('01-base'), stage: 'review' }, trigger: 'gap' }))
+    items.push(...briefs)
+    if (opts.fixFiles) items.push(prompt('q107', 'repair the flaky export'), prompt('q113', 'tidy src/b.js'), prompt('q114', 'repair src/shared.js'))
+    if (opts.gatedFix) items.push(prompt('q115', 'tidy the export', { after: { spec: specRel('04-z') } }))
+    fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 115, items }))
   }
   const common = path.join(root, '.git')
   const wt =(stem) => root + '-wt-' + stem
@@ -113,6 +146,28 @@ function fanoutHost(opts = {}) {
     state: () => JSON.parse(fs.readFileSync(path.join(common, 'spec-fanout.json'), 'utf8')),
     lane: (id) => h.state().lanes.find((l) => l.id === id),
     status: (args) => runNode(STATUS, ['--root', root, ...args], { cwd: root }),
+    // A linked worktree on fix/<queueId>, standing in for the one the harness gives a fix lane's worker.
+    startFixLane(queueId) {
+      git('worktree', 'add', '-q', '-b', 'fix/' + queueId, wt(queueId))
+      return wt(queueId)
+    },
+    // One item born through the real spec-queue add writer (never a hand-written queue file); returns its id.
+    born(subject, { origin, stage, trigger, after, lane = 'fix', cwd } = {}) {
+      const queueFile = path.join(common, 'spec-queue.json')
+      const items = () => (fs.existsSync(queueFile) ? JSON.parse(fs.readFileSync(queueFile, 'utf8')).items : [])
+      const before = items().map((i) => i.id)
+      const args = ['add', subject, '--lane', lane, '--distinct']
+      if (after) args.push('--after-spec', after)
+      if (origin) args.push('--origin', origin)
+      if (stage) args.push('--stage', stage)
+      if (trigger) args.push('--trigger', trigger)
+      const r = runNode('scripts/spec-queue.js', args, { cwd: cwd || root })
+      assert.strictEqual(r.status, 0, 'spec-queue add must birth the item for the rest of the test to mean anything: ' + r.stderr + r.stdout)
+      // A first add on a host with no queue file also seeds the roadmap's brief items; the birth is the prompt with this payload.
+      const fresh = items().filter((i) => !before.includes(i.id) && i.kind === 'prompt' && i.payload === subject).map((i) => i.id)
+      assert.strictEqual(fresh.length, 1, 'exactly one new prompt carrying the subject must appear after add: ' + JSON.stringify(fresh))
+      return fresh[0]
+    },
     // A linked worktree on spec/<stem>, standing in for the one the harness gives a worker.
     startLane(stem) {
       git('worktree', 'add', '-q', '-b', 'spec/' + stem, wt(stem))

@@ -239,7 +239,36 @@ function promptAction(item) {
   return command ? `${command} ${item.payload}` : `📌 decide: ${item.payload}`
 }
 
+// Provenance of a pipeline-born item:
+// the closed vocabularies spec-queue.js validates `add` against, and the ONE `↳ from` render
+// shared by spec-queue show and spec-status.js. `unknown` fills a half an old item lacks.
+const STAGES = ['build', 'review', 'fanout', 'plan']
+const TRIGGERS = ['red-leg', 'repair-separate', 'close-followup', 'stopped', 'gate-red', 'gap']
+function originLine(item) {
+  if (!item) return null
+  const spec = item.origin && item.origin.spec
+  const trigger = item.trigger
+  if (!spec && !trigger) return null
+  return `↳ from ${spec || 'unknown'} (${trigger || 'unknown'})`
+}
+
+// The repo files a fix item's text names: path-shaped tokens (>= 1 `/`, last segment with an
+// extension), kept when `exists(token)` or an open File Plan names it; never a rooted, relative-
+// escaping or specs/ path (the item's subject, a log). First-seen order; null when none survives.
+const PATH_TOKEN = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/
+function namedFiles(text, { exists, plans } = {}) {
+  const out = []
+  for (const tok of String(text || '').split(/[\s'"`(),:]+/)) {
+    if (!tok || out.includes(tok) || !PATH_TOKEN.test(tok)) continue
+    if (/^(\.\.?\/|specs\/)/.test(tok)) continue
+    if (!/\.[A-Za-z0-9]+$/.test(tok.slice(tok.lastIndexOf('/') + 1))) continue
+    if ((exists && exists(tok)) || (plans || []).some(pl => pl.includes(tok))) out.push(tok)
+  }
+  return out.length ? out : null
+}
+
 module.exports = {
+  STAGES, TRIGGERS, originLine, namedFiles,
   normBrief, isSupersededBriefText, evaluateWhen, isItemDone, isItemReady, makeCtx,
   dedupeItems, reconcileMissingBriefs,
   promptTokens, jaccard, isPathPayload, promptDupScore, citesDoneSpec, LANES, promptAction,

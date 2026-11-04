@@ -101,7 +101,7 @@ const { policy: hostPolicy, readConfig: readHostConfig } = require('./lib/host-c
 const { readLedgerRows, qualifyingObservation, sinceLastRelease } = require('./lib/observation')
 const {
   isSupersededBriefText, isItemDone, isItemReady, makeCtx, dedupeItems,
-  reconcileMissingBriefs, promptAction,
+  reconcileMissingBriefs, promptAction, originLine, namedFiles,
 } = require('./lib/queue')
 // The local frontmatter() kv
 // loop this replaced stripped a trailing comment at the FIRST "#" regardless of what preceded it,
@@ -358,6 +358,7 @@ const queuePosBySpec = new Map()
 const queueBlockersByBrief = new Map()
 const queueBlockersBySpec = new Map()
 let queueUndonePromptEntries = []
+let queueBorn = []
 if (queueOverlay.parseError) {
   pushAnomaly({ kind: 'queue-unparseable', detail: `${queueOverlay.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`spec-queue next\`)` })
 }
@@ -409,8 +410,18 @@ if (queueOverlay.on) {
         action: promptAction(it), path: null, status: 'queued', brief: null, blockers,
         note: `queue item ${it.id}`, rank: 0, queue: true, __queuePos: i, __queueId: it.id,
         __after: (it.after && it.after.spec) || null,
+        __origin: it.origin || null, __trigger: it.trigger || null, __batch: it.batch || null,
+        __payload: it.payload,
       }
     })
+  // `born` every undone item carrying any provenance field, queue order.
+  queueBorn = reconciled
+    .filter(it => (it.origin || it.trigger || it.batch) && !isItemDone(it, ctx).done)
+    .map(it => ({
+      id: it.id,
+      action: it.kind === 'prompt' ? promptAction(it) : it.kind === 'spec' ? `spec ${it.spec}` : `brief ${it.brief}`,
+      origin: it.origin || null, trigger: it.trigger || null, batch: it.batch || null,
+    }))
 }
 
 // Unknown status: frontmatter carries a word outside the lifecycle. Without this, deriveNext's
@@ -727,7 +738,7 @@ if (nextMode) {
     // claim against), so the generic augmentation is skipped for it, never applied then
     // nulled out.
     writeOut(JSON.stringify({
-      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, __after, ...e }) =>
+      next: entries.map(({ rank, parallelReason, __queuePos, __queueId, __after, __origin, __trigger, __batch, __payload, ...e }) =>
         e.queue ? e : { ...e, parallel: e.parallel === undefined ? null : e.parallel, parallel_reason: parallelReason || null }),
     }, null, 2))
     process.exit(0)
@@ -780,11 +791,26 @@ if (lanesMode) {
     path: e.path, brief: e.brief,
     reason: laneClash.get(e) || e.parallelReason || 'queued behind the top pick',
   }))
-  const fixes = all.filter(e => e.action === '/spec:fix' || (e.queue && String(e.action).startsWith('/spec:fix '))).map(e =>
-    e.queue
-      ? { action: `/spec:fix ${e.__queueId}`, path: null, note: e.note, queue_id: e.__queueId, after: e.__after || null }
-      : { action: e.action, path: e.path, note: e.note, queue_id: null, after: null })
-  writeOut(JSON.stringify({ lanes: runLanes, serialized, fixes }, null, 2))
+  // the repo files a fix's text names, and the open specs whose File Plans name them.
+  const openPlans = specs.filter(sp => KNOWN_STATUS.has(sp.status) && !DONE(sp.status))
+  const filesOf = text => namedFiles(text, {
+    exists: f => fs.existsSync(path.join(root, f)),
+    plans: openPlans.map(sp => sp.filePlan),
+  })
+  const overlapsOf = files => (files ? openPlans.filter(sp => files.some(f => sp.filePlan.includes(f))).map(sp => sp.path) : [])
+  const fixes = all.filter(e => e.action === '/spec:fix' || (e.queue && String(e.action).startsWith('/spec:fix '))).map(e => {
+    if (!e.queue) {
+      const files = filesOf(e.note)
+      return { action: e.action, path: e.path, note: e.note, queue_id: null, after: null, origin: null, trigger: null, batch: null, files, overlaps: overlapsOf(files), blocker: null }
+    }
+    const files = filesOf(e.__payload)
+    return {
+      action: `/spec:fix ${e.__queueId}`, path: null, note: e.note, queue_id: e.__queueId, after: e.__after || null,
+      origin: e.__origin, trigger: e.__trigger, batch: e.__batch,
+      files, overlaps: overlapsOf(files), blocker: e.blockers[0] || null,
+    }
+  })
+  writeOut(JSON.stringify({ lanes: runLanes, serialized, fixes, born: queueBorn }, null, 2))
   process.exit(0)
 }
 
@@ -917,6 +943,12 @@ const waitClause = n => `${n} more open`
   // renders every command through it too.
   const rowWidth = process.stdout.columns || 100
   const idWidth = Math.max(0, ...entries.filter(e => e.__queueId).map(e => e.__queueId.length))
+  // a prompt row carries its provenance line directly under it (before any ⏳ branch).
+  const emit = e => {
+    out.push(cmd(e))
+    const l = e.queue ? originLine({ origin: e.__origin, trigger: e.__trigger }) : null
+    if (l) out.push(`   ${l}`)
+  }
   const cmd = e => {
     if (e.path) return `${e.action} @${e.path}`
     const head = e.__queueId ? `${e.__queueId.padEnd(idWidth)}  ` : ''
@@ -938,12 +970,12 @@ const waitClause = n => `${n} more open`
   const escapes = entries.filter(e => e.action === '/spec:fix')
   escapes.forEach(e => out.push(cmd(e)))
   const prompts = entries.filter(e => e.queue && !e.blockers.length)
-  prompts.forEach(e => out.push(cmd(e)))
+  prompts.forEach(emit)
   let laneRendered = false
   if (lanes.length > 1) {
     laneRendered = true
     out.push(`⚡ ${lanes.length} parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):`)
-    lanes.forEach(e => out.push(cmd(e)))
+    lanes.forEach(emit)
     // Merge-conflict heads-up: annotation only, never a verdict change — the corpus audit
     // showed File Plan overlap can't DECIDE parallelism (51% of unrelated-brief pairs
     // overlap; strict demotion would serialize half of everything) but it can PREDICT
@@ -965,7 +997,7 @@ const waitClause = n => `${n} more open`
     })
   } else if (lanes.length === 1) {
     laneRendered = true
-    out.push(cmd(lanes[0]))
+    emit(lanes[0])
     // "Is this parallelable?" must never be answered by the ABSENCE of the ⚡ header —
     // when other open work exists, the solo pick states it out loud.
     if (later.length || blocked.length) out.push('   └─ 🚦 solo')
@@ -979,7 +1011,7 @@ const waitClause = n => `${n} more open`
     } else {
       const top = entries[0]
       topPrintedAsBlocked = true
-      out.push(cmd(top))
+      emit(top)
       top.blockers.forEach((b, i) =>
         out.push(`   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
     }
@@ -999,7 +1031,7 @@ const waitClause = n => `${n} more open`
         : laneClash.has(e) ? `⛓️ ${laneClash.get(e)}`
         : '🤷 no brief — parallelism unknown'
       later.forEach((e, i) => {
-        out.push(cmd(e))
+        emit(e)
         const reason = reasonOf(e)
         const next = later[i + 1]
         if (!next || reasonOf(next) !== reason) out.push(`   └─ ${reason}`)
@@ -1012,7 +1044,7 @@ const waitClause = n => `${n} more open`
     if (blockedForAll.length) {
       out.push('', '⛔ blocked:')
       blockedForAll.forEach(e => {
-        out.push(cmd(e))
+        emit(e)
         e.blockers.forEach((b, i) =>
           out.push(`   ${i === e.blockers.length - 1 ? '└─' : '├─'} ⏳ ${shortBlocker(b)}`))
       })

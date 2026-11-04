@@ -176,6 +176,16 @@ test('AC-20261103-04-10: an in-session critical-tier unsanctioned-green on a def
   assert.doesNotMatch(step, /AskUserQuestion/, 'a default host must not be asked the red-findings stop: ' + step)
 })
 
+// specs/20261103/08-queue-items-remember-their-origin.md D7 — AC-20261103-08-16.
+
+test('AC-20261103-08-16: the park choice prints the add line ending --top --origin <specRel> --stage build --trigger stopped', () => {
+  const { host } = escalatedHost(['ℹ fail 5', 'ℹ fail 5', 'ℹ fail 5', 'ℹ fail 5'], undefined, ASK_ESCALATE)
+  const m = run(host.root, host.spec, '--mark', 'escalate-choice', 'park')
+  const rel = path.relative(host.root, host.spec)
+  assert.ok(m.stdout.includes('--lane fix --top --origin ' + rel + ' --stage build --trigger stopped'),
+    'without the origin flags the parked build lands in the queue with no record of the spec it stopped: ' + m.stdout)
+})
+
 test('AC-20261103-04-6: after a default host auto-picks re-arm, the printed override mark escalate-choice park is admitted and lands the explicit park state', () => {
   const { host } = escalatedHost(['Failed: 20', 'Failed: 9', 'Failed: 4', 'Failed: 2'], 'Failed:\\s+(\\d+)')
   const step = run(host.root, host.spec).stdout

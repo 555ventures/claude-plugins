@@ -1,12 +1,13 @@
 ---
 date: 2026-11-03
-status: hardened
+status: implementing
 tier: critical           # spec/scripts/spec-status.js — `--lanes --json` grows a key and `fixes[]` grows six (§ Risk Tiers: the sole "what's next" derivation and a machine surface the fan-out consumes); fanout-driver.js dispatches a fix lane onto a red main (D16)
 area: pipeline
 breaking: false
 depends_on: [specs/20261103/06-the-fan-out-drains-the-queue.md]
 brief: n/a
 open_markers: 0
+diff_base: 85be4cbe550ba0292aec67a76e866a3259bd40ae
 ---
 
 # Queue items remember their origin

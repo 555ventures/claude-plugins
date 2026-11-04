@@ -1509,7 +1509,7 @@ function escalateRecommendation() {
 function escalateStepBody() {
   const runs = marks.gateRuns || []
   const lastLog = runs.length ? path.relative(repoRoot, runs[runs.length - 1].log) : '(none)'
-  const queueLine = `node "$(spec-paths spec-queue)" add "${specRel}: build parked at the repair cap \u2014 ${lastLog}" --lane fix --top`
+  const queueLine = `node "$(spec-paths spec-queue)" add "${specRel}: build parked at the repair cap \u2014 ${lastLog}" --lane fix --top --origin ${specRel} --stage build --trigger stopped`
   if (marks.escalateChoice === 'park') {
     return `## ESCALATE \u2014 parked at the repair cap\n` +
       `The build stays parked. Queue the repair (run this line):\n  ${queueLine}\n` +

@@ -98,8 +98,8 @@ Write the spec per the template. `status: draft`. While drafting:
    `node "$(spec-paths collision-closure)" --spec {spec path} --root . --literal <stem>…` with the list's own
    name among the literals and enumerates every literals-leg hit in the File Plan as fix or recorded waive. Work discovered this session that needs its own spec →
    write the roadmap brief now; if it must run before the current work,
-   `node "$(spec-paths spec-queue)" add NN --top`; any follow-up that must wait for this spec →
-   `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide --after-spec {spec path}`.
+   `node "$(spec-paths spec-queue)" add NN --top --origin {spec path} --stage plan --trigger gap`; any follow-up that must wait for this spec →
+   `node "$(spec-paths spec-queue)" add "<subject>" --lane plan|prototype|fix|decide --after-spec {spec path} --origin {spec path} --stage plan --trigger close-followup`.
 2b. **Critical confirm** (only `tier: critical`; after step 2 is green, before the ledger row):
    ONE `AskUserQuestion` — "This spec is critical tier because it touches <the § Risk Tiers
    trigger>. Lock it now?" — with the clause ", and it adds or changes dependencies: <path>, <path>" inserted

@@ -738,3 +738,129 @@ test('spec-queue next marks a lane-less legacy item and still prints its payload
   assert.strictEqual(r.stdout.trim(),
     '⚠️ no lane — re-add with --lane plan|prototype|fix|decide, then spec-queue done q1\nship the landing page', r.stdout)
 })
+
+// specs/20261103/08-queue-items-remember-their-origin.md D1/D2/D3/D13: `add` stamps origin,
+// trigger and batch on the item, refuses bad flags before any write, `show` renders the
+// origin line, and `namedFiles` derives the files a fix item's text names.
+const ORIGIN_SPECS = {
+  '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+  '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+}
+const FANOUT_AT = '2026-11-03T10:00:00.000Z'
+const writeFanout = (dir, obj) => fs.writeFileSync(path.join(dir, '.git/spec-fanout.json'), JSON.stringify(obj))
+
+test('AC-20261103-08-1: spec-queue add stamps origin and trigger on a free-text item and on a spec item, and writes no batch key without a fan-out table', () => {
+  const dir = host({ specs: ORIGIN_SPECS })
+  const r = runNode(SCRIPT, ['add', 'repair x', '--lane', 'fix', '--origin', 'specs/20260701/01-a.md', '--stage', 'review', '--trigger', 'red-leg'], { cwd: dir })
+  assert.strictEqual(r.status, 0, 'the three provenance flags must be accepted by add, or no pipeline step can record who queued an item: ' + r.stdout + r.stderr)
+  assert.match(r.stdout, /added/, 'add keeps printing its added line: ' + r.stdout)
+  const item = readQueue(dir).items[0]
+  assert.deepStrictEqual(item.origin, { spec: 'specs/20260701/01-a.md', stage: 'review' }, 'origin must be the {spec, stage} pair, or the fan-out cannot tell which lane bore the item: ' + JSON.stringify(item))
+  assert.strictEqual(item.trigger, 'red-leg', 'trigger must be stamped verbatim, or the render prints the wrong cause: ' + JSON.stringify(item))
+  assert.ok(!('batch' in item), 'with no spec-fanout.json there is no run to stamp, or an item claims membership of a run that never existed: ' + JSON.stringify(item))
+  assert.deepStrictEqual(Object.keys(item), ['id', 'kind', 'lane', 'payload', 'added', 'origin', 'trigger'], 'the new keys are appended after the existing ones, or readers that depend on key order shift: ' + JSON.stringify(item))
+
+  const r2 = runNode(SCRIPT, ['add', 'specs/20260701/02-b.md', '--origin', 'specs/20260701/01-a.md', '--stage', 'plan', '--trigger', 'gap'], { cwd: dir })
+  assert.strictEqual(r2.status, 0, 'a spec item takes the same flags: ' + r2.stdout + r2.stderr)
+  const spec = readQueue(dir).items.find((i) => i.kind === 'spec')
+  assert.ok(spec && spec.origin && spec.origin.stage === 'plan' && spec.trigger === 'gap',
+    'the stamp applies whatever the item kind, or a /spec:plan lock queues an unmarked spec: ' + JSON.stringify(spec))
+})
+
+test('AC-20261103-08-2: spec-queue add refuses an unpaired origin or stage, an unknown stage or trigger and a missing origin spec with exit 2 and writes no queue file', () => {
+  const dir = host({ specs: ORIGIN_SPECS })
+  const cases = [
+    { argv: ['--origin', 'specs/20260701/01-a.md'], match: /--origin and --stage travel together/ },
+    { argv: ['--stage', 'build'], match: /--origin and --stage travel together/ },
+    { argv: ['--origin', 'specs/20260701/01-a.md', '--stage', 'ship'], match: /one of build\|review\|fanout\|plan/ },
+    { argv: ['--trigger', 'oops'], match: /one of red-leg\|repair-separate\|close-followup\|stopped\|gate-red\|gap/ },
+    { argv: ['--origin', 'specs/20260701/99-none.md', '--stage', 'build'], match: /--origin specs\/20260701\/99-none\.md: no such spec file/ },
+  ]
+  for (const c of cases) {
+    const r = runNode(SCRIPT, ['add', 'repair x', '--lane', 'fix', ...c.argv], { cwd: dir })
+    assert.strictEqual(r.status, 2, `add ${c.argv.join(' ')} must exit 2, or a typed value the enum does not admit lands in the queue: ` + r.stdout + r.stderr)
+    assert.match(r.stderr, c.match, 'the refusal must name the rule so the caller can fix the flag: ' + r.stderr)
+  }
+  assert.ok(!fs.existsSync(path.join(dir, '.git/spec-queue.json')), 'every refusal happens before any write, or a bad add leaves a half-stamped item behind')
+})
+
+test('AC-20261103-08-3: spec-queue add stamps batch from the fan-out table startedAt and writes no batch key when the table is absent or carries no startedAt', () => {
+  const dir = host()
+  writeFanout(dir, { version: 1, startedAt: FANOUT_AT, lanes: [] })
+  const r = runNode(SCRIPT, ['add', 'repair y', '--lane', 'fix'], { cwd: dir })
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  const item = readQueue(dir).items[0]
+  assert.strictEqual(item.batch, FANOUT_AT, 'batch is the run startedAt, or the fan-out cannot bound a born fix to its own run: ' + JSON.stringify(item))
+  assert.ok(!('origin' in item), 'a bare add from the main root carries no origin, or an old-style add reads as pipeline-born: ' + JSON.stringify(item))
+
+  for (const body of [null, {}]) {
+    const d = host()
+    if (body) writeFanout(d, body)
+    const r2 = runNode(SCRIPT, ['add', 'repair z', '--lane', 'fix'], { cwd: d })
+    assert.strictEqual(r2.status, 0, r2.stdout + r2.stderr)
+    assert.ok(!('batch' in readQueue(d).items[0]), 'no live run means no batch key, or a stale table stamps a run that is over: ' + JSON.stringify(body))
+  }
+})
+
+test('AC-20261103-08-4: a bare add inside a fan-out lane worktree derives origin from the lane table and its stage from the review sidecar, never a trigger, and stays unset on the main root', () => {
+  const root = fs.realpathSync(tmpdir('queue-origin-lane'))
+  gitRepo(root)
+  const wt = path.join(root, '.claude/worktrees/lane1')
+  execFileSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', 'spec/01-a', wt, 'HEAD'])
+  writeFanout(root, { version: 1, startedAt: FANOUT_AT, lanes: [{ id: 'L1', kind: 'run', spec: 'specs/20260701/01-a.md', branch: 'spec/01-a' }] })
+
+  const noSidecar = runNode(SCRIPT, ['add', 'born build', '--lane', 'fix'], { cwd: wt })
+  assert.strictEqual(noSidecar.status, 0, noSidecar.stdout + noSidecar.stderr)
+  let item = readQueue(root).items.find((i) => i.payload === 'born build')
+  assert.deepStrictEqual(item.origin, { spec: 'specs/20260701/01-a.md', stage: 'build' }, 'a lane with no review sidecar is in its build stage, or the item names the wrong stage: ' + JSON.stringify(item))
+  assert.ok(!('trigger' in item), 'the trigger is never derived, or a model-free guess passes for the cause: ' + JSON.stringify(item))
+
+  fs.mkdirSync(path.join(wt, 'specs/20260701/01-a.review'), { recursive: true })
+  fs.writeFileSync(path.join(wt, 'specs/20260701/01-a.review/review-state.json'), '{}')
+  runNode(SCRIPT, ['add', 'born review', '--lane', 'fix'], { cwd: wt })
+  item = readQueue(root).items.find((i) => i.payload === 'born review')
+  assert.deepStrictEqual(item.origin, { spec: 'specs/20260701/01-a.md', stage: 'review' }, 'a review sidecar on the lane own disk says the item was born in review: ' + JSON.stringify(item))
+
+  runNode(SCRIPT, ['add', 'born main', '--lane', 'fix'], { cwd: root })
+  item = readQueue(root).items.find((i) => i.payload === 'born main')
+  assert.ok(!('origin' in item), 'the main root is no lane, so a hand-typed add carries no origin: ' + JSON.stringify(item))
+  assert.strictEqual(item.batch, FANOUT_AT, 'batch is still stamped from the main root while a run is live: ' + JSON.stringify(item))
+})
+
+test('AC-20261103-08-5: spec-queue show prints the origin line after the gate line for live and archived items, unknown for a missing half, and nothing for an item with neither field', () => {
+  const batch = '2026-11-03T10:00:00.000Z'
+  const dir = host({
+    specs: ORIGIN_SPECS,
+    queue: [
+      { id: 'q1', kind: 'prompt', lane: 'fix', payload: 'stopped one', after: { spec: 'specs/20260701/02-b.md' }, added: '2026-11-03T09:00:00Z', origin: { spec: 'specs/20260701/01-a.md', stage: 'build' }, trigger: 'stopped', batch },
+      { id: 'q2', kind: 'prompt', lane: 'fix', payload: 'gap one', added: '2026-11-03T09:00:00Z', trigger: 'gap' },
+      { id: 'q3', kind: 'prompt', lane: 'fix', payload: 'old', added: '2026-11-03T09:00:00Z' },
+    ],
+  })
+  const lines = (ref) => runNode(SCRIPT, ['show', ref], { cwd: dir }).stdout.split('\n')
+  const q1 = lines('q1')
+  const i1 = q1.indexOf('↳ from specs/20260701/01-a.md (stopped) · batch ' + batch)
+  assert.ok(i1 > 0, 'show must print the origin and batch line, or the reader cannot see why the item exists: ' + q1.join('\n'))
+  assert.match(q1[i1 - 1], /^⏳ after /, 'the origin line follows the gate line: ' + q1.join('\n'))
+  assert.strictEqual(q1[i1 + 1], '', 'the blank line separating the payload follows the origin line: ' + q1.join('\n'))
+  assert.ok(lines('q2').includes('↳ from unknown (gap)'), 'a missing origin reads unknown, never an empty half: ' + lines('q2').join('\n'))
+  assert.ok(!lines('q3').some((l) => l.includes('↳')), 'an old item prints no new line — the no-migration rule made visible: ' + lines('q3').join('\n'))
+
+  fs.writeFileSync(path.join(dir, '.git/spec-queue-done.json'), JSON.stringify({ version: 1, items: [
+    { id: 'q9', kind: 'prompt', lane: 'fix', payload: 'archived one', added: '2026-11-01T09:00:00Z', origin: { spec: 'specs/20260701/01-a.md', stage: 'review' }, trigger: 'red-leg', archived: '2026-11-02T09:00:00Z' },
+  ] }))
+  const arc = runNode(SCRIPT, ['show', 'q9'], { cwd: dir })
+  assert.match(arc.stdout, /↳ from specs\/20260701\/01-a\.md \(red-leg\)/, 'an archived item renders its origin too, or provenance vanishes at done: ' + arc.stdout + arc.stderr)
+})
+
+test('AC-20261103-08-19: namedFiles keeps path-shaped tokens an existing file or an open File Plan admits, first-seen and deduplicated, and returns null for spec paths, absolute paths and bare prose', () => {
+  const { namedFiles } = require(path.join(SPEC, 'scripts/lib/queue.js'))
+  assert.strictEqual(typeof namedFiles, 'function', 'lib/queue.js must export namedFiles, or spec-status has no derivation of what a fix names')
+  assert.deepStrictEqual(namedFiles('fix the export in spec/scripts/foo.js, then src/x/y.ts (see docs/a.md and spec/scripts/foo.js)',
+    { exists: (p) => p === 'spec/scripts/foo.js', plans: [['src/x/y.ts']] }), ['spec/scripts/foo.js', 'src/x/y.ts'],
+  'tokens come back first-seen with repeats dropped and unadmitted paths removed, or overlap is computed over noise')
+  for (const text of ['specs/20261102/03-x.md: review stopped, repair round spent', 'main gate red after merging L1: /tmp/r/.git/spec-fanout/L1.gate.log', 'repair the flaky export']) {
+    assert.strictEqual(namedFiles(text, { exists: () => true, plans: [] }), null,
+      'a spec path, an absolute path or text with no path token never counts as a named file, or the subject serializes against itself: ' + text)
+  }
+})

@@ -132,7 +132,7 @@ test('AC-20260903-03-3: a queued brief item gated with after:{brief} carries the
 // D9's own Contracts section describes this key shape as CONTINUE TO — the frozen surface is
 // unchanged by this spec, so the pin is green both before and after the `after`/`spec`-item
 // mechanisms land.
-test('AC-20260903-03-12: --next --json keeps its exact frozen key shapes — top-level ["next"], the prompt entry\'s 7 keys, every other entry\'s 8 keys — with a gated prompt, a spec item, and a brief item all present', () => {
+test('AC-20260903-03-12 / AC-20261103-08-7: --next --json keeps its exact frozen key shapes — top-level ["next"], the prompt entry\'s 7 keys, every other entry\'s 8 keys — with a gated prompt, a spec item, and a brief item all present', () => {
   const dir = host({
     briefs: { '05-a.md': '# 05 — A\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n' },
     specs: {
@@ -140,7 +140,7 @@ test('AC-20260903-03-12: --next --json keeps its exact frozen key shapes — top
       '20260701/02-b.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
     },
     queueItems: [
-      { id: 'q1', kind: 'prompt', payload: '/spec:plan @docs/roadmap/26-x.md', after: { brief: '05' }, added: '2026-08-23T10:00:00Z' },
+      { id: 'q1', kind: 'prompt', payload: '/spec:plan @docs/roadmap/26-x.md', after: { brief: '05' }, origin: { spec: 'specs/20260701/01-a.md', stage: 'plan' }, trigger: 'gap', batch: '2026-11-03T10:00:00.000Z', added: '2026-08-23T10:00:00Z' },
       { id: 'q2', kind: 'spec', spec: 'specs/20260701/02-b.md', added: '2026-08-23T10:01:00Z' },
       { id: 'q3', kind: 'brief', brief: '05', added: '2026-08-23T10:02:00Z' },
     ],
@@ -153,6 +153,8 @@ test('AC-20260903-03-12: --next --json keeps its exact frozen key shapes — top
   assert.deepStrictEqual(Object.keys(promptEntry).sort(),
     ['action', 'blockers', 'brief', 'note', 'path', 'queue', 'status'].sort(),
     "D9: a prompt entry's key set must stay exactly action,path,queue,status,brief,blockers,note — an ungated OR gated prompt entry never grows or drops a key: " + Object.keys(promptEntry).join(','))
+  assert.ok(!/__origin|__trigger|__batch|"origin"|"trigger"|"batch"/.test(JSON.stringify(j.next)),
+    'AC-20261103-08-7: the overlay carries origin, trigger and batch for the render but --next --json must strip them like __queuePos, or a frozen consumer sees new keys: ' + JSON.stringify(j.next))
   const specEntry = j.next.find((e) => !e.queue)
   assert.ok(specEntry, 'a queued spec item and brief item must both surface as ordinary (non-queue) entries: ' + JSON.stringify(j.next))
   assert.deepStrictEqual(Object.keys(specEntry).sort(),
@@ -504,4 +506,30 @@ test('a decide prompt at the queue head never seats itself as the only lane — 
   const next = runNode(SCRIPT, ['--root', dir, '--next'])
   assert.match(next.stdout, /pick the export format/,
     'the --next pointer moved off the queue head, changing the user-ordered top pick: ' + next.stdout)
+})
+
+// specs/20261103/08-queue-items-remember-their-origin.md D4: a prompt row carries the item's
+// origin line directly beneath it, in Next and in blocked, and an item with no field prints none.
+test('AC-20261103-08-6: spec-status renders a ↳ from line directly under a prompt row in Next and under a blocked row before its gate branch, and none under an item with no origin fields', () => {
+  const dir = host({
+    specs: {
+      '20260701/01-a.md': 'date: 2026-07-01\nstatus: hardened\nbrief: n/a',
+      '20260701/02-b.md': 'date: 2026-07-01\nstatus: implementing\nbrief: n/a',
+    },
+    queueItems: [
+      { id: 'q1', kind: 'prompt', lane: 'fix', payload: 'repair the export', origin: { spec: 'specs/20260701/01-a.md', stage: 'review' }, trigger: 'repair-separate', added: '2026-11-03T10:00:00Z' },
+      { id: 'q2', kind: 'prompt', lane: 'fix', payload: 'repair the import', added: '2026-11-03T10:01:00Z' },
+      { id: 'q3', kind: 'prompt', lane: 'fix', payload: 'repair the gated one', after: { spec: 'specs/20260701/02-b.md' }, trigger: 'close-followup', added: '2026-11-03T10:02:00Z' },
+    ],
+  })
+  const r = runNode(SCRIPT, ['--root', dir, '--all'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  const lines = r.stdout.split('\n')
+  const row = (id) => lines.findIndex((l) => l.startsWith(id + ' ') && !l.includes('↳'))
+  assert.ok(row('q1') >= 0 && row('q2') >= 0 && row('q3') >= 0, 'every queue prompt must keep its row: ' + r.stdout)
+  assert.strictEqual(lines[row('q1') + 1], '   ↳ from specs/20260701/01-a.md (repair-separate)',
+    'the origin line sits directly under q1, or the reader never sees why the item exists: ' + r.stdout)
+  assert.ok(!(lines[row('q2') + 1] || '').includes('↳'), 'an item with no origin fields prints no ↳ line, the no-migration rule made visible: ' + r.stdout)
+  assert.deepStrictEqual(lines.slice(row('q3') + 1, row('q3') + 3), ['   ↳ from unknown (close-followup)', '   └─ ⏳ after 02-b'],
+    'under a blocked row the origin line precedes the gate branch, or the gate branch no longer closes the row: ' + r.stdout)
 })

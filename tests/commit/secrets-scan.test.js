@@ -76,17 +76,13 @@ test('AC-20261029-04-1: WHEN --root is not a git work tree THE SYSTEM SHALL exit
   assert.match(r.stderr, /\S/, 'exit 2 must say why on stderr — commit.md prints that line verbatim: ' + r.stderr)
 })
 
-test('AC-20261029-04-1: WHEN --paths lists one file THE SYSTEM SHALL scan only that file, print plain hit lines, and print "no secrets found" on a clean list', () => {
-  const dir = hostWith({ 'src/a.js': AWS_KEY + '\n', 'src/b.js': 'hello\n', 'server.pem': 'x\n' })
-  const list = path.join(dir, 'paths.txt')
-  fs.writeFileSync(list, 'src/a.js\n')
-  const hit = runNode(SCRIPT, ['--root', dir, '--paths', list])
-  assert.strictEqual(hit.status, 1, '--paths with a secret must exit 1: ' + hit.stdout + hit.stderr)
+test('AC-20261029-04-1: WHEN --worktree runs without --json THE SYSTEM SHALL print plain hit lines, and print "no secrets found" on a clean tree', () => {
+  const dir = hostWith({ 'src/a.js': AWS_KEY + '\n' })
+  const hit = runNode(SCRIPT, ['--root', dir, '--worktree'])
+  assert.strictEqual(hit.status, 1, 'a worktree holding a secret must exit 1: ' + hit.stdout + hit.stderr)
   assert.match(hit.stdout, /^src\/a\.js\s+content:AKIA\[0-9A-Z\]\{16\}:1$/m, 'the plain format is "<path>  <reason>:<line>"; a different shape breaks the human render: ' + hit.stdout)
-  assert.ok(!/server\.pem/.test(hit.stdout), '--paths must scan only the listed files, or an unrelated untracked file blocks the commit: ' + hit.stdout)
-  fs.writeFileSync(list, 'src/b.js\n')
-  const clean = runNode(SCRIPT, ['--root', dir, '--paths', list])
-  assert.strictEqual(clean.status, 0, 'a clean --paths list must exit 0: ' + clean.stdout + clean.stderr)
+  const clean = runNode(SCRIPT, ['--root', hostWith({ 'src/b.js': 'hello\n' }), '--worktree'])
+  assert.strictEqual(clean.status, 0, 'a clean worktree must exit 0: ' + clean.stdout + clean.stderr)
   assert.match(clean.stdout, /no secrets found/, 'a clean plain run must say so, or silence is indistinguishable from a crash: ' + clean.stdout)
 })
 

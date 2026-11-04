@@ -34,21 +34,19 @@ function smokeAsync(dir, args = []) {
 const FILE_BOOT = 'trap "exit 0" TERM; echo "${PORT-unset}" > boot.port; touch "ready.${PORT-unset}"; while :; do sleep 0.2; done'
 const readText = (dir, name) => fs.readFileSync(path.join(dir, name), 'utf8').trim()
 
-test('AC-20261005-03-1: smoke.sh gives bootCommand, readyCheck and seedCommand one and the same integer PORT on a PORT-reading host and prints it in the pass line', () => {
+test('AC-20261005-03-1: smoke.sh gives bootCommand and readyCheck one and the same integer PORT on a PORT-reading host and prints it in the pass line', () => {
   const dir = writeHost(tmpdir('smoke-port-one'), {
     bootCommand: FILE_BOOT,
     readyCheck: 'test -f "ready.$PORT"',
-    seedCommand: 'echo "$PORT" > seed.port',
+    readyTimeout: 8,
   })
-  const r = smoke(dir, ['--seed', '--timeout', '8'])
+  const r = smoke(dir)
   assert.strictEqual(r.status, 0,
-    'a PORT-reading host whose boot, ready check and seed all use one port must pass — a split or empty PORT leaves the ready check probing a port the boot never used: ' + r.stdout + r.stderr)
+    'a PORT-reading host whose boot and ready check use one port must pass — a split or empty PORT leaves the ready check probing a port the boot never used: ' + r.stdout + r.stderr)
   const bootPort = readText(dir, 'boot.port')
   assert.match(bootPort, /^\d+$/, 'bootCommand must see an integer PORT, not unset or empty: ' + JSON.stringify(bootPort))
   const n = Number(bootPort)
   assert.ok(n >= 1024 && n <= 65535, 'the allocated PORT must be an unprivileged TCP port: ' + n)
-  assert.strictEqual(readText(dir, 'seed.port'), bootPort,
-    'seedCommand must see the same PORT as bootCommand — a different value seeds an app that is not the one that booted: ' + readText(dir, 'seed.port'))
   assert.match(r.stdout, new RegExp('\\| port: ' + n + '\\)'),
     'the pass line must end with "| port: <n>)" naming the port the run used, so a reader can tell which launch passed: ' + r.stdout)
 })
@@ -85,8 +83,8 @@ test('AC-20261005-03-3: smoke.sh overrides a PORT already in the caller environm
   await new Promise((resolve) => held.listen(0, '127.0.0.1', resolve))
   const p = held.address().port
   try {
-    const dir = writeHost(tmpdir('smoke-port-override'), { bootCommand: FILE_BOOT, readyCheck: 'test -f "ready.$PORT"' })
-    const r = smoke(dir, ['--timeout', '8'], { ...process.env, PORT: String(p) })
+    const dir = writeHost(tmpdir('smoke-port-override'), { bootCommand: FILE_BOOT, readyCheck: 'test -f "ready.$PORT"', readyTimeout: 8 })
+    const r = smoke(dir, [], { ...process.env, PORT: String(p) })
     assert.strictEqual(r.status, 0,
       'a caller that already exports PORT must not break the run: ' + r.stdout + r.stderr)
     const bootPort = readText(dir, 'boot.port')

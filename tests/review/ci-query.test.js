@@ -13,10 +13,9 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 // `gh` on PATH.
 //
 // specs/20260810/07-per-sha-ci-legs.md D1: a review asking "latest run on this branch?" can
-// hard-stop on evidence about a DIFFERENT commit. D1 adds a `--commit <sha>` mode, mutually
-// exclusive with `--branch`, that keys `gh run list` on the exact reviewed commit instead —
-// every other behavior (normalization, the raw-vs-mapped split, `--limit 1`, no retry) stays
-// byte-identical, and `--branch` mode itself is untouched (AC-20260810-07-4).
+// hard-stop on evidence about a DIFFERENT commit. D1 adds a `--commit <sha>` mode that keys
+// `gh run list` on the exact reviewed commit instead — every other behavior (normalization, the
+// raw-vs-mapped split, `--limit 1`, no retry) stays byte-identical.
 //
 // specs/20260830/03-ci-leg-honest-absence.md D1/D2/D3: an unpushed HEAD's empty --commit run
 // list was indistinguishable from "no CI at all" —
@@ -39,8 +38,6 @@ const { tmpdir, runNode, gitRepo } = require('../helpers')
 
 const SCRIPT = 'scripts/ci-query.js'
 const CANONICAL_NO_ADAPTER = 'unavailable — no supported forge adapter'
-const USAGE_LINE = 'usage: ci-query.js (--branch <name> | --commit <sha>) [--root <dir>]'
-const usageLineRe = new RegExp(USAGE_LINE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 
 function writeHostConfig(dir, config) {
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
@@ -94,52 +91,6 @@ function makeContainedShaHost() {
   return { dir, headSha }
 }
 
-test('AC-20260805-02-10 / AC-20260810-07-4 / AC-20260830-03-3 (SHALL CONTINUE TO): gh absent from PATH prints available:false, transient:false in --branch mode (unchanged by the --commit addition or by the shaUnseen fallback)', () => {
-  const dir = githubHost('ci-query')
-  const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
-    { env: { PATH: '/nonexistent-bin-dir-for-ci-query-test' } })
-  assert.strictEqual(r.status, 0, 'gh being absent is a structural fact, not a usage error — exit 0: ' + r.stderr)
-  let out
-  assert.doesNotThrow(() => { out = JSON.parse(r.stdout) },
-    'ci-query.js must print parseable JSON even when gh is missing: ' + r.stdout + ' / ' + r.stderr)
-  assert.strictEqual(out.available, false,
-    'with no gh binary reachable there is no CI to consult — available must be false: ' + r.stdout)
-  assert.strictEqual(out.transient, false,
-    'a missing gh binary is a structural condition (never retryable by itself) — transient must be false, ' +
-    'distinguishing it from an auth/network failure: ' + r.stdout)
-})
-
-test('AC-20260805-02-10 / AC-20260810-07-4 / AC-20261102-01-13: a fake gh exiting non-zero prints transient:true in --branch mode on a host declaring forge github (unchanged by the --commit addition)', () => {
-  const ghDir = fakeGhDir('echo "gh: authentication failed" >&2\nexit 1')
-  const dir = githubHost('ci-query')
-  const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
-    { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
-  assert.strictEqual(r.status, 0, 'a transient gh failure is still an answered query, not a usage error: ' + r.stderr)
-  const out = JSON.parse(r.stdout)
-  assert.strictEqual(out.available, false,
-    'a failing gh call cannot report a CI run — available must be false: ' + r.stdout)
-  assert.strictEqual(out.transient, true,
-    'gh executing but exiting non-zero (auth/network) is retryable — transient must be true, distinguishing ' +
-    'it from the structural gh-missing case: ' + r.stdout)
-})
-
-test('AC-20260805-02-10 / AC-20260810-07-4: a fake gh printing a completed run passes status/conclusion/sha/url/runAt through in --branch mode (unchanged by the --commit addition)', () => {
-  const ghDir = fakeGhDir(
-    'echo \'[{"status":"completed","conclusion":"success","headSha":"abc123def456","' +
-    'url":"https://github.com/x/y/actions/runs/1","updatedAt":"2026-08-06T00:00:00Z"}]\'')
-  const dir = githubHost('ci-query')
-  const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
-    { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
-  assert.strictEqual(r.status, 0, 'an answered, completed run must exit 0: ' + r.stderr)
-  const out = JSON.parse(r.stdout)
-  assert.strictEqual(out.available, true, 'a completed run was successfully fetched — available must be true: ' + r.stdout)
-  assert.strictEqual(out.status, 'completed', 'gh\'s status field must pass through unmapped: ' + r.stdout)
-  assert.strictEqual(out.conclusion, 'success', 'gh\'s conclusion field must pass through unmapped: ' + r.stdout)
-  assert.strictEqual(out.sha, 'abc123def456', 'gh\'s headSha must map to the normalized sha field: ' + r.stdout)
-  assert.strictEqual(out.url, 'https://github.com/x/y/actions/runs/1', 'gh\'s url must pass through: ' + r.stdout)
-  assert.strictEqual(out.runAt, '2026-08-06T00:00:00Z', 'gh\'s updatedAt must map to the normalized runAt field: ' + r.stdout)
-})
-
 test('AC-20260810-07-1: --commit <sha> invokes gh run list --commit <sha> --limit 1 --json ... and passes a completed run through', () => {
   const dir = githubHost('ci-query')
   const argsFile = path.join(dir, 'gh-argv.txt')
@@ -174,31 +125,6 @@ test('AC-20260810-07-2 / AC-20260830-03-3 (SHALL CONTINUE TO): --commit <sha> wi
   assert.deepStrictEqual(out, { available: false, transient: false },
     'this is the Prax incident\'s exact shape (unpushed HEAD, CI never saw the commit) — it must normalize to ' +
     'available:false, transient:false so the review ci leg treats it as informational, never a hard-stop: ' + r.stdout)
-})
-
-test('AC-20260810-07-3: passing both --branch and --commit prints the exclusive-mode usage line to stderr and exits 2', () => {
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
-  const r = runNode(SCRIPT, ['--branch', 'main', '--commit', 'deadbeef1234', '--root', dir])
-  assert.strictEqual(r.status, 2,
-    'D1 requires exactly one of --branch/--commit — passing both is a usage error and must exit 2, never ' +
-    'silently pick one of the two conflicting keys: ' + r.stdout + ' / ' + r.stderr)
-  assert.match(r.stderr, usageLineRe,
-    'stderr must print the two-alternative usage line from the spec Contracts section, naming both --branch ' +
-    'and --commit as the exclusive modes — the pre-change usage text only mentions --branch and would not ' +
-    'tell a caller --commit even exists: ' + r.stderr)
-})
-
-test('AC-20260810-07-3: passing neither --branch nor --commit prints the exclusive-mode usage line to stderr and exits 2', () => {
-  const dir = tmpdir('ci-query')
-  gitRepo(dir)
-  const r = runNode(SCRIPT, ['--root', dir])
-  assert.strictEqual(r.status, 2,
-    'D1 requires exactly one of --branch/--commit — passing neither is a usage error and must exit 2: ' +
-    r.stdout + ' / ' + r.stderr)
-  assert.match(r.stderr, usageLineRe,
-    'stderr must print the two-alternative usage line from the spec Contracts section, naming both --branch ' +
-    'and --commit as the exclusive modes: ' + r.stderr)
 })
 
 test('AC-20260830-03-1: an unpushed commit whose current branch has a real red origin run prints the shaUnseen shape carrying that branch and run, exit 0', () => {
@@ -295,7 +221,7 @@ test('AC-20261102-01-11: ci-query.js prints the no-adapter line, exits 0 and nev
     writeHostConfig(dir, config)
     const argsFile = path.join(dir, 'gh-argv.txt')
     const ghDir = fakeGhDir('echo "$@" >> "' + argsFile + '"\nexit 1')
-    const r = runNode(SCRIPT, ['--branch', 'main', '--root', dir],
+    const r = runNode(SCRIPT, ['--commit', 'deadbeef1234', '--root', dir],
       { env: { PATH: ghDir + path.delimiter + process.env.PATH } })
     assert.strictEqual(r.status, 0, label + ': an unsupported forge is an answered query, not a usage error: ' + r.stderr)
     assert.strictEqual(r.stdout.trim(), CANONICAL_NO_ADAPTER,

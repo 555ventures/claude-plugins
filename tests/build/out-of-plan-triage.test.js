@@ -44,7 +44,7 @@ const triage = (root, file, ...extra) =>
 
 test('AC-20261103-07-1: WHEN a test outside the File Plan names a planned path on a critical spec THE SYSTEM auto-picks add to scope and prints the pick, both rows and a matching --json object', () => {
   const root = host()
-  const r = triage(root, 'tests/pins.test.js', '--gate-line', 'pins the hook list')
+  const r = triage(root, 'tests/pins.test.js')
   assert.strictEqual(r.status, 0, 'a non-surface file must exit 0 whatever the spec tier: ' + r.stdout + r.stderr)
   const lines = r.stdout.split('\n')
   const want = [
@@ -56,11 +56,11 @@ test('AC-20261103-07-1: WHEN a test outside the File Plan names a planned path o
   ]
   assert.deepStrictEqual(lines.slice(0, 5), want,
     'the first five lines must be the pick, strength, and row headers in order, or the session pastes the wrong rows: ' + r.stdout)
-  assert.ok(String(lines[5]).startsWith('| D3 | Scope widened at build: `tests/pins.test.js` enters the File Plan (gate line: pins the hook list); the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names File Plan row hooks/hooks.json'),
-    'the Decisions row must take the next D-id and carry the gate clause and reason: ' + lines[5])
+  assert.ok(String(lines[5]).startsWith('| D3 | Scope widened at build: `tests/pins.test.js` enters the File Plan; the pin is updated in place, never weakened. [auto: out-of-plan-triage — its source names File Plan row hooks/hooks.json'),
+    'the Decisions row must take the next D-id and carry the reason: ' + lines[5])
   assert.ok(String(lines[5]).includes('[no-ac: the gate line is the oracle]'),
     'the row must carry the no-ac sanction or promise-sweep orphans it: ' + lines[5])
-  const j = triage(root, 'tests/pins.test.js', '--gate-line', 'pins the hook list', '--json')
+  const j = triage(root, 'tests/pins.test.js', '--json')
   assert.strictEqual(j.status, 0, j.stderr)
   assert.strictEqual(j.stdout.trim(),
     '{"verdict":"auto","file":"tests/pins.test.js","tier":"critical","surface":null,"namesPlanned":["hooks/hooks.json"],"layer":"tests","nextDecision":"D3","reason":"its source names File Plan row hooks/hooks.json — an in-place update of a pin on planned work"}',

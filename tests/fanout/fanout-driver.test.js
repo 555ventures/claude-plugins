@@ -111,9 +111,9 @@ test('AC-20261102-03-7: --include-fixes appends fix lanes F1 and F2 with their b
   const lanes = h.state().lanes
   const f1 = lanes.find((l) => l.id === 'F1')
   const f2 = lanes.find((l) => l.id === 'F2')
-  assert.ok(f1 && f2, 'the queued fix and the CI escape must each become a fix lane: ' + JSON.stringify(lanes.map((l) => l.id)))
+  assert.ok(f1 && f2, 'each queued fix must become a fix lane, or a queued repair is silently dropped: ' + JSON.stringify(lanes.map((l) => l.id)))
   assert.deepStrictEqual([f1.kind, f1.branch, f1.queueId], ['fix', 'fix/q107', 'q107'], 'F1 is the queued item: ' + JSON.stringify(f1))
-  assert.deepStrictEqual([f2.kind, f2.branch, f2.ci], ['fix', 'fix/ci-deadbee', 'deadbee'], 'F2 is the CI escape named by the red row\'s short sha: ' + JSON.stringify(f2))
+  assert.deepStrictEqual([f2.kind, f2.branch, f2.queueId], ['fix', 'fix/q116', 'q116'], 'F2 is the second queued item, in queue order: ' + JSON.stringify(f2))
   assert.deepStrictEqual(lanes.filter((l) => l.kind === 'run').map((l) => l.id), ['L1', 'L2', 'L3'], 'run lanes keep their L ids ahead of the fix lanes, the shared-brief member included')
 })
 

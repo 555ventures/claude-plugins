@@ -1024,18 +1024,6 @@ test('WHEN --apply leaves the host gate red THE SYSTEM restores every trimmed an
   assert.match(r.stderr, /domain gate: gone\/only has no tests/, 'the gate\'s own output tail reaches the user')
 })
 
-test('WHEN --apply --keep-on-red leaves the host gate red THE SYSTEM keeps the writes, exits 1, and reports gate.reverted false', () => {
-  const root = writeSweepHost('expiry-gate-keep')
-  setGate(root, 'exit 3')
-  const r = runNode('scripts/expire-tests.js', ['--root', root, '--all-done', '--apply', '--keep-on-red', '--json'], { encoding: 'utf8' })
-  assert.strictEqual(r.status, 1, r.stdout + r.stderr)
-  const out = JSON.parse(r.stdout)
-  assert.strictEqual(out.applied, true)
-  assert.deepStrictEqual(out.gate, { command: 'exit 3', ok: false, reverted: false })
-  assert.ok(!fs.existsSync(path.join(root, 'tests/gone')), 'the emptied file and its directory stay deleted')
-  assert.ok(!fs.readFileSync(path.join(root, 'tests/trimmed.test.js'), 'utf8').includes('retired ('))
-})
-
 // a {testDirs} gate has no File Plan to resolve against in an --all-done sweep
 test('WHEN --apply runs a gateCommand carrying {testDirs}/{scopeDirs} THE SYSTEM points it at the test files the sweep left in the directories it touched, never the raw placeholder', () => {
   const root = writeSweepHost('expiry-gate-placeholder')

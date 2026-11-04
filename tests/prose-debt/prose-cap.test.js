@@ -64,7 +64,7 @@ test('AC-20260823-06-1: a section holding more entry bullets than the cap exits 
   const entries = []
   for (let i = 1; i <= 16; i++) entries.push(bullet(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas'])
   assert.strictEqual(r.status, 1, (r.stderr || '') +
     ' — a 16-entry section over a cap of 15 must exit 1; a silent pass here lets the exact ' +
     'append-only accretion this spec exists to stop continue unchecked')
@@ -81,7 +81,7 @@ test('AC-20260823-06-2: a section at exactly the cap exits 0 and reports the cou
   const entries = []
   for (let i = 1; i <= 15; i++) entries.push(bullet(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas'])
   assert.strictEqual(r.status, 0, (r.stderr || '') +
     ' — a 15-entry section at a cap of 15 must exit 0; a false overage here blocks every ' +
     'review close on a section that is not actually over budget')
@@ -100,7 +100,7 @@ test('AC-20260823-06-2: continuation lines inside a wrapped entry never count as
     '  also must never count toward the section total.'
   )
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas'])
   assert.strictEqual(r.status, 0, (r.stderr || '') +
     ' — this section holds 15 logical entries (14 plain + 1 wrapped across 3 physical lines); ' +
     'counting the wrap\'s continuation lines as new entries would falsely push it over the cap')
@@ -115,7 +115,7 @@ test('fail-open regression 2026-08-23: tag-at-end entries (the real host shape) 
   const entries = []
   for (let i = 1; i <= 15; i++) entries.push(...tagAtEndEntry(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas'])
   assert.strictEqual(r.status, 0, (r.stderr || '') +
     ' — 15 logical tag-at-end entries at a cap of 15 must exit 0; a nonzero exit means the ' +
     'indented continuation lines were miscounted as entries')
@@ -130,7 +130,7 @@ test('fail-open regression 2026-08-23: 16 tag-at-end entries over a cap of 15 tr
   const entries = []
   for (let i = 1; i <= 16; i++) entries.push(...tagAtEndEntry(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas'])
   assert.strictEqual(r.status, 1, (r.stderr || '') +
     ' — the cap must trip on the exact shape that previously counted 0; a silent pass here ' +
     'means the guard still only fires on self-authored tag-first fixtures, never on real hosts')
@@ -144,7 +144,7 @@ test('fail-open regression 2026-08-23: 16 tag-at-end entries over a cap of 15 tr
 
 test('AC-20260823-06-3: this repo\'s suite runs prose-cap.js against the live rules file\'s Gotchas section — red on the 23-entry pre-image, green once the D9 triage lands', () => {
   const rulesFile = path.join(ROOT, '.claude/rules/spec-pipeline.md')
-  const r = runNode('scripts/prose-cap.js', ['--file', rulesFile, '--section', 'Gotchas', '--cap', '15'])
+  const r = runNode('scripts/prose-cap.js', ['--file', rulesFile, '--section', 'Gotchas'])
   assert.strictEqual(r.status, 0, (r.stderr || r.stdout || '') +
     ' — the live § Gotchas section must be at or under the cap of 15 for this suite to be ' +
     'green; a nonzero exit here means an eviction (delete / merge / mechanize) is owed before ' +
@@ -174,7 +174,7 @@ test('ratchet: an over-cap section strictly below --baseline exits 0 and names t
   const entries = []
   for (let i = 1; i <= 40; i++) entries.push(bullet(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15', '--baseline', '41'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--baseline', '41'])
   assert.strictEqual(r.status, 0, (r.stderr || '') +
     ' — 40 entries against a baseline of 41 is a net eviction; refusing it is the flag-day gate that made Prax close with the cap unmet')
   assert.match(r.stdout || '', /ratchet: 40 < baseline 41/,
@@ -186,7 +186,7 @@ test('ratchet: an over-cap section at or above --baseline exits 1 naming the bas
   const entries = []
   for (let i = 1; i <= 40; i++) entries.push(bullet(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15', '--baseline', '40'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--baseline', '40'])
   assert.strictEqual(r.status, 1, 'equal to baseline is no shrink — a pass here lets an over-cap section grow forever behind the ratchet')
   assert.match(r.stderr || '', /baseline 40/, 'stderr must name the baseline the count failed against')
 })
@@ -196,7 +196,7 @@ test('ratchet: at or under cap the baseline is ignored and the hard cap rules', 
   const entries = []
   for (let i = 1; i <= 15; i++) entries.push(bullet(i))
   const file = writeFixture(dir, entries)
-  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--cap', '15', '--baseline', '10'])
+  const r = runNode('scripts/prose-cap.js', ['--file', file, '--section', 'Gotchas', '--baseline', '10'])
   assert.strictEqual(r.status, 0, 'a section at cap passes regardless of a lower baseline — the ratchet only governs the over-cap regime')
   assert.doesNotMatch(r.stdout || '', /ratchet:/, 'no ratchet note when the cap itself admitted the pass')
 })

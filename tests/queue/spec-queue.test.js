@@ -189,14 +189,11 @@ test('AC-20260903-03-6 / AC-20261013-02-10: spec-queue add refuses a brief alrea
     'D5: a refused add must leave the queue file byte-identical — no partial write on a usage refusal: ' + after)
 })
 
-test('AC-20260903-03-9 / AC-20261101-08-10: the retired bump/defer/ok verbs exit 2 naming their D6 replacement and the retired add flags exit 2 through the generic add unknown-flag refusal, writing nothing', () => {
+test('AC-20261101-08-10: the retired add flags and any unknown add flag exit 2 through the generic add unknown-flag refusal, writing nothing', () => {
   const dir = host({ queue: [{ id: 'q1', kind: 'brief', brief: '05', added: '2026-08-23T10:00:00Z' }] })
   const before = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
 
   const cases = [
-    { argv: ['bump', '05'], mustMatch: /spec-queue move 05 1/ },
-    { argv: ['defer', '05'], mustMatch: /spec-queue move 05/ },
-    { argv: ['ok'], mustMatch: /no accept step/ },
     { argv: ['add', 'x', '--after', 'q1'], mustMatch: /add: unknown flag --after/ },
     { argv: ['add', '--brief', '05'], mustMatch: /add: unknown flag --brief/ },
     // An unknown flag must refuse, never fold into the payload — `add specs/x.md --root /abs`
@@ -212,7 +209,7 @@ test('AC-20260903-03-9 / AC-20261101-08-10: the retired bump/defer/ok verbs exit
   }
   const after = fs.readFileSync(path.join(dir, '.git/spec-queue.json'), 'utf8')
   assert.strictEqual(after, before,
-    'D6: none of the five removed-verb/flag invocations may write the queue file: ' + after)
+    'D6: none of the refused add invocations may write the queue file: ' + after)
 })
 
 test('AC-20260903-03-11: spec-queue add --after-spec/--after-brief refuses a missing target at add time, and a gate whose target later disappears reports (missing) rather than releasing the item', () => {

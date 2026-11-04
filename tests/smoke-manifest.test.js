@@ -77,8 +77,9 @@ test('AC-20260815-04-7: smoke: readyCheck never passing CONTINUES TO exit 1 afte
   const dir = writeConfig(tmpdir('smoke'), {
     bootCommand: 'sleep 30',
     readyCheck: 'false',
+    readyTimeout: 2,
   })
-  const res = smoke(dir, '--timeout', '2')
+  const res = smoke(dir)
   assert.strictEqual(res.status, 1, res.stdout + res.stderr)
   assert.match(res.stdout, /__SMOKE_FAIL__ not-ready/)
 })

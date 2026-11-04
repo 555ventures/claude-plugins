@@ -43,8 +43,8 @@ const filePlan = (...paths) => '# plan\n\n## File Plan\n\n| Path | Action | Laye
   paths.map((x) => '| `' + x + '` | MODIFY | scripts | change |').join('\n') + '\n'
 
 // opts: parked — a hardened spec 05-p on an independent brief whose branch lives in a linked
-// worktree; dependent — a hardened spec 07-d on a brief that depends on brief 32; fixes — a queued
-// `--lane fix` item q107 plus a red-CI row on a done spec; blocked — hardened 08-k (brief 35) that
+// worktree; dependent — a hardened spec 07-d on a brief that depends on brief 32; fixes — queued
+// `--lane fix` items q107 and q116 beside a done spec; blocked — hardened 08-k (brief 35) that
 // depends on 03-x; draft — a draft 08-p (brief 35); selfSurface — hardened 08-s (brief 35) whose File
 // Plan names spec/scripts/fanout-driver.js; critical — a rules file whose Risk Tiers names src/db.js
 // (config pipelineRules), 03-x planning src/db.js and a hardened critical 08-c (brief 35) planning it;
@@ -97,17 +97,11 @@ function fanoutHost(opts = {}) {
   git('add', '-A')
   git('commit', '-q', '-m', 'seed fan-out host')
   if (opts.fixes) {
-    fs.writeFileSync(path.join(root, '.claude/spec-runs.jsonl'), JSON.stringify({
-      ts: '2026-11-02', stage: 'observe', spec: specRel('01-base'), branch: 'main', ci: 'red',
-      sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-11-02T09:00:00Z',
-    }) + '\n')
-    // The run log is tracked in a real host; committing it keeps the main root clean for MERGE's dirty-root check.
-    git('add', '.claude/spec-runs.jsonl')
-    git('commit', '-q', '-m', 'record the red CI row')
-    fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 107, items: [
+    fs.writeFileSync(path.join(root, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 116, items: [
       { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
       { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
       { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
+      { id: 'q116', kind: 'prompt', lane: 'fix', payload: 'repair the import', added: '2026-11-02T10:03:00Z' },
     ] }))
   }
   if (opts.bornFix) {

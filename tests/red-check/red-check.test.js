@@ -389,31 +389,6 @@ test('AC-20260821-01-8: a host config declaring no testCommand exits 2 with a re
     `the exit-2 message must name the remedy command /spec:init — stderr: ${res.stderr}`)
 })
 
-test('AC-20260821-01-9: a red-expected file passed via --expect-green is treated green-expected (matching its green pass, no finding) and a warning names the flag and the path — proven against the same file WITHOUT the flag, which is unsanctioned-green', () => {
-  const { dir, base } = newHost('rc9')
-  fs.mkdirSync(path.join(dir, 'tests'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'tests/design.test.js'),
-    "'use strict'\nconst { test } = require('node:test')\nconst assert = require('node:assert')\n" +
-    "test('AC-20260821-87-1: a design-stage pre-landed component, already green', () => { assert.ok(true) })\n")
-  const spec = path.join(dir, 'spec.md')
-  fs.writeFileSync(spec, specMd(
-    ['- **AC-20260821-87-1**: WHEN x THE SYSTEM SHALL y → tests/design.test.js'],
-    ['| tests/design.test.js | CREATE | tests | unsanctioned pin, but a design-stage component already landed it green |']))
-
-  const without = findings(run(spec, dir, base, ['--json']))
-  assert.ok(without.findings.some(f => f.class === 'unsanctioned-green' && f.path === 'tests/design.test.js'),
-    `precondition: without --expect-green this file is an ordinary unsanctioned-green finding — otherwise this test cannot show the flag changed anything: ${JSON.stringify(without.findings)}`)
-
-  const withFlag = findings(run(spec, dir, base, ['--expect-green', 'tests/design.test.js', '--json']))
-  assert.ok(!withFlag.findings.some(f => f.path === 'tests/design.test.js'),
-    `--expect-green tests/design.test.js must flip this file's expectation to green so its actual green pass is a match, not a finding — got ${JSON.stringify(withFlag.findings)}`)
-  const row = withFlag.files.find(f => f.path === 'tests/design.test.js')
-  assert.ok(row && row.expected === 'green',
-    `the files[] row for the flagged path must record expected: "green" (flipped from red) — got ${JSON.stringify(row)}`)
-  assert.ok(withFlag.warnings.some(w => w.includes('--expect-green') && w.includes('tests/design.test.js')),
-    `--expect-green is an orchestrator-derived sanction and must be visible, never silent — a warning must name both the flag and the path: ${JSON.stringify(withFlag.warnings)}`)
-})
-
 test('AC-20260821-01-13: --json prints the Contracts shape — files[] rows carrying path/expected/observed/carriedAcs, findings[] rows carrying class/path/acs', () => {
   const { dir, base } = newHost('rc13')
   fs.mkdirSync(path.join(dir, 'tests/t'), { recursive: true })

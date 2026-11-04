@@ -164,8 +164,8 @@ test('AC-20260904-01-1: spec-paths commit-coverage resolves to spec/scripts/comm
 // specs/20260914/03-the-html-atlas-is-retired.md AC-20260914-03-5 (reuse, tag only): reuses this
 // case to pin that shared-mocks still resolves after the HTML-atlas deletion batch.
 // specs/20260902/06-mocks-provenance-ledger.md D7, AC-20260902-06-9: spec-paths gains a
-// `shared-mocks` key resolving to the new spec/doctrine/mocks.md, the way `shared-design` and
-// `shared-genesis` resolve their own doctrine files — a missing key breaks any command that
+// `shared-mocks` key resolving to the new spec/doctrine/mocks.md, the way
+// `shared-genesis` resolves its own doctrine file — a missing key breaks any command that
 // resolves it silently (§ Risk Tiers, spec-paths).
 test('AC-20260902-06-9: spec-paths shared-mocks resolves to an existing spec/doctrine/mocks.md', () => {
   const fs = require('node:fs')

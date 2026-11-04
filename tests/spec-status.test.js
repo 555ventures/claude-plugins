@@ -42,15 +42,6 @@ function host({ briefs = {}, specs = {}, overviewRow = null } = {}) {
   return dir
 }
 
-// One red-observation ledger row naming specPath — shared by every escape-entry fixture below.
-function writeRedLedger(dir, specPath) {
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec-runs.jsonl'), JSON.stringify({
-    ts: '2026-08-20', stage: 'observe', spec: specPath, branch: 'main', ci: 'red',
-    sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-08-20T09:00:00Z',
-  }) + '\n')
-}
-
 const BRIEFS = {
   '01-auth.md': '# 01 — Auth\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n',
   '02-billing.md': '# 02 — Billing\n\nPhase: P0 · Depends on: 01 · Primary workspaces: api\n',
@@ -440,10 +431,7 @@ test('AC-20260901-10-4: --next orders closest-to-done first (both implementing a
 // `if (readyBriefs.length && !entries.some(e => !e.blockers.length))`) only ever adds a
 // /spec:plan entry when NO other entry is unblocked, and /spec:run/​/spec:escape entries are
 // always unblocked — so /spec:plan can never coexist with /spec:run or /spec:escape in one
-// call. Host A carries a hardened spec, an implementing spec, and an open escape (a
-// red-observation ledger row — D2/qualifyingObservation, spec/scripts/lib/observation.js, an
-// offline read of .claude/spec-runs.jsonl with no git-repo dependency, so this host writes one
-// directly rather than reaching for tests/queue/queue-overlay.test.js's queue-file fixture).
+// call. Host A carries a hardened spec and an implementing spec.
 // Host B carries only a done spec, so the unplanned dependency-met brief 03 is the sole
 // (fallback) pick. Both hosts assert the negative — the forbidden three never appear — and
 // together they cover the positive presence of all three surviving actions.
@@ -456,8 +444,6 @@ test(`AC-20261025-01-14 / AC-20260901-10-6: --json emits only /spec:plan | /spec
       '20260710/03-reports.md': 'date: 2026-07-10\nstatus: implementing\nbrief: n/a',
     },
   })
-  const redSpecPath = 'specs/20260701/01-auth-core.md'
-  writeRedLedger(dirA, redSpecPath)
   const rA = runNode(SCRIPT, ['--root', dirA, '--next', '--json'])
   assert.strictEqual(rA.status, 0, rA.stderr)
   const jA = JSON.parse(rA.stdout)
@@ -485,7 +471,6 @@ test(`AC-20261025-01-14 / AC-20260901-10-6: --json emits only /spec:plan | /spec
     }
   }
   assert.ok(actionsA.has('/spec:run'), 'AC-20260901-10-6/D5: the hardened and implementing specs must both surface as /spec:run entries: ' + JSON.stringify(jA.next))
-  assert.ok(actionsA.has('/spec:fix'), 'AC-20261025-01-14/D6: the red-observation ledger row for the done spec must surface as a /spec:fix entry: ' + JSON.stringify(jA.next))
   assert.ok(actionsB.has('/spec:plan'), 'AC-20260901-10-6/D5: brief 03\'s unplanned, dependency-met status must surface as the fallback /spec:plan pick once every spec is done: ' + JSON.stringify(jB.next))
 })
 
@@ -662,31 +647,6 @@ test('AC-20260909-08-1: default render prints the ⚡ lane header + both lane co
   assert.match(rAll.stdout, /\/spec:run @specs\/20260710\/05-adhoc\.md\n\s+└─ 🤷 no brief — parallelism unknown/,
     'briefless runner-up gets a no-claim branch')
   assert.match(rAll.stdout, /⛔ blocked:\n\/spec:run @specs\/20260710\/04-blocked\.md\n\s+└─ ⏳ 01-billing/, 'blocked entries close the section')
-})
-
-// D1(a)+(b): an escape entry ranks first, then the lane render, never duplicated elsewhere.
-test('AC-20260909-08-4: default render prints /spec:fix first, then the lane header and both lane commands, with the fix line exactly once total', () => {
-  const dir = host({
-    briefs: PARALLEL_BRIEFS,
-    specs: {
-      '20260701/01-auth-core.md': sp('done', 'brief: 01'),
-      '20260710/01-x.md': sp('hardened', 'brief: 02'),
-      '20260710/02-y.md': sp('hardened', 'brief: 03'),
-    },
-  })
-  const redSpecPath = 'specs/20260701/01-auth-core.md'
-  writeRedLedger(dir, redSpecPath)
-  const r = runNode(SCRIPT, ['--root', dir])
-  assert.strictEqual(r.status, 0, r.stderr)
-  const lines = r.stdout.split('\n')
-  const idxNext = lines.findIndex(l => l.includes('🎯 Next'))
-  assert.deepStrictEqual(lines.slice(idxNext + 1, lines.indexOf('', idxNext + 1)), [
-    `/spec:fix @${redSpecPath}`,
-    '⚡ 2 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):',
-    '/spec:run @specs/20260710/01-x.md', '/spec:run @specs/20260710/02-y.md',
-  ], 'D1(a)+(b): escape line first, then the lane header + both lane commands, all inside the Next block: ' + r.stdout)
-  const escapeOccurrences = r.stdout.split('\n').filter(l => l === `/spec:fix @${redSpecPath}`).length
-  assert.strictEqual(escapeOccurrences, 1, 'the /spec:fix line must print exactly once — never duplicated inside the lane list: ' + r.stdout)
 })
 
 // merge-conflict heads-up: parallel lanes are independently safe by brief, but
@@ -1207,7 +1167,7 @@ const LANE_SPECS = {
 
 // Brief 32 carries 03-x and 06-y (shared brief), brief 33 carries 04-z (independent); 06-y's branch
 // is checked out in a linked worktree. A git repo, because the mode reads `git worktree list`.
-function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null, config = null, baseSpecs = LANE_SPECS } = {}) {
+function lanesHost({ extraSpecs = {}, queue = null, config = null, baseSpecs = LANE_SPECS } = {}) {
   const dir = fs.realpathSync(tmpdir('spec-status-lanes'))
   const git = gitRepo(dir)
   fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
@@ -1229,7 +1189,6 @@ function lanesHost({ extraSpecs = {}, queue = null, ledgerSpec = null, config = 
     fs.writeFileSync(path.join(dir, '.claude/spec.config.json'), JSON.stringify(config, null, 2) + '\n')
   }
   if (queue) fs.writeFileSync(path.join(dir, '.git/spec-queue.json'), JSON.stringify({ version: 1, seq: 107, items: queue }))
-  if (ledgerSpec) writeRedLedger(dir, ledgerSpec)
   const wt = dir + '-wt-06y'
   git('worktree', 'add', '-q', '-b', 'spec/06-y', wt)
   return { dir, wt, git }
@@ -1259,30 +1218,6 @@ test('AC-20261102-03-1 / AC-20261103-08-8: --lanes --json prints the admitted ru
   assert.strictEqual(y.branch, 'spec/06-y', 'the branch is spec/<stem> as merge-back derives it')
 })
 
-test('AC-20261102-03-2: --lanes --json lists the queued fix item with its queue id and the red-CI escape with a null queue id under fixes', () => {
-  const h = lanesHost({
-    extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
-    ledgerSpec: 'specs/20261102/01-base.md',
-    queue: [
-      { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
-      { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
-      { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
-    ],
-  })
-  const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'])
-  assert.strictEqual(r.status, 0, r.stderr)
-  const out = JSON.parse(r.stdout)
-  const fixes = [...out.fixes].sort((a, b) => String(a.queue_id).localeCompare(String(b.queue_id)))
-  assert.strictEqual(fixes.length, 2, 'one queued fix and one CI escape must yield two fixes, or a fix lane is silently dropped: ' + r.stdout)
-  const q = fixes.find(f => f.queue_id === 'q107')
-  assert.ok(q && q.action === '/spec:fix q107' && q.path === null && q.note === 'queue item q107',
-    'the queued item must read {action "/spec:fix q107", path null, queue_id q107}: ' + JSON.stringify(fixes))
-  const ci = fixes.find(f => f.queue_id === null)
-  assert.ok(ci && ci.action === '/spec:fix' && ci.path === 'specs/20261102/01-base.md' && /CI red/.test(ci.note),
-    'the CI escape must read {action "/spec:fix", path the red spec, queue_id null}: ' + JSON.stringify(fixes))
-  assert.ok(out.lanes.every(l => l.action === '/spec:run'), 'a fix entry must never appear among the run lanes: ' + r.stdout)
-})
-
 test('AC-20261102-03-3: --lanes --json run from inside a linked worktree exits 2 naming the main worktree', () => {
   const h = lanesHost()
   const r = runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json'], { cwd: h.wt })
@@ -1294,7 +1229,6 @@ test('AC-20261102-03-3: --lanes --json run from inside a linked worktree exits 2
 test('AC-20261102-03-19: --next --json, --json and the bare dashboard keep their shapes and carry no lanes keys or branch and worktree fields', () => {
   const h = lanesHost({
     extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
-    ledgerSpec: 'specs/20261102/01-base.md',
     queue: [
       { id: 'q1', kind: 'brief', brief: '32', added: '2026-11-02T10:00:00Z' },
       { id: 'q2', kind: 'brief', brief: '33', added: '2026-11-02T10:01:00Z' },
@@ -1394,31 +1328,28 @@ test('AC-20261103-06-4 / AC-20261103-08-8: --lanes --json admits the disjoint br
 test('AC-20261103-06-6 / AC-20261103-08-8: --lanes --json fixes entries carry exactly action, path, note, queue_id, after and the six provenance, files, overlaps and blocker keys, with the after-spec path for a queued item and null otherwise', () => {
   const h = lanesHost({
     extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
-    ledgerSpec: 'specs/20261102/01-base.md',
     queue: [
       { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
       { id: 'q108', kind: 'prompt', lane: 'fix', payload: 'repair the import', after: { spec: 'specs/20261102/03-x.md' }, added: '2026-11-02T10:03:00Z' },
     ],
   })
   const out = JSON.parse(runNode(SCRIPT, ['--root', h.dir, '--lanes', '--json']).stdout)
-  assert.strictEqual(out.fixes.length, 3, 'two queued fixes and one CI escape must all be listed: ' + JSON.stringify(out.fixes))
+  assert.strictEqual(out.fixes.length, 2, 'both queued fixes must be listed: ' + JSON.stringify(out.fixes))
   for (const f of out.fixes) {
     assert.deepStrictEqual(Object.keys(f).sort(), ['action', 'after', 'batch', 'blocker', 'files', 'note', 'origin', 'overlaps', 'path', 'queue_id', 'trigger'], 'every fixes entry carries the after key and the provenance, files, overlaps and blocker keys, or the driver must open the queue file itself')
   }
   const by = (id) => out.fixes.find(f => f.queue_id === id)
   assert.strictEqual(by('q107').after, null, 'a queued fix with no after is null, or the driver admits it behind a lane it never waited on')
   assert.strictEqual(by('q108').after, 'specs/20261102/03-x.md', 'a queued fix names its after-spec path, or born fixes cannot join the batch')
-  assert.strictEqual(by(null).after, null, 'a CI escape has no after, or it is admitted as a born fix')
 })
 
 // specs/20261103/08-queue-items-remember-their-origin.md D4/D13/D15: `--lanes --json` fixes[]
 // carry provenance, named files, overlaps and the gate blocker; `born` lists every item carrying provenance.
 
-test('AC-20261103-08-8: --lanes --json fixes carry origin, trigger and batch (null for an unmarked item and a CI escape) and born lists exactly the provenance-carrying undone items in queue order', () => {
+test('AC-20261103-08-8: --lanes --json fixes carry origin, trigger and batch (null for an unmarked item) and born lists exactly the provenance-carrying undone items in queue order', () => {
   const batch = '2026-11-02T12:00:00.000Z'
   const h = lanesHost({
     extraSpecs: { '20261102/01-base.md': 'date: 2026-11-02\nstatus: done\nbrief: 31' },
-    ledgerSpec: 'specs/20261102/01-base.md',
     queue: [
       { id: 'q107', kind: 'prompt', lane: 'fix', payload: 'repair the flaky export', added: '2026-11-02T10:02:00Z' },
       { id: 'q120', kind: 'prompt', lane: 'fix', payload: 'repair the export after review', origin: { spec: 'specs/20261102/03-x.md', stage: 'review' }, trigger: 'close-followup', batch, added: '2026-11-02T10:03:00Z' },
@@ -1433,9 +1364,7 @@ test('AC-20261103-08-8: --lanes --json fixes carry origin, trigger and batch (nu
       'every fixes entry carries exactly the eleven keys, or the driver must open the queue file itself: ' + JSON.stringify(f))
   }
   const by = (id) => out.fixes.find((f) => f.queue_id === id)
-  for (const f of [by('q107'), by(null)]) {
-    assert.deepStrictEqual([f.origin, f.trigger, f.batch], [null, null, null], 'an unmarked item and a CI escape read origin unknown, or an old item is admitted as a birth: ' + JSON.stringify(f))
-  }
+  assert.deepStrictEqual([by('q107').origin, by('q107').trigger, by('q107').batch], [null, null, null], 'an unmarked item reads origin unknown, or an old item is admitted as a birth: ' + JSON.stringify(by('q107')))
   assert.deepStrictEqual([by('q120').origin, by('q120').trigger, by('q120').batch],
     [{ spec: 'specs/20261102/03-x.md', stage: 'review' }, 'close-followup', batch], 'a born fix carries its provenance verbatim, or the driver cannot admit it by origin')
   assert.strictEqual(by('q121'), undefined, 'a plan item is never a fix entry, or a planner birth joins a fix lane')

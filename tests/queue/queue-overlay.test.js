@@ -347,33 +347,6 @@ test('spec-status.js --next --json survives a real pipe intact at a fixture size
     'the parsed --next JSON received over the pipe must carry its documented top-level "next" array — a truncated payload would either fail JSON.parse above or land here without it: ' + JSON.stringify(parsed))
 })
 
-test('AC-20261025-01-15 / AC-20260823-08-15 / AC-20260903-03-10: a red-observation /spec:fix entry keeps rank supremacy above every queue position', () => {
-  const dir = fs.realpathSync(tmpdir('queue-escape'))
-  gitRepo(dir)
-  fs.mkdirSync(path.join(dir, 'docs/roadmap'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'docs/roadmap/00-overview.md'), overviewHeader())
-  fs.writeFileSync(path.join(dir, 'docs/roadmap/08-b.md'), '# 08 — B\n\nPhase: P0 · Depends on: — · Primary workspaces: api\n')
-  const specPath = 'specs/20260701/01-x.md'
-  fs.mkdirSync(path.join(dir, 'specs/20260701'), { recursive: true })
-  fs.writeFileSync(path.join(dir, specPath), '---\nstatus: done\n---\n# x\n')
-
-  const ledgerRows = [
-    { ts: '2026-08-20', stage: 'observe', spec: specPath, branch: 'main', ci: 'red', sha: 'deadbee', url: 'https://github.com/x/y/actions/runs/9', runAt: '2026-08-20T09:00:00Z' },
-  ]
-  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.claude/spec-runs.jsonl'), ledgerRows.map((r) => JSON.stringify(r)).join('\n') + '\n')
-
-  fs.writeFileSync(path.join(dir, '.git/spec-queue.json'), JSON.stringify({
-    version: 1, seq: 1, items: [{ id: 'q1', kind: 'brief', brief: '08', added: '2026-08-23T10:00:00Z' }],
-  }))
-
-  const j = JSON.parse(runNode(SCRIPT, ['--root', dir, '--next', '--json']).stdout)
-  assert.strictEqual(j.next[0].action, '/spec:fix',
-    'D10: a red observation must outrank every queue position — the queue orders work, it never silences an alarm: ' + JSON.stringify(j.next))
-  assert.strictEqual(j.next[0].path, specPath,
-    'the /spec:fix entry at rank 0 must point at the red spec itself, not a queue-derived pick: ' + JSON.stringify(j.next[0]))
-})
-
 // One-line open-work rows: a free-text queue payload runs to hundreds of words, and printing
 // it whole turned a four-item section into ~45 wrapped terminal lines with no scannable left
 // edge. Every row is now exactly one line — a prose row leads with its queue id (the handle

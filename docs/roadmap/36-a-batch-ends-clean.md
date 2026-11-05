@@ -39,6 +39,15 @@ its own lanes created, and tells the truth in every report:
   names trunk's status when it differs (superseded, done); the REPORT and MERGE_READY lines print
   the current branch head. The WAIT body says a lane at ESCALATE holds a question until it is
   marked returned.
+- **Evidence has a channel.** An AC that asks for something "recorded in the commit message" cannot
+  be met: the driver owns the message. The lane writes `<spec>.run/evidence.md` (listings, renders,
+  counts the ACs name) and the driver appends it to the build commit body at COMMIT; plan.md says
+  evidence ACs name that file. (04 AC-10 and 05 AC-14 in this repo were unmeetable as written.)
+- **A missing state file is named, not hidden.** When lane markers exist but `spec-fanout.json`
+  does not, the driver refuses with the newest `spec-v7-backup/*/spec-fanout.json` as the remedy
+  instead of printing "queue drained" (two running lanes were reported drained on both hosts after
+  a migrate wipe). `gate-repaired` with no new commit is allowed and the MERGE_RED text says so
+  (a flaky re-run needs no commit).
 - **The contract lists what exists.** interface-contract.md names the marks and flags the code
   accepts and no others (`groom` is gone from § 7), and queue.js refuses a trailing `--type` or
   `--after` with no value instead of ignoring it.

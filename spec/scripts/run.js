@@ -6,7 +6,7 @@
 //
 // node run.js <spec> [--in-place] [--fix "<symptom>"] [--root <dir>] [--state] [--json] [--mark <verb>]
 // --fix runs only as a fanout lane: the brief is the symptom, the commit is `fix(<id>): <symptom>`.
-// Marks: built · repaired · reviewed --file <json> · fixed · escalate <retry|park|amend|revert> ·
+// Marks: built · repaired · regate · reviewed --file <json> · fixed · escalate <retry|park|amend|revert> ·
 // conflicts-resolved · waiting --on <spec> (lane) · unmet --decision <id> --why <text>.
 // Exit 0 ok · 1 error · 2 refusal.
 
@@ -135,6 +135,7 @@ function open(state, ctx) {
     }
     wt = git.worktreeAdd(ctx.root, rel, specBranch, cfg.trunk)
   }
+  if (fresh && wt !== mainRoot(ctx.root)) host.copyLaneFiles(mainRoot(ctx.root), wt, cfg.laneFiles)
   if (fresh && cfg.setupCommand) {
     const r = host.run(cfg.setupCommand, { cwd: wt })
     if (r.status !== 0) refuse(`setupCommand failed in ${wt}:\n${r.tail}\nfix setupCommand in .claude/spec.config.json, then re-run`, 1)
@@ -181,15 +182,30 @@ function specEdits(state, ctx) {
   return files
 }
 
+const secs = (ms) => Math.round(ms / 1000)
+
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx)
   const wt = wtOf(state, ctx)
   const t0 = Date.now()
-  const g = host.gate(wt, cfg)
+  let g = host.gate(wt, cfg)
+  let waited = g.lockWaitMs || 0
+  // A tree the last gate already ran on keeps its rerun count: one rerun per tree.
+  const prior = state.gate && state.gate.tree === g.tree ? state.gate : null
+  let reruns = prior ? prior.reruns || 0 : 0
+  // Red only on tests the diff does not touch: load, not the build. Run once more before a repair counts.
+  if (g.status !== 0 && !prior && g.failing && g.failing.length) {
+    const touched = new Set(git.changedFiles(state.base, wt))
+    if (g.failing.every((f) => !touched.has(f))) {
+      g = host.gate(wt, cfg)
+      waited += g.lockWaitMs || 0
+      reruns = 1
+    }
+  }
   const ms = Date.now() - t0
   const red = g.status !== 0
   const tail = red && cfg.testFileCommand ? g.tail + '\n' + redCheck(state, wt) : g.tail
-  state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail }
+  state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail, tree: g.tree, failing: g.failing || [], reruns, lockWaitMs: waited }
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   const edits = specEdits(state, ctx)
   if (edits.length) return go(state, 'ESCALATE', { why: 'spec-edit', specEdits: edits })
@@ -199,7 +215,12 @@ function gateStep(state, ctx) {
 }
 
 // A lane stops here, committed: fanout writes done, merges in queue order and cleans up.
-const readyReport = (state, ctx) => render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: `commit ${state.commit || 'none (nothing changed)'}`, next: 'nothing needs you — fanout merges the lane' })
+// `load:` bullet: what a shared machine cost this run, only when it cost something.
+const loadBullet = (state) => {
+  const g = state.gate || {}
+  return g.reruns || g.lockWaitMs >= 1000 ? [`load: ${g.reruns || 0} gate rerun(s), ${secs(g.lockWaitMs || 0)}s waiting for a slot`] : []
+}
+const readyReport = (state, ctx) => render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: [`commit ${state.commit || 'none (nothing changed)'}`, ...loadBullet(state)], next: 'nothing needs you — fanout merges the lane' })
 
 function commit(state, ctx) {
   const spec = st.readSpec(specIn(state, ctx))
@@ -265,6 +286,7 @@ function finish(state, ctx) {
       `commit ${state.commit || 'none (nothing changed)'}${state.mergeSha ? `, merged as ${state.mergeSha}` : ''}`,
       `gate green (run ${state.gate.runId})${tg ? `; trunk gate ${tg.status}${tg.cached ? ' (cached)' : ''}` : ''}`,
       `review ${state.review.verdict}, ${findings.length} finding(s); ${state.attempts.repair} repair(s), ${state.attempts.fix} fix round(s)`,
+      ...loadBullet(state),
     ],
     pins: state.pin,
     warns: [...(rm.removed ? [] : [`worktree kept at ${state.worktree}: ${rm.reason} — git worktree remove --force ${state.worktree}`]),
@@ -300,7 +322,8 @@ function builderBrief(state, ctx, kind) {
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
     OTHER_SECTIONS, '',
   ]
-  if (kind === 'repair') out.push(`${/^git commit was rejected/.test(state.gate.output_tail || '') ? 'The commit hook rejected the build' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```', '')
+  if (kind === 'repair') out.push(`${/^git commit was rejected/.test(state.gate.output_tail || '') ? 'The commit hook rejected the build' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```',
+    'A failing test the diff does not touch, a timeout, or a flake under load is not yours to fix: say so in your reply and stop; the driver re-runs the gate. Never raise a host test timeout, retry count or worker limit to pass.', '')
   if (kind === 'fix') {
     out.push('The reviewer found blocking issues. Fix each one:')
     for (const f of state.review.findings.filter((x) => x.severity === 'blocking')) out.push(`- ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}${f.evidence ? ` (evidence: ${f.evidence})` : ''}`)
@@ -422,7 +445,10 @@ function derive(state, ctx) {
     case 'OPEN': return { name: 'OPEN', auto: open }
     case 'BUILD': return { name: 'BUILD', body: builderBrief(state, ctx, 'build'), mark: 'built', accepts: LANE_ASKS }
     case 'GATE': return { name: 'GATE', auto: gateStep }
-    case 'REPAIR': return { name: 'REPAIR', body: builderBrief(state, ctx, 'repair'), mark: 'repaired', accepts: LANE_ASKS }
+    case 'REPAIR': return {
+      name: 'REPAIR', mark: 'repaired', accepts: [...LANE_ASKS, 'regate'],
+      body: builderBrief(state, ctx, 'repair') + `\n\nGate tree ${String((state.gate && state.gate.tree) || '').slice(0, 7)}. If the builder replied that the failure is not its to fix (no change to the tree), re-run the gate without counting a repair: node ${shq(path.join(__dirname, 'run.js'))} ${shq(state.spec)} --root ${shq(ctx.root)} --mark regate (once per tree).`,
+    }
     case 'REVIEW': return { name: 'REVIEW', body: reviewerBrief(state, ctx), mark: `reviewed --file ${shq(runFile(ctx, 'findings.json'))}`, accepts: LANE_ASKS }
     case 'FIX': return { name: 'FIX', body: builderBrief(state, ctx, 'fix'), mark: 'fixed', accepts: LANE_ASKS }
     case 'ESCALATE': {
@@ -484,10 +510,25 @@ function revertSpecEdits(state, ctx) {
 // The marks a lane agent may use while a builder or reviewer is out: stop for another spec, or ask about a Decision.
 const LANE_ASKS = ['waiting', 'unmet']
 
+// A builder round changes the tree; a mark with the tree the last gate ran on spends the budget for nothing.
+function unchanged(state, ctx) {
+  if (state.gate && state.gate.tree && host.treeSha(wtOf(state, ctx)) === state.gate.tree) {
+    refuse('nothing changed since the last gate — re-run the gate (mark regate) or dispatch a builder')
+  }
+}
+
 const steps = {
   built: (state) => go(state, 'GATE'),
-  repaired: (state) => { state.attempts.repair++; return go(state, 'GATE') },
-  fixed: (state) => { state.attempts.fix++; return go(state, 'GATE') },
+  repaired(state, flags, ctx) { unchanged(state, ctx); state.attempts.repair++; return go(state, 'GATE') },
+  fixed(state, flags, ctx) { unchanged(state, ctx); state.attempts.fix++; return go(state, 'GATE') },
+  // Re-runs the gate on the same tree without counting a repair; once per tree.
+  regate(state, flags, ctx) {
+    const tree = host.treeSha(wtOf(state, ctx))
+    if (!state.gate || state.gate.tree !== tree) refuse('regate re-runs the gate on an unchanged tree — the tree changed since the last gate, mark repaired after a builder round')
+    if (state.regated === tree) refuse('this tree was already re-run once — dispatch a builder (mark repaired after its round) or escalate')
+    state.regated = tree
+    return go(state, 'GATE')
+  },
   reviewed(state, flags, ctx) {
     if (!flags.file || flags.file === true) refuse('reviewed needs --file <findings json>')
     const doc = st.readJson(path.resolve(ctx.root, flags.file))
@@ -553,9 +594,10 @@ const steps = {
 // One line under the checkpoint so the session sees what the mark led to.
 function afterMark(verb, state, ctx) {
   const g = state.gate
-  if (['built', 'repaired', 'fixed'].includes(verb) && g) {
-    if (g.status === 'red') return `gate: red — ${redLine(g.output_tail)}`
-    return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}`
+  if (['built', 'repaired', 'regate', 'fixed'].includes(verb) && g) {
+    const cost = `${g.reruns === 1 ? ' · rerun' : ''}${g.lockWaitMs >= 1000 ? ` · waited ${secs(g.lockWaitMs)}s for a gate slot` : ''}`
+    if (g.status === 'red') return `gate: red — ${redLine(g.output_tail)}${cost}`
+    return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}${cost}`
   }
   if (verb === 'waiting') return `WAITING — ${state.spec} waits on ${state.waitingOn}; the lane stops here and fanout re-picks it once ${state.waitingOn} is done on trunk`
   if (verb === 'unmet' && state.lane) return pending.stopLine(ctx.root)

@@ -4,9 +4,11 @@
 // Exit 0 clean, 1 with findings.
 
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
-const { readJson, configPath, readFanout } = require('./lib/state')
-const { run } = require('./lib/host')
+const { spawnSync } = require('child_process')
+const { readJson, configPath, readFanout, readConfig } = require('./lib/state')
+const { run, cacheDir } = require('./lib/host')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
 const { IGNORE } = require('./init')
@@ -33,6 +35,51 @@ function probeCap(cfg) {
   return c > 0 ? c : 600000
 }
 
+// Free space and filesystem of the one holding `p` (df -Pk); null when df is unavailable.
+function dfOf(p) {
+  const r = spawnSync('df', ['-Pk', p], { encoding: 'utf8' })
+  if (r.error || r.status !== 0) return null
+  const f = (r.stdout || '').trim().split('\n').pop().trim().split(/\s+/)
+  const kb = Number(f[3])
+  return f.length >= 4 && Number.isFinite(kb) ? { fs: f[0], bytes: kb * 1024 } : null
+}
+
+const GB = 1024 ** 3
+const human = (bytes) => bytes >= GB ? `${(bytes / GB).toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`
+const freeOf = (d) => (d ? human(d.bytes) : '?')
+
+// The newest cached green run's recorded time (ms), or null when no entry carries one.
+function cachedGateMs(root) {
+  let best = null
+  try {
+    const dir = cacheDir(root)
+    for (const n of fs.readdirSync(dir)) {
+      if (!n.endsWith('.json')) continue
+      const e = readJson(path.join(dir, n), null)
+      if (e && Number(e.ms) > 0 && (!best || String(e.ts) > String(best.ts))) best = e
+    }
+  } catch { /* no cache yet */ }
+  return best ? Number(best.ms) : null
+}
+
+// Facts about the machine, as info lines (advice, never findings).
+function boxInfo(root, cfg, probedMs) {
+  const cores = os.cpus().length
+  const lanes = readConfig(root).lanes
+  const measured = probedMs != null
+  const ms = measured ? probedMs : cachedGateMs(root)
+  const tmp = process.env.TMPDIR || os.tmpdir()
+  const wtDir = path.join(root, '.claude', 'worktrees')
+  const tmpDf = dfOf(tmp)
+  const wtDf = dfOf(fs.existsSync(wtDir) ? wtDir : root)
+  const out = [`box: ${cores} cores${ms != null ? ` · gate ${(ms / 1000).toFixed(0)}s (${measured ? 'measured' : 'cached'})` : ''} · TMPDIR ${tmp} ${freeOf(tmpDf)} free · worktrees on ${wtDf ? wtDf.fs : '?'} ${freeOf(wtDf)} free`]
+  const half = Math.floor(cores / 2)
+  if (lanes > half) out.push(`⚠️ lanes ${lanes} > cores/2 (${cores}) — set "lanes": ${Math.max(1, half)} or "gateConcurrency": 1 in .claude/spec.config.json`)
+  if (ms != null && ms > 120000) out.push(`⚠️ gate took ${(ms / 1000).toFixed(0)}s (over 2 min) — set "gateConcurrency": 1, or lower lanes`)
+  if (tmpDf && tmpDf.bytes < 2 * GB) out.push(`⚠️ TMPDIR has ${human(tmpDf.bytes)} free (under 2 GB) — export TMPDIR=<path on the worktrees' filesystem> before /spec:fanout`)
+  return out
+}
+
 // probe:false skips the testCommand run (status counts hygiene findings and must stay fast).
 function check(root, { probe = true } = {}) {
   const f = []; const info = [] // info: runs in flight, printed but not a finding
@@ -43,15 +90,25 @@ function check(root, { probe = true } = {}) {
     if (!cfg || typeof cfg !== 'object') f.push('config: .claude/spec.config.json does not parse')
     else if (!cfg.testCommand) f.push('config: testCommand is not set — run /spec:init')
   }
+  let probedMs = null
   if (probe && cfg && cfg.testCommand) {
     const cap = probeCap(cfg)
     process.stderr.write(`running testCommand: ${cfg.testCommand} …\n`)
     const t0 = Date.now()
     const r = run(cfg.testCommand, { cwd: root, timeoutMs: cap })
-    process.stderr.write(`testCommand finished in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`)
+    probedMs = Date.now() - t0
+    process.stderr.write(`testCommand finished in ${(probedMs / 1000).toFixed(1)}s\n`)
     if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand} (raise the cap with doctorProbeMs in .claude/spec.config.json, or SPEC_DOCTOR_PROBE_MS)`)
     else if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
     else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.pop() || ''}`) }
+  }
+  if (cfg && typeof cfg === 'object') {
+    const named = Array.isArray(cfg.laneFiles) ? cfg.laneFiles : []
+    for (const env of ['.env', '.env.local']) {
+      if (fs.existsSync(path.join(root, env)) && git.raw(['ls-files', '--error-unmatch', '--', env], root).status !== 0 && !named.includes(env)) {
+        f.push(`laneFiles: the root has ${env} that lanes will not see — add "laneFiles": ["${env}"] to .claude/spec.config.json`)
+      }
+    }
   }
   for (const e of IGNORE) if (git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e}`)
   const ENDED = ['DONE', 'PARKED', 'AMENDED']
@@ -83,6 +140,7 @@ function check(root, { probe = true } = {}) {
     const pending = git.raw(['status', '--porcelain', '--', 'docs/archive/v7'], root).stdout.trim()
     if (!tracked || pending) f.push('uncommitted migration: docs/archive/v7/ is untracked or staged — commit it (git add -A && git commit -m "chore(spec): migrate v7 → v8")')
   }
+  info.push(...boxInfo(root, cfg, probedMs))
   const plugin = readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {}) || {}
   return { findings: f, info, version: plugin.version || null }
 }

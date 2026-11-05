@@ -12,7 +12,9 @@ the worktree, gates, commits and merges. Every `▶ when done:` line carries `--
 checkout the driver works in (a lane's worktree under fanout); run it as printed.
 
 - **BUILD, REPAIR, FIX**: dispatch one `spec:builder` with the printed brief, mark `built`,
-  `repaired` or `fixed`, then re-run the driver for the next step.
+  `repaired` or `fixed`, then re-run the driver for the next step. A builder that replies a
+  failure is a flake, timeout or test outside its diff changed nothing: mark `regate` (REPAIR,
+  once per tree) to re-run the gate; `repaired` or `fixed` on an unchanged tree is refused.
 - **REVIEW**: dispatch one `spec:reviewer`, then mark `reviewed --file <findings path>`;
   a clean review runs through to DONE itself. Relay advisories in the final report; never act
   on them.

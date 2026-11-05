@@ -3,7 +3,10 @@
 // detection for init. No CLI.
 //
 // run(cmd, {cwd, env, timeoutMs})  → {status, stdout, stderr, tail}; timeout → status 124
-// gate(root, config)               → {status, cached, runId, tail}; green runs cached by tree hash
+// gate(root, config)               → {status, cached, runId, tail, tree, failing, lockWaitMs}; green runs
+//                                    cached by tree hash; at most config.gateConcurrency gates run at once
+//                                    on the host (pid files under <git common dir>/spec-gate.lock/)
+// copyLaneFiles(main, wt, files)   copies untracked root files into a fresh worktree
 // treeSha(root)                    git tree of the working tree (tracked edits + untracked, not ignored)
 // detectTestCommand(root)          → command string or null
 // firstRedLine(tail)               the line of a red tail worth reading first
@@ -39,11 +42,13 @@ function git(root, args, env) {
   return spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: env || process.env, maxBuffer: 64 * 1024 * 1024 })
 }
 
-function cacheDir(root) {
+function commonDir(root) {
   const r = git(root, ['rev-parse', '--git-common-dir'])
   if (r.status !== 0) throw new Error(`host: ${root} is not a git checkout — run inside a git repository`)
-  return path.join(path.resolve(root, r.stdout.trim()), 'spec-run-cache')
+  return path.resolve(root, r.stdout.trim())
 }
+
+const cacheDir = (root) => path.join(commonDir(root), 'spec-run-cache')
 
 // A HEAD-seeded scratch index (so tracked-but-ignored files stay in), `add -A`, overlay removed,
 // write-tree. Identical content gives the identical sha in any worktree of the repo.
@@ -88,6 +93,66 @@ function record(root, cmd, tree, entry) {
 
 const newRunId = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + crypto.randomBytes(3).toString('hex')
 
+// The repo-relative files a red tail names: path-shaped tokens that exist under root, deduplicated.
+const FILE_TOKEN = /(^|[\s'"(])((?:[\w.@-]+\/)+[\w.@-]+\.[a-z]{1,5})(?=[\s:'")(]|$)/gm
+
+function failingFiles(root, tail) {
+  const out = []
+  for (const m of String(tail || '').matchAll(FILE_TOKEN)) {
+    const rel = path.normalize(m[2]).split(path.sep).join('/')
+    if (rel.startsWith('..') || out.includes(rel)) continue
+    try { if (fs.statSync(path.join(root, rel)).isFile()) out.push(rel) } catch { /* not a file under root */ }
+  }
+  return out
+}
+
+// ---- gate slots: a pid file per running gate, shared by every worktree through the common dir ----
+
+function slots(config) {
+  const raw = config && config.gateConcurrency
+  if (raw === undefined || raw === null) return 2
+  const n = Math.floor(Number(raw))
+  return Number.isFinite(n) ? Math.max(1, n) : 2
+}
+
+function alive(pid) {
+  try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' }
+}
+
+const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+// Live holders other than `self`; holder files naming a dead pid are deleted on sight.
+function holders(dir, self) {
+  const live = []
+  let names = []
+  try { names = fs.readdirSync(dir) } catch { /* no directory yet */ }
+  for (const n of names) {
+    const pid = Number(n)
+    if (!Number.isInteger(pid) || pid <= 0 || String(pid) !== n || pid === self) continue
+    if (alive(pid)) live.push(pid); else fs.rmSync(path.join(dir, n), { force: true })
+  }
+  return live
+}
+
+// Takes a slot (blocking, polling every 2 s) and returns {release, waitedMs}.
+function takeSlot(root, config) {
+  const dir = path.join(commonDir(root), 'spec-gate.lock')
+  fs.mkdirSync(dir, { recursive: true })
+  const limit = slots(config)
+  const mine = path.join(dir, String(process.pid))
+  const t0 = Date.now()
+  let told = false
+  for (;;) {
+    fs.writeFileSync(mine, `${process.pid} ${new Date().toISOString()} ${root}\n`)
+    const others = holders(dir, process.pid)
+    // Symmetric check after writing: of two racing gates both see the other and both back off.
+    if (others.length + 1 <= limit) return { release: () => fs.rmSync(mine, { force: true }), waitedMs: told ? Date.now() - t0 : 0 }
+    fs.rmSync(mine, { force: true })
+    if (!told) { process.stderr.write(`gate: waiting for a slot (${others.length} running) …\n`); told = true }
+    sleepMs(2000 + Math.floor(Math.random() * 200))
+  }
+}
+
 // Runs config.testCommand in root unless this exact tree already ran green under it.
 function gate(root, config, { timeoutMs } = {}) {
   const cmd = config && config.testCommand
@@ -98,11 +163,32 @@ function gate(root, config, { timeoutMs } = {}) {
   }
   const tree = treeSha(root)
   const hit = lookup(root, cmd, tree)
-  if (hit) return { status: 0, cached: true, runId: hit.runId, tail: hit.tail || '' }
+  if (hit) return { status: 0, cached: true, runId: hit.runId, tail: hit.tail || '', tree, failing: [], lockWaitMs: 0 }
   const runId = newRunId()
-  const r = run(cmd, { cwd: root, timeoutMs })
-  if (r.status === 0) record(root, cmd, tree, { runId, tail: r.tail })
-  return { status: r.status, cached: false, runId, tail: r.tail }
+  const slot = takeSlot(root, config)
+  try {
+    const t0 = Date.now()
+    const r = run(cmd, { cwd: root, timeoutMs })
+    if (r.status === 0) record(root, cmd, tree, { runId, tail: r.tail, ms: Date.now() - t0 })
+    return { status: r.status, cached: false, runId, tail: r.tail, tree, failing: r.status === 0 ? [] : failingFiles(root, r.tail), lockWaitMs: slot.waitedMs }
+  } finally { slot.release() }
+}
+
+// Each named file that exists in the main checkout and is untracked is copied into the same path in
+// the worktree. A tracked or missing entry is skipped with a stderr line.
+function copyLaneFiles(main, wt, files) {
+  for (const p of Array.isArray(files) ? files : []) {
+    const src = path.resolve(main, p)
+    const rel = path.relative(main, src)
+    let why = null
+    if (rel.startsWith('..') || path.isAbsolute(rel)) why = 'missing'
+    else if (!fs.existsSync(src) || !fs.statSync(src).isFile()) why = 'missing'
+    else if (git(main, ['ls-files', '--error-unmatch', '--', rel]).status === 0) why = 'tracked'
+    if (why) { process.stderr.write(`laneFiles: skipped ${p} (${why})\n`); continue }
+    const dst = path.join(wt, rel)
+    fs.mkdirSync(path.dirname(dst), { recursive: true })
+    fs.copyFileSync(src, dst)
+  }
 }
 
 // The line of a red tail worth reading first: a failure marker, else an error word, else the first line.
@@ -131,4 +217,4 @@ function detectTestCommand(root) {
   return null
 }
 
-module.exports = { run, gate, treeSha, cacheDir, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }
+module.exports = { run, gate, treeSha, cacheDir, commonDir, copyLaneFiles, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }

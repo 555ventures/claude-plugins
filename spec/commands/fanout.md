@@ -31,5 +31,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 - **Long marks**: every `returned` of a MERGE_READY lane may run a rebase, fast-forward and trunk
   gate: 600000 ms. So do the marks that end RELAY or MERGE_RED (a four-lane batch took 4m38s on a
   2-minute gate). A killed mark is resumed by re-running the driver without `--mark`.
+  Builders still run in parallel; only gates queue, at most `gateConcurrency` at once (default 2).
+  Temp space: suites that write temp data fill a tmpfs with four lanes; export TMPDIR to a
+  directory on a real disk before /spec:fanout (doctor prints the free space).
 - **REPORT**: mark `reported`, then end the turn and report; the user runs `/spec:fanout` again, after
   `/clear`. Never loop to the next batch in the same turn.

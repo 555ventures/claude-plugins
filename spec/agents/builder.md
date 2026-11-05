@@ -14,6 +14,7 @@ as `cd <worktree> && …`.
 On a build, write a failing test per criterion first, then code. Always run the test command
 until green. Honour every Decision. Repair the code; never weaken a test. Do not touch files outside the File Plan without listing them in your
 final summary. Never edit the spec or any other spec file; a Decision you cannot honour goes in your reply.
+A failing test your diff does not touch, a timeout or a flake under load is not yours to fix: say so in your reply and stop, and never raise a host test timeout, retry count or worker limit to pass.
 Leave git alone: the driver commits, and a hook blocks git writes. Evidence an AC asks to record
 (listings, renders, counts) goes in the `evidence.md` the brief names; the driver appends it to the build commit.
 

@@ -5,7 +5,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { spawnSync } = require('child_process')
+const { spawnSync, spawn } = require('child_process')
 const { tmpdir, gitRepo, runNode, runBash, SPEC } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const pending = require(path.join(SPEC, 'scripts/lib/pending.js'))
@@ -84,6 +84,11 @@ function fixture({ ignoreRun = true, status = 'hardened', cfg = {}, files = {}, 
   }
 }
 
+// A builder round changes the tree: a repaired or fixed mark on the tree the last gate ran on is refused.
+let bumps = 0
+const bump = (dir) => fs.writeFileSync(path.join(dir, 'bump.txt'), `round ${++bumps} ${process.hrtime.bigint()}\n`)
+const unbump = (dir) => fs.rmSync(path.join(dir, 'bump.txt'), { force: true })
+
 const ok = (r) => { assert.strictEqual(r.status, 0, r.stderr + r.stdout); return r.stdout }
 const BLOCKING = [{ severity: 'blocking', file: 'feature.txt', line: 1, summary: 'wrong thing', evidence: 'cat' }]
 
@@ -156,7 +161,9 @@ test('red gate: two repairs then ESCALATE; retry bumps to opus with fresh attemp
   assert.match(repair, /FAIL: RED flag present/, 'REPAIR carries the failure tail')
   assert.match(repair, /model opus/, 'the builder retries on opus after one red gate')
   assert.strictEqual(h.run('--mark', 'built').status, 2, 'a mark for another step is refused')
+  bump(h.wt)
   assert.match(ok(h.run('--mark', 'repaired')), /REPAIR → REPAIR/)
+  bump(h.wt)
   assert.match(ok(h.run('--mark', 'repaired')), /REPAIR → ESCALATE/, 'REPAIR is capped at 2')
   assert.match(ok(h.run()), /--mark escalate <retry\|park\|amend>/)
   assert.strictEqual(h.run('--mark', 'escalate', 'nope').status, 2, 'an unknown choice is refused')
@@ -164,7 +171,9 @@ test('red gate: two repairs then ESCALATE; retry bumps to opus with fresh attemp
 
   assert.match(ok(h.run('--mark', 'escalate', 'retry')), /ESCALATE → REPAIR/)
   assert.deepStrictEqual([h.state().attempts.repair, h.state().opus], [0, true], 'retry resets attempts and pins opus')
+  bump(h.wt)
   ok(h.run('--mark', 'repaired'))
+  bump(h.wt)
   assert.match(ok(h.run('--mark', 'repaired')), /→ ESCALATE/)
 
   assert.match(ok(h.run('--mark', 'escalate', 'park')), /ESCALATE → PARKED/)
@@ -185,6 +194,7 @@ test('blocking findings: one FIX round, then ESCALATE; amend sets the spec to dr
   assert.strictEqual(h.run('--mark', 'reviewed').status, 2, 'reviewed needs --file')
   assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings(BLOCKING))), /REVIEW → FIX;.*\nreview: 1 blocking → FIX/)
   assert.match(ok(h.run()), /wrong thing/, 'the fix brief carries the blocking findings')
+  bump(h.wt)
   assert.match(ok(h.run('--mark', 'fixed')), /FIX → REVIEW/, 'a fix re-gates, then re-reviews')
   assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings(BLOCKING))), /REVIEW → ESCALATE/, 'FIX is capped at 1')
   assert.match(ok(h.run('--mark', 'escalate', 'amend')), /ESCALATE → AMENDED/)
@@ -240,7 +250,9 @@ test('lane mode: PENDING_QUESTION at ESCALATE, resume after the answer, stop at 
 
   fs.writeFileSync(path.join(h.wt, 'RED'), '')
   ok(h.runIn(h.wt, '--mark', 'built'))
+  bump(h.wt)
   ok(h.runIn(h.wt, '--mark', 'repaired'))
+  bump(h.wt)
   ok(h.runIn(h.wt, '--mark', 'repaired'))
   const q = ok(h.runIn(h.wt))
   assert.match(q, /PENDING_QUESTION/, 'a lane never asks: it prints PENDING_QUESTION and exits 0')
@@ -252,6 +264,7 @@ test('lane mode: PENDING_QUESTION at ESCALATE, resume after the answer, stop at 
 
   pending.answerPending(h.wt, 'retry')
   fs.rmSync(path.join(h.wt, 'RED'))
+  unbump(h.wt)
   assert.match(ok(h.runIn(h.wt)), /^▶ REPAIR/, 'the re-dispatched lane continues with the recorded answer')
   assert.strictEqual(pending.readPending(h.wt), null, 'the answer is consumed')
   fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
@@ -304,7 +317,9 @@ test('the run marker is on only while a builder or reviewer is out; a stale run 
   ok(h.run('--mark', 'built'))
   assert.strictEqual(h.state().step, 'REPAIR')
   assert.ok(pending.isLane(h.dir), 'REPAIR dispatches a builder: marked')
+  bump(h.dir)
   ok(h.run('--mark', 'repaired'))
+  bump(h.dir)
   ok(h.run('--mark', 'repaired'))
   assert.strictEqual(h.state().step, 'ESCALATE')
   assert.ok(!pending.isLane(h.dir), 'no agent is out at ESCALATE: the marker is off')
@@ -312,6 +327,7 @@ test('the run marker is on only while a builder or reviewer is out; a stale run 
   ok(h.run('--mark', 'escalate', 'retry'))
   assert.ok(pending.isLane(h.dir), 'retry dispatches a builder again: marked')
   fs.rmSync(path.join(h.dir, 'RED'))
+  unbump(h.dir)
   fs.writeFileSync(path.join(h.dir, 'feature.txt'), 'thing\n')
   ok(h.run('--mark', 'repaired'))
   assert.strictEqual(h.state().step, 'REVIEW')
@@ -337,6 +353,7 @@ test('reviewer findings: malformed or ambiguous files are refused; any blocking 
   const r = h.run('--mark', 'reviewed', '--file', put({ findings: BLOCKING, verdict: 'clean' }))
   assert.match(ok(r), /REVIEW → FIX/, 'a blocking finding wins over a clean verdict')
   fs.writeFileSync(findingsPath, JSON.stringify({ findings: BLOCKING, verdict: 'fix' }))
+  bump(h.wt)
   ok(h.run('--mark', 'fixed'))
   assert.strictEqual(h.state().step, 'REVIEW')
   assert.ok(!fs.existsSync(findingsPath), "entering REVIEW deletes the last round's findings, so a stale file is never re-read")
@@ -621,7 +638,7 @@ test('AC-20261105-02-14 unmet outside a builder or reviewer step is refused', ()
   ok(h.run())
   fs.writeFileSync(path.join(h.wt, 'RED'), '')
   ok(h.run('--mark', 'built'))
-  ok(h.run('--mark', 'repaired')); ok(h.run('--mark', 'repaired'))
+  bump(h.wt); ok(h.run('--mark', 'repaired')); bump(h.wt); ok(h.run('--mark', 'repaired'))
   assert.strictEqual(h.state().step, 'ESCALATE')
   assert.strictEqual(h.run('--mark', 'unmet', '--decision', 'D1', '--why', 'x').status, 2)
 })
@@ -672,4 +689,173 @@ test('AC-20261105-07-13 evidence.md is appended to the build commit body; absent
   ok(bare.run('--mark', 'built'))
   ok(bare.run('--mark', 'reviewed', '--file', bare.findings([])))
   assert.strictEqual(bare.g('log', '-1', '--format=%B', 'main^2').trim(), 'build(20261104/01): Thing')
+})
+
+// ---- spec 20261105/08: a load flake is not a repair -------------------------------------------
+
+// A suite whose first `fails` runs are red naming tests/slow.test.js (a file no build touches); the run
+// count lives outside the worktree so the tree a gate keys on never moves.
+function flaky(fails, extra = {}) {
+  const state = path.join(tmpdir('flaky'), 'n')
+  const check = `const fs = require('fs')
+const n = fs.existsSync(${JSON.stringify(state)}) ? Number(fs.readFileSync(${JSON.stringify(state)}, 'utf8')) : 0
+fs.writeFileSync(${JSON.stringify(state)}, String(n + 1))
+if (n < ${fails}) { console.error('FAIL tests/slow.test.js > jsdom timeout'); process.exit(1) }
+console.log('ok')
+`
+  const h = fixture({ files: { 'check.js': check, 'tests/slow.test.js': '// slow\n', ...extra } })
+  return Object.assign(h, { suiteRuns: () => (fs.existsSync(state) ? Number(fs.readFileSync(state, 'utf8')) : 0) })
+}
+const BRIEF_RULE = 'A failing test the diff does not touch, a timeout, or a flake under load is not yours to fix: say so in your reply and stop; the driver re-runs the gate. Never raise a host test timeout, retry count or worker limit to pass.'
+
+test('AC-20261105-08-1 a red gate naming only tests outside the diff is re-run once; green on the rerun goes to REVIEW with no repair counted', () => {
+  const h = flaky(1)
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  const out = ok(h.run('--mark', 'built'))
+  assert.match(out, /BUILD → REVIEW;/, 'the rerun was green')
+  assert.match(out, /\ngate: green \(ran \d+ms\) · rerun\n/, 'the gate line says it was a rerun (AC-20261105-08-16)')
+  assert.strictEqual(h.suiteRuns(), 2, 'the suite ran twice')
+  const s = h.state()
+  assert.deepStrictEqual([s.attempts.repair, s.gate.reruns, s.gate.status], [0, 1, 'green'])
+  assert.deepStrictEqual(s.gate.failing, [], 'the green result names no failing file')
+  assert.match(s.gate.tree, /^[0-9a-f]{40,}$/, 'state.gate keeps the tree it keyed on')
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(done, /- load: 1 gate rerun\(s\), 0s waiting for a slot\n/, 'the DONE report counts the rerun (AC-20261105-08-16)')
+})
+
+test('AC-20261105-08-2 a rerun that is red again goes to REPAIR as before and the same tree is never re-run again', () => {
+  const h = flaky(99)
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  const out = ok(h.run('--mark', 'built'))
+  assert.match(out, /BUILD → REPAIR;/)
+  assert.match(out, /\ngate: red — .* · rerun\n/, 'the red line names the rerun')
+  assert.strictEqual(h.suiteRuns(), 2, 'one rerun, not two')
+  assert.deepStrictEqual([h.state().attempts.repair, h.state().gate.reruns, h.state().gate.failing], [0, 1, ['tests/slow.test.js']])
+  const brief = ok(h.run())
+  assert.ok(brief.includes(BRIEF_RULE), 'the REPAIR brief carries the flake rule (AC-20261105-08-6)')
+  assert.ok(brief.indexOf('FAIL tests/slow.test.js') < brief.indexOf(BRIEF_RULE), 'the rule follows the failure tail')
+  assert.match(ok(h.run('--mark', 'regate')), /REPAIR → REPAIR;/, 'regate on the same tree runs the gate again: still red')
+  assert.strictEqual(h.suiteRuns(), 3, 'a tree that was re-run once is not re-run again by the gate step')
+  bump(h.wt)
+  assert.match(ok(h.run('--mark', 'repaired')), /REPAIR → REPAIR;/, 'a new tree can be re-run once')
+  assert.strictEqual(h.suiteRuns(), 5, 'the changed tree got its own rerun')
+  bump(h.wt)
+  assert.match(ok(h.run('--mark', 'repaired')), /REPAIR → ESCALATE;/, 'REPAIR_CAP still ends in ESCALATE')
+  assert.strictEqual(h.state().attempts.repair, 2)
+})
+
+test('AC-20261105-08-3 a red tail that names a file the diff touched, or no file, goes to REPAIR without a rerun', () => {
+  const h = flaky(99)
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'tests/slow.test.js'), '// slow\n// edited by the build\n')
+  assert.match(ok(h.run('--mark', 'built')), /BUILD → REPAIR;/)
+  assert.strictEqual(h.suiteRuns(), 1, 'the failing file is in the diff: no rerun')
+  assert.strictEqual(h.state().gate.reruns, 0)
+  const bare = fixture()
+  ok(bare.run())
+  fs.writeFileSync(path.join(bare.wt, 'RED'), '')
+  const out = ok(bare.run('--mark', 'built'))
+  assert.match(out, /BUILD → REPAIR;.*\ngate: red — [^\n]*\n$/, 'no rerun text on a plain red gate')
+  assert.strictEqual(bare.runs(), 1, 'a tail naming no file is not re-run')
+  assert.strictEqual(bare.state().gate.reruns, 0)
+})
+
+test('AC-20261105-08-4 repaired and fixed on a tree the last gate ran on are refused with their remedy; attempts stay', () => {
+  const h = fixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'RED'), '')
+  ok(h.run('--mark', 'built'))
+  for (const verb of ['repaired']) {
+    const r = h.run('--mark', verb)
+    assert.strictEqual(r.status, 2)
+    assert.ok(r.stderr.includes('nothing changed since the last gate — re-run the gate (mark regate) or dispatch a builder'), r.stderr)
+    assert.strictEqual(h.state().attempts.repair, 0, 'the budget counts builder rounds')
+  }
+  assert.match(ok(h.run()), /Gate tree [0-9a-f]{7}\./, 'the REPAIR body prints the current gate tree short sha')
+  const f = fixture()
+  ok(f.run())
+  fs.writeFileSync(path.join(f.wt, 'feature.txt'), 'thing\n')
+  ok(f.run('--mark', 'built'))
+  ok(f.run('--mark', 'reviewed', '--file', f.findings(BLOCKING)))
+  const r = f.run('--mark', 'fixed')
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('nothing changed since the last gate — re-run the gate (mark regate) or dispatch a builder'), r.stderr)
+  assert.strictEqual(f.state().attempts.fix, 0)
+  assert.strictEqual(f.state().step, 'FIX')
+})
+
+test('AC-20261105-08-5 regate re-runs the gate without a repair, once per tree; at any other step it is refused', () => {
+  const h = flaky(2)
+  ok(h.run())
+  assert.strictEqual(h.run('--mark', 'regate').status, 2, 'regate at BUILD is refused')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  assert.match(ok(h.run('--mark', 'built')), /BUILD → REPAIR;/, 'two reds: the rerun did not help')
+  assert.ok(ok(h.run()).includes('--mark regate'), 'the REPAIR body offers regate')
+  const out = ok(h.run('--mark', 'regate'))
+  assert.match(out, /REPAIR → REVIEW;/, 'the third run is green')
+  assert.strictEqual(h.state().attempts.repair, 0, 'no repair was counted')
+  assert.strictEqual(h.suiteRuns(), 3)
+  const g = flaky(99)
+  ok(g.run())
+  fs.writeFileSync(path.join(g.wt, 'feature.txt'), 'thing\n')
+  ok(g.run('--mark', 'built'))
+  ok(g.run('--mark', 'regate'))
+  assert.strictEqual(g.state().attempts.repair, 0)
+  const again = g.run('--mark', 'regate')
+  assert.strictEqual(again.status, 2, 'a second regate on the same tree is refused')
+  assert.strictEqual(g.suiteRuns(), 3, 'the refused regate ran nothing')
+  bump(g.wt)
+  assert.strictEqual(g.run('--mark', 'regate').status, 2, 'regate needs the tree unchanged')
+})
+
+test('AC-20261105-08-6 builder.md carries the flake rule', () => {
+  const md = fs.readFileSync(path.join(SPEC, 'agents/builder.md'), 'utf8')
+  assert.match(md, /not yours to fix/)
+  assert.match(md, /never raise a host test timeout, retry count or worker limit to pass/)
+})
+
+test('AC-20261105-08-16 a lane that waited for a gate slot shows it on the gate line and in the report; a lane that did not shows nothing', () => {
+  const quiet = fixture()
+  ok(quiet.run())
+  fs.writeFileSync(path.join(quiet.wt, 'feature.txt'), 'thing\n')
+  const q = ok(quiet.run('--mark', 'built'))
+  assert.ok(!/rerun|waited/.test(q), 'no cost, no text:\n' + q)
+  const qr = ok(quiet.run('--mark', 'reviewed', '--file', quiet.findings([])))
+  assert.ok(!/load:/.test(qr), 'no load bullet in a quiet report:\n' + qr)
+
+  const h = fixture({ cfg: { gateConcurrency: 1 } })
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  const dir = path.join(h.dir, '.git', 'spec-gate.lock')
+  fs.mkdirSync(dir, { recursive: true })
+  const sleeper = spawn('sleep', ['30'])
+  const holder = path.join(dir, String(sleeper.pid))
+  fs.writeFileSync(holder, `${sleeper.pid} now ${h.dir}\n`)
+  spawn('sh', ['-c', `sleep 1; rm -f ${holder}`], { detached: true, stdio: 'ignore' }).unref()
+  try {
+    const out = ok(h.run('--mark', 'built'))
+    assert.match(out, /\ngate: green \(ran \d+ms\) · waited [1-9]\ds? for a gate slot\n|\ngate: green \(ran \d+ms\) · waited \d+s for a gate slot\n/, out)
+    assert.ok(h.state().gate.lockWaitMs >= 1000)
+    assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /- load: 0 gate rerun\(s\), [1-9]\d*s waiting for a slot\n/)
+  } finally { sleeper.kill() }
+})
+
+// ---- laneFiles at OPEN -------------------------------------------------------------------------
+
+test('AC-20261105-08-14 AC-20261105-08-15 OPEN copies untracked laneFiles into the fresh worktree byte for byte before setupCommand; a tracked or missing entry is skipped with a reason', () => {
+  const seen = path.join(tmpdir('seen'), 'env.copy')
+  const bytes = Buffer.from([0x53, 0x45, 0x43, 0x00, 0xff, 0x0a, 0x4b, 0x3d, 0x31, 0x0a])
+  const dirName = tmpdir('laneenv')
+  fs.writeFileSync(path.join(dirName, '.env'), bytes)
+  const h = fixture({ dirName, files: { '.gitignore': '.claude/worktrees/\nspecs/**/*.run/\n.env\n' }, cfg: { laneFiles: ['.env', 'a.txt', 'nope.env'], setupCommand: `cp .env ${seen}` } })
+  const r = h.run()
+  ok(r)
+  assert.ok(fs.existsSync(seen), 'setupCommand ran with .env already in place')
+  assert.ok(fs.readFileSync(seen).equals(bytes), 'the copy seen by setupCommand is byte-identical')
+  assert.ok(fs.readFileSync(path.join(h.wt, '.env')).equals(bytes), 'the worktree holds the byte-identical file')
+  assert.ok(!/\.env/.test(h.g('-C', h.wt, 'status', '--porcelain')), 'git status in the worktree does not list the copied file')
+  assert.match(r.stderr, /laneFiles: skipped a\.txt \(tracked\)/)
+  assert.match(r.stderr, /laneFiles: skipped nope\.env \(missing\)/)
 })

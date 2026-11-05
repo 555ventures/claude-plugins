@@ -32,6 +32,8 @@ const DEFAULTS = {
   setupCommand: null,
   trunk: 'main',
   lanes: 4,
+  gateConcurrency: 2,
+  laneFiles: [],
   seats: {
     builder: { model: 'sonnet', effort: 'high' },
     reviewer: { model: 'opus', effort: 'low' },

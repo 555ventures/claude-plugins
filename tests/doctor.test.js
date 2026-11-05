@@ -125,3 +125,93 @@ test('check(root, { probe: false }) returns the same findings without running th
   assert.deepStrictEqual(full.findings.filter((x) => !/^testCommand:/.test(x)), quiet.findings)
   assert.ok(full.findings.some((x) => /^testCommand: exited 3/.test(x)))
 })
+
+// ---- spec 20261105/08: doctor knows the box -----------------------------------------------------
+
+const os = require('os')
+
+// A `df` that reports `availKb` free on a device called /dev/fake, first on PATH.
+function fakeDf(availKb) {
+  const bin = tmpdir('fakebin')
+  const body = availKb === null ? 'exit 1' : `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/fake 999999999 1 ${availKb} 1%% /fake\\n'`
+  fs.writeFileSync(path.join(bin, 'df'), `#!/bin/sh\n${body}\n`, { mode: 0o755 })
+  return { PATH: bin + path.delimiter + process.env.PATH }
+}
+
+const doctorJson = (d, env) => {
+  const r = runNode('scripts/doctor.js', ['--root', d, '--json'], { env })
+  return { ...JSON.parse(r.stdout), status: r.status }
+}
+const FIVE_GB = 5 * 1024 * 1024
+const cores = os.cpus().length
+
+test('AC-20261105-08-10 doctor prints a box: info line with cores, the measured gate time and the free space of TMPDIR and the worktrees filesystem', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  const j = doctorJson(d, { ...fakeDf(FIVE_GB), TMPDIR: '/var/tmp' })
+  const box = j.info.find((x) => x.startsWith('box:'))
+  assert.ok(box, 'a box: line: ' + j.info)
+  assert.ok(box.startsWith(`box: ${cores} cores · gate `), box)
+  assert.match(box, /gate \d+s \(measured\) · TMPDIR \/var\/tmp 5\.0 GB free · worktrees on \/dev\/fake 5\.0 GB free$/, box)
+  const none = doctorJson(d, { ...fakeDf(null) })
+  assert.match(none.info.find((x) => x.startsWith('box:')), /TMPDIR \S+ \? free · worktrees on \? \? free$/, 'df unavailable prints ?')
+})
+
+test('AC-20261105-08-11 lanes above cores/2 prints the advice line and still exits 0; lanes at or under it prints none', () => {
+  const over = setup({ testCommand: 'true', lanes: 1000 })
+  runNode('scripts/init.js', ['--root', over])
+  const j = doctorJson(over, fakeDf(FIVE_GB))
+  assert.strictEqual(j.status, 0, 'advice is not a finding')
+  assert.deepStrictEqual(j.findings, [])
+  const w = j.info.find((x) => x.startsWith('⚠️ lanes 1000 > cores/2'))
+  assert.ok(w, j.info.join('\n'))
+  assert.ok(w.includes(`(${cores}) — set "lanes": ${Math.max(1, Math.floor(cores / 2))} or "gateConcurrency": 1 in .claude/spec.config.json`), w)
+  const under = setup({ testCommand: 'true', lanes: Math.max(1, Math.floor(cores / 2)) })
+  runNode('scripts/init.js', ['--root', under])
+  assert.ok(!doctorJson(under, fakeDf(FIVE_GB)).info.some((x) => x.includes('cores/2')), 'lanes within cores/2: no advice')
+})
+
+test('AC-20261105-08-12 a gate over two minutes and a TMPDIR under 2 GB each print their ⚠️ info line with the remedy', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  const cache = path.join(d, '.git', 'spec-run-cache')
+  fs.mkdirSync(cache, { recursive: true })
+  fs.writeFileSync(path.join(cache, 'old.json'), JSON.stringify({ cmd: 'true', tree: 'a', ms: 5000, ts: '2026-01-01T00:00:00.000Z' }))
+  fs.writeFileSync(path.join(cache, 'new.json'), JSON.stringify({ cmd: 'true', tree: 'b', ms: 130000, ts: '2026-02-01T00:00:00.000Z' }))
+  const saved = process.env.PATH
+  process.env.PATH = fakeDf(1500000).PATH // 1.4 GB free
+  try {
+    const { check } = require(path.join(require('./helpers').SPEC, 'scripts/doctor.js'))
+    const { info, findings } = check(d, { probe: false })
+    assert.deepStrictEqual(findings, [])
+    assert.match(info.find((x) => x.startsWith('box:')), /gate 130s \(cached\)/, 'no probe: the newest cached run supplies the time')
+    assert.ok(info.includes('⚠️ gate took 130s (over 2 min) — set "gateConcurrency": 1, or lower lanes'), info.join('\n'))
+    const tmp = info.find((x) => x.startsWith('⚠️ TMPDIR has'))
+    assert.match(tmp, /^⚠️ TMPDIR has 1\.4 GB free \(under 2 GB\) — export TMPDIR=<path on the worktrees' filesystem> before \/spec:fanout$/)
+  } finally { process.env.PATH = saved }
+  const roomy = doctorJson(d, fakeDf(FIVE_GB))
+  assert.ok(!roomy.info.some((x) => x.includes('TMPDIR has')), 'enough room: no TMPDIR advice')
+})
+
+test('AC-20261105-08-13 an untracked .env or .env.local that laneFiles does not name is a finding; a tracked or named one is not', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  fs.writeFileSync(path.join(d, '.env'), 'K=1\n')
+  fs.writeFileSync(path.join(d, '.env.local'), 'K=2\n')
+  fs.appendFileSync(path.join(d, '.gitignore'), '.env\n.env.local\n')
+  execFileSync('git', ['-C', d, 'add', '-A']); execFileSync('git', ['-C', d, 'commit', '-q', '-m', 'ignore env'])
+  const f = doctorJson(d).findings
+  assert.ok(f.includes('laneFiles: the root has .env that lanes will not see — add "laneFiles": [".env"] to .claude/spec.config.json'), f.join('\n'))
+  assert.ok(f.some((x) => x.includes('.env.local that lanes will not see')), 'each file is reported')
+  const cfgFile = path.join(d, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
+  fs.writeFileSync(cfgFile, JSON.stringify({ ...cfg, laneFiles: ['.env'] }))
+  const named = doctorJson(d).findings
+  assert.ok(!named.some((x) => x.includes('root has .env that')), 'a named file is not reported')
+  assert.ok(named.some((x) => x.includes('.env.local that')), 'the unnamed sibling still is')
+  execFileSync('git', ['-C', d, 'add', '-f', '.env.local'])
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
+  const tracked = doctorJson(d).findings
+  assert.ok(!tracked.some((x) => x.includes('.env.local that')), 'a tracked file is not reported')
+  assert.ok(tracked.some((x) => x.includes('root has .env that')), 'the untracked, unnamed one is')
+})

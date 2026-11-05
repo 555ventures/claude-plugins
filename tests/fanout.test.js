@@ -25,8 +25,9 @@ function host(opts = {}) {
   const SPECS = opts.specs || SPEC_LIST
   const dir = tmpdir('fanout')
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
-  fs.writeFileSync(path.join(dir, '.gitignore'), '.claude/worktrees/\nspecs/**/*.run/\n')
-  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ testCommand: opts.testCommand || 'test ! -f RED', lanes: opts.lanes || 2 }))
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.claude/worktrees/\nspecs/**/*.run/\n' + (opts.ignore || ''))
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ testCommand: opts.testCommand || 'test ! -f RED', lanes: opts.lanes || 2, ...(opts.cfg || {}) }))
+  for (const [f, t] of Object.entries(opts.files || {})) fs.writeFileSync(path.join(dir, f), t)
   for (const [stem, file] of SPECS) {
     fs.mkdirSync(path.join(dir, 'specs', '20261104'), { recursive: true })
     fs.writeFileSync(path.join(dir, specPath(stem)), specText(stem, file, { status: (opts.status || {})[stem], deps: (opts.deps || {})[stem] }))
@@ -37,14 +38,14 @@ function host(opts = {}) {
   const ok = (...a) => { const r = run(...a); assert.strictEqual(r.status, 0, `${a.join(' ')}: ${r.stderr}${r.stdout}`); return r }
   const wt = (stem) => path.join(dir, '.claude', 'worktrees', 'spec-' + stem)
   // A lane finishing: code committed on its branch, run state at MERGE_READY.
-  const finish = (stem, file, content = stem + '\n') => {
+  const finish = (stem, file, content = stem + '\n', gate = null) => {
     const w = wt(stem)
     fs.mkdirSync(path.dirname(path.join(w, file)), { recursive: true })
     fs.writeFileSync(path.join(w, file), content)
     execFileSync('git', ['-C', w, 'add', '-A'])
     execFileSync('git', ['-C', w, 'commit', '-q', '-m', 'lane ' + stem])
     const base = execFileSync('git', ['-C', w, 'merge-base', 'main', 'HEAD'], { encoding: 'utf8' }).trim()
-    st.writeRun(path.join(w, specPath(stem)), { step: 'MERGE_READY', spec: specPath(stem), lane: true, worktree: '.', branch: 'spec/' + stem, base, inPlace: false, attempts: { repair: 0, fix: 0 }, gate: null, review: null })
+    st.writeRun(path.join(w, specPath(stem)), { step: 'MERGE_READY', spec: specPath(stem), lane: true, worktree: '.', branch: 'spec/' + stem, base, inPlace: false, attempts: { repair: 0, fix: 0 }, gate, review: null })
   }
   return { dir, g, run, ok, wt, finish, step: () => run('--state').stdout.trim() }
 }
@@ -926,4 +927,56 @@ test('AC-20261105-07-15 the contract names the discard flag, --fix and no groom 
   const cmd = fs.readFileSync(path.join(__dirname, '..', 'spec/commands/fanout.md'), 'utf8')
   const report = cmd.slice(cmd.indexOf('**REPORT**'))
   assert.ok(report.includes('end the turn') && !cmd.includes('continue until the queue drains'))
+})
+
+// ---- spec 20261105/08: lanes share a machine ---------------------------------------------------
+
+test('AC-20261105-08-14 AC-20261105-08-15 prepare copies an untracked laneFiles entry into each fresh lane worktree, byte for byte, and skips a tracked or missing one with its reason', () => {
+  const bytes = Buffer.from([0x41, 0x00, 0xff, 0x0a, 0x42])
+  const h = host({ ignore: '.env\n', cfg: { laneFiles: ['.env', 'src-tracked.txt', 'gone.env'] }, files: { 'src-tracked.txt': 'tracked\n' } })
+  fs.writeFileSync(path.join(h.dir, '.env'), bytes)
+  const r = h.ok('--mark', 'planned') // the worktrees are created while this mark settles
+  for (const stem of ['01-alpha', '02-beta']) {
+    assert.ok(fs.readFileSync(path.join(h.wt(stem), '.env')).equals(bytes), `${stem} holds the byte-identical .env`)
+    assert.ok(!/\.env/.test(h.g('-C', h.wt(stem), 'status', '--porcelain')), `${stem}: git status does not list the copy`)
+  }
+  assert.match(r.stderr, /laneFiles: skipped src-tracked\.txt \(tracked\)/)
+  assert.match(r.stderr, /laneFiles: skipped gone\.env \(missing\)/)
+})
+
+test('AC-20261105-08-16 the REPORT names the reruns and slot waits of a lane that paid them and sums them in one load: line; a batch that paid nothing prints neither', () => {
+  const h = host()
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js', 'a\n', { status: 'green', reruns: 1, lockWaitMs: 3000 })
+  h.finish('02-beta', 'src/b.js', 'b\n', { status: 'green', reruns: 0, lockWaitMs: 0 })
+  h.ok('--mark', 'returned', '--lane', '1')
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'REPORT')
+  const rep = h.ok().stdout
+  assert.match(rep, /- merged 01-alpha as \w+ into trunk; queue item ticked \(1 rerun\(s\), 3s slot wait\)\n/, rep)
+  assert.match(rep, /- merged 02-beta as \w+ into trunk; queue item ticked\n/, 'a lane that paid nothing has no suffix')
+  assert.ok(rep.includes('⚠️ load: 1 rerun(s), 3s of slot waits across the batch\n'), rep)
+
+  const q = host()
+  dispatchTwo(q)
+  q.finish('01-alpha', 'src/a.js'); q.finish('02-beta', 'src/b.js')
+  q.ok('--mark', 'returned', '--lane', '1'); q.ok('--mark', 'returned', '--lane', '2')
+  const quiet = q.ok().stdout
+  assert.ok(!/rerun|slot wait|load:/.test(quiet), 'no cost, no text:\n' + quiet)
+})
+
+test('AC-20261105-08-17 the commands and docs name gateConcurrency, laneFiles, regate and the TMPDIR advice where the spec puts them', () => {
+  const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')
+  const fan = read('spec/commands/fanout.md')
+  assert.ok(fan.includes('gateConcurrency') && fan.includes('only gates queue'), 'fanout.md: gates queue, builders stay parallel')
+  assert.ok(/Temp space:[\s\S]*export TMPDIR[\s\S]*real disk[\s\S]*doctor prints the free space/.test(fan), 'fanout.md: the TMPDIR advice under Long marks')
+  assert.ok(read('spec/commands/run.md').includes('`regate`'), 'run.md names the regate mark')
+  const arch = read('docs/v8/architecture.md')
+  const sec3 = arch.slice(arch.indexOf('## 3. Config keys'), arch.indexOf('## 4.'))
+  assert.ok(sec3.includes('gateConcurrency') && sec3.includes('laneFiles'), 'architecture §3 lists both keys')
+  const gateRow = arch.split('\n').find((l) => l.startsWith('| GATE |'))
+  assert.ok(/re-run once/.test(gateRow) && /spec-gate\.lock/.test(gateRow), 'the GATE row names the rerun rule and the lock')
+  const contract = read('docs/v8/interface-contract.md')
+  assert.ok(contract.includes('`gateConcurrency`') && contract.includes('`laneFiles`'), 'the interface contract config row names both keys')
+  assert.ok(contract.includes('`regate`'), 'the interface contract lists the regate mark')
 })

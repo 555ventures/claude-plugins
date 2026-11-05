@@ -69,6 +69,8 @@ per file; writes are atomic (tmp + rename).
   "setupCommand": "npm ci",               // run once in a fresh worktree
   "trunk": "main",
   "lanes": 4,                             // fanout parallelism
+  "gateConcurrency": 2,                   // gates running at once on the host (min 1), all worktrees
+  "laneFiles": [".env"],                  // default []: untracked root files copied into each fresh lane worktree before setupCommand
   "seats": { "builder": {"model":"sonnet","effort":"high"},
              "reviewer": {"model":"opus","effort":"low"},
              "orchestrator": {"model":"opus","effort":"medium"} },
@@ -95,12 +97,12 @@ per file; writes are atomic (tmp + rename).
 
 | Step | Driver does | Session does | `--mark` |
 |---|---|---|---|
-| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
+| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), copies `laneFiles`, runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
 | BUILD | prints the builder brief: spec path, Intent block, File Plan, test command, "write failing tests first, then code, run `testCommand` until green" | dispatches ONE `builder` agent (seat from config; Opus on attempt 2) in the worktree | `built` |
-| GATE | runs `testCommand` in the worktree itself; green-run cache by tree hash (`lib/host.js`) | nothing | (auto) → REVIEW or REPAIR |
-| REPAIR | prints failure tail; cap 2, then ESCALATE | dispatches builder with the failure | `repaired` → GATE |
+| GATE | runs `testCommand` in the worktree itself; green-run cache by tree hash (`lib/host.js`); takes a slot in `<git common dir>/spec-gate.lock/` (at most `gateConcurrency` gates at once, pid files, dead pids cleaned); a red whose failing test files are all outside the diff is re-run once before a repair is counted (`gate.reruns`) | nothing | (auto) → REVIEW or REPAIR |
+| REPAIR | prints failure tail; cap 2, then ESCALATE; `repaired` on an unchanged tree is refused | dispatches builder with the failure | `repaired` → GATE; `regate` → GATE (same tree, no repair counted, once per tree) |
 | REVIEW | prints reviewer brief: diff vs base, spec Intent + ACs; seat = reviewer, or Fable when `architecture: true` | dispatches ONE `reviewer` agent; writes findings JSON | `reviewed --file <json>` |
-| FIX | only for `blocking` findings; cap 1, then ESCALATE | dispatches builder with findings | `fixed` → GATE |
+| FIX | only for `blocking` findings; cap 1, then ESCALATE; `fixed` on an unchanged tree is refused | dispatches builder with findings | `fixed` → GATE |
 | ESCALATE | prints the options: retry on opus / park (queue a fix) / amend spec | asks the user (one question) | `escalate <retry\|park\|amend>` |
 | COMMIT | driver commits in the worktree (`lib/git.js`), message from the spec title | nothing | (auto) |
 | MERGE | merge-back to trunk per `mergeStrategy`, re-run gate on trunk tree (cache hit when unchanged) | conflicts only: asked | (auto) / `conflicts-resolved` |

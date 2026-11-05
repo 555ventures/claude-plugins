@@ -229,6 +229,7 @@ function prepare(s, ctx) {
     lane.reused = (fs.existsSync(abs) && git.worktreeList(ctx.root).includes(fs.realpathSync(abs))) || git.branchExists(ctx.root, lane.branch)
     git.worktreeAdd(ctx.root, lane.worktree, lane.branch, config.trunk)
     if (lane.reused) reuseLane(ctx.root, config, lane)
+    else host.copyLaneFiles(ctx.root, abs, config.laneFiles) // a fresh worktree only, before run.js's setupCommand
     pending.markLane(abs, 'fanout')
     lane.ready = true
   }
@@ -429,6 +430,8 @@ function deriveReport(s, ctx) {
   const waiting = s.batch.filter((l) => l.status === 'waiting')
   const saved = EXPLICIT
   EXPLICIT = []
+  const cost = (l) => (l.reruns || l.lockWaitMs >= 1000 ? ` (${l.reruns || 0} rerun(s), ${Math.round((l.lockWaitMs || 0) / 1000)}s slot wait)` : '')
+  const paid = merged.filter((l) => l.reruns || l.lockWaitMs >= 1000)
   const left = plan(ctx.root, st.readConfig(ctx.root)).picked
   EXPLICIT = saved
   const fixes = left.filter((p) => p.fix).length
@@ -443,10 +446,11 @@ function deriveReport(s, ctx) {
     body: render({
       outcome: `✅ fanout — ${merged.length} lane(s) merged${parked.length ? `, ${parked.length} parked` : ''}${dismissed.length ? `, ${dismissed.length} dismissed` : ''}${waiting.length ? `, ${waiting.length} waiting` : ''}`,
       bullets: [
-        ...merged.map((l) => `merged ${l.stem}${l.landed ? ` as ${l.landed}` : ` (${l.branch})`} into trunk; queue item ticked`),
+        ...merged.map((l) => `merged ${l.stem}${l.landed ? ` as ${l.landed}` : ` (${l.branch})`} into trunk; queue item ticked${cost(l)}`),
         ...(s.answered || []).map((a) => `answered lane ${a.lane} (${a.stem}): ${a.label}`),
       ],
       warns: [
+        ...(paid.length ? [`load: ${paid.reduce((n, l) => n + (l.reruns || 0), 0)} rerun(s), ${Math.round(paid.reduce((n, l) => n + (l.lockWaitMs || 0), 0) / 1000)}s of slot waits across the batch`] : []),
         ...merged.filter((l) => l.kept).map((l) => l.kept),
         ...parked.map((l) => `parked ${l.stem} — its lane ended ${l.ended}${l.ended === 'AMENDED' ? ' (spec set to draft in the lane; amend it with /spec:plan)' : ' (a /spec:fix item is queued)'}; worktree kept at ${l.worktree}`),
         ...dismissed.map(dismissedLine),
@@ -520,6 +524,7 @@ const steps = {
     }
     if (git.rebasing(wt)) refuse(`lane ${lane.id} (${lane.stem}) still has a rebase in progress — re-dispatch it, or mark dismissed --lane ${lane.id}`)
     if (!FINISHED.includes(step)) refuse(`lane ${lane.id} (${lane.stem}) is at ${step}, not MERGE_READY — re-dispatch it, mark returned --lane ${lane.id} --stopped "<reason>", or mark dismissed --lane ${lane.id}`)
+    if (run.gate) { lane.reruns = run.gate.reruns || 0; lane.lockWaitMs = run.gate.lockWaitMs || 0 }
     lane.status = 'done' // WAIT lands it as soon as no lane is sent back or mid-rebase
   },
   answered(s, flags, ctx) {

@@ -6,7 +6,8 @@
 const fs = require('fs')
 const path = require('path')
 const git = require('./lib/git')
-const { readJson, writeJson, configPath, gitCommonDir } = require('./lib/state')
+const { readJson, writeJson, configPath, gitCommonDir, readQueue, writeQueue } = require('./lib/state')
+const { normBrief } = require('./lib/work')
 const { detectTestCommand } = require('./lib/host')
 const { render } = require('./lib/report')
 const { ensureGitignore, IGNORE } = require('./init')
@@ -18,6 +19,7 @@ const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-r
   'scripts/spec-patterns.sh'] // .claude/rules/conventions is repo-owned (tests and lint messages read it): never archived
 const SKILLS = ['run', 'spec-verify']
 const LABEL = { ref: 'git-dir refs/spec-review/* (v7 review bookkeeping, deleted)' }
+const TYPES = ['plan', 'prototype', 'fix', 'decide']
 const SIDECAR = /\.(build|review|design)$/
 
 const exists = (p) => { try { fs.lstatSync(p); return true } catch { return false } }
@@ -69,6 +71,13 @@ function isoAdded(v) {
   return new Date(Number.isFinite(t) && t > 0 ? t : Date.now()).toISOString()
 }
 
+// A v7 item's `after` as v8 stores it: {brief} normalised, {spec} as written; null when it names neither.
+function afterOf(a) {
+  if (a && a.brief != null && String(a.brief).trim()) return { brief: normBrief(a.brief) }
+  if (a && typeof a.spec === 'string' && a.spec) return { spec: a.spec }
+  return null
+}
+
 function convertQueue(root, q) {
   const lost = []
   const briefFile = (n) => {
@@ -81,9 +90,35 @@ function convertQueue(root, q) {
     if (it.when && it.when.type === 'ledger') lost.push(it.id)
     const o = { id: it.id, kind: it.when && it.when.type === 'ledger' ? 'prompt' : kind, payload, added: isoAdded(it.added) }
     if (it.ticked || it.done) o.done = true
+    if (o.kind === 'prompt' && TYPES.includes(it.lane)) o.type = it.lane
+    const after = afterOf(it.after)
+    if (after) o.after = after
     return o
   })
   return { queue: { version: 2, seq: q.seq || 0, items }, lost }
+}
+
+// An already-migrated (v2) queue lacks the `type`/`after` v7 held; the newest spec-v7-backup queue that
+// carries any of them is the only copy. One fill per field a same-id v2 item lacks.
+function queueFills(common, q) {
+  const dir = path.join(common, 'spec-v7-backup')
+  let names = []
+  try { names = fs.readdirSync(dir).sort().reverse() } catch { return [] }
+  for (const n of names) {
+    const src = readJson(path.join(dir, n, 'spec-queue.json'), null)
+    const items = src && Array.isArray(src.items) ? src.items : []
+    if (!items.some((i) => i.lane || i.after)) continue
+    const fills = []
+    for (const it of q.items || []) {
+      const old = items.find((i) => i.id === it.id)
+      if (!old) continue
+      if (it.kind === 'prompt' && it.type === undefined && TYPES.includes(old.lane)) fills.push({ id: it.id, field: 'type', value: old.lane, text: `${it.id} type ${old.lane}` })
+      const after = afterOf(old.after)
+      if (after && it.after === undefined) fills.push({ id: it.id, field: 'after', value: after, text: `${it.id} after ${after.brief !== undefined ? 'brief ' + after.brief : after.spec}` })
+    }
+    return fills
+  }
+  return []
 }
 
 // ---- plan -----------------------------------------------------------------------------------
@@ -117,6 +152,11 @@ function plan(root) {
   const q = readJson(qf, null)
   let lost = []
   if (q && q.version !== 2) { lost = convertQueue(root, q).lost; add('queue', qf, null, `${(q.items || []).length} items -> v2`) }
+  let fills = []
+  if (q && q.version === 2) {
+    fills = queueFills(common, q)
+    if (fills.length) add('queue-fields', qf, null, `${fills.length} fills`)
+  }
   // sidecars and deviations
   walk(path.join(root, 'specs'), (p, isDir) => {
     if (isDir && SIDECAR.test(p)) { if (exists(p.replace(SIDECAR, '.md'))) add('delete', rel(p)); return true } // a dotted dir with no spec beside it is the user's
@@ -161,7 +201,7 @@ function plan(root) {
   try {
     if (/spec-runs\.jsonl merge=union/.test(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8'))) add('gitattributes', '.gitattributes')
   } catch { /* none */ }
-  if (ops.some((o) => o.op !== 'gitignore') && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
+  if (ops.some((o) => o.op !== 'gitignore' && o.op !== 'queue-fields') && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
   // listed, never touched
   const listed = []
   const wt = path.join(root, '.claude/worktrees')
@@ -172,7 +212,7 @@ function plan(root) {
   if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) warns.push('.claude/settings.local.json is tracked and may hold a token — run: git rm --cached .claude/settings.local.json')
   const wts = git.worktreeList(root).slice(1).filter((w) => path.relative(fs.realpathSync(root), w).startsWith('..'))
   if (wts.length) warns.push('git worktree entries outside this repo (copied repo?) — never touched: ' + wts.join('; '))
-  return { ops, dropped, lost, listed, owned, warns, testCommand }
+  return { ops, dropped, lost, listed, owned, warns, testCommand, fills }
 }
 
 // ---- apply ----------------------------------------------------------------------------------
@@ -214,7 +254,11 @@ function apply(root, p) {
     if (o.op === 'tag') git.sh(['tag', 'spec-v7-final'], root)
     else if (o.op === 'config') writeJson(abs, trimConfig(root, readJson(abs, {})))
     else if (o.op === 'queue') writeJson(abs, convertQueue(root, readJson(abs, {})).queue)
-    else if (o.op === 'delete') fs.rmSync(abs, { recursive: true, force: true })
+    else if (o.op === 'queue-fields') {
+      const q = readQueue(root)
+      for (const f of p.fills) { const it = q.items.find((i) => i.id === f.id); if (it && it[f.field] === undefined) it[f.field] = f.value }
+      writeQueue(root, q)
+    } else if (o.op === 'delete') fs.rmSync(abs, { recursive: true, force: true })
     else if (o.op === 'archive') archive(root, o.path, o.to, warns)
     else if (o.op === 'extract') {
       const text = fs.readFileSync(abs, 'utf8')
@@ -252,7 +296,8 @@ function main(argv) {
   const bullets = Object.entries(counts).map(([k, n]) => `${LABEL[k] || k}: ${n}`)
   if (sha) bullets.push(`commit ${sha}: chore(spec): migrate v7 → v8`)
   if (saved) bullets.push(`git-dir backup: ${saved}`)
-  if (!doApply) bullets.push(...p.ops.map((o) => `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}`))
+  if (!doApply) bullets.push(...p.ops.map((o) => `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}${o.op === 'queue-fields' ? ` (${o.note})` : ''}`))
+  bullets.push(...p.fills.map((f) => '  ' + f.text))
   const warns = [...p.warns, ...applyWarns]
   if (p.dropped.length) warns.push('dropped config keys: ' + p.dropped.join(', '))
   if (p.testCommand) warns.push(`testCommand: ${p.testCommand}`)

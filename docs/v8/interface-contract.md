@@ -173,13 +173,17 @@ doc and command prose, and its close-time expiry classifies a test by the text o
 
 ## 7. Queue
 
-An item is `{id: "qN", kind: brief|spec|prompt, brief?|spec?|payload?, lane? (plan|prototype|fix|decide, prompt only), added, after?: {spec|brief}, when?: {brief-state:NN:STATE | spec-exists:PATH | ledger-count:STAGE:MIN | manual}, origin?: {spec, stage}, trigger?: red-leg|repair-separate|close-followup|stopped|gate-red|gap, batch?, ticked?}`. The file is `{version:1, seq, items[]}`. How a payload is classified: `NN` or a roadmap path is a brief, `specs/*.md` is a spec, anything else is a prompt. A `<ref>` can be an id, a brief number, a spec path or unique basename, or a unique prompt substring.
+An item is `{id: "qN", kind: brief|spec|prompt, payload, added, done?, type?, after?}` in `{version: 2, seq, items[]}`. `type` is only on a prompt item: `plan | prototype | fix | decide`. `after` is `{brief: "NN"}` (zero-padded, suffix lowercase: `3` → `03`, `4B` → `04b`) or `{spec: "specs/…md"}` (root-relative). How a payload is classified: `NN` or a roadmap path is a brief, `specs/*.md` is a spec, anything else is a prompt. A `<ref>` can be an id, a brief number, a spec path or unique basename, or a unique prompt substring.
+
+The paste line of a prompt item: `/spec:plan <payload>`, `/spec:prototype <payload>` or `/spec:fix <payload>` for those three types (verbatim when the payload already starts with that command), `📌 decide: <payload>` for `decide`, the payload verbatim when the item has no `type` (a migrated item). A spec item pastes `/spec:run <path>` once hardened, else `/spec:plan <path>`; a brief item pastes `/spec:plan <roadmap path>`.
+
+An item is ready without `after`; with `{brief}` when that brief's specs are all done; with `{spec}` when that spec is `done` or `superseded`; a target with no file or no brief is never ready. `next` pastes the first pending ready item, or prints `nothing ready — N waiting on after gates` (exit 0). Fanout waits a spec whose item is not ready. Reconcile ticks a brief item once its brief is done, and a spec item once its spec is done or superseded and no run sidecar (in the root or the spec's lane worktree) is live.
 
 | Subcommand | Effect |
 |---|---|
-| `next` (default) | Reconciles, then prints the pick (`🛣️ <lane>` + paste line) |
-| `list` | Pending items as `n  id  age  payload  flags` (`📎 cites done`, `⏳ gate met`, `⌛ stale`), footer `— N done · move: … · full text: …` |
-| `add <payload> [--lane] [--top\|--at n] [--after-spec p\|--after-brief NN] [--when t:a] [--distinct] [--origin s --stage build\|review\|fanout\|plan] [--trigger …]` | Refuses a duplicate brief/spec and near-duplicate prompts |
+| `next` (default) | Reconciles, then prints the paste line of the first ready item |
+| `list` | Pending items as `n  id  age  payload`; an unready row ends `  ⏳ after brief NN` or `  ⏳ after <spec stem>`; footer `— N done` |
+| `add <payload> [--top] [--type plan\|prototype\|fix\|decide] [--after <NN\|roadmap path\|spec path>]` | Refuses a duplicate payload. A prose payload is typed `plan` (a payload starting `/spec:fix `, `/spec:plan ` or `/spec:prototype ` gets that type); `--type` on a spec or brief item, or outside the four, exits 2. `--after` needs an existing `docs/roadmap/NN-*.md` or `specs/…md`, else exits 2 |
 | `move <ref> <n>` / `done <ref>` / `show <ref>` | Reorder / tick by hand / print the full payload |
 | `groom` | Read-only buckets: duplicates, cites-done, gate-met, stale |
 
@@ -187,7 +191,7 @@ An item is `{id: "qN", kind: brief|spec|prompt, brief?|spec?|payload?, lane? (pl
 
 | Term | Meaning to the user |
 |---|---|
-| lane | (a) The path a change travels: Direct, Behaviour (prototype) or Structural (spec). (b) One fan-out unit, a worktree sub-agent running one spec or fix. (c) A queue item's `--lane` |
+| lane | (a) The path a change travels: Direct, Behaviour (prototype) or Structural (spec). (b) One fan-out unit, a worktree sub-agent running one spec or fix |
 | leg | One executed review check (gate, smoke, drift, ci, tests, literals, at-risk, slow). Named in findings and `[oracle: <leg>]` |
 | pin | (a) An AC bullet using `SHALL CONTINUE TO`, whose test survives close. (b) A prototype overlay note on a screen (`pin <id>`) |
 | mark | `--mark <verb>`: the session reporting a step done to a driver |

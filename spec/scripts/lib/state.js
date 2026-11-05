@@ -63,14 +63,17 @@ const writeConfig = (root, cfg) => writeJson(configPath(root), cfg)
 
 const FM_RE = /^\uFEFF?---\n([\s\S]*?)\n---(?:\n|$)/
 
-function fmScalar(raw) {
+function fmScalar(raw, key) {
   const t = raw.trim()
   const q = /^(["'])(.*)\1/.exec(t)
   if (q) return q[2]
   const v = t.replace(/\s+#.*$/, '')
   if (v === 'true') return true
   if (v === 'false') return false
-  if (/^\[.*\]$/.test(v)) return v.slice(1, -1).split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+  const list = (x) => x.split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+  if (/^\[.*\]$/.test(v)) return list(v.slice(1, -1))
+  // An unbracketed `depends_on: a.md, b.md` splits like the bracketed form; one value is a one-element list.
+  if (key === 'depends_on' && v) return list(v)
   return v
 }
 
@@ -80,7 +83,7 @@ function parseFrontmatter(text) {
   if (!m) return { frontmatter: fm, body: text }
   for (const line of m[1].split('\n')) {
     const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line)
-    if (kv) fm[kv[1]] = fmScalar(kv[2])
+    if (kv) fm[kv[1]] = fmScalar(kv[2], kv[1])
   }
   return { frontmatter: fm, body: text.slice(m[0].length) }
 }
@@ -195,6 +198,21 @@ const readRun = (specPath) => readJson(runPath(specPath))
 const writeRun = (specPath, state) => writeJson(runPath(specPath), state)
 const clearRun = (specPath) => fs.rmSync(runDir(specPath), { recursive: true, force: true })
 
+// The sidecar of a spec being built: in the root, or in the spec's lane worktree (v8 runs there and
+// leaves the root's frontmatter at `hardened`). Live = parses, not ended, not at DONE/PARKED/AMENDED.
+function liveRun(root, rel) {
+  const stem = path.basename(rel).replace(/\.md$/, '')
+  const wt = path.join(root, '.claude', 'worktrees', 'spec-' + stem)
+  for (const base of [root, wt]) {
+    const r = readRun(path.join(base, rel))
+    if (r && typeof r === 'object' && r.ended !== true && !['DONE', 'PARKED', 'AMENDED'].includes(r.step)) return r
+  }
+  return null
+}
+
+// What the screen calls a spec: `implementing` while a live sidecar says it is being built.
+const specState = (root, rel, status) => (status !== 'done' && status !== 'superseded' && liveRun(root, rel) ? 'implementing' : status)
+
 // ---- git common dir files ----------------------------------------------------------------
 
 function gitCommonDir(root) {
@@ -244,7 +262,7 @@ module.exports = {
   writeText, writeJson, readJson, readText,
   DEFAULTS, readConfig, writeConfig, configPath,
   readSpec, writeStatus, parseFrontmatter,
-  runDir, runPath, readRun, writeRun, clearRun,
+  runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
   gitCommonDir, readQueue, writeQueue, readFanout, writeFanout,
   readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,
 }

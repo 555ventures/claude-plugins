@@ -20,6 +20,7 @@ const st = require('./lib/state')
 const git = require('./lib/git')
 const host = require('./lib/host')
 const pending = require('./lib/pending')
+const work = require('./lib/work')
 const { render } = require('./lib/report')
 
 const FINISHED = ['MERGE_READY', 'DONE']
@@ -60,6 +61,8 @@ function eligible(root, opts = {}) {
   const held = [] // not hardened, queue-only: one summary line at PLAN, so no queued spec seems to vanish
   const waited = []
   const laneOf = new Map()
+  const cache = {}
+  const queued = st.readQueue(root).items.filter((i) => !i.done && i.kind === 'spec')
   const unmet = (spec, entry, written, label) => {
     const dep = rel(root, entry)
     if (dep === spec || !isSpecFile(root, dep)) return null // an entry with no file on disk is ignored
@@ -85,6 +88,8 @@ function eligible(root, opts = {}) {
     let why = null
     for (const e of entries) { why = unmet(spec, e, e, 'depends on'); if (why) break }
     if (!why && run.waitingOn) why = unmet(spec, run.waitingOn, run.waitingOn, 'waiting on')
+    // An unmet queue `after` gate (an explicit path obeys it too): v7's blocker words.
+    if (!why) { const item = queued.find((i) => rel(root, i.payload) === spec); const g = item && work.gateWhy(root, item.after, cache); if (g) why = 'after ' + g }
     if (why) { waited.push({ spec, why }); continue }
     ok.push({ spec, title: doc.title || stemOf(spec) })
     if (opts.auto && ok.length <= opts.lanes) laneOf.set(spec, ok.length)

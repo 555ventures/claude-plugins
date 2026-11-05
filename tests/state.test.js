@@ -153,3 +153,43 @@ test('proto, mocks and genesis files round-trip at their §2 paths', () => {
   const leftovers = fs.readdirSync(path.join(root, 'design/prototypes/cart')).filter((f) => f.endsWith('.tmp'))
   assert.deepStrictEqual(leftovers, [], 'atomic writes must not leave tmp files')
 })
+
+// ---- spec 20261105/04 D6, D7 -----------------------------------------------------------------
+test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktree makes a hardened spec implementing; ended, PARKED, AMENDED, done and superseded keep the frontmatter', () => {
+  const root = tmpdir('live'); gitRepo(root)
+  const rel = 'specs/20261105/01-a.md'
+  const put = (base, run) => { fs.mkdirSync(path.join(base, 'specs/20261105/01-a.run'), { recursive: true }); fs.writeFileSync(path.join(base, 'specs/20261105/01-a.run/state.json'), JSON.stringify(run)) }
+  const wt = path.join(root, '.claude/worktrees/spec-01-a')
+  assert.strictEqual(S.specState(root, rel, 'hardened'), 'hardened')
+  put(wt, { step: 'BUILD' })
+  assert.strictEqual(S.specState(root, rel, 'hardened'), 'implementing')
+  assert.strictEqual(S.specState(root, rel, 'done'), 'done')
+  assert.strictEqual(S.specState(root, rel, 'superseded'), 'superseded')
+  for (const run of [{ step: 'PARKED', ended: true }, { step: 'AMENDED' }, { step: 'BUILD', ended: true }, { step: 'DONE' }]) {
+    put(wt, run)
+    assert.strictEqual(S.specState(root, rel, 'hardened'), 'hardened', JSON.stringify(run))
+    assert.strictEqual(S.liveRun(root, rel), null)
+  }
+  fs.rmSync(wt, { recursive: true })
+  put(root, { step: 'GATE' })
+  assert.strictEqual(S.specState(root, rel, 'hardened'), 'implementing', 'a root sidecar counts the same')
+  assert.deepStrictEqual(S.liveRun(root, rel), { step: 'GATE' })
+})
+
+test('AC-20261105-04-8 the worktree copy of the spec saying done never matters: only the sidecar is read there', () => {
+  const root = tmpdir('live'); gitRepo(root)
+  const wt = path.join(root, '.claude/worktrees/spec-01-a/specs/20261105')
+  fs.mkdirSync(path.join(wt, '01-a.run'), { recursive: true })
+  fs.writeFileSync(path.join(wt, '01-a.md'), '---\nstatus: done\n---\n# A\n')
+  fs.writeFileSync(path.join(wt, '01-a.run/state.json'), '{"step":"REVIEW"}')
+  assert.strictEqual(S.specState(root, 'specs/20261105/01-a.md', 'hardened'), 'implementing')
+})
+
+test('AC-20261105-04-9 a bracketless depends_on splits like the bracketed form; one value is a one-element list', () => {
+  const fm = (v) => S.parseFrontmatter(`---\ndepends_on: ${v}\nstatus: x\n---\n`).frontmatter
+  assert.deepStrictEqual(fm('specs/a.md, specs/b.md').depends_on, ['specs/a.md', 'specs/b.md'])
+  assert.deepStrictEqual(fm('[specs/a.md, specs/b.md]').depends_on, ['specs/a.md', 'specs/b.md'])
+  assert.deepStrictEqual(fm('specs/a.md').depends_on, ['specs/a.md'])
+  assert.strictEqual(fm('x').status, 'x')
+  assert.strictEqual(S.parseFrontmatter('---\nstatus: a, b\n---\n').frontmatter.status, 'a, b', 'only depends_on splits')
+})

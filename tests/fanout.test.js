@@ -600,3 +600,32 @@ test('AC-20261105-02-16 the interface contract lists the real fanout arguments a
   const run = doc.split('\n').filter((l) => /\(`\/spec:run`\)/.test(l)).join('\n')
   for (const m of ['`waiting --on <spec>`', '`unmet --decision <id> --why <text>`', '`escalate <retry\\|park\\|amend\\|revert>`']) assert.ok(run.includes(m), m)
 })
+
+// ---- spec 20261105/04 D8: the queue's `after` gate -----------------------------------------------
+test('AC-20261105-04-9 a hardened spec whose queue item has an unmet after waits, is picked when the gate opens, and obeys it as an explicit path', () => {
+  const h = host({ lanes: 4, specs: [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js']] })
+  const q = st.readQueue(h.dir)
+  q.items[1].after = { brief: '03' }
+  st.writeQueue(h.dir, q)
+  fs.mkdirSync(path.join(h.dir, 'docs/roadmap'), { recursive: true })
+  fs.writeFileSync(path.join(h.dir, 'docs/roadmap/03-rounds.md'), '# 03\n')
+  const line = `${P('02-beta')} waits — after brief 03 (unplanned)`
+  const auto = JSON.parse(h.ok('--json').stdout)
+  assert.ok(auto.body.includes('lane 1: ' + P('01-alpha')) && !auto.body.includes('lane 2:'), auto.body)
+  assert.ok(auto.body.includes(line), auto.body)
+  const explicit = JSON.parse(h.ok(P('02-beta'), '--json').stdout)
+  assert.ok(explicit.body.includes(line), explicit.body)
+  assert.match(explicit.body, /queue drained/)
+  fs.writeFileSync(path.join(h.dir, 'specs/20261104/03-done.md'), '---\nstatus: done\nbrief: 03\n---\n# Done\n')
+  const open = JSON.parse(h.ok('--json').stdout)
+  assert.ok(open.body.includes('lane 2: ' + P('02-beta')), open.body)
+  const q2 = st.readQueue(h.dir); q2.items[1].after = { spec: 'specs/20261104/missing.md' }; st.writeQueue(h.dir, q2)
+  assert.ok(JSON.parse(h.ok('--json').stdout).body.includes(`${P('02-beta')} waits — after specs/20261104/missing.md (missing)`))
+})
+
+test('AC-20261105-04-9 a bracketless depends_on of two specs is evaluated entry by entry', () => {
+  const h = host({ lanes: 4, deps: { '03-gamma': `${P('01-alpha')}, ${P('02-beta')}` } })
+  st.writeStatus(path.join(h.dir, P('01-alpha')), 'done')
+  const only = JSON.parse(h.ok(P('03-gamma'), '--json').stdout)
+  assert.ok(only.body.includes(`${P('03-gamma')} waits — depends on ${P('02-beta')} (hardened, not done)`), only.body)
+})

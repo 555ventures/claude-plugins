@@ -188,3 +188,60 @@ test('real v7 host copy: plan, apply, idempotent', { skip: !real || !hasTag(), t
   }
   assert.strictEqual(mig(d, '--apply').ops.length, 0)
 })
+
+// ---- spec 20261105/04 D9: type and after ----------------------------------------------------------
+const qfile = (d) => path.join(d, '.git/spec-queue.json')
+const readQ = (d) => JSON.parse(fs.readFileSync(qfile(d), 'utf8'))
+
+test('AC-20261105-04-10 convertQueue carries lane as type and after normalised; a foreign lane is dropped', () => {
+  const { convertQueue } = require(path.join(__dirname, '../spec/scripts/migrate.js'))
+  const root = tmpdir('conv')
+  const { queue } = convertQueue(root, { seq: 4, items: [
+    { id: 'q1', kind: 'prompt', payload: 'a', lane: 'plan', after: { brief: '3' }, added: 1 },
+    { id: 'q2', kind: 'prompt', payload: 'b', lane: 'weird', after: { spec: 'specs/x.md' }, added: 1 },
+    { id: 'q3', kind: 'prompt', payload: 'c', added: 1 },
+    { id: 'q4', kind: 'spec', spec: 'specs/y.md', lane: 'plan', added: 1 }] })
+  assert.deepStrictEqual(queue.items.map((i) => [i.type, i.after]), [['plan', { brief: '03' }], [undefined, { spec: 'specs/x.md' }], [undefined, undefined], [undefined, undefined]])
+})
+
+function migrated() {
+  const { d, g } = synthetic()
+  mig(d, '--apply')
+  return { d, g }
+}
+
+test('AC-20261105-04-10 an already-migrated host gets queue-fields from the newest backup: planned line by line, applied, idempotent', () => {
+  const { d } = migrated()
+  const c = path.join(d, '.git')
+  const bdir = path.join(c, 'spec-v7-backup')
+  fs.rmSync(bdir, { recursive: true, force: true }) // the apply's own backup holds the full v1 queue; use a synthetic one
+  const old = path.join(bdir, '2026-01-01T00-00-00.000Z')
+  fs.mkdirSync(old, { recursive: true })
+  fs.writeFileSync(path.join(old, 'spec-queue.json'), JSON.stringify({ version: 1, seq: 9, items: [
+    { id: 'q1', kind: 'brief', brief: '33', after: { brief: '3' } }, { id: 'q3', kind: 'prompt', payload: 'do it', lane: 'fix', after: { spec: 'specs/20260101/01-a.md' } }, { id: 'q4', kind: 'prompt', lane: 'plan', payload: 'plain' }, { id: 'q99', kind: 'prompt', lane: 'plan' }] }))
+  const q = readQ(d)
+  const before = JSON.stringify(q)
+  const p = mig(d)
+  const op = p.ops.find((o) => o.op === 'queue-fields')
+  assert.ok(op && op.note === '3 fills', JSON.stringify(op))
+  assert.deepStrictEqual(p.fills.map((f) => f.text), ['q1 after brief 03', 'q3 after specs/20260101/01-a.md', 'q4 type plan'])
+  assert.strictEqual(JSON.stringify(readQ(d)), before, 'plan writes nothing')
+  const text = runNode('scripts/migrate.js', ['--root', d]).stdout
+  assert.ok(text.includes('q4 type plan') && text.includes('q1 after brief 03'), text)
+  mig(d, '--apply')
+  const items = Object.fromEntries(readQ(d).items.map((i) => [i.id, i]))
+  assert.deepStrictEqual(items.q1.after, { brief: '03' })
+  assert.deepStrictEqual([items.q3.type, items.q3.after], ['fix', { spec: 'specs/20260101/01-a.md' }])
+  assert.strictEqual(items.q4.type, 'plan')
+  assert.ok(!mig(d).ops.some((o) => o.op === 'queue-fields'), 'a second run plans no queue-fields')
+})
+
+test('AC-20261105-04-10 no backup, or a backup with no lane/after, plans no queue-fields', () => {
+  const { d } = migrated()
+  const bdir = path.join(d, '.git/spec-v7-backup')
+  fs.rmSync(bdir, { recursive: true, force: true })
+  assert.ok(!mig(d).ops.some((o) => o.op === 'queue-fields'))
+  const b = path.join(bdir, '2026-01-01T00-00-00.000Z'); fs.mkdirSync(b, { recursive: true })
+  fs.writeFileSync(path.join(b, 'spec-queue.json'), JSON.stringify({ version: 1, seq: 1, items: [{ id: 'q3', kind: 'prompt', payload: 'x' }] }))
+  assert.ok(!mig(d).ops.some((o) => o.op === 'queue-fields'))
+})

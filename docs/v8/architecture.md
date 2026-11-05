@@ -33,7 +33,7 @@ spec/
   templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md, proto-overlay.js
   hooks/hooks.json
   scripts/
-    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js
+    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js
     run.js fanout.js queue.js status.js plan.js init.js doctor.js migrate.js
     genesis.js mocks.js prototype.js connect.js release.js red-check.js
     state-gate.sh block-worker-git.sh block-cross-worktree-writes.sh merge-back.sh
@@ -50,7 +50,7 @@ per file; writes are atomic (tmp + rename).
 | `.claude/spec.config.json` | `readConfig(root)` | Keys in §3. Missing file → `{}` with defaults applied. |
 | `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, title, sections, intent, filePlan, acs, markers}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. |
 | `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | `<spec>` = spec path minus `.md`. One sidecar per in-flight spec. Gitignored (`specs/**/*.run/`). Shape in §4. |
-| `<git-common-dir>/spec-queue.json` | `readQueue(root)`, `writeQueue(root, q)` | `{version: 2, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?}`. |
+| `<git-common-dir>/spec-queue.json` | `readQueue(root)`, `writeQueue(root, q)` | `{version: 2, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?, type?, after?}` (`type` plan\|prototype\|fix\|decide, prompt only; `after` `{brief: "NN"}` or `{spec: "specs/…md"}`). |
 | `<git-common-dir>/spec-fanout.json` | `readFanout`, `writeFanout` | `{step, batch: [{spec, worktree, branch, status, question?}], started}` |
 | `.claude/pending-question.json` | in `lib/pending.js` | Lane question relay. Doc `{lane, question, options: [{label, description?}], writtenAt, answer: {label, by, at} \| null}`. |
 | `<git-dir>/spec-lane-open` | `isLane`, `markLane`, `unmarkLane` in `lib/pending.js` | Lane marker (private git dir of the lane worktree); read by `block-worker-git.sh`. |
@@ -177,7 +177,7 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 
 ## 9. Other drivers
 
-- `queue.js`: `next|list|add|move|done|show`. ≤ 150 LOC. Duplicate payload refused.
+- `queue.js`: `next|list|add|move|done|show`. ≤ 200 LOC. Duplicate payload refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done briefs and specs.
 - `status.js`: the dashboard. Roadmap (collapsed ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔),
   🎯 Next (`qNN` prompt rows, top pick, `⚡` lanes with `🚦 solo` / `🔶` overlap markers), ⚠️ pending
   questions, footer verdict; `--all` adds 🕓 after that, ⛔ blocked and 🧹 hygiene
@@ -221,6 +221,7 @@ Later builders: use these, do not re-derive them.
   an absent file → `{version: 2, seq: 0, items: []}`; `readFanout`/`readRun`/`readGenesis` → `null`.
   `readProto(root, stem)` → `{status, pins, contract}` (each `null` when absent); `writeProto` and
   `writeMocks(root, {status?, seed?})` write only the keys given.
+- `lib/work.js`: the one reader of specs and roadmap briefs (≤ 250 LOC, no CLI): `normBrief`, `briefOrd`, `readSpecs(root)`, `readBriefs(root, specs)` (brief status `unplanned|in-flight|done|superseded`, a brief is done when its live specs are done), `gateWhy`. `state.js` adds `liveRun`/`specState`: a run sidecar in the root or the lane worktree makes a spec `implementing`.
 - `driver.js`: `makeDriver({name, specArg, load, save, derive, steps, script?})` returns
   `main(argv) → exit code` (script does `process.exitCode = main()`). `derive(state, ctx)` returns
   `{name, body?, mark?, accepts?, auto?}`: `mark` is the verb line the session replies with

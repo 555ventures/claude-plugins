@@ -18,9 +18,9 @@ test('roadmap states: done needs every spec done and the brief item closed; any 
   w(d, 'specs/20261104/02-y.md', spec('done', '02', ['b.js']))
   w(d, 'specs/20261104/03-y2.md', spec('hardened', '02', ['b2.js'])) // one done + one hardened
   w(d, 'specs/20261104/04-v.md', spec('done', '05', ['e.js']))
-  queue(d, 'add', 'docs/roadmap/05-e.md') // all specs done, but the brief is still being planned
+  queue(d, 'add', 'docs/roadmap/05-e.md') // all specs done: spec 04 D5 ticks the brief item on the next queue read
   const r = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(r.roadmap.map((b) => b.state), ['done', 'implementing', 'open', 'superseded', 'implementing'])
+  assert.deepStrictEqual(r.roadmap.map((b) => b.state), ['done', 'implementing', 'open', 'superseded', 'done'])
   queue(d, 'done', '05')
   assert.strictEqual(JSON.parse(run(d).stdout).roadmap[4].state, 'done', 'closing the brief item by number completes it')
   queue(d, 'add', 'undefined') // a v7-migrated brief item with no number must not crash status
@@ -35,7 +35,7 @@ test('empty queue verdict; next ready verdict', () => {
   assert.ok(!runNode('scripts/status.js', ['--root', d]).stdout.includes('Roadmap'), 'no briefs → no roadmap header')
   queue(d, 'add', 'do a thing')
   const r = JSON.parse(run(d).stdout)
-  assert.strictEqual(r.next, 'do a thing')
+  assert.strictEqual(r.next, '/spec:plan do a thing')
   assert.match(r.verdict, /^🟢/)
 })
 
@@ -71,7 +71,7 @@ test('Next skips a brief that already has specs in progress, shows an unqueued r
   w(d, 'specs/20261104/01-x.md', spec('hardened', '01', ['a.js']))
   assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:queue add specs/20261104/01-x.md', 'a hardened spec nobody queued is the next step')
   queue(d, 'add', 'specs/20261104/01-x.md')
-  assert.strictEqual(JSON.parse(run(d).stdout).next, 'do a thing', 'a planned brief is not offered for planning again; its spec waits its turn')
+  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:plan do a thing', 'a planned brief is not offered for planning again; its spec waits its turn')
   w(d, 'specs/20261104/01-x.run/state.json', '{"step":"REVIEW"}')
   assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:run specs/20261104/01-x.md', 'a run started by hand comes first')
   fs.rmSync(path.join(d, 'specs/20261104/01-x.run'), { recursive: true })
@@ -265,7 +265,7 @@ test('AC-20261105-01-9 --json keeps every key and adds the dashboard keys', () =
   assert.deepStrictEqual(j.blocked, [{ action: '/spec:run', path: 'specs/20261103/05-gated.md', blockers: ['specs/20261103/02-lane-c.md'] }])
   assert.strictEqual(j.open, 9)
   assert.strictEqual(j.hygiene.length, 1)
-  assert.strictEqual(j.next, 'tighten the retry copy on the failed-send banner', 'next keeps its v8 derivation: the queue head')
+  assert.strictEqual(j.next, '/spec:plan tighten the retry copy on the failed-send banner', 'next keeps its v8 derivation: the queue head')
 })
 
 test('briefs sort by number then letter suffix: 11 before 11a, 02a after 02', () => {

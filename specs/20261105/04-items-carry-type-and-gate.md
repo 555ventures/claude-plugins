@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: implementing
 area: queue
 depends_on: [specs/20261105/02-lanes-that-wait-for-each-other.md]
 brief: n/a

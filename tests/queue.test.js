@@ -25,7 +25,7 @@ test('add classifies kinds, next prints paste lines', () => {
   q(d, 'done', '1')
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan docs/roadmap/07-auth.md')
   q(d, 'done', '07')
-  assert.strictEqual(q(d, 'next').stdout.trim(), 'fix the login bug')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan fix the login bug')
 })
 
 test('hardened spec pastes /spec:run; empty queue is not an error', () => {
@@ -75,7 +75,7 @@ test('a spec item whose spec is done counts as done, and the next write records 
   q(d, 'add', 'specs/20261104/01-a.md'); q(d, 'add', 'later')
   const f = path.join(d, 'specs/20261104/01-a.md')
   fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('hardened', 'done'))
-  assert.strictEqual(q(d, 'next').stdout.trim(), 'later')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan later')
   q(d, 'add', 'more')
   const stored = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items
   assert.ok(stored.find((i) => i.payload === 'specs/20261104/01-a.md').done, 'the done timestamp is written back')
@@ -135,4 +135,125 @@ test('a v7 brief item with `brief` and no payload lists as the brief number, not
   const q = reconcile(process.cwd(), { version: 2, seq: 1, items: [{ id: 'q1', kind: 'brief', brief: '33' }] })
   assert.strictEqual(q.items[0].payload, '33')
   assert.strictEqual(q.items[0].brief, undefined)
+})
+
+// ---- spec 20261105/04: items carry type and gate ----------------------------------------------
+const items = (d) => JSON.parse(q(d, 'list', '--json').stdout).items
+const w = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
+const sp = (status, brief) => `---\nstatus: ${status}\n${brief ? `brief: ${brief}\n` : ''}---\n# S\n`
+
+test('AC-20261105-04-1 a prose item stores type plan and pastes /spec:plan; a command payload keeps its type verbatim; decide and prototype paste their own lines', () => {
+  const d = repo()
+  q(d, 'add', 'fix the login bug')
+  assert.strictEqual(items(d)[0].type, 'plan')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan fix the login bug')
+  q(d, 'done', '1')
+  q(d, 'add', '/spec:fix specs/x.md — gate red')
+  assert.strictEqual(items(d)[0].type, 'fix')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:fix specs/x.md — gate red')
+  q(d, 'done', '1')
+  q(d, 'add', 'pick a database', '--type', 'decide')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '📌 decide: pick a database')
+  q(d, 'done', '1')
+  q(d, 'add', 'a rough idea', '--type', 'prototype')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:prototype a rough idea')
+  assert.strictEqual(JSON.parse(q(d, 'next', '--json').stdout).paste, '/spec:prototype a rough idea')
+})
+
+test('AC-20261105-04-2 --type on a spec or brief item, or outside the four, exits 2 and stores nothing; a type-less prompt pastes verbatim', () => {
+  const d = repo()
+  for (const args of [['specs/20261104/01-a.md', '--type', 'plan'], ['07', '--type', 'plan'], ['x', '--type', 'other']]) {
+    const r = q(d, 'add', ...args)
+    assert.strictEqual(r.status, 2)
+    assert.ok(r.stderr.includes('--type takes plan, prototype, fix or decide, on a prompt item'), r.stderr)
+  }
+  assert.strictEqual(items(d).length, 0)
+  const f = path.join(d, '.git/spec-queue.json')
+  fs.writeFileSync(f, JSON.stringify({ version: 2, seq: 1, items: [{ id: 'q1', kind: 'prompt', payload: 'migrated words', added: '2026-11-01T00:00:00.000Z' }] }))
+  assert.strictEqual(q(d, 'next').stdout.trim(), 'migrated words')
+})
+
+test('AC-20261105-04-3 --after stores a normalised brief or a root-relative spec, and refuses a target with no file naming it as typed', () => {
+  const d = repo()
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'docs/roadmap/04B-boards.md', '# 04b\n'); w(d, 'specs/20261104/01-a.md', sp('hardened'))
+  q(d, 'add', 'x', '--after', '3')
+  q(d, 'add', 'y', '--after', 'docs/roadmap/04B-boards.md')
+  q(d, 'add', 'z', '--after', '@specs/20261104/01-a.md')
+  assert.deepStrictEqual(items(d).map((i) => i.after), [{ brief: '03' }, { brief: '04b' }, { spec: 'specs/20261104/01-a.md' }])
+  for (const t of ['9', 'specs/nope.md', 'whatever']) {
+    const r = q(d, 'add', 'w' + t, '--after', t)
+    assert.strictEqual(r.status, 2)
+    assert.ok(r.stderr.includes(`--after target not found: ${t}`), r.stderr)
+  }
+  assert.strictEqual(items(d).length, 3)
+  q(d, 'add', 'specs/20261104/01-a.md', '--after', '3') // accepted on every kind
+  assert.deepStrictEqual(items(d)[3].after, { brief: '03' })
+})
+
+test('AC-20261105-04-4 next skips a gated head, list marks it, an all-gated queue says so, and the gate opens when the brief is done', () => {
+  const d = repo()
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'specs/20261102/08-server-timeouts.md', sp('hardened'))
+  q(d, 'add', 'gated', '--after', '3'); q(d, 'add', 'free')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan free')
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}\d+m {2}gated {2}⏳ after brief 03$/m)
+  q(d, 'done', 'free')
+  const none = q(d, 'next')
+  assert.strictEqual(none.status, 0)
+  assert.strictEqual(none.stdout.trim(), 'nothing ready — 1 waiting on after gates')
+  assert.deepStrictEqual(JSON.parse(q(d, 'next', '--json').stdout), { empty: false, waiting: 1 })
+  q(d, 'add', 'by spec', '--after', 'specs/20261102/08-server-timeouts.md')
+  assert.match(q(d, 'list').stdout, /by spec {2}⏳ after 08-server-timeouts$/m)
+  w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('hardened', '03'))
+  assert.strictEqual(q(d, 'next').stdout.trim(), 'nothing ready — 2 waiting on after gates', 'a hardened live spec keeps brief 03 open')
+  w(d, 'specs/20261104/03-b.md', sp('done', '03'))
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan gated')
+  assert.strictEqual(items(d)[0].after.brief, '03', 'list --json carries after as stored')
+})
+
+test('AC-20261105-04-5 a superseded spec meets a spec gate; a path with no file never does', () => {
+  const d = repo()
+  w(d, 'specs/20261104/09-old.md', sp('superseded'))
+  q(d, 'add', 'after old', '--after', 'specs/20261104/09-old.md')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan after old')
+  const f = path.join(d, '.git/spec-queue.json')
+  const s = JSON.parse(fs.readFileSync(f, 'utf8'))
+  s.items.push({ id: 'q9', kind: 'prompt', payload: 'ghost gate', added: '2026-11-01T00:00:00.000Z', type: 'plan', after: { spec: 'specs/20261104/missing.md' } })
+  s.items[0].done = 'x'
+  fs.writeFileSync(f, JSON.stringify(s))
+  assert.match(q(d, 'next').stdout, /nothing ready — 1 waiting/)
+  s.items[1].after = { brief: '77' }
+  fs.writeFileSync(f, JSON.stringify(s))
+  assert.match(q(d, 'list').stdout, /ghost gate {2}⏳ after brief 77/)
+})
+
+test('AC-20261105-04-6 a brief item ticks when its live specs are done; a spec item ticks only with no live sidecar', () => {
+  const d = repo()
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'docs/roadmap/04-boards.md', '# 04\n')
+  w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('superseded', '03'))
+  w(d, 'specs/20261104/04-a.md', sp('done', '04')); w(d, 'specs/20261104/04-b.md', sp('hardened', '04'))
+  q(d, 'add', '03'); q(d, 'add', '04')
+  const l = JSON.parse(q(d, 'list', '--json').stdout)
+  assert.deepStrictEqual(l.items.map((i) => i.payload), ['04'], 'brief 03 is ticked, 04 (done + hardened) stays')
+  q(d, 'add', 'poke')
+  assert.ok(JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items.find((i) => i.payload === '03').done, 'the tick is written on the next write')
+  w(d, 'specs/20261104/01-a.md', sp('done'))
+  q(d, 'add', 'specs/20261104/01-a.md')
+  const wtRun = path.join(d, '.claude/worktrees/spec-01-a/specs/20261104/01-a.run/state.json')
+  w(d, path.relative(d, wtRun), '{"step":"GATE"}')
+  assert.ok(items(d).some((i) => i.payload === 'specs/20261104/01-a.md'), 'a spec still in a lane stays pending')
+  w(d, path.relative(d, wtRun), '{"step":"DONE","ended":true}')
+  assert.ok(!items(d).some((i) => i.payload === 'specs/20261104/01-a.md'), 'an ended sidecar ticks it')
+})
+
+test('AC-20261105-04-11 the interface contract and architecture name type, after, --type, --after, decide and the ⏳ row; §7 drops the v7 fields', () => {
+  const root = path.join(__dirname, '..')
+  const ic = fs.readFileSync(path.join(root, 'docs/v8/interface-contract.md'), 'utf8')
+  const arch = fs.readFileSync(path.join(root, 'docs/v8/architecture.md'), 'utf8')
+  const s7 = ic.slice(ic.search(/^## 7\b/m)).split(/^## (?!7\b)/m)[0]
+  for (const t of ['type', 'after', '--type', '--after', '📌 decide:', '⏳ after']) assert.ok(s7.includes(t), 'interface-contract §7 names ' + t)
+  for (const t of ['type', 'after']) assert.ok(arch.includes(t), 'architecture names ' + t)
+  assert.ok(/lib\/work\.js/.test(arch))
+  for (const t of ['lane?', 'when?', 'origin?', 'trigger?']) assert.ok(!s7.includes(t), '§7 no longer names ' + t)
+  const cmd = fs.readFileSync(path.join(root, 'spec/commands/queue.md'), 'utf8')
+  assert.ok(cmd.includes('--type') && cmd.includes('--after') && cmd.includes('⏳ after'))
 })

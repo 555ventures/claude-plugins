@@ -2,9 +2,12 @@
 // queue.js — the session queue: next | list | add | move | done | show. Storage: lib/state.js.
 const fs = require('fs')
 const path = require('path')
-const { readQueue, writeQueue, readSpec, readRun } = require('./lib/state')
+const { readQueue, writeQueue, readSpec, liveRun } = require('./lib/state')
+const work = require('./lib/work')
 
 const BRIEF_RE = /^(?:docs\/roadmap\/)?(\d+[a-z]?)(?:-[^/]*\.md)?$/
+const TYPES = ['plan', 'prototype', 'fix', 'decide']
+const CMD_TYPES = ['plan', 'prototype', 'fix']
 
 function kindOf(payload) {
   if (/^specs\/.*\.md$/.test(payload)) return 'spec'
@@ -26,7 +29,9 @@ function specStatus(root, p) {
 function pasteLine(root, it) {
   if (it.kind === 'spec') return (specStatus(root, it.payload) === 'hardened' ? '/spec:run ' : '/spec:plan ') + it.payload
   if (it.kind === 'brief') return '/spec:plan ' + briefPath(root, it.payload)
-  return it.payload
+  // A prompt item pastes as v7's promptAction did; a migrated item with no type pastes verbatim.
+  if (CMD_TYPES.includes(it.type)) return it.payload.startsWith(`/spec:${it.type} `) ? it.payload : `/spec:${it.type} ${it.payload}`
+  return it.type === 'decide' ? '📌 decide: ' + it.payload : it.payload
 }
 
 const pending = (q) => q.items.filter((i) => !i.done)
@@ -38,13 +43,18 @@ function toIso(v) {
   return Number.isFinite(t) ? new Date(t).toISOString() : v
 }
 
-// A spec item whose spec is done counts as done; the timestamp is written with the next write.
+// A spec item whose spec is done (or superseded) and not live, and a brief item whose brief is done,
+// count as done; the timestamp is written with the next write.
 function reconcile(root, q) {
   // A v7 brief item carried `brief: "NN"` and no payload; it renders as `undefined` otherwise.
   for (const i of q.items) if (i.payload === undefined && i.brief !== undefined) { i.payload = String(i.brief); i.kind = i.kind || 'brief'; delete i.brief }
   for (const i of q.items) if (i.added !== undefined) i.added = toIso(i.added)
-  const inFlight = (p) => { const r = readRun(path.join(root, p)); return r && !r.ended }
-  for (const i of q.items) if (!i.done && i.kind === 'spec' && specStatus(root, i.payload) === 'done' && !inFlight(i.payload)) i.done = new Date().toISOString()
+  const now = new Date().toISOString()
+  for (const i of q.items) if (!i.done && i.kind === 'spec' && ['done', 'superseded'].includes(specStatus(root, i.payload)) && !liveRun(root, i.payload)) i.done = now
+  if (q.items.some((i) => !i.done && i.kind === 'brief')) {
+    const briefs = work.readBriefs(root)
+    for (const i of q.items) if (!i.done && i.kind === 'brief' && (briefs.find((b) => b.num === work.normBrief(i.payload)) || {}).status === 'done') i.done = now
+  }
   return q
 }
 
@@ -71,12 +81,23 @@ function resolve(q, ref, root) {
     hit(list.filter((i) => i.payload.includes(ref)))
 }
 
+// `--after` target -> {brief: "NN"} when docs/roadmap/NN-*.md exists, {spec: "specs/…md"} when the file exists, else null.
+function afterOf(root, v) {
+  const t = String(v).trim().replace(/^@/, '').replace(/^\.\//, '')
+  if (/^(?:docs\/roadmap\/)?\d+[a-z]?(?:-[^/]*\.md)?$/i.test(t)) {
+    const num = work.normBrief(t)
+    return work.readBriefs(root, []).some((b) => b.num === num) ? { brief: num } : null
+  }
+  const rel = path.relative(root, path.resolve(root, t)).split(path.sep).join('/')
+  return /^specs\/.*\.md$/.test(rel) && fs.existsSync(path.join(root, rel)) ? { spec: rel } : null
+}
+
 function main(argv) {
   const flags = {}; const pos = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--json' || a === '--top') flags[a.slice(2)] = true
-    else if (a === '--root') flags.root = argv[++i]
+    else if (a === '--root' || a === '--type' || a === '--after') flags[a.slice(2)] = argv[++i]
     else pos.push(a)
   }
   const root = path.resolve(flags.root || require('./lib/git').repoRoot(process.cwd()))
@@ -86,12 +107,17 @@ function main(argv) {
   const out = (text, json) => console.log(flags.json ? JSON.stringify(json ?? text) : text)
   const fail = (msg, code = 1) => { console.error('queue: ' + msg); return code }
   const list = pending(q)
+  const cache = {}
+  // The row tag of an unmet gate: `after brief 03` / `after 08-server-timeouts`; null when there is none or it is met.
+  const waitsOn = (it) => (work.gateWhy(root, it.after, cache) ? 'after ' + (it.after.brief !== undefined ? 'brief ' + work.normBrief(it.after.brief) : path.basename(it.after.spec || '', '.md')) : null)
 
   if (cmd === 'next') {
     if (!list.length) return out('queue empty', { empty: true }), 0
-    out(pasteLine(root, list[0]), { ...list[0], paste: pasteLine(root, list[0]) })
+    const head = list.find((i) => !waitsOn(i))
+    if (!head) return out(`nothing ready — ${list.length} waiting on after gates`, { empty: false, waiting: list.length }), 0
+    out(pasteLine(root, head), { ...head, paste: pasteLine(root, head) })
   } else if (cmd === 'list') {
-    const rows = list.map((it, i) => `${i + 1}  ${it.id}  ${age(it.added)}  ${it.payload}`)
+    const rows = list.map((it, i) => `${i + 1}  ${it.id}  ${age(it.added)}  ${it.payload}${waitsOn(it) ? '  ⏳ ' + waitsOn(it) : ''}`)
     const done = q.items.length - list.length
     if (flags.json) return console.log(JSON.stringify({ items: list, done })), 0
     console.log([...rows, `— ${done} done`].join('\n'))
@@ -102,9 +128,20 @@ function main(argv) {
     const file = fs.existsSync(path.resolve(root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(root, typed) : path.resolve(process.cwd(), typed)
     const relp = path.relative(root, file).split(path.sep).join('/')
     if (/\.md$/.test(arg) && !relp.startsWith('..') && fs.existsSync(file)) arg = relp
+    const kind = kindOf(arg)
+    let type
+    if (flags.type !== undefined || kind === 'prompt') {
+      type = flags.type !== undefined ? flags.type : (/^\/spec:(fix|plan|prototype) /.exec(arg) || [])[1] || 'plan'
+      if (kind !== 'prompt' || !TYPES.includes(type)) return fail('--type takes plan, prototype, fix or decide, on a prompt item', 2)
+    }
+    let after
+    if (flags.after !== undefined) {
+      after = afterOf(root, flags.after)
+      if (!after) return fail(`--after target not found: ${flags.after}`, 2)
+    }
     if (q.items.some((i) => !i.done && i.payload === arg)) return fail(`duplicate payload already queued: ${arg}`, 2)
     q.seq += 1
-    const it = { id: 'q' + q.seq, kind: kindOf(arg), payload: arg, added: new Date().toISOString() }
+    const it = { id: 'q' + q.seq, kind, payload: arg, added: new Date().toISOString(), ...(type ? { type } : {}), ...(after ? { after } : {}) }
     const before = flags.top ? list[0] : null
     q.items.splice(before ? q.items.indexOf(before) : q.items.length, 0, it)
     writeQueue(root, q)

@@ -18,4 +18,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 - **RELAY**: ask every lane question in one batch, then run each printed `answered` line.
 - **MERGE**: a lane whose rebase onto trunk conflicts goes back; send its printed Agent call,
   mark `resent`. **MERGE_RED**: repair the trunk gate, commit, mark `gate-repaired`.
+- **Long marks**: the mark that ends WAIT, RELAY or MERGE_RED runs every rebase, fast-forward and trunk
+  gate for the batch in one process; run it with a Bash timeout of 600000 ms (a four-lane batch took
+  4m38s on a 2-minute gate). A killed mark is resumed by re-running the driver without `--mark`.
 - **REPORT**: mark `reported` and continue until the queue drains; never ask "continue?".

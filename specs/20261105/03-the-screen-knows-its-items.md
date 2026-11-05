@@ -1,6 +1,7 @@
 ---
 date: 2026-11-05
-status: hardened
+status: superseded
+superseded_by: specs/20261105/05-the-v7-screen-on-v8.md
 area: status
 depends_on: [specs/20261105/02-lanes-that-wait-for-each-other.md]
 brief: n/a
@@ -8,6 +9,8 @@ architecture: true
 ---
 
 # The screen knows its items
+
+> Superseded by specs/20261105/04-items-carry-type-and-gate.md and specs/20261105/05-the-v7-screen-on-v8.md (2026-11-05): the same goal, built on v8's modules instead of carrying v7's script verbatim.
 
 ## Intent
 - You asked: `/spec:status` must be EXACTLY v7's `spec-status.js` — what it prints and how it behaves — on v8's engine: the queue items carry the type and the `after` gate v7's did, migration fills them on niko-hub from the v7 backup, a spec being built in a worktree shows as implementing, non-roadmap specs are always visible, and nothing v8 added to the screen survives.

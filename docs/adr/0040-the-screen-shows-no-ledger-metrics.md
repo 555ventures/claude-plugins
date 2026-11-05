@@ -1,6 +1,6 @@
 # 0040. The screen shows no ledger metrics
 
-- Status: accepted
+- Status: accepted (the screen's data sentence amended by ADR-0041)
 - Date: 2026-11-05
 
 ## Context

@@ -84,6 +84,24 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.match(runNode('scripts/migrate.js', ['--root', d, '--apply']).stdout, /\/spec:doctor/)
 })
 
+test('apply backs up the git-dir files and refs first; copying them back restores the v7 queue byte-identical', () => {
+  const { d, g } = synthetic()
+  const c = path.join(d, '.git')
+  const queue = fs.readFileSync(path.join(c, 'spec-queue.json'))
+  const ref = g('rev-parse', 'refs/spec-review/rv_1/judged').trim()
+  const applied = mig(d, '--apply')
+  const b = applied.backup
+  assert.ok(b && b.startsWith(path.join(c, 'spec-v7-backup') + path.sep), 'the backup sits under <git-common-dir>/spec-v7-backup/<timestamp>/')
+  assert.match(runNode('scripts/migrate.js', ['--root', synthetic().d, '--apply']).stdout, /git-dir backup: .*spec-v7-backup/, 'the report names the backup path')
+  for (const f of ['spec-queue.json', 'spec-queue-done.json', 'spec-fanout.json', 'spec-wave-open', 'spec-run-cache', 'refs.txt']) assert.ok(fs.existsSync(path.join(b, f)), f + ' backed up')
+  assert.strictEqual(fs.readFileSync(path.join(b, 'refs.txt'), 'utf8'), `${ref} refs/spec-review/rv_1/judged\n`)
+  assert.notDeepStrictEqual(fs.readFileSync(path.join(c, 'spec-queue.json')), queue, 'apply rewrote the queue')
+  fs.copyFileSync(path.join(b, 'spec-queue.json'), path.join(c, 'spec-queue.json'))
+  for (const line of fs.readFileSync(path.join(b, 'refs.txt'), 'utf8').trim().split('\n')) { const [sha, name] = line.split(' '); g('update-ref', name, sha) }
+  assert.deepStrictEqual(fs.readFileSync(path.join(c, 'spec-queue.json')), queue, 'the restored queue is byte-identical')
+  assert.strictEqual(g('rev-parse', 'refs/spec-review/rv_1/judged').trim(), ref, 'the review ref is restored')
+})
+
 test('apply refuses a dirty tree, naming the files', () => {
   const { d } = synthetic()
   fs.writeFileSync(path.join(d, 'stray.txt'), 'x')

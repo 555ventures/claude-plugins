@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # PreToolUse guard (matcher Bash): inside a lane worktree — its private git dir carries the
 # `spec-lane-open` marker that run.js / fanout write — builder and reviewer agents may not run git
-# commit/push/merge/rebase/reset/checkout. The driver commits and merges; a node process it spawns
-# is not a Bash tool call, so the driver itself is never blocked.
+# commit/push/merge/rebase/reset/checkout. `git rebase --continue` and `git add` stay allowed: a lane
+# sent back by fanout's MERGE resolves the rebase left in progress. The driver commits and merges; a
+# node process it spawns is not a Bash tool call, so the driver itself is never blocked.
 # The command is tokenized in node (quotes, escapes, ; && || | ( ) $( ) and newlines), so quoted
 # paths with spaces, `cd <dir> && git …` chains, `git -C <dir>` and `bash -c "…"` are all seen.
 # Fail-open: no marker, cwd outside a repo, unparseable input, or no node all allow.
@@ -50,7 +51,7 @@ function scan(cmd, dir, dirs, verbs, depth) {
         if (a === "-C" && w[k + 1] !== undefined) { d = path.resolve(d, w[++k]); dirs.push(d) }
         else if (a === "-c" || a === "--git-dir" || a === "--work-tree" || a === "--namespace") k++
         else if (a.startsWith("-")) continue
-        else { verbs.push(a); break }
+        else { verbs.push(a === "rebase" && w[k + 1] === "--continue" ? "rebase --continue" : a); break }
       }
     } else if (["bash", "sh", "zsh", "dash"].includes(prog) && depth < 3) {
       const k = w.findIndex((x, n) => n > 0 && /^-[a-z]*c[a-z]*$/.test(x))

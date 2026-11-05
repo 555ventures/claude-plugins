@@ -31,7 +31,7 @@ const DEFAULTS = {
   testFileCommand: null,
   setupCommand: null,
   trunk: 'main',
-  lanes: 3,
+  lanes: 4,
   seats: {
     builder: { model: 'sonnet', effort: 'high' },
     reviewer: { model: 'opus', effort: 'low' },

@@ -4,9 +4,11 @@
 //
 // Runs several hardened specs as parallel lanes from one session. Steps:
 // PLAN → DISPATCH → WAIT → RELAY → MERGE (MERGE_RED) → REPORT → PLAN … until nothing is runnable.
-// State: <git-common-dir>/spec-fanout.json (lib/state readFanout/writeFanout). The driver creates the
-// lane worktrees, merges each finished lane into trunk one at a time with the gate after each, removes
-// the worktree and ticks the queue. The session only dispatches agents and relays questions.
+// Bare = AUTO (the batch is the first `lanes` runnable specs); --pick = SELF-PICK (a checkbox question).
+// State: <git-common-dir>/spec-fanout.json (lib/state readFanout/writeFanout). Lanes run in parallel
+// whatever their File Plans share; MERGE rebases each finished lane onto trunk in its worktree,
+// fast-forwards trunk, gates, removes the worktree and ticks the queue. A rebase conflict sends the
+// lane back to its agent. The session only dispatches agents and relays questions.
 // Lane mode contract with run.js: architecture.md §11 "fanout.js notes".
 
 const fs = require('fs')
@@ -21,6 +23,8 @@ const { render } = require('./lib/report')
 const FINISHED = ['MERGE_READY', 'DONE']
 const ENDED = ['PARKED', 'AMENDED'] // a lane that ended without a merge: dismissed automatically
 let EXPLICIT = [] // positional spec paths of this invocation
+let PICK = false // --pick: SELF-PICK
+let LABELS = [] // every --label of this invocation (picked takes several)
 
 const stemOf = (p) => path.basename(p).replace(/\.md$/, '')
 const rel = (root, p) => path.relative(root, path.resolve(root, String(p).replace(/^@/, ''))).split(path.sep).join('/')
@@ -45,30 +49,42 @@ function candidates(root) {
   return [...new Set(list.map((p) => rel(root, p)))]
 }
 
-// First come wins: a spec whose File Plan shares a path with an already-picked one waits.
-function plan(root, config) {
-  const cap = config.lanes
-  const picked = []
+// Runnable = hardened, its lane did not end, and not already in a lane; in queue (or argument) order.
+function eligible(root) {
+  const ok = []
+  const held = [] // not hardened, queue-only: silent at PLAN, named when picked
   const waited = []
-  const taken = new Map()
   for (const spec of candidates(root)) {
     const doc = specDoc(path.join(root, spec))
     if (!doc) { waited.push({ spec, why: 'spec file not found' }); continue }
     const status = doc.frontmatter.status || 'missing'
-    if (status !== 'hardened') { if (EXPLICIT.length) waited.push({ spec, why: `status is ${status}, not hardened` }); continue }
+    if (status !== 'hardened') { (EXPLICIT.length ? waited : held).push({ spec, why: `status is ${status}, not hardened` }); continue }
     // A lane that parked or amended keeps its worktree and sidecar; re-running it would only
     // print the same ending, so it waits until the user removes that worktree.
     const wt = path.join(root, '.claude', 'worktrees', 'spec-' + stemOf(spec))
     const ended = (st.readRun(path.join(wt, spec)) || {}).step
     if (ENDED.includes(ended)) { waited.push({ spec, why: `its lane ended ${ended} — see the report; remove ${path.relative(root, wt)} to run it again` }); continue }
-    if (picked.length >= cap) { waited.push({ spec, why: `all ${cap} lanes are taken` }); continue }
-    const paths = doc.filePlan.map((r) => r.path)
-    const clash = paths.filter((p) => taken.has(p))
-    if (clash.length) { waited.push({ spec, why: `File Plan overlaps ${taken.get(clash[0])} on ${clash.join(', ')}` }); continue }
-    for (const p of paths) taken.set(p, spec)
-    picked.push(spec)
+    if (pending.isLane(wt)) { waited.push({ spec, why: `already in a lane at ${path.relative(root, wt)}` }); continue }
+    ok.push({ spec, title: doc.title || stemOf(spec) })
   }
-  return { picked, waited }
+  return { ok, waited, held }
+}
+
+function plan(root, config) {
+  const { ok, waited } = eligible(root)
+  for (const o of ok.slice(config.lanes)) waited.push({ spec: o.spec, why: `all ${config.lanes} lanes are taken` })
+  return { picked: ok.slice(0, config.lanes).map((o) => o.spec), waited }
+}
+
+// SELF-PICK: up to 4 questions of up to 4 boxes, labels = spec titles.
+function pickBody(ok, cap) {
+  const shown = ok.slice(0, 16)
+  const lines = [`Ask the user which specs to run (at most ${cap}) as ONE AskUserQuestion call with multiSelect checkboxes, up to 4 options per question:`]
+  for (let i = 0; i < shown.length; i += 4) {
+    lines.push('', `  Question ${i / 4 + 1}: Which of these should run as lanes?`, ...shown.slice(i, i + 4).map((o) => `   [ ] ${o.title} — ${o.spec}`))
+  }
+  lines.push('', 'Then mark picked with one --label per ticked box, e.g. ' + shown.slice(0, 2).map((o) => `--label ${shq(o.title)}`).join(' '))
+  return lines.join('\n')
 }
 
 const waitLines = (waited) => waited.map((w) => `${w.spec} waits — ${w.why}`)
@@ -79,26 +95,32 @@ function derivePlan(ctx) {
   const branch = git.currentBranch(root)
   if (branch !== config.trunk) refuse(`${root} is on ${branch}, not trunk ${config.trunk} — run /spec:fanout from the main checkout`)
   const { picked, waited } = plan(root, config)
+  const extra = EXPLICIT.slice(1)
+  if (picked.length && PICK) {
+    return { name: 'PLAN', body: pickBody(eligible(root).ok, config.lanes), mark: ['picked --label <title>', '[--label <title> …]', ...extra].join(' '), accepts: ['planned'] }
+  }
   if (!picked.length) {
     return {
       name: 'PLAN',
       body: render({ outcome: '✅ queue drained — no hardened spec is runnable', warns: waitLines(waited), next: 'nothing needs you — queue drained' }),
     }
   }
-  const lines = [`${picked.length} lane(s) — File Plans do not overlap:`, ...picked.map((p, i) => `  lane ${i + 1}: ${p}`)]
+  const lines = [`📌 Auto-picked batch: ${picked.length} lane(s), in queue order`, ...picked.map((p, i) => `  lane ${i + 1}: ${p}`)]
   if (waited.length) lines.push('', 'Waiting:', ...waitLines(waited).map((w) => '  ' + w))
   lines.push('', 'Mark planned; the driver then creates the worktrees and prints the dispatch.')
-  return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...EXPLICIT.slice(1)].join(' ') }
+  return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...extra].join(' '), accepts: ['picked'] }
 }
 
 // ---- DISPATCH ---------------------------------------------------------------------------------
 
 // The Agent tool takes no working directory, so the lane's prompt points run.js at its worktree.
+const REBASE = 'a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git rebase --continue`, re-run the test command, then stop'
 function agentLine(root, config, lane) {
   const seat = config.seats.orchestrator || {}
   const model = seat.model || 'opus'
+  const tail = lane.conflicts ? ` — ${REBASE}` : ''
   return `Agent({ subagent_type: "claude", model: "${model}", effort: "${seat.effort || 'medium'}", description: "lane ${lane.id}: ${lane.stem}", ` +
-    `prompt: ${JSON.stringify(`/spec:run ${lane.spec} --root ${shq(wtAbs(root, lane))}`)} })`
+    `prompt: ${JSON.stringify(`/spec:run ${lane.spec} --root ${shq(wtAbs(root, lane))}${tail}`)} })`
 }
 
 function dispatchBody(root, lanes, intro) {
@@ -130,7 +152,7 @@ function laneRunStep(root, lane) {
 }
 
 function deriveWait(s, ctx) {
-  const active = s.batch.filter((l) => l.status !== 'dismissed')
+  const active = s.batch.filter((l) => l.status !== 'dismissed' && l.status !== 'merged')
   if (active.every((l) => l.status === 'done' || l.status === 'stopped')) {
     return { name: 'WAIT', auto: (x) => ({ ...x, step: active.some((l) => l.status === 'stopped') ? 'RELAY' : 'MERGE' }) }
   }
@@ -197,7 +219,8 @@ function gateAfter(s, ctx, lane) {
   return finalize(s, ctx, lane)
 }
 
-// The lane's spec is marked done on its own branch so trunk takes it with the merge (root stays clean).
+// Rebase the lane onto trunk in its worktree, then fast-forward trunk to it, then gate. The run state
+// stays MERGE_READY until the rebase lands, so a sent-back lane's /spec:run is a no-op.
 function mergeLane(s, ctx, lane) {
   const root = ctx.root
   const config = st.readConfig(root)
@@ -205,31 +228,34 @@ function mergeLane(s, ctx, lane) {
   const spec = laneSpec(root, lane)
   // finalize removed the worktree and branch, then a crash beat the save: only the bookkeeping is left.
   if (!fs.existsSync(wt) && !git.branchExists(root, lane.branch)) return finalize(s, ctx, lane)
+  const r = git.rebaseOnto(wt, config.trunk)
+  if (!r.ok) {
+    const at = git.headSha(root)
+    lane.conflicts = r.conflicts
+    if (lane.conflictAt === at) { lane.status = 'stopped'; lane.reason = 'second rebase conflict'; lane.question = null }
+    else { lane.status = 'sent-back'; lane.conflictAt = at }
+    return s
+  }
+  delete lane.conflicts
   pending.consumePending(wt)
   st.clearRun(spec)
   const doc = specDoc(spec)
   if (doc && doc.frontmatter.status !== 'done') st.writeStatus(spec, 'done')
   git.commitAll(wt, `chore(spec): ${lane.stem} done`)
-  const title = doc && doc.title ? ` — ${doc.title}` : ''
-  const r = git.mergeBack(root, lane.branch, config.mergeStrategy, { message: `merge: ${lane.branch}${title}` })
-  if (!r.merged) {
-    s.conflict = { lane: lane.id, files: r.conflicts, reason: r.reason || null }
-    return s
-  }
+  const m = git.mergeBack(root, lane.branch, 'ff-only')
+  if (!m.merged) refuse(`fast-forward of ${config.trunk} to ${lane.branch} failed: ${m.reason}`, 1)
   return gateAfter(s, ctx, lane)
 }
 
 function deriveMerge(s, ctx) {
-  if (s.conflict) {
-    const lane = s.batch.find((l) => l.id === s.conflict.lane)
-    const lines = [`Merging lane ${lane.id} (${lane.branch}) into trunk stopped.`]
-    if (s.conflict.files.length) lines.push('Conflicts in the main checkout:', ...s.conflict.files.map((f) => '  ' + f))
-    if (s.conflict.reason) lines.push(s.conflict.reason)
-    lines.push('', `Ask the user how to resolve, resolve in ${ctx.root}, commit the merge, then mark merged.`)
-    return { name: 'MERGE', body: lines.join('\n'), mark: 'merged' }
-  }
   const next = s.batch.find((l) => l.status === 'done')
   if (next) return { name: 'MERGE', auto: (x) => mergeLane(x, ctx, x.batch.find((l) => l.id === next.id)) }
+  const back = s.batch.filter((l) => l.status === 'sent-back')
+  if (back.length) {
+    const body = dispatchBody(ctx.root, back, 'These lanes hit a rebase conflict onto trunk and go back to their agents (the rebase is left in progress):')
+    return { name: 'MERGE', body: body + '\n\n' + back.map((l) => `lane ${l.id} conflicts: ${l.conflicts.join(', ')}`).join('\n'), mark: 'resent', accepts: ['dismissed'] }
+  }
+  if (s.batch.some((l) => l.status === 'stopped')) return { name: 'MERGE', auto: (x) => ({ ...x, step: 'RELAY' }) }
   return { name: 'MERGE', auto: (x) => ({ ...x, step: 'REPORT' }) }
 }
 
@@ -288,15 +314,19 @@ function derive(s, ctx) {
   }
 }
 
+function batchOf(picked, waited) {
+  const batch = picked.map((spec, i) => {
+    const stem = stemOf(spec)
+    return { id: String(i + 1), spec, stem, worktree: `.claude/worktrees/spec-${stem}`, branch: `spec/${stem}`, status: 'planned' }
+  })
+  return { step: 'DISPATCH', batch, waited, answered: [], started: now() }
+}
+
 const steps = {
   planned(s, flags, ctx) {
     const { picked, waited } = plan(ctx.root, st.readConfig(ctx.root))
     if (!picked.length) refuse('nothing is runnable — re-run without --mark')
-    const batch = picked.map((spec, i) => {
-      const stem = stemOf(spec)
-      return { id: String(i + 1), spec, stem, worktree: `.claude/worktrees/spec-${stem}`, branch: `spec/${stem}`, status: 'planned' }
-    })
-    return { step: 'DISPATCH', batch, waited, answered: [], started: now() }
+    return batchOf(picked, waited)
   },
   dispatched(s) {
     for (const l of s.batch) if (l.status === 'planned') l.status = 'dispatched'
@@ -320,6 +350,7 @@ const steps = {
       lane.ended = step
       return
     }
+    if (git.rebasing(wt)) refuse(`lane ${lane.id} (${lane.stem}) still has a rebase in progress — re-dispatch it, or mark dismissed --lane ${lane.id}`)
     if (!FINISHED.includes(step)) refuse(`lane ${lane.id} (${lane.stem}) is at ${step}, not MERGE_READY — re-dispatch it, mark returned --lane ${lane.id} --stopped "<reason>", or mark dismissed --lane ${lane.id}`)
     lane.status = 'done'
   },
@@ -350,17 +381,22 @@ const steps = {
     pending.unmarkLane(wtAbs(ctx.root, lane))
     lane.status = 'dismissed'
   },
-  merged(s, flags, ctx) {
-    const root = ctx.root
-    const lane = s.batch.find((l) => l.id === s.conflict.lane)
-    if (git.conflictsIn(root).length) refuse(`conflicts remain in ${root}: ${git.conflictsIn(root).join(', ')} — resolve them first`)
-    if (git.raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], root).status === 0) refuse('the merge is not committed yet — git commit --no-edit, then mark merged')
-    const strategy = st.readConfig(root).mergeStrategy
-    if (strategy !== 'squash' && git.raw(['merge-base', '--is-ancestor', lane.branch, 'HEAD'], root).status !== 0) {
-      refuse(`${lane.branch} is not merged into ${git.currentBranch(root)} yet — merge it, then mark merged`)
-    }
-    delete s.conflict
-    return gateAfter(s, ctx, lane)
+  picked(s, flags, ctx) {
+    const config = st.readConfig(ctx.root)
+    const { ok, waited, held } = eligible(ctx.root)
+    if (!LABELS.length) refuse('pass one --label <title> per ticked box')
+    if (LABELS.length > config.lanes) refuse(`${LABELS.length} picked — at most ${config.lanes} lanes run at once`)
+    const picked = LABELS.map((label) => {
+      const hit = ok.find((o) => o.title === label || o.spec === rel(ctx.root, label))
+      if (hit) return hit.spec
+      const w = [...waited, ...held].find((x) => x.spec === rel(ctx.root, label) || (specDoc(path.join(ctx.root, x.spec)) || {}).title === label)
+      return refuse(w ? `${w.spec} is not runnable — ${w.why}` : `no runnable spec titled '${label}' — known: ${ok.map((o) => o.title).join(' | ')}`)
+    })
+    return batchOf([...new Set(picked)], waited)
+  },
+  resent(s) {
+    for (const l of s.batch) if (l.status === 'sent-back') l.status = 'dispatched'
+    s.step = 'WAIT'
   },
   'gate-repaired'(s, flags, ctx) {
     const root = ctx.root
@@ -387,6 +423,9 @@ const driverMain = makeDriver({
 
 function main(argv = process.argv.slice(2)) {
   try {
+    PICK = argv.includes('--pick')
+    argv = argv.filter((x) => x !== '--pick')
+    LABELS = argv.flatMap((x, i) => (x === '--label' && argv[i + 1] !== undefined ? [argv[i + 1]] : []))
     const a = parseArgv(argv)
     EXPLICIT = a.pos.map((p) => rel(a.root, p))
   } catch (e) {

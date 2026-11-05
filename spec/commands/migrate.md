@@ -12,3 +12,4 @@ Show the plan and ask the user once whether to apply it. On a yes, run
 commits the migration as `chore(spec): migrate v7 → v8` and prints the sha. Agents and skills the
 repo owns are listed as "left alone (user-owned)", and worktree entries outside the repo are only
 warned about.
+Rollback: `git revert <migrate commit>`, then copy the backup files back into the git dir.

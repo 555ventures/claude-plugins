@@ -36,7 +36,7 @@ test('empty queue verdict; next ready verdict', () => {
   assert.match(r.verdict, /^🟢/)
 })
 
-test('lanes: hardened queue specs with disjoint File Plans only', () => {
+test('lanes: hardened queue specs in order, File Plan overlap regardless', () => {
   const d = tmpdir('status'); gitRepo(d)
   w(d, 'specs/20261104/01-a.md', spec('hardened', 'n/a', ['x.js']))
   w(d, 'specs/20261104/02-b.md', spec('hardened', 'n/a', ['x.js', 'y.js']))
@@ -44,8 +44,8 @@ test('lanes: hardened queue specs with disjoint File Plans only', () => {
   w(d, 'specs/20261104/04-d.md', spec('draft', 'n/a', ['w.js']))
   for (const n of ['01-a', '02-b', '03-c', '04-d']) queue(d, 'add', `specs/20261104/${n}.md`)
   const r = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(r.lanes, ['specs/20261104/01-a.md', 'specs/20261104/03-c.md'])
-  assert.match(runNode('scripts/status.js', ['--root', d]).stdout, /⚡ 2 parallel lanes ready[\s\S]*\/spec:run @specs\/20261104\/03-c\.md/)
+  assert.deepStrictEqual(r.lanes, ['specs/20261104/01-a.md', 'specs/20261104/02-b.md', 'specs/20261104/03-c.md'], 'overlapping 02-b is a lane too; the draft is not')
+  assert.match(runNode('scripts/status.js', ['--root', d]).stdout, /⚡ 3 parallel lanes ready[\s\S]*\/spec:run @specs\/20261104\/03-c\.md/)
 })
 
 test('pending questions in root and worktrees turn the verdict yellow', () => {

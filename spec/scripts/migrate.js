@@ -186,6 +186,20 @@ function commit(root, warns) {
   return git.headSha(root)
 }
 
+// Copies every git-dir file the apply deletes or rewrites, and the refs/spec-review refs (refs.txt,
+// restorable with `git update-ref <ref> <sha>`), to <git-common-dir>/spec-v7-backup/<ISO time>/.
+function backup(root, p) {
+  const common = gitCommonDir(root)
+  const files = p.ops.filter((o) => o.op !== 'ref' && path.relative(common, path.resolve(root, o.path)).match(/^(?!\.\.)./))
+  const refs = git.raw(['for-each-ref', '--format=%(objectname) %(refname)', 'refs/spec-review'], root).stdout
+  if (!files.length && !refs.trim()) return null
+  const dir = path.join(common, 'spec-v7-backup', new Date().toISOString().replace(/:/g, '-'))
+  fs.mkdirSync(dir, { recursive: true })
+  for (const o of files) fs.cpSync(path.resolve(root, o.path), path.join(dir, path.relative(common, path.resolve(root, o.path))), { recursive: true })
+  if (refs.trim()) fs.writeFileSync(path.join(dir, 'refs.txt'), refs)
+  return dir
+}
+
 function apply(root, p) {
   const warns = []
   for (const o of p.ops) {
@@ -222,13 +236,15 @@ function main(argv) {
       return 2
     }
   }
+  const saved = doApply && p.ops.length ? backup(root, p) : null
   const applyWarns = doApply ? apply(root, p) : []
   const sha = doApply && p.ops.length ? commit(root, applyWarns) : null
   const counts = {}
   for (const o of p.ops) counts[o.op] = (counts[o.op] || 0) + 1
-  if (argv.includes('--json')) { process.stdout.write(JSON.stringify({ applied: doApply, commit: sha, counts, ...p, warns: [...p.warns, ...applyWarns] }) + '\n'); return 0 }
+  if (argv.includes('--json')) { process.stdout.write(JSON.stringify({ applied: doApply, commit: sha, backup: saved, counts, ...p, warns: [...p.warns, ...applyWarns] }) + '\n'); return 0 }
   const bullets = Object.entries(counts).map(([k, n]) => `${LABEL[k] || k}: ${n}`)
   if (sha) bullets.push(`commit ${sha}: chore(spec): migrate v7 → v8`)
+  if (saved) bullets.push(`git-dir backup: ${saved}`)
   if (!doApply) bullets.push(...p.ops.map((o) => `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}`))
   const warns = [...p.warns, ...applyWarns]
   if (p.dropped.length) warns.push('dropped config keys: ' + p.dropped.join(', '))

@@ -33,13 +33,14 @@ test('block-worker-git blocks git writes only in a marked lane worktree', () => 
   const p = (command) => hook('block-worker-git.sh', { cwd: dir, tool_input: { command } })
   assert.strictEqual(p('git commit -m x').status, 0, 'no marker → allowed')
   fs.writeFileSync(path.join(dir, '.git', 'spec-lane-open'), '')
-  for (const c of ['git commit -m x', 'cd a && git -C . push', 'git checkout main', 'git reset --hard', 'git rebase main', 'git merge x']) {
+  for (const c of ['git commit -m x', 'cd a && git -C . push', 'git checkout main', 'git reset --hard', 'git rebase main', 'git rebase --abort', 'git merge x', 'git add . && git commit -m x']) {
     const r = p(c)
     assert.strictEqual(r.status, 2, `${c} must be blocked in a lane`)
     assert.match(r.stderr, /^BLOCKED:/)
   }
-  for (const c of ['git status', 'git diff HEAD', 'git log -1', 'echo commit', 'node run.js x --mark built']) {
-    assert.strictEqual(p(c).status, 0, `${c} is read-only and allowed`)
+  for (const c of ['git status', 'git diff HEAD', 'git log -1', 'echo commit', 'node run.js x --mark built',
+    'git add src/a.js', 'git rebase --continue', 'git add -A && GIT_EDITOR=true git rebase --continue']) {
+    assert.strictEqual(p(c).status, 0, `${c} is allowed in a lane`)
   }
   const wt = path.join(dir, '.claude/worktrees/spec-l')
   execFileSync('git', ['-C', dir, 'worktree', 'add', '-q', '-b', 'l', wt])

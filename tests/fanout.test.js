@@ -1,7 +1,7 @@
 'use strict'
-// Pins spec/scripts/fanout.js by execution: plan with File Plan overlap, dispatch creates the lane
-// worktrees, lanes return, the driver merges into trunk, ticks the queue, removes worktrees; the
-// RELAY path for a stopped lane; MERGE_RED on a red trunk gate.
+// Pins spec/scripts/fanout.js by execution: AUTO and --pick plans, dispatch creates the lane worktrees,
+// lanes return, MERGE rebases each onto trunk and fast-forwards, ticks the queue, removes worktrees; a
+// rebase conflict sends the lane back (twice → stopped); RELAY for a stopped lane; MERGE_RED.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
@@ -55,12 +55,14 @@ function dispatchTwo(h) {
   return { plan, disp }
 }
 
-test('two disjoint lanes are planned, merged into trunk, ticked, cleaned; then PLAN picks the overlapping third', () => {
+test('AUTO: the first two lanes are planned, rebased onto trunk and fast-forwarded, ticked, cleaned; then PLAN picks the third', () => {
   const h = host()
   const { plan, disp } = dispatchTwo(h)
-  assert.ok(plan.stdout.includes('03-gamma.md waits'), 'the overlapping spec is reported as waiting')
+  assert.match(plan.stdout, /📌 Auto-picked batch: 2 lane\(s\)/, 'bare run auto-picks and says so')
+  assert.ok(!/AskUserQuestion/.test(plan.stdout), 'bare run asks no question')
+  assert.ok(plan.stdout.includes('03-gamma.md waits — all 2 lanes are taken'), 'the third spec waits for a lane')
   const f = st.readFanout(h.dir)
-  assert.deepStrictEqual(f.batch.map((l) => l.spec), [specPath('01-alpha'), specPath('02-beta')], 'only the two disjoint specs become lanes')
+  assert.deepStrictEqual(f.batch.map((l) => l.spec), [specPath('01-alpha'), specPath('02-beta')], 'the first two queue specs become lanes')
   assert.deepStrictEqual(f.batch.map((l) => l.branch), ['spec/01-alpha', 'spec/02-beta'])
   for (const stem of ['01-alpha', '02-beta']) {
     assert.ok(fs.existsSync(h.wt(stem)), 'the driver creates each lane worktree before dispatch')
@@ -82,6 +84,7 @@ test('two disjoint lanes are planned, merged into trunk, ticked, cleaned; then P
   assert.strictEqual(h.g('rev-parse', '--abbrev-ref', 'HEAD').trim(), 'main')
   assert.strictEqual(st.readSpec(path.join(h.dir, specPath('01-alpha'))).frontmatter.status, 'done', 'merged spec is done on trunk')
   assert.strictEqual(h.g('status', '--porcelain', '--untracked-files=no').trim(), '', 'trunk is left clean')
+  assert.strictEqual(h.g('log', '--merges', '--format=%H').trim(), '', 'lanes land by rebase + fast-forward: no merge commits')
   const q = st.readQueue(h.dir)
   assert.ok(q.items[0].done && q.items[1].done && !q.items[2].done, 'the two merged queue items are ticked, the third is not')
   assert.ok(!fs.existsSync(h.wt('01-alpha')) && !fs.existsSync(h.wt('02-beta')), 'lane worktrees are removed')
@@ -168,11 +171,11 @@ test('explicit spec paths limit the plan; the mark line carries them', () => {
   const h = host()
   const r = h.ok(specPath('03-gamma'), specPath('01-alpha'), '--json')
   const j = JSON.parse(r.stdout)
-  assert.ok(j.body.includes('01-alpha.md waits'), 'the second explicit spec waits on the File Plan overlap')
+  assert.ok(!j.body.includes('waits'), 'overlapping File Plans do not make a spec wait')
   const mark = j.mark.replace(/^node /, '').split(' ')
   const m = runNode(mark[0], mark.slice(1))
   assert.strictEqual(m.status, 0, m.stderr)
-  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma')], 'the printed mark line plans the same lanes')
+  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma'), specPath('01-alpha')], 'the printed mark line plans the same lanes, in argument order')
 })
 
 test('a lane that ended PARKED or AMENDED is dismissed on return, reported as parked, and not re-planned', () => {
@@ -199,7 +202,7 @@ test('a lane that ended PARKED or AMENDED is dismissed on return, reported as pa
   const plan = JSON.parse(h.run('--json').stdout)
   assert.match(plan.body, /01-alpha\.md waits — its lane ended AMENDED/, 'an ended lane is not planned again')
   h.ok('--mark', 'planned')
-  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma')], 'the freed File Plan lets gamma run')
+  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma')], 'gamma takes the free lane')
 })
 
 test('explicit @-prefixed paths and lane prompts with spaces in the worktree path', () => {
@@ -215,4 +218,74 @@ test('explicit @-prefixed paths and lane prompts with spaces in the worktree pat
   const disp = runNode('scripts/fanout.js', ['--root', dir]).stdout
   const p = JSON.parse(prompt.exec(disp)[1])
   assert.strictEqual(p, `/spec:run ${specPath('02-beta')} --root '${path.join(dir, '.claude/worktrees/spec-02-beta')}'`, 'the worktree path is quoted in the lane prompt')
+})
+
+// alpha and gamma share src/a.js: both run as lanes; alpha lands first, gamma's rebase conflicts.
+function conflicting(h) {
+  h.ok(specPath('01-alpha'), specPath('03-gamma'), '--mark', 'planned', specPath('03-gamma'))
+  h.ok('--mark', 'dispatched')
+  h.finish('01-alpha', 'src/a.js', 'alpha\n')
+  h.finish('03-gamma', 'src/a.js', 'gamma\n')
+  h.ok('--mark', 'returned', '--lane', '1')
+  h.ok('--mark', 'returned', '--lane', '2')
+}
+
+test('a rebase conflict sends the lane back with the rebase in progress; resolved, it lands on the next pass', () => {
+  const h = host()
+  conflicting(h)
+  assert.strictEqual(h.step(), 'MERGE')
+  assert.strictEqual(fs.readFileSync(path.join(h.dir, 'src/a.js'), 'utf8'), 'alpha\n', 'the first lane landed')
+  const lane = st.readFanout(h.dir).batch[1]
+  assert.deepStrictEqual([lane.status, lane.conflicts], ['sent-back', ['src/a.js']])
+  const gd = execFileSync('git', ['-C', h.wt('03-gamma'), 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim()
+  assert.ok(fs.existsSync(path.join(gd, 'rebase-merge')) || fs.existsSync(path.join(gd, 'rebase-apply')), 'the rebase is left in progress in the lane worktree')
+  const out = h.ok().stdout
+  assert.ok(out.includes(`/spec:run ${specPath('03-gamma')} --root ${h.wt('03-gamma')} — a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent`), 'the re-dispatch prompt carries the rebase instruction')
+  assert.match(out, /re-run the test command, then stop/)
+  assert.match(out, /lane 2 conflicts: src\/a\.js/)
+  h.ok('--mark', 'resent')
+  assert.strictEqual(h.step(), 'WAIT')
+  assert.strictEqual(h.run('--mark', 'returned', '--lane', '2').status, 2, 'a lane still mid-rebase cannot return')
+  const w = h.wt('03-gamma')
+  fs.writeFileSync(path.join(w, 'src/a.js'), 'alpha\ngamma\n')
+  execFileSync('git', ['-C', w, 'add', 'src/a.js'])
+  execFileSync('git', ['-C', w, '-c', 'core.editor=true', 'rebase', '--continue'])
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'REPORT')
+  assert.strictEqual(fs.readFileSync(path.join(h.dir, 'src/a.js'), 'utf8'), 'alpha\ngamma\n', 'the resolved lane landed on trunk')
+  assert.ok(st.readQueue(h.dir).items[2].done && !fs.existsSync(w), 'ticked and cleaned')
+})
+
+test('a second rebase conflict against the same trunk stops the lane for the user', () => {
+  const h = host()
+  conflicting(h)
+  h.ok('--mark', 'resent')
+  execFileSync('git', ['-C', h.wt('03-gamma'), 'rebase', '--abort'])
+  h.ok('--mark', 'returned', '--lane', '2')
+  const lane = st.readFanout(h.dir).batch[1]
+  assert.deepStrictEqual([lane.status, lane.reason], ['stopped', 'second rebase conflict'])
+  assert.strictEqual(h.step(), 'RELAY')
+  assert.match(h.ok().stdout, /stopped: second rebase conflict/, 'relayed to the user')
+})
+
+test('--pick prints a checkbox question; picked builds the batch from exactly the ticked specs', () => {
+  const h = host()
+  const r = h.ok('--pick')
+  assert.match(r.stdout, /AskUserQuestion call with multiSelect checkboxes/)
+  assert.match(r.stdout, /Question 1: [\s\S]*\[ \] 01-alpha[\s\S]*\[ \] 03-gamma/, 'every runnable spec is a box, labelled by title')
+  assert.match(r.stdout, /--mark picked --label <title>/)
+  assert.ok(!/Auto-picked/.test(r.stdout))
+  assert.strictEqual(h.run('--mark', 'picked', '--label', 'nope').status, 2, 'an unknown label is refused')
+  assert.strictEqual(h.run('--mark', 'picked', '--label', '01-alpha', '--label', '02-beta', '--label', '03-gamma').status, 2, 'more than lanes is refused')
+  st.writeStatus(path.join(h.dir, specPath('01-alpha')), 'draft')
+  const bad = h.run('--mark', 'picked', '--label', '01-alpha')
+  assert.strictEqual(bad.status, 2)
+  assert.match(bad.stderr, /not runnable — status is draft/, 'the same validity checks as AUTO')
+  st.writeStatus(path.join(h.dir, specPath('01-alpha')), 'hardened')
+  h.g('worktree', 'add', '-q', '-b', 'spec/02-beta', h.wt('02-beta'))
+  pending.markLane(h.wt('02-beta'), 'fanout')
+  const busy = h.run('--mark', 'picked', '--label', '02-beta')
+  assert.match(busy.stderr, /already in a lane/, 'a spec already in a lane is refused')
+  h.ok('--mark', 'picked', '--label', '03-gamma', '--label', '01-alpha')
+  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma'), specPath('01-alpha')], 'exactly the picked specs, in pick order')
 })

@@ -65,7 +65,7 @@ function writeSpec(dir, text = SPEC_DOC) {
 test('readConfig applies defaults key by key and merges nested objects one level', () => {
   const root = tmpdir('cfg')
   assert.strictEqual(S.readConfig(root).trunk, 'main', 'a host with no config must still get the default trunk')
-  assert.strictEqual(S.readConfig(root).lanes, 3, 'fanout would run with no parallelism default')
+  assert.strictEqual(S.readConfig(root).lanes, 4, 'fanout would run with no parallelism default')
   S.writeConfig(root, { testCommand: 'npm test', seats: { builder: { model: 'opus' } }, lanes: 5 })
   const c = S.readConfig(root)
   assert.strictEqual(c.testCommand, 'npm test', 'the gate command must come from the file')

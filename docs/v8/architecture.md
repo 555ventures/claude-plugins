@@ -68,7 +68,7 @@ per file; writes are atomic (tmp + rename).
   "testFileCommand": "npx vitest {file}", // optional: single-file run used by red-check
   "setupCommand": "npm ci",               // run once in a fresh worktree
   "trunk": "main",
-  "lanes": 3,                             // fanout parallelism
+  "lanes": 4,                             // fanout parallelism
   "seats": { "builder": {"model":"sonnet","effort":"high"},
              "reviewer": {"model":"opus","effort":"low"},
              "orchestrator": {"model":"opus","effort":"medium"} },
@@ -115,13 +115,23 @@ Builder agent brief must include the Intent block verbatim and the line
 ## 5. Fanout (`fanout.js`)
 
 PLAN → DISPATCH → WAIT → RELAY → MERGE → REPORT, then back to PLAN until the queue is
-empty. PLAN picks up to `lanes` queue items whose specs are `hardened` and whose File Plans
-do not overlap (path set intersection); overlapping ones wait. DISPATCH prints one Agent
+empty. PLAN, bare (AUTO): the first `lanes` (default 4) runnable queue specs in queue order —
+runnable = `hardened`, its lane did not end PARKED/AMENDED, not already in a lane — File Plan
+overlap regardless; prints a 📌 Auto-picked batch line, mark `planned`. `--pick` (SELF-PICK): the
+runnable specs as checkbox questions (≤ 4 boxes × ≤ 4 questions, labels = titles), mark `picked
+--label <title>` (repeatable; same validity checks, ≤ `lanes`). DISPATCH prints one Agent
 call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec> --root
 .claude/worktrees/spec-<stem>` (absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
 run state. RELAY: all `pending-question.json` batched into one message; `answered --lane`.
-MERGE: lanes in queue order, gate after each, stop on red (`MERGE_RED` → `gate-repaired`).
-REPORT: one report, queue items ticked `done`.
+MERGE, per done lane in batch order: `git.rebaseOnto(<worktree>, trunk)` (run state still
+MERGE_READY), then status done + commit in the lane, `mergeBack` ff-only, gate on trunk
+(`MERGE_RED` → `gate-repaired` on red). A rebase conflict leaves the rebase in progress, sets the
+lane `sent-back` with its conflict files, and prints the re-dispatch Agent line (prompt plus "a
+rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git
+rebase --continue`, re-run the test command, then stop"); mark `resent`; on return it lands on the next
+pass (`returned` refuses while the rebase is in progress). `block-worker-git.sh` allows `git add`
+and `git rebase --continue` in a lane. A second conflict against the same trunk sha → lane
+`stopped`, reason "second rebase conflict", relayed at RELAY. REPORT: one report, queue items ticked `done`.
 
 ## 6. Plan (`plan.js` + `templates/spec.md`)
 
@@ -148,7 +158,7 @@ tier, Users, Contracts, UI, Data Model, Rationale, Canonical Delta, oracle/pre-g
 | Event | Script | Rule |
 |---|---|---|
 | UserPromptSubmit | `state-gate.sh` | `/spec:run <spec>` on a `draft` spec or one with `[NEEDS CLARIFICATION:` markers → exit 2 with the remedy. |
-| PreToolUse Bash | `block-worker-git.sh` | inside a lane worktree, builder/reviewer agents may not run `git commit/push/merge/rebase/reset/checkout`. Marker: `<git-dir>/spec-lane-open`. |
+| PreToolUse Bash | `block-worker-git.sh` | inside a lane worktree, builder/reviewer agents may not run `git commit/push/merge/rebase/reset/checkout` (`git add` and `git rebase --continue` stay allowed). Marker: `<git-dir>/spec-lane-open`. |
 | PreToolUse Write\|Edit | `block-cross-worktree-writes.sh` | copy-trim from v7. |
 
 ## 8. Report (`lib/report.js`)
@@ -221,7 +231,8 @@ Later builders: use these, do not re-derive them.
   clean. `mergeBack(root, branch, strategy, {message})` merges into the branch checked out at root →
   `{merged, conflicts[], sha?, reason?}` (ff-only divergence → `merged: false` + `reason`; conflicts
   are left in the root tree for `conflicts-resolved`); a root with tracked uncommitted changes or an
-  unknown strategy throws `{exit: 2}`. `diff(base, cwd)` / `changedFiles(base, cwd)` compare the
+  unknown strategy throws `{exit: 2}`. `rebaseOnto(worktree, trunk)` → `{ok, conflicts[]}`; a conflict
+  leaves the rebase in progress in the worktree (`rebasing(wt)` tells). `diff(base, cwd)` / `changedFiles(base, cwd)` compare the
   WORKING TREE (incl. untracked) with base via a scratch index, because REVIEW runs before COMMIT.
 - `report.js`: `render(...)` per §8; empty sections omitted; a trailing `?` on `next` is stripped;
   missing `next` → `nothing needs you — all done`. The interface contract's `✨ found` line is not in
@@ -241,8 +252,8 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - **In lane mode run.js stops at MERGE_READY after COMMIT; fanout merges.** It writes run state
   `step: 'MERGE_READY'` (readable by fanout as `readRun(<worktree>/<spec>).step`) with the branch
   committed, and does not merge, remove the worktree, delete the branch, clear the sidecar or write
-  `status: done` — fanout does all of that (status done + sidecar clear + commit in the lane,
-  `mergeBack` into trunk, `gate` on root, `worktreeRemove` with the branch, queue tick).
+  `status: done` — fanout does all of that (rebase onto trunk in the lane, status done + sidecar
+  clear + commit in the lane, `mergeBack` ff-only into trunk, `gate` on root, `worktreeRemove` with the branch, queue tick).
 - OPEN in lane mode creates no second worktree: it runs in place in the lane worktree
   (`.claude/worktrees/spec-<stem>`, branch `spec/<stem>`, both made by fanout from trunk) and still
   runs `setupCommand`.

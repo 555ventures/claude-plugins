@@ -87,6 +87,18 @@ function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
   throw new Error(`merge of ${branch} failed without conflicts: ${(r.stderr || r.stdout).trim()}`)
 }
 
+// Rebases the branch checked out in worktree onto trunk. A conflict leaves the rebase in progress
+// in the worktree (for the lane to resolve) and lists the conflicted files.
+const rebasing = (wt) => ['rebase-merge', 'rebase-apply'].some((d) => fs.existsSync(path.join(sh(['rev-parse', '--absolute-git-dir'], wt), d)))
+function rebaseOnto(worktree, trunk) {
+  const r = raw(['-c', 'core.editor=true', 'rebase', trunk], worktree)
+  if (r.status === 0) return { ok: true, conflicts: [] }
+  const conflicts = conflictsIn(worktree)
+  if (conflicts.length) return { ok: false, conflicts }
+  if (rebasing(worktree)) raw(['rebase', '--abort'], worktree)
+  throw new Error(`rebase of ${worktree} onto ${trunk} failed without conflicts: ${(r.stderr || r.stdout).trim()}`)
+}
+
 // Runs fn(env) with GIT_INDEX_FILE pointing at a scratch index holding the working tree.
 function withWorkingIndex(cwd, fn) {
   const idx = path.join(os.tmpdir(), 'spec-idx-' + process.pid + '-' + crypto.randomBytes(4).toString('hex'))
@@ -107,5 +119,5 @@ const changedFiles = (base, cwd) =>
 
 module.exports = {
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
-  commitAll, mergeBack, conflictsIn, diff, changedFiles,
+  commitAll, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
 }

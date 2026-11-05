@@ -39,18 +39,10 @@ function roadmap(root, specs) {
   })
 }
 
-// Same rule as fanout: hardened queue specs in order, kept while their File Plan path sets stay disjoint.
+// Same rule as fanout AUTO: the first `max` hardened queue specs in order, File Plans regardless.
 function lanes(root, q, max) {
-  const taken = new Set(); const out = []
-  for (const it of pending(q).filter((i) => i.kind === 'spec')) {
-    let s
-    try { s = readSpec(path.join(root, it.payload)) } catch { continue }
-    if (s.frontmatter.status !== 'hardened') continue
-    const paths = s.filePlan.map((r) => r.path)
-    if (out.length >= max || paths.some((p) => taken.has(p))) continue
-    paths.forEach((p) => taken.add(p)); out.push(it.payload)
-  }
-  return out
+  const hardened = (p) => { try { return readSpec(path.join(root, p)).frontmatter.status === 'hardened' } catch { return false } }
+  return pending(q).filter((i) => i.kind === 'spec' && hardened(i.payload)).map((i) => i.payload).slice(0, max)
 }
 
 function questions(root) {

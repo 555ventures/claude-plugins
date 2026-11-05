@@ -1,0 +1,411 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "q1",
+      "kind": "brief",
+      "brief": "22a",
+      "archived": "2026-10-29T14:43:41.154Z"
+    },
+    {
+      "id": "q4",
+      "kind": "prompt",
+      "payload": "/spec:plan the CLIENT state, driver half (ADR-0010's unplanned state; brief 22a reserved 09 for it and that number went elsewhere). Carry: SIGNOFF becomes CLIENT between WALK and APPROVED; notes gain origin (walk|client|session) derived server-side from the entry route, NEVER from the typed 'by' field; APPROVED refuses while any client-origin note is open; clients see product-kind rows only, never process rows or the walk lane; 'notes address' refuses when the anchored screen file is unchanged since the note was raised (the cheap derived substitute for ADR-0010's before/after render, which is deferred to its own later spec, gated on a client asking for it); a ledgered waiver (reason recorded) releases APPROVED when a client goes quiet, or the whole project strands on one person. NO AUTH and no capability token (JJ 2026-09-09) — residual accepted: anyone holding the link can post or resolve as anyone. Testable without a browser; the served client view (whole-project entry, filtered view, reachability precondition on the exposed URL) is its own second spec.",
+      "added": "2026-09-09T17:10:31.662Z",
+      "ticked": "2026-10-31T06:34:22.360Z",
+      "archived": "2026-10-31T06:34:22.367Z"
+    },
+    {
+      "id": "q3",
+      "kind": "prompt",
+      "payload": "/spec:plan move spec/scripts/lib/shell-region.js's canon own-stylesheet check (the double-quoted-only <link[^>]+href=\"...\" test at checkCanon) onto lib/wire-register.js's stylesheetTargets — the fifth hand-rolled spelling of the same question, missed by 20260908/07's private-spelling pin because that pin scans only for the escaped wire/ separator",
+      "added": "2026-09-09T05:36:28.699Z",
+      "after": {
+        "spec": "specs/20260908/07-one-wire-register-predicate.md"
+      },
+      "ticked": "2026-10-31T06:34:22.591Z",
+      "archived": "2026-10-31T06:34:22.598Z"
+    },
+    {
+      "id": "q2",
+      "kind": "prompt",
+      "payload": "delete docs/spikes/23-atlas-index-nav/ (the executed A2 prototype of specs/20260907/09; the spec's Assumptions keep the evidence) and rewrite its one citing line in that spec to say the prototype was deleted after landing — specs/20260908/01-size-ratchet.md D11",
+      "added": "2026-09-08T20:30:24.775Z",
+      "after": {
+        "spec": "specs/20260907/09-atlas-index-and-note-navigation.md"
+      },
+      "ticked": "2026-10-31T06:34:22.821Z",
+      "archived": "2026-10-31T06:34:22.828Z"
+    },
+    {
+      "id": "q5",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "enforcement.json and rules § Review Checks name tests/consistency/plugin-bump.test.js as the version-bump gate wiring, but the file no longer exists — re-point the provenance or restore a merge-base-free check",
+      "added": "2026-10-29T14:43:41.153Z",
+      "after": {
+        "spec": "specs/20261029/01-model-placement-refresh.md"
+      },
+      "ticked": "2026-10-31T06:46:18.917Z",
+      "archived": "2026-10-31T06:46:18.924Z"
+    },
+    {
+      "id": "q6",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "session-stamp reads the stamp from the main working tree when repoRoot is a linked worktree — the stamp hook writes to the prompt's cwd (main root), so every worktree build and review row records model:null and sessionTokens:null (seen on 20261029/01, /02 and /03 rows)",
+      "added": "2026-10-30T03:47:16.947Z",
+      "ticked": "2026-10-31T06:54:16.558Z",
+      "archived": "2026-10-31T06:54:16.565Z"
+    },
+    {
+      "id": "q7",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "commit secrets scan covers only the cwd sub-folder while add -A stages the whole repo — pass the repo toplevel as --root (spec 20261029/04 advisory a0)",
+      "added": "2026-10-30T05:07:44.498Z",
+      "ticked": "2026-10-31T07:03:21.322Z",
+      "archived": "2026-10-31T07:03:21.343Z"
+    },
+    {
+      "id": "q8",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "policy.models seat gaps from 20261029/09 review: three review-driver re-dispatch remedy lines print no model/effort; stage-review.md fix-worker bullet hard-codes sonnet/medium; spec 7.291.0 changelog wrongly claims the mocks driver prints seats",
+      "added": "2026-11-01T03:52:12.911Z",
+      "ticked": "2026-11-01T04:21:26.017Z",
+      "archived": "2026-11-01T04:21:26.025Z"
+    },
+    {
+      "id": "q9",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "init-gen policy-check prints an empty rules filename when pipelineRules is absent (spec 08 advisory a1)",
+      "added": "2026-11-01T04:00:21.817Z",
+      "ticked": "2026-11-01T04:47:38.517Z",
+      "archived": "2026-11-01T04:47:38.524Z"
+    },
+    {
+      "id": "q11",
+      "kind": "prompt",
+      "lane": "decide",
+      "payload": "Decide: .claude/agents/plugin-tests.md prescribes regex pins over doctrine prose while core § Doctrine Authoring and conventions/tests.md forbid them (~250 assertions in 29 files) — pick one rule and apply it to the agent and the suite",
+      "added": "2026-11-01T07:44:24.405Z",
+      "ticked": "2026-11-01T08:15:07.714Z",
+      "archived": "2026-11-01T08:15:07.748Z"
+    },
+    {
+      "id": "q10",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "workspace-scan.js returns every manifest of a directory, not the first match — a polyglot root with package.json reads as JavaScript only (audit 2026-11-01)",
+      "added": "2026-11-01T07:44:23.301Z",
+      "after": {
+        "spec": "specs/20261101/02-the-host-declares-its-file-shapes.md"
+      },
+      "ticked": "2026-11-02T02:17:09.221Z",
+      "archived": "2026-11-02T02:17:09.238Z"
+    },
+    {
+      "id": "q12",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Delete the compat paths no host uses (genesis legacy design values/--legacy/RETIRED_MARKS, queue auto_placed strip, retired-flag stubs, via:backfill, amendment stage) and the unreferenced files/exports/spec-paths keys from the 2026-11-01 audit; fix docs/canonical stale citations",
+      "added": "2026-11-01T07:44:26.050Z",
+      "ticked": "2026-11-02T02:59:01.147Z",
+      "archived": "2026-11-02T02:59:01.154Z"
+    },
+    {
+      "id": "q15",
+      "kind": "prompt",
+      "lane": "decide",
+      "payload": "Decide: two-week freeze on new plugin capability until zubu-web cuts over, and adopt 'host specs reaching production per week' as the plugin's success metric. Context: docs/audit/pipeline-efficiency-audit-2026-11-01.md § Decision taken.",
+      "added": "2026-11-01T14:51:06.072Z",
+      "ticked": "2026-11-02T03:02:02.731Z",
+      "archived": "2026-11-02T03:02:02.737Z"
+    },
+    {
+      "id": "q18",
+      "kind": "spec",
+      "spec": "specs/20261101/08-no-host-needs-the-shims.md",
+      "added": "2026-11-02T02:59:00.703Z",
+      "archived": "2026-11-02T03:38:44.767Z"
+    },
+    {
+      "id": "q13",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "count-tests.js throws EPIPE when stdout closes early (e.g. piped to head) — writeOut must treat EPIPE as done",
+      "added": "2026-11-01T07:44:27.053Z",
+      "ticked": "2026-11-02T03:54:05.899Z",
+      "archived": "2026-11-02T03:54:05.917Z"
+    },
+    {
+      "id": "q17",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Three review-ledger defects (docs/audit/pipeline-efficiency-audit-2026-11-01.md § Ledger defects): build rows appended twice on resume (bd_dd116bc58894 zubu-connect, bd_7a2b6d665cb3 zubu-web share runId and ts); review-row iteration changed meaning at fc9c1a8e and omits skip-driven legs runs; fixDispatched is 0 on all 100 host review rows.",
+      "added": "2026-11-01T14:51:13.910Z",
+      "ticked": "2026-11-02T04:13:45.439Z",
+      "archived": "2026-11-02T04:13:45.446Z"
+    },
+    {
+      "id": "q19",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "citations-check.js never scans docs/canonical, so the review-close canon still claims one full gate run per close attempt after 20261101/05 reused the suite gate — add docs/canonical to its scanned dirs and fix what it flags",
+      "added": "2026-11-02T02:59:00.932Z",
+      "ticked": "2026-11-02T04:26:18.218Z",
+      "archived": "2026-11-02T04:26:18.276Z"
+    },
+    {
+      "id": "q20",
+      "kind": "prompt",
+      "lane": "plan",
+      "payload": "Move the remaining 18 copied sync writers (including the 5 without EAGAIN retry: port-check, spec-number-check, workspace-scan, design-contract-check, catalog-inventory) onto lib/sync-write.js",
+      "added": "2026-11-02T03:47:06.011Z",
+      "ticked": "2026-11-02T04:36:25.178Z",
+      "archived": "2026-11-02T04:36:25.200Z"
+    },
+    {
+      "id": "q21",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "full suite silently drops the last 19 tests of tests/spec-status.test.js (1393 -> 1374/1375 tests, fail 0, cancelled 0) — gate goes green with tests unrun",
+      "added": "2026-11-02T04:47:17.928Z",
+      "ticked": "2026-11-02T05:42:27.809Z",
+      "archived": "2026-11-02T05:42:27.820Z"
+    },
+    {
+      "id": "q16",
+      "kind": "prompt",
+      "lane": "plan",
+      "payload": "Feedback Loop blind spot: direction flips that discard shipped code leave no ledger row, so core.md § Incident Policy can never count them. Add one ledger row (a) when spec-state-gate moves a spec to superseded, and (b) when the review stage's merge-back deletes a file that a done spec's File Plan added, each carrying class and the superseding decision or ADR id, readable by fleet-reader as escapes.byClass. No prose, no guard yet. Evidence and numbers: docs/audit/pipeline-efficiency-audit-2026-11-01.md leak 1. Leg durations are already covered by 20261101/05, do not duplicate.",
+      "added": "2026-11-01T14:51:13.680Z",
+      "after": {
+        "spec": "specs/20261101/07-the-gate-is-scoped-and-the-slow-tier-has-a-home.md"
+      },
+      "ticked": "2026-11-02T06:39:27.520Z",
+      "archived": "2026-11-02T06:39:27.530Z"
+    },
+    {
+      "id": "q14",
+      "kind": "brief",
+      "brief": "31",
+      "archived": "2026-11-02T09:05:47.980Z"
+    },
+    {
+      "id": "q22",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "review driver warns 'durable ledger row no longer readable' after drainStoppedRows moved the GATE_RED row into the main ledger on purpose — false alarm on every stopped-then-recovered review (seen on 20261101/11)",
+      "added": "2026-11-02T07:53:41.922Z",
+      "ticked": "2026-11-02T09:55:38.241Z",
+      "archived": "2026-11-02T09:55:38.248Z"
+    },
+    {
+      "id": "q23",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "smoke-port test flakes under parallel runs: fixture bootCommand touches ready before trapping TERM, so an early SIGTERM exits 143 (seen in review rv_e028d73852e2)",
+      "added": "2026-11-02T09:05:47.980Z",
+      "ticked": "2026-11-02T13:12:20.029Z",
+      "archived": "2026-11-02T13:12:20.036Z"
+    },
+    {
+      "id": "q27",
+      "kind": "prompt",
+      "lane": "plan",
+      "payload": "spec 20261103/08: queue-side origin, trigger and batch fields so a lane-born fix names the lane that bore it (fanout-driver then admits depth-1 births by origin, not by after.spec)",
+      "added": "2026-11-03T13:55:14.088Z",
+      "after": {
+        "spec": "specs/20261103/06-the-fan-out-drains-the-queue.md"
+      },
+      "ticked": "2026-11-03T14:14:52.500Z",
+      "archived": "2026-11-03T14:14:52.508Z"
+    },
+    {
+      "id": "q28",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "review ESCALATE queue pick records laneExit in review-state.json then prints 'delete <sidecarDir>', so a fan-out lane following the step loses the laneExit --mark returned reads (specs/20261103/04 advisory a0)",
+      "added": "2026-11-03T15:17:18.550Z",
+      "ticked": "2026-11-03T15:38:06.208Z",
+      "archived": "2026-11-03T15:38:06.215Z"
+    },
+    {
+      "id": "q25",
+      "kind": "prompt",
+      "lane": "plan",
+      "payload": "policy.stops.rejectWithEvidence: auto-accept a disposer reject that carries an executed repro (needs a disposer return-shape field; sits beside 'only the user waives')",
+      "added": "2026-11-03T10:13:47.193Z",
+      "after": {
+        "spec": "specs/20261103/04-predictable-stops-become-host-policy.md"
+      },
+      "ticked": "2026-11-03T15:41:12.527Z",
+      "archived": "2026-11-03T15:41:12.541Z"
+    },
+    {
+      "id": "q29",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "fix.md's waive/reject step never reads policy.stops.rejectWithEvidence, so /spec:fix asks about a finding the review driver would auto-accept on an executed repro; apply the same accept-on-repro rule (spec-review-driver.js ~1647), waives stay human",
+      "added": "2026-11-04T01:23:05.775Z",
+      "ticked": "2026-11-04T03:27:10.713Z",
+      "archived": "2026-11-04T03:27:10.720Z"
+    },
+    {
+      "id": "q30",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "policy.stops.prototypeClose defaults to ask, so every prototype-backed spec close asks the same delete question; flip the default to delete (contract, pictures, tests survive under design/prototypes/<stem>/; branch reflog-recoverable) with a 📌 line, veto --prototype keep; also route the review driver's repair-round-spent exit through stops.reviewEscalate (queue) instead of leaving the session to choose",
+      "added": "2026-11-04T01:23:06.673Z",
+      "ticked": "2026-11-04T03:46:59.246Z",
+      "archived": "2026-11-04T03:46:59.254Z"
+    },
+    {
+      "id": "q34",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "The fan-out leaves queued fix items and red-CI fixes out unless --include-fixes is passed, so a bare run (and every /clear resume) skips startable fix work the user expects drained; make the serial fix group the default with a 📌 line, replace the flag with an opt-out (--no-fixes), and update fanout.md, the driver's flag parsing and its tests",
+      "added": "2026-11-04T03:41:01.323Z",
+      "ticked": "2026-11-04T03:49:27.276Z",
+      "archived": "2026-11-04T03:49:27.285Z"
+    },
+    {
+      "id": "q35",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Opt-in interactive item picking for the fan-out: --pick prints the driver's candidate table, asks one multiSelect per chunk of 4 (max 16; beyond that only the first boundary window), and resolves to the existing --batch <ids> so the pick goes through the same boundary validation (self-surface, shared critical files, unmet dependencies) — never a silent --override-serial; confirm --batch itself re-applies those checks. A bare run stays automatic (📌 batch line); the pick is never written into queue order (spec-queue move exists for that)",
+      "added": "2026-11-04T03:47:42.630Z",
+      "ticked": "2026-11-04T03:49:27.527Z",
+      "archived": "2026-11-04T03:49:27.535Z"
+    },
+    {
+      "id": "q36",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Trim /spec:fanout to two modes, removing flags: a bare run is AUTO (derived batch in queue order, queued and red-CI fixes included as the serial fix group, one 📌 batch line, no question); /spec:fanout --pick is SELF-PICK (one multiSelect per chunk of 4 candidates, max 16, labelled in plain words, routed through the same boundary checks as auto — self-surface, shared critical files, unmet dependencies — never a bypass). Remove the user-facing --batch, --include-fixes, --override-serial, --ask, --lanes and positional spec paths unless a caller in the pipeline prints them (check spec-status --next, other commands, tests first; keep an internal driver flag only if --pick needs it). Net change should delete more doctrine and driver code than it adds; update fanout.md, the driver's flag parsing and its tests",
+      "added": "2026-11-04T03:49:27.770Z",
+      "ticked": "2026-11-04T03:50:55.442Z",
+      "archived": "2026-11-04T03:50:55.465Z"
+    },
+    {
+      "id": "q37",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Trim /spec:fanout to two modes, removing flags: a bare run is AUTO (derived batch in queue order, queued and red-CI fixes included as the serial fix group, one 📌 batch line, no question); /spec:fanout --pick is SELF-PICK (one multiSelect per chunk of 4 candidates, max 16, plain-word labels, routed through the same boundary checks as auto — self-surface, shared critical files, unmet dependencies — never a bypass). Remove the user-facing --batch, --include-fixes, --override-serial, --ask, --lanes and positional spec paths unless a caller in the pipeline prints them (check spec-status --next, other commands, tests first). CLEANUP IS PART OF THE FIX, not a follow-up: for every removed flag delete the code that only it reached — parsing in VALUE_FLAGS/options, state fields in spec-fanout.json (options.includeFixes, overrideSerial, specs, ask overlay read by pending-question.js stopPolicy if nothing else writes it), branches and helpers left unreachable, fixture options and tests that only pinned the flag, doctrine/grounding-contract/docs/canonical/README/changelog mentions, and printed remedies naming the flag. Prove it: grep for each removed flag and field name returns nothing outside the changelog entry, and the diff deletes more lines than it adds",
+      "added": "2026-11-04T03:50:56.454Z",
+      "ticked": "2026-11-04T03:51:34.228Z",
+      "archived": "2026-11-04T03:51:34.247Z"
+    },
+    {
+      "id": "q38",
+      "kind": "prompt",
+      "lane": "plan",
+      "payload": "q37  prompt\n\nTrim /spec:fanout to two modes, removing flags: a bare run is AUTO (derived batch in queue order, queued and red-CI fixes included as the serial fix group, one 📌 batch line, no question); /spec:fanout --pick is SELF-PICK (one multiSelect per chunk of 4 candidates, max 16, plain-word labels, routed through the same boundary checks as auto — self-surface, shared critical files, unmet dependencies — never a bypass). Remove the user-facing --batch, --include-fixes, --override-serial, --ask, --lanes and positional spec paths unless a caller in the pipeline prints them (check spec-status --next, other commands, tests first). CLEANUP IS PART OF THE FIX, not a follow-up: for every removed flag delete the code that only it reached — parsing in VALUE_FLAGS/options, state fields in spec-fanout.json (options.includeFixes, overrideSerial, specs, ask overlay read by pending-question.js stopPolicy if nothing else writes it), branches and helpers left unreachable, fixture options and tests that only pinned the flag, doctrine/grounding-contract/docs/canonical/README/changelog mentions, and printed remedies naming the flag. Prove it: grep for each removed flag and field name returns nothing outside the changelog entry, and the diff deletes more lines than it adds",
+      "added": "2026-11-04T03:51:35.204Z",
+      "ticked": "2026-11-04T03:51:49.710Z",
+      "archived": "2026-11-04T03:51:49.740Z"
+    },
+    {
+      "id": "q39",
+      "kind": "prompt",
+      "lane": "plan",
+      "payload": "Trim /spec:fanout to two modes, removing flags: a bare run is AUTO (derived batch in queue order, queued and red-CI fixes included as the serial fix group, one 📌 batch line, no question); /spec:fanout --pick is SELF-PICK (one multiSelect per chunk of 4 candidates, max 16, plain-word labels, routed through the same boundary checks as auto — self-surface, shared critical files, unmet dependencies — never a bypass). Remove the user-facing --batch, --include-fixes, --override-serial, --ask, --lanes and positional spec paths unless a caller in the pipeline prints them (check spec-status --next, other commands, tests first). CLEANUP IS PART OF THE FIX, not a follow-up: for every removed flag delete the code that only it reached — parsing in VALUE_FLAGS/options, state fields in spec-fanout.json (options.includeFixes, overrideSerial, specs, ask overlay read by pending-question.js stopPolicy if nothing else writes it), branches and helpers left unreachable, fixture options and tests that only pinned the flag, doctrine/grounding-contract/docs/canonical/README/changelog mentions, and printed remedies naming the flag. Prove it: grep for each removed flag and field name returns nothing outside the changelog entry, and the diff deletes more lines than it adds",
+      "added": "2026-11-04T03:51:50.709Z",
+      "ticked": "2026-11-04T04:13:48.635Z",
+      "archived": "2026-11-04T04:13:48.647Z"
+    },
+    {
+      "id": "q26",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "run the one deliberate expiry sweep once: node \"$(spec-paths test-expiry)\" --root . --all-done --apply (after 20261103/05 ships, on the installed plugin that carries it)",
+      "added": "2026-11-03T12:50:06.310Z",
+      "after": {
+        "spec": "specs/20261103/05-tests-that-earn-their-keep.md"
+      },
+      "ticked": "2026-11-04T04:34:34.969Z",
+      "archived": "2026-11-04T04:34:34.977Z"
+    },
+    {
+      "id": "q31",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Repeated always-same asks outside the drivers: /spec:init policy rounds 1+2 (8 questions; write POLICY_DEFAULTS with one 📌 line per key, veto --ask-policy), init substrate create, init no-remote CI inert, init write-confirm when the dry-run shows no drift; /spec:plan critical 'lock it now?' (lock + 📌, veto --draft); /spec:fix authored-strings decisions stop (print as 📌 veto window, stops.fixDecisions); /spec:doctor --fix per-patch yes (apply all cited patches, veto --ask; test deletion stays human)",
+      "added": "2026-11-04T01:23:07.274Z",
+      "ticked": "2026-11-05T02:54:43.849Z",
+      "archived": "2026-11-05T02:54:43.860Z"
+    },
+    {
+      "id": "q43",
+      "kind": "spec",
+      "spec": "specs/20261103/15-shared-files-land-by-rebase.md",
+      "archived": "2026-11-05T02:54:43.860Z"
+    },
+    {
+      "id": "q42",
+      "kind": "spec",
+      "spec": "specs/20261103/14-the-fan-out-has-two-modes.md",
+      "archived": "2026-11-05T02:54:43.860Z"
+    },
+    {
+      "id": "q44",
+      "kind": "spec",
+      "spec": "specs/20261104/01-the-legs-seal-the-manifest.md",
+      "archived": "2026-11-05T02:54:43.860Z"
+    },
+    {
+      "id": "q33",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "fanout-driver inspectReturned marks every /spec:fix lane 'stopped — returned without a recognised stop' because it requires a clean worktree, but /spec:fix appends its fix row to .claude/spec-runs.jsonl uncommitted after /git:commit (q29 lane, 2026-11-04); the merge step never runs and the fix row is lost with the worktree. Treat a dirty tree whose only change is spec-runs.jsonl appends as merge-ready and promote the rows at MERGE like spec lanes do",
+      "added": "2026-11-04T03:27:05.479Z",
+      "ticked": "2026-11-05T02:54:44.080Z",
+      "archived": "2026-11-05T02:54:44.091Z"
+    },
+    {
+      "id": "q24",
+      "kind": "brief",
+      "brief": "33",
+      "ticked": "2026-11-05T02:54:44.310Z",
+      "archived": "2026-11-05T02:54:44.320Z"
+    },
+    {
+      "id": "q32",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "Fan-out lane worktrees are cut from a stale base (the harness worktree for spec 08 sat at 7558f342 after spec 06 merged as 00f8cd2a), so a lane builds on old code; the dispatch prompt's first command must fast-forward the lane branch to the main root's HEAD and refuse if it cannot. Also the build driver's preflight moves a spec to implementing while a depends_on spec is not done on the lane's base — refuse there with the remedy instead",
+      "added": "2026-11-04T02:14:03.333Z",
+      "ticked": "2026-11-05T02:54:44.546Z",
+      "archived": "2026-11-05T02:54:44.557Z"
+    },
+    {
+      "id": "q40",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "tag sole-executor tests [invariant]: run the suite under --experimental-test-coverage once per test file, mark every test that is the only executor of a spec/scripts code path with [invariant] in its title, so the catch-up sweep under spec 13's keep rule keeps real guards; root cause: no existing test carries the tag the new keep rule reads",
+      "added": "2026-11-04T04:34:34.762Z",
+      "after": {
+        "spec": "specs/20261103/13-a-change-is-sized-by-its-files.md"
+      },
+      "batch": "2026-11-04T02:09:33.596Z",
+      "ticked": "2026-11-05T02:54:44.785Z",
+      "archived": "2026-11-05T02:54:44.795Z"
+    },
+    {
+      "id": "q41",
+      "kind": "prompt",
+      "lane": "fix",
+      "payload": "run the catch-up expiry sweep once under spec 13's keep rule, after the [invariant] tagging pass: node spec/scripts/expire-tests.js --root . --all-done --apply, commit the deletions, record tests and wall-clock before and after; root cause: ~1,150 AC-tagged tests of closed specs predate close-time expiry (replaces q26, whose gate was spec 20261103/05 and whose rule retired only 83)",
+      "added": "2026-11-04T04:34:35.206Z",
+      "after": {
+        "spec": "specs/20261103/13-a-change-is-sized-by-its-files.md"
+      },
+      "batch": "2026-11-04T02:09:33.596Z",
+      "ticked": "2026-11-05T02:54:45.018Z",
+      "archived": "2026-11-05T02:54:45.029Z"
+    }
+  ]
+}

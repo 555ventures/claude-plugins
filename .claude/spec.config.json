@@ -1,46 +1,6 @@
 {
-  "generatedBy": "spec@7.268.0",
-  "contractHash": "90a8038bcdd4",
-  "trunk": "main",
-  "gateCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js {testFiles}",
   "testCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js --test-reporter=spec --test-reporter-destination=stdout",
-  "postGateCommand": "{testCommand}",
   "setupCommand": "npm install",
-  "testNameFilter": "--test-name-pattern={name}",
-  "runtime": {
-    "inert": "marketplace of CLI plugins and dependency-free scripts — no bootable app; the autopilot daemon is parked (JJ 2026-08-18, confirmed 2026-08-20)"
-  },
-  "capabilities": {
-    "forge": "github",
-    "skipReportPattern": "ℹ skipped (\\d+)",
-    "testCountPattern": "ℹ tests (\\d+)",
-    "ciPoll": {
-      "intervalSeconds": 30,
-      "timeoutSeconds": 600
-    }
-  },
-  "patternsScript": "scripts/spec-patterns.sh",
-  "layerGroups": [
-    [
-      "doctrine",
-      "scripts"
-    ]
-  ],
-  "agentMap": {
-    "tests": "plugin-tests",
-    "doctrine": "doctrine-author",
-    "scripts": "gate-scripts",
-    "default": "general-purpose"
-  },
-  "routing": {
-    "tests": "tests/*.test.js rows",
-    "doctrine": "spec/commands/*.md, spec/doctrine/*.md, spec/agents/*.md, spec/templates/*, git/commands/*.md, spec/hooks/hooks.json, plugin manifests",
-    "scripts": "spec/scripts/*.js|*.sh, spec/bin/*, scripts/*, spec/workflows/wf-*.js (frozen design/enforce scripts)"
-  },
-  "pipelineRules": ".claude/rules/spec-pipeline.md",
-  "enforcementManifest": ".claude/rules/enforcement.json",
-  "rulesEnforcementHash": "f333e8050707",
-  "policy": {
-    "closeSuite": "always"
-  }
+  "trunk": "main",
+  "forge": "github"
 }

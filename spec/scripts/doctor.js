@@ -40,7 +40,7 @@ function check(root) {
     process.stderr.write(`testCommand finished in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`)
     if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand}`)
     else if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
-    else if (r.status > 1) f.push(`testCommand: exited ${r.status}, expected 0 or 1`)
+    else if (r.status !== 0) f.push(`testCommand: exited ${r.status} — the suite is not green: ${(r.tail || '').trim().split('\n').pop()}`)
   }
   let ig = ''
   try { ig = fs.readFileSync(path.join(root, '.gitignore'), 'utf8') } catch { /* none */ }

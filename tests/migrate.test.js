@@ -8,6 +8,7 @@ const { tmpdir, gitRepo, runNode } = require('./helpers')
 
 const V7 = '/home/jj/projects/claude-plugins'
 const real = fs.existsSync(path.join(V7, '.git'))
+const hasTag = () => { try { execFileSync('git', ['-C', V7, 'rev-parse', '-q', '--verify', 'spec-v7-final'], { stdio: 'ignore' }); return true } catch { return false } }
 const git = (d, ...a) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8' })
 const mig = (d, ...a) => { const r = runNode('scripts/migrate.js', ['--root', d, '--json', ...a]); assert.strictEqual(r.status, 0, r.stderr); return JSON.parse(r.stdout) }
 
@@ -119,9 +120,22 @@ test('seats: mapped from policy.models; absent writes none; existing v8 seats ke
   assert.deepStrictEqual(trimConfig('/nonexistent', { testCommand: 't', seats: kept, policy: { models: { workers: 'haiku' } } }).seats, kept)
 })
 
-test('real v7 host copy: plan, apply, idempotent', { skip: !real, timeout: 120000 }, () => {
+test('real v7 host copy: plan, apply, idempotent', { skip: !real || !hasTag(), timeout: 120000 }, () => {
   const d = tmpdir('v7copy')
   fs.cpSync(V7, d, { recursive: true, mode: fs.constants.COPYFILE_FICLONE, filter: (s) => !/\/(node_modules|\.claude\/worktrees)(\/|$)/.test(s) })
+  // Once the source repo itself is migrated, rebuild its v7 state: the spec-v7-final tag plus
+  // the newest git-dir backup migrate left. This also proves the documented rollback path.
+  if (!fs.existsSync(path.join(d, '.claude/spec-runs.jsonl'))) {
+    git(d, 'checkout', '-q', '-f', 'spec-v7-final'); git(d, 'clean', '-fdq', '-e', 'node_modules')
+    const bk = path.join(d, '.git/spec-v7-backup'); const last = fs.readdirSync(bk).sort().pop()
+    for (const f of fs.readdirSync(path.join(bk, last))) {
+      if (f === 'refs.txt') continue
+      fs.cpSync(path.join(bk, last, f), path.join(d, '.git', f), { recursive: true })
+    }
+    for (const line of fs.readFileSync(path.join(bk, last, 'refs.txt'), 'utf8').split('\n').filter(Boolean)) {
+      const [sha, ref] = line.split(' '); git(d, 'update-ref', ref, sha)
+    }
+  }
   const adrs = fs.readdirSync(path.join(d, 'docs/adr')).length
   const p = mig(d)
   assert.ok(p.ops.length > 20)

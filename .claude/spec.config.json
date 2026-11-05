@@ -1,5 +1,5 @@
 {
-  "testCommand": "node --test --test-timeout=45000 --test-force-exit --require ./scripts/test-stdout-blocking.js --test-reporter=spec --test-reporter-destination=stdout",
+  "testCommand": "npm test",
   "setupCommand": "npm install",
   "trunk": "main",
   "forge": "github"

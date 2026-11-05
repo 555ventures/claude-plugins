@@ -61,7 +61,7 @@ function isoAdded(v) {
   if (typeof v === 'number') t = v < 1e11 ? v * 1000 : v
   else if (typeof v === 'string' && /^\d+$/.test(v.trim())) { const n = Number(v); t = n < 1e11 ? n * 1000 : n }
   else if (typeof v === 'string') t = Date.parse(v)
-  return new Date(Number.isFinite(t) ? t : 0).toISOString()
+  return new Date(Number.isFinite(t) && t > 0 ? t : Date.now()).toISOString()
 }
 
 function convertQueue(root, q) {

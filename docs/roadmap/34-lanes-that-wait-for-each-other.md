@@ -55,8 +55,12 @@ lane never rewrites a locked decision on its own:
   semantic conflict the textual rebase missed. The resolve prompt names the live trunk head.
 - **A lane never edits Decisions.** run.md and doctrine say it in one line each; at FIX a
   decision that cannot be met is a pending question (`amend` with the proposed text as the
-  option description), never an edit to the spec or to another spec. REVIEW blocks a diff that
-  changes a locked Decisions row or any other spec file.
+  option description), never an edit to the spec or to another spec. The same holds when a
+  rebase resolution finds a Decision no longer satisfiable on the moved trunk (shop-bltr's lane
+  08 dropped two of its Decisions as superseded by the lane merged before it, with no reviewer
+  yet): the lane stops with an `amend` question naming the Decision and the trunk commit, it
+  does not decide. REVIEW blocks a diff that changes a locked Decisions row or any other spec
+  file, and a resolution that leaves a Decision unmet without that question.
 - **The report tells the truth after a rebase.** MERGE_READY and the batch report print the
   lane branch's current head, not the pre-rebase commit.
 - **The contract matches the code.** docs/v8/interface-contract.md lists the marks that exist

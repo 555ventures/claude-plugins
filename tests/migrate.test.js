@@ -245,3 +245,23 @@ test('AC-20261105-04-10 no backup, or a backup with no lane/after, plans no queu
   fs.writeFileSync(path.join(b, 'spec-queue.json'), JSON.stringify({ version: 1, seq: 1, items: [{ id: 'q3', kind: 'prompt', payload: 'x' }] }))
   assert.ok(!mig(d).ops.some((o) => o.op === 'queue-fields'))
 })
+
+test('a live v8 fan-out is never a v7 leftover: plan keeps spec-fanout.json and the run cache, --apply refuses while lanes are out', () => {
+  const { d } = migrated()
+  const common = path.join(d, '.git')
+  fs.writeFileSync(path.join(common, 'spec-fanout.json'), JSON.stringify({ step: 'WAIT', batch: [{ id: '1', stem: 'a', status: 'dispatched' }], waited: [], answered: [] }))
+  fs.mkdirSync(path.join(common, 'spec-run-cache'), { recursive: true }); fs.writeFileSync(path.join(common, 'spec-run-cache/x.json'), '{}')
+  const p = mig(d)
+  assert.ok(!p.ops.some((o) => o.op === 'delete' && /spec-fanout\.json|spec-run-cache/.test(o.path)), JSON.stringify(p.ops))
+  assert.strictEqual(p.liveFanout, true)
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(r.status, 2)
+  assert.match(r.stderr, /fan-out is in flight/)
+  assert.ok(fs.existsSync(path.join(common, 'spec-fanout.json')))
+  assert.ok(fs.existsSync(path.join(common, 'spec-run-cache/x.json')))
+  // idle v8 record (every lane merged): still never deleted, and --apply is allowed
+  fs.writeFileSync(path.join(common, 'spec-fanout.json'), JSON.stringify({ step: 'REPORT', batch: [{ id: '1', stem: 'a', status: 'merged' }] }))
+  const p2 = mig(d)
+  assert.strictEqual(p2.liveFanout, false)
+  assert.ok(!p2.ops.some((o) => o.op === 'delete' && /spec-fanout\.json/.test(o.path)))
+})

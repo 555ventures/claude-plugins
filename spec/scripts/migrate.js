@@ -188,9 +188,14 @@ function plan(root) {
   // git dir leftovers
   const privs = [common]
   if (exists(path.join(common, 'worktrees'))) for (const n of fs.readdirSync(path.join(common, 'worktrees'))) privs.push(path.join(common, 'worktrees', n))
+  // v8's fan-out state shares v7's file name. A v8 record ({step, batch[]}) is never a leftover:
+  // with lanes out, the migration refuses; idle, the file is left to the driver.
+  const fan = readJson(path.join(common, 'spec-fanout.json'), null)
+  const v8Fan = fan && typeof fan.step === 'string' && Array.isArray(fan.batch) ? fan : null
+  const liveFanout = !!(v8Fan && v8Fan.batch.some((l) => l && l.status !== 'merged' && l.status !== 'dismissed'))
   for (const d of privs) for (const n of ['spec-fanout.json', 'spec-delegated', 'spec-lane-exit.json', 'spec-wave-open'])
-    if (exists(path.join(d, n))) add('delete', path.join(d, n))
-  if (exists(path.join(common, 'spec-run-cache'))) add('delete', path.join(common, 'spec-run-cache'))
+    if (exists(path.join(d, n)) && !(n === 'spec-fanout.json' && d === common && v8Fan)) add('delete', path.join(d, n))
+  if (exists(path.join(common, 'spec-run-cache')) && !v8Fan) add('delete', path.join(common, 'spec-run-cache'))
   const refs = git.raw(['for-each-ref', '--format=%(refname)', 'refs/spec-review/'], root).stdout.split('\n').filter(Boolean)
   for (const r of refs) add('ref', r)
   // .gitignore / .gitattributes
@@ -212,7 +217,7 @@ function plan(root) {
   if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) warns.push('.claude/settings.local.json is tracked and may hold a token — run: git rm --cached .claude/settings.local.json')
   const wts = git.worktreeList(root).slice(1).filter((w) => path.relative(fs.realpathSync(root), w).startsWith('..'))
   if (wts.length) warns.push('git worktree entries outside this repo (copied repo?) — never touched: ' + wts.join('; '))
-  return { ops, dropped, lost, listed, owned, warns, testCommand, fills }
+  return { ops, dropped, lost, listed, owned, warns, testCommand, fills, liveFanout }
 }
 
 // ---- apply ----------------------------------------------------------------------------------
@@ -280,6 +285,10 @@ function main(argv) {
   const root = i >= 0 ? path.resolve(argv[i + 1]) : process.cwd()
   const doApply = argv.includes('--apply')
   const p = plan(root)
+  if (doApply && p.liveFanout) {
+    process.stderr.write(`migrate: refusing --apply while a fan-out is in flight (${path.join(gitCommonDir(root), 'spec-fanout.json')}) — finish or dismiss its lanes, then re-run\n`)
+    return 2
+  }
   if (doApply && p.ops.length) {
     const dirty = git.raw(['status', '--porcelain'], root).stdout.split('\n').filter(Boolean)
     if (dirty.length) {

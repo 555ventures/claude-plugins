@@ -415,6 +415,8 @@ const steps = {
   },
   'gate-repaired'(s, flags, ctx) {
     const root = ctx.root
+    const on = git.currentBranch(root); const trunk = st.readConfig(root).trunk
+    if (on !== trunk) refuse(`${root} is on ${on}, not ${trunk} — check out ${trunk} there, then re-run`)
     if (git.sh(['status', '--porcelain', '--untracked-files=no'], root)) refuse(`${root} has uncommitted changes — commit the repair, then mark gate-repaired`)
     const lane = s.batch.find((l) => l.id === s.red.lane)
     const g = host.gate(root, st.readConfig(root))

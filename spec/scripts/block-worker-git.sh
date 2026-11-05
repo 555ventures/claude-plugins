@@ -57,7 +57,7 @@ function scan(cmd, dir, dirs, verbs, depth, cwd = dir) {
         else {
           // Read-only or additive forms are harmless in the main checkout (still blocked inside a lane).
           const rest = w.slice(k + 1); const sub = rest.find((x) => !x.startsWith("-")) || ""
-          const harmless = (a === "branch" && !rest.some((x) => /^-[a-zA-Z]*[dDmMfc]/.test(x)) && (!sub || rest.some((x) => /^(--list|-l|-v|-vv|-a|-r|--show-current)$/.test(x))))
+          const harmless = (a === "branch" && !rest.some((x) => /^-[a-zA-Z]*[dDmMfc]|^--(delete|move|copy|force|set-upstream|unset-upstream|edit-description)/.test(x)) && (!sub || rest.some((x) => /^(--list|-l|-v|-vv|-a|-r|--show-current)$/.test(x))))
             || (a === "worktree" && /^(list|prune)$/.test(sub)) || (a === "stash" && /^(list|show)$/.test(sub))
           if (a === "rebase" && rest[0] === "--continue") break
           verbs.push({ v: a, harmless, d: require("fs").existsSync(d) ? d : cwd })
@@ -79,40 +79,37 @@ try {
   const cmd = String((j.tool_input || {}).command || "")
   const dirs = [], verbs = []
   scan(cmd, cwd, dirs, verbs, 0)
-  // A real blocked verb anywhere in the command decides; only its directories are checked.
-  const blocked = verbs.filter((x) => BLOCK.has(x.v) && !x.harmless)
-  const pick = blocked.length ? blocked : verbs.filter((x) => BLOCK.has(x.v))
-  if (pick.length) process.stdout.write(pick[0].v + (blocked.length ? "" : " (harmless)") + "\n" + [...new Set(pick.map((x) => x.d))].join("\n"))
+  // One record per blocked verb; bash judges each in its own directory, so no verb covers for another.
+  const recs = verbs.filter((x) => BLOCK.has(x.v)).map((x) => `${x.v}\t${x.harmless ? 1 : 0}\t${x.d}`)
+  if (recs.length) process.stdout.write(recs.join("\n"))
 } catch {}' 2>/dev/null)" || exit 0
 [ -n "$parsed" ] || exit 0
-verb="${parsed%%$'\n'*}"
-harmless=0; case "$verb" in *" (harmless)") harmless=1; verb="${verb% (harmless)}" ;; esac
-case "$verb" in commit|push|merge|rebase) lane_only=1 ;; *) lane_only=$harmless ;; esac
-
-gd=""; open=""; lane=""
-while IFS= read -r d; do
-  [ -n "$d" ] || continue
+# Each record: verb<TAB>harmless<TAB>dir. commit/push/merge/rebase are blocked only inside a lane;
+# a harmless listing is never blocked outside one; everything else is blocked in any checkout of a
+# repo while one of its lanes is open.
+while IFS=$'\t' read -r verb harmless d; do
+  [ -n "$verb" ] && [ -n "$d" ] || continue
   g="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)" || continue
-  if [ -f "$g/spec-lane-open" ]; then gd="$g"; lane="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$d")"; break; fi
-  if [ "$lane_only" = 0 ]; then
-    c="$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)" || continue
-    case "$c" in /*) ;; *) c="$d/$c" ;; esac
-    for m in "$c"/spec-lane-open "$c"/worktrees/*/spec-lane-open; do [ -f "$m" ] && open="$m" && break; done
+  if [ -f "$g/spec-lane-open" ]; then
+    lane="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$d")"
+    {
+      echo "BLOCKED: git $verb inside a spec lane worktree ($lane) — agents never run git here; /spec:run commits and merges at its own steps."
+      echo "  stale marker (no run in flight)? remove $g/spec-lane-open"
+    } >&2
+    exit 2
   fi
-done < <(printf '%s\n' "${parsed#*$'\n'}")
-
-if [ -n "$gd" ]; then
-  {
-    echo "BLOCKED: git $verb inside a spec lane worktree ($lane) — agents never run git here; /spec:run commits and merges at its own steps."
-    echo "  stale marker (no run in flight)? remove $gd/spec-lane-open"
-  } >&2
-  exit 2
-fi
-if [ -n "$open" ]; then
-  {
-    echo "BLOCKED: git $verb while a spec lane is open ($open) — it can discard work in this checkout; the driver owns git until the run ends."
-    echo "  stale marker (no run in flight)? rm $open"
-  } >&2
-  exit 2
-fi
+  case "$verb" in commit|push|merge|rebase) continue ;; esac
+  [ "$harmless" = 1 ] && continue
+  c="$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)" || continue
+  case "$c" in /*) ;; *) c="$d/$c" ;; esac
+  for m in "$c"/spec-lane-open "$c"/worktrees/*/spec-lane-open; do
+    if [ -f "$m" ]; then
+      {
+        echo "BLOCKED: git $verb while a spec lane is open ($m) — it can discard work in this checkout; the driver owns git until the run ends."
+        echo "  stale marker (no run in flight)? rm $m"
+      } >&2
+      exit 2
+    fi
+  done
+done < <(printf '%s\n' "$parsed")
 exit 0

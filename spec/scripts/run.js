@@ -34,7 +34,7 @@ function specInfo(ctx) {
   const typed = ctx.arg.replace(/^@/, '') // under root first (a lane's shell sits in the main checkout); else as typed from the shell's directory
   const abs = fs.existsSync(path.resolve(ctx.root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(ctx.root, typed) : path.resolve(process.cwd(), typed)
   const rel = path.relative(ctx.root, abs)
-  if (rel.startsWith('..') || !fs.existsSync(abs)) refuse(`no spec at ${abs} — pass a spec path inside ${ctx.root}`)
+  if (rel.startsWith('..') || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) refuse(`no spec at ${abs} — pass a spec path inside ${ctx.root}`)
   const m = /(\d{8})\/(\d+)-[^/]+\.md$/.exec(rel.split(path.sep).join('/'))
   const stem = path.basename(abs, '.md')
   return { abs, rel, stem, id: m ? `${m[1]}/${m[2]}` : stem }
@@ -60,7 +60,7 @@ function go(state, step, extra = {}) {
 
 function load(ctx) {
   const s = specInfo(ctx)
-  const ignored = (p) => git.raw(['check-ignore', '-q', p], ctx.root).status === 0
+  const ignored = (p) => git.raw(['check-ignore', '-q', p], ctx.root).status !== 1 // 0 ignored; 128 (e.g. a symlinked dir) is not "missing"
   if (!ignored(path.relative(ctx.root, st.runPath(s.abs))) || (cfgOf(ctx).worktreePerSpec !== false && !ignored('.claude/worktrees/x')))
     refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
   return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel }
@@ -94,6 +94,8 @@ function open(state, ctx) {
   const specBranch = `spec/${s.stem}`
   const cur = git.currentBranch(ctx.root)
   const lane = pending.isFanoutLane(ctx.root)
+  if (!lane && cur === 'HEAD') refuse('detached HEAD — check out a branch, then re-run')
+  if (!lane && !git.branchExists(ctx.root, cfg.trunk)) refuse(`trunk "${cfg.trunk}" is not a branch here — set trunk in .claude/spec.config.json, then re-run`)
   const why = lane ? 'fanout lane — this session sits in the lane worktree'
     : inPlaceFlag ? '--in-place'
     : cfg.worktreePerSpec === false ? 'host policy worktreePerSpec: false'
@@ -348,7 +350,7 @@ function derive(state, ctx) {
       name: 'CONFLICTS', mark: 'conflicts-resolved',
       body: ask(state, ctx, `merging ${state.branch} into ${cfgOf(ctx).trunk} conflicts in ${state.conflicts.join(', ')}. Resolve them?`, [
         { label: 'resolve', description: `resolve each file by both sides' intent in ${mainRoot(ctx.root)}, leave it uncommitted, then mark conflicts-resolved` },
-        { label: 'abort', description: 'run `git reset --merge` there; marking conflicts-resolved later retries the merge' },
+        { label: 'abort', description: 'run `git reset --merge` there (from your own shell if the hook refuses); marking conflicts-resolved later retries the merge' },
       ]),
     }
     case 'MERGE_READY': return { name: 'MERGE_READY', body: git.rebasing(wtOf(state, ctx)) ? REBASE_LEFT : state.report || '' }

@@ -31,7 +31,7 @@ function lock(root, arg, confirmed) {
   const missing = REQUIRED.filter((n) => !Object.keys(s.sections).some((k) => k === n || k.startsWith(n + ' ') || k.startsWith(n + '(')))
   if (missing.length) throw new Refusal(`missing sections: ${missing.join(', ')}`)
   if (s.markers) throw new Refusal(`${s.markers} [NEEDS CLARIFICATION:] marker(s) left — resolve them first`)
-  const prose = s.body.replace(/`[^`\n]*`/g, '') // inline code may say `--root <path>`
+  const prose = (readText(file).replace(/^```[\s\S]*?^```/gm, '').replace(/`[^`\n]*`/g, '')) // code may say `--root <path>` or <Title>Hi</Title>
   const left = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => prose.includes(t))
   if (left.length) throw new Refusal(`template placeholders left: ${left.join(' ')} — fill them in first`)
   if (s.frontmatter.architecture === true && !confirmed) throw new Refusal("architecture change — needs the user's yes; re-run with --confirmed")

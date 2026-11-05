@@ -61,7 +61,7 @@ const writeConfig = (root, cfg) => writeJson(configPath(root), cfg)
 
 // ---- spec documents -----------------------------------------------------------------------
 
-const FM_RE = /^---\n([\s\S]*?)\n---(?:\n|$)/
+const FM_RE = /^\uFEFF?---\n([\s\S]*?)\n---(?:\n|$)/
 
 function fmScalar(raw) {
   const t = raw.trim()
@@ -178,7 +178,7 @@ function readSpec(specPath) {
 function writeStatus(specPath, status) {
   const text = fs.readFileSync(specPath, 'utf8')
   const eol = text.includes('\r\n') ? '\r\n' : '\n'
-  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
+  const m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/.exec(text)
   if (!m) throw new Error(`state: ${specPath} has no frontmatter`)
   const block = m[1]
   const next = /^status:.*$/m.test(block)

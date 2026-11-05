@@ -409,6 +409,16 @@ test('OPEN refuses a dirty tracked tree, a fanout lane worktree and a spec branc
   assert.strictEqual(h.g('rev-parse', 'spec/01-thing').trim(), h.g('rev-parse', 'main').trim())
 })
 
+test('OPEN refuses a detached HEAD and a trunk that is not a branch', () => {
+  const h = fixture()
+  h.g('checkout', '-q', '--detach')
+  let r = h.run(); assert.strictEqual(r.status, 2); assert.match(r.stderr, /detached HEAD/)
+  h.g('checkout', '-q', 'main')
+  fs.writeFileSync(path.join(h.dir, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'node check.js', trunk: 'master' }))
+  h.g('commit', '-q', '-am', 'trunk master')
+  r = h.run(); assert.strictEqual(r.status, 2); assert.match(r.stderr, /trunk "master" is not a branch/)
+})
+
 test('--in-place on a feature branch finishes on that branch and never merges into trunk', () => {
   const h = fixture()
   h.g('checkout', '-q', '-b', 'feat/pr')
@@ -455,10 +465,13 @@ test('the hook blocks destructive git in every checkout while a lane is open, an
   assert.strictEqual(hook(h.dir, 'git branch').status, 0, 'listing branches is harmless in the main checkout')
   assert.strictEqual(hook(h.dir, 'git worktree list && git stash list && git branch -a').status, 0)
   assert.strictEqual(hook(h.dir, 'git branch && git reset --hard').status, 2, 'a harmless verb never unlocks the rest of the command')
+  assert.strictEqual(hook(h.dir, 'git commit -m x && git reset --hard').status, 2, 'nor does a lane-only verb placed first')
+  assert.strictEqual(hook(h.dir, 'git branch -v --delete --force feat').status, 2, 'long-form delete is not a listing')
   assert.strictEqual(hook(h.dir, 'git branch -D x').status, 2); assert.strictEqual(hook(h.dir, 'git checkout -b feat').status, 2, 'moving the checkout mid-run breaks the merge')
   assert.strictEqual(hook(h.wt, 'git branch').status, 2, 'inside the lane every blocked verb stays blocked')
   const other = tmpdir('other'); gitRepo(other)
   assert.strictEqual(hook(h.dir, `git -C ${other} reset --hard`).status, 0, 'another repo is not guarded by this one\'s lane')
+  assert.strictEqual(hook(h.dir, `git -C ${other} branch -D x && git commit -m y`).status, 0, 'each verb is judged in its own directory')
   fs.rmSync(h.wt, { recursive: true, force: true }) // a crash left the marker behind
   const r = hook(h.dir, 'git reset --hard')
   assert.strictEqual(r.status, 2); assert.match(r.stderr, /stale marker.*rm /, 'the way out is printed')

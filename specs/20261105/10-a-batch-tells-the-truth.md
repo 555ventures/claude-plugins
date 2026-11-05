@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: implementing
+status: done
 area: fanout
 depends_on: [specs/20261105/07-a-batch-ends-clean.md]
 brief: 38

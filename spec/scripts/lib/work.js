@@ -50,7 +50,7 @@ function readSpecs(root) {
     specs.push({
       path: rel, status: st.specState(root, rel, String(fm.status)), brief: b,
       depends_on: (Array.isArray(dep) ? dep : dep ? [dep] : []).map(strip),
-      superseded_by: fm.superseded_by || null, filePlan: doc.filePlan, filePaths: doc.filePlan.map((f) => f.path),
+      superseded_by: fm.superseded_by || null, filePlan: doc.filePlan, filePaths: doc.filePaths,
     })
   }
   return specs

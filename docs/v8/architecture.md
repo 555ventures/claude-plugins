@@ -33,7 +33,7 @@ spec/
   templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md, proto-overlay.js
   hooks/hooks.json
   scripts/
-    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js
+    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js
     run.js fanout.js queue.js status.js plan.js init.js doctor.js migrate.js
     genesis.js mocks.js prototype.js connect.js release.js red-check.js
     state-gate.sh block-worker-git.sh block-cross-worktree-writes.sh merge-back.sh
@@ -178,11 +178,21 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 ## 9. Other drivers
 
 - `queue.js`: `next|list|add|move|done|show`. ≤ 200 LOC. Duplicate payload refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done briefs and specs.
-- `status.js`: the dashboard. Roadmap (collapsed ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔),
-  🎯 Next (`qNN` prompt rows, top pick, `⚡` lanes with `🚦 solo` / `🔶` overlap markers), ⚠️ pending
-  questions, footer verdict; `--all` adds 🕓 after that, ⛔ blocked and 🧹 hygiene
-  (`doctor.check(root, {probe: false})`); `NN` reports one brief's dependency readiness. `--json`
-  extends, never renames.
+- `status.js` (≤ 400 LOC): the dashboard, v7's screen drawn from `lib/next.js`. Roadmap (collapsed
+  ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔), 🎯 Next (`qNN` prompt rows, then
+  `⚡ N parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):` with `🔶`
+  overlap pairs, a lone pick with `🚦 solo`, or a blocked pick with `⏳ after …` branches), up to three `⚠️` decide lines, footer
+  (`🟢`/`🟠`/`⬜`, `· N more open`, `· N more to decide (--all)`, `· H hygiene findings (/spec:doctor)`);
+  `--all` adds 🕓 after that, ⛔ blocked, all decide lines and 🧹 hygiene (the derivation's own
+  anomalies: `queue-unparseable`, `queue-orphan`, `unknown-status`, `orphan-stamp`,
+  `unparsed-dependency`, `unknown-dependency`, `skipped-spec`, `hand-tracked-status`); `NN` reports one
+  brief's dependency readiness. `--json` is `{briefs, specs, superseded, anomalies, next}`. No ledger
+  lines, no run-in-flight or fan-out footer, no `doctor.check`.
+- `lib/next.js` (≤ 250 LOC): v7's derivation on v8's state, no CLI. `derive(root)` reads `lib/work.js`
+  (`readSpecs`, `readBriefs`, `gateWhy`) and the queue file (read-only overlay, off in a linked
+  worktree; `reconcile` applied in memory) and returns entries with blockers (`depends_on`, brief
+  dependencies, `after` gates), the anomaly catalogue (`decide` or `hygiene`), `laneAdmission`
+  (pairwise, no cap) and `nothingNextLine`. Fanout keeps its own cap and admission.
 - `init.js`: detect test command (package.json scripts.test, pytest, go test, cargo test),
   trunk, write config; ask only what cannot be detected (one AskUserQuestion). ≤ 150 LOC.
 - `doctor.js`: config valid, testCommand runs (exit 0 or 1, never "command not found"),

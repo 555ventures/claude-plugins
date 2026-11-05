@@ -127,29 +127,55 @@ function parseIntent(text) {
   return intent
 }
 
-function parseTableRows(text) {
-  const rows = []
-  let header = null
-  for (const line of text.split('\n')) {
-    if (!/^\s*\|/.test(line)) { if (header && rows.length) break; continue }
-    const cells = line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
-    if (cells.every((c) => /^:?-+:?$/.test(c))) continue
-    if (!header) { header = cells.map((c) => c.toLowerCase()); continue }
-    rows.push(cells)
-  }
-  return { header: header || [], rows }
+// A path cell split into paths: backticks and a trailing `(generated)` dropped, `{a,b}` expanded,
+// then cut on `+` and commas.
+function splitPlanCell(cell) {
+  const c = cell.replace(/`/g, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const brace = /^(.*)\{([^}]+)\}(.*)$/.exec(c)
+  if (brace) return brace[2].split(',').map((x) => (brace[1] + x.trim() + brace[3]).trim())
+  return c.split(/\s*\+\s*|,\s*/).map((x) => x.trim()).filter(Boolean)
 }
 
+// Every File Plan table (a maximal run of `|` lines): its first row binds the columns when a cell reads
+// `file` or `path`; otherwise column 1 is the path and that first row is data.
+function filePlanTables(text) {
+  const tables = []
+  let cur = null
+  for (const line of text.split('\n')) {
+    const t = line.trim()
+    if (!t.startsWith('|')) { cur = null; continue }
+    const cells = t.replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
+    if (cells.every((c) => !c || /^:?-{2,}:?$/.test(c))) continue
+    if (!cur) {
+      cur = { header: false, path: 0, action: -1, summary: -1, rows: [] }
+      tables.push(cur)
+      const p = cells.findIndex((c) => /^(file|path)s?$/i.test(c.replace(/`/g, '')))
+      if (p >= 0) {
+        Object.assign(cur, { header: true, path: p, action: cells.findIndex((c) => /^actions?$/i.test(c)), summary: cells.findIndex((c) => /^summary$/i.test(c)) })
+        continue
+      }
+    }
+    cur.rows.push(cells)
+  }
+  return tables
+}
+
+// `filePlan`: the rows of every headed table, as run.js prints them. `filePaths`: every path the
+// tables name, split, deduplicated, in first-seen order.
+const FILE_ACTION = /^(create|modify|delete|rename|move)\b/i
 function parseFilePlan(text) {
-  const { header, rows } = parseTableRows(text)
-  const col = (n) => header.indexOf(n)
-  const [p, a, s] = [col('path'), col('action'), col('summary')]
-  if (p < 0) return []
-  return rows.map((r) => ({
-    path: (r[p] || '').replace(/`/g, ''),
-    action: a < 0 ? '' : (r[a] || '').toUpperCase(),
-    summary: s < 0 ? '' : r[s] || '',
-  })).filter((r) => r.path)
+  const filePlan = []; const filePaths = []
+  for (const t of filePlanTables(text)) {
+    for (const r of t.rows) {
+      const action = t.action < 0 ? '' : r[t.action] || ''
+      if (t.header) filePlan.push({ path: (r[t.path] || '').replace(/`/g, ''), action: action.toUpperCase(), summary: t.summary < 0 ? '' : r[t.summary] || '' })
+      for (const p of splitPlanCell(r[t.path] || '')) {
+        const isPath = p.includes('/') || /\.[A-Za-z0-9]+$/.test(p) || (FILE_ACTION.test(action) && /^[A-Za-z0-9_-]+$/.test(p))
+        if (isPath && !filePaths.includes(p)) filePaths.push(p)
+      }
+    }
+  }
+  return { filePlan: filePlan.filter((r) => r.path), filePaths }
 }
 
 function parseAcs(text) {
@@ -171,7 +197,7 @@ function readSpec(specPath) {
   return {
     frontmatter, body, title, sections,
     intent: parseIntent(section(sections, 'Intent')),
-    filePlan: parseFilePlan(section(sections, 'File Plan')),
+    ...parseFilePlan(section(sections, 'File Plan')),
     acs: parseAcs(section(sections, 'Acceptance Criteria')),
     markers: (body.match(/\[NEEDS CLARIFICATION:/g) || []).length,
   }

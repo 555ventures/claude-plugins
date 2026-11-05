@@ -108,4 +108,40 @@ function gitRepo(dir, opts = {}) {
   return (...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
 }
 
-module.exports = { ROOT, SPEC, RUN_ROOT, tmpdir, runNode, runBash, freePort, gitRepo }
+// The tagged v7 scripts, extracted once per process. A missing tag throws: the oracle fails, it never skips.
+let v7Dir = null
+function v7Scripts() {
+  if (!v7Dir) {
+    const dir = tmpdir('v7')
+    const tar = execFileSync('git', ['-C', ROOT, 'archive', 'spec-v7-final', 'spec/scripts'], { maxBuffer: 256 * 1024 * 1024 })
+    execFileSync('tar', ['-x', '-C', dir], { input: tar })
+    v7Dir = path.join(dir, 'spec', 'scripts')
+  }
+  return v7Dir
+}
+
+// A copy of a fixture host beside it whose queue file is the v1 twin of the host's v2 file and whose
+// specs read the state v8 derives (a live sidecar stamps `implementing`), so v7 can run on it.
+function v1Queue(root) {
+  const { normBrief } = require(path.join(SPEC, 'scripts/lib/work.js'))
+  const st = require(path.join(SPEC, 'scripts/lib/state.js'))
+  const twin = root + '-v1'
+  fs.rmSync(twin, { recursive: true, force: true })
+  fs.cpSync(root, twin, { recursive: true })
+  const q = st.readJson(path.join(st.gitCommonDir(root), 'spec-queue.json'))
+  if (q) {
+    const items = q.items.map((i) => {
+      const base = { id: i.id, kind: i.kind }
+      const body = i.kind === 'brief' ? { brief: normBrief(i.payload) } : i.kind === 'spec' ? { spec: i.payload } : { payload: i.payload, lane: i.type }
+      return { ...base, ...body, ...(i.after ? { after: i.after } : {}), ...(i.done ? { ticked: true } : {}), added: i.added }
+    })
+    st.writeJson(path.join(st.gitCommonDir(twin), 'spec-queue.json'), { version: 1, seq: q.seq, items })
+  }
+  const { readSpecs } = require(path.join(SPEC, 'scripts/lib/work.js'))
+  for (const s of readSpecs(root)) {
+    if (st.readSpec(path.join(twin, s.path)).frontmatter.status !== s.status) st.writeStatus(path.join(twin, s.path), s.status)
+  }
+  return twin
+}
+
+module.exports = { ROOT, SPEC, RUN_ROOT, tmpdir, runNode, runBash, freePort, gitRepo, v7Scripts, v1Queue }

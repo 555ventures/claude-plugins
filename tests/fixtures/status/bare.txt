@@ -1,18 +1,33 @@
-```
+
 🗺️ Roadmap
-   ✅ 01–02           P0  done (2 briefs, 2 specs)
-   🔨 02a primitives  P0  ▓▓▓▓▓▓▓░░░ 3/4
-   ⬜ 03–04           P1  unplanned (2 briefs)
-   ⛔ 05 old          P1  superseded
+   ✅ 01–02       P0     done (2 briefs, 2 specs)
+   🔨 03 rounds   P1     ░░░░░░░░░░ 0/1
+   🔨 04a boards  P1     ░░░░░░░░░░ 0/2
+   🔨 04b views   P1     ▓▓▓░░░░░░░ 1/3
+   ⬜ 05–06       P1–P2  unplanned (5 briefs)
+   🔨 07 export   P2     ░░░░░░░░░░ 0/2
+   ⛔ 08–09       P2     superseded (2 briefs)
 
 🎯 Next
-q1  tighten the retry copy on the failed-send banner
-q2  notifications: a removed or soft-deleted staff person has no ended suppression rule so the look…
-⚡ 3 parallel lanes ready — /spec:fanout
-/spec:run @specs/20261102/04-prim-d.md
-/spec:run @specs/20261103/01-lane-b.md
-/spec:run @specs/20261103/02-lane-c.md
-   └─ 🔶 04-prim-d.md × 01-lane-b.md: merge-conflict risk: src/shared.js
+q3   /spec:plan tighten the retry copy
+q4   /spec:prototype the board drag handle
+q5   /spec:fix digest sends twice
+q6   📌 decide: drop the legacy export?
+q7   notifications: a removed or soft-deleted staff person has no ended suppression rule so the loo…
+q11  /spec:fix after schema
+q14  /spec:plan after retired
+⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):
+/spec:run @specs/20261104/01-boards.md
+/spec:run @specs/20261104/04-adhoc-a.md
+/spec:run @specs/20261104/05-adhoc-b.md
+   ├─ 🔶 01-boards.md × 04-adhoc-a.md: merge-conflict risk: src/shared.ts
+   ├─ 🔶 01-boards.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts
+   └─ 🔶 04-adhoc-a.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts, src/z.ts (+2 more)
 
-🟢 next is ready · 8 more open · 1 hygiene finding (/spec:doctor)
-```
+⚠️ Brief 07 (export) moved on, but its dependency 06 (reports) was never planned.
+   Plan it now?  /spec:plan @docs/roadmap/06-reports.md
+⚠️ Brief 05 (settings) is unplanned while later brief 07 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/05-settings.md
+⚠️ Brief 05a (alpha) is unplanned while later brief 07 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/05A-alpha.md
+🟢 next is ready · 19 more open · 2 more to decide (--all) · 7 hygiene findings (/spec:doctor)

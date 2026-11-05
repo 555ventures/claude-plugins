@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: implementing
 area: status
 depends_on: [specs/20261105/04-items-carry-type-and-gate.md]
 brief: n/a

@@ -104,6 +104,42 @@ test('readSpec reads a CRLF spec the same as LF and an architecture: no intent a
   assert.strictEqual(s.filePlan.length, 2, 'CRLF must not break the table parse')
 })
 
+test('readSpec reads every File Plan table; filePaths splits `+`, commas, {a,b} and (generated) cells', () => {
+  const body = `---
+status: draft
+---
+# T
+
+## File Plan
+
+| Path | Action | Summary |
+|---|---|---|
+| \`src/a.ts + src/b.ts\` | MODIFY | both |
+| src/{c,d}.ts (generated) | CREATE | pair |
+| Dockerfile | CREATE | bare root file |
+| notes | NOTE | a word, not a file |
+| src/a.ts | MODIFY | again |
+
+Prose between tables.
+
+| File | Why |
+|------|-----|
+| docs/x.md, docs/y.md | two |
+
+| docs/headerless.md | MODIFY | first column is the path |
+
+## Contracts
+
+| Path | Action |
+|---|---|
+| not/in/the/plan.js | MODIFY |
+`
+  const s = S.readSpec(writeSpec(tmpdir('plan'), body))
+  assert.deepStrictEqual(s.filePaths, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'Dockerfile', 'docs/x.md', 'docs/y.md', 'docs/headerless.md'])
+  assert.deepStrictEqual(s.filePlan.map((r) => [r.path, r.action]), [['src/a.ts + src/b.ts', 'MODIFY'], ['src/{c,d}.ts (generated)', 'CREATE'], ['Dockerfile', 'CREATE'], ['notes', 'NOTE'], ['src/a.ts', 'MODIFY'], ['docs/x.md, docs/y.md', '']], 'filePlan keeps the rows of every headed table as written')
+  assert.deepStrictEqual(S.readSpec(writeSpec(tmpdir('plan'), SPEC_DOC)).filePaths, ['spec/scripts/queue.js', 'tests/queue.test.js'])
+})
+
 test('writeStatus rewrites only the status line and keeps CRLF endings', () => {
   const dir = tmpdir('status')
   const p = writeSpec(dir, SPEC_DOC.replace(/\n/g, '\r\n'))

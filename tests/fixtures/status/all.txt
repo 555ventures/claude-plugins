@@ -1,33 +1,70 @@
-```
+
 🗺️ Roadmap
-   ✅ 01–02           P0  done (2 briefs, 2 specs)
-   🔨 02a primitives  P0  ▓▓▓▓▓▓▓░░░ 3/4
-   ⬜ 03–04           P1  unplanned (2 briefs)
-   ⛔ 05 old          P1  superseded
+   ✅ 01–02       P0     done (2 briefs, 2 specs)
+   🔨 03 rounds   P1     ░░░░░░░░░░ 0/1
+   🔨 04a boards  P1     ░░░░░░░░░░ 0/2
+   🔨 04b views   P1     ▓▓▓░░░░░░░ 1/3
+   ⬜ 05–06       P1–P2  unplanned (5 briefs)
+   🔨 07 export   P2     ░░░░░░░░░░ 0/2
+   ⛔ 08–09       P2     superseded (2 briefs)
 
 🎯 Next
-q1  tighten the retry copy on the failed-send banner
-q2  notifications: a removed or soft-deleted staff person has no ended suppression rule so the look…
-⚡ 3 parallel lanes ready — /spec:fanout
-/spec:run @specs/20261102/04-prim-d.md
-/spec:run @specs/20261103/01-lane-b.md
-/spec:run @specs/20261103/02-lane-c.md
-   └─ 🔶 04-prim-d.md × 01-lane-b.md: merge-conflict risk: src/shared.js
+q3   /spec:plan tighten the retry copy
+q4   /spec:prototype the board drag handle
+q5   /spec:fix digest sends twice
+q6   📌 decide: drop the legacy export?
+q7   notifications: a removed or soft-deleted staff person has no ended suppression rule so the loo…
+q11  /spec:fix after schema
+q14  /spec:plan after retired
+⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):
+/spec:run @specs/20261104/01-boards.md
+/spec:run @specs/20261104/04-adhoc-a.md
+/spec:run @specs/20261104/05-adhoc-b.md
+   ├─ 🔶 01-boards.md × 04-adhoc-a.md: merge-conflict risk: src/shared.ts
+   ├─ 🔶 01-boards.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts
+   └─ 🔶 04-adhoc-a.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts, src/z.ts (+2 more)
 
 🕓 after that:
-/spec:run @specs/20261103/03-capped.md
-   └─ 🤷 beyond the lane cap (3)
-/spec:run @specs/20261103/04-unqueued.md
-   └─ 🤷 not queued — /spec:queue add specs/20261103/04-unqueued.md
-/spec:plan @specs/20261103/06-drafty.md
-   └─ 🤷 draft — /spec:plan first
+/spec:run @specs/20261104/13-boards-two.md
+   └─ ⛓️ shared brief 04a
+/spec:run @specs/20261104/06-export-a.md
+   └─ ⛓️ brief 07 depends on 04a
+/spec:run @specs/20261104/02-views.md
+/spec:run @specs/20261104/14-views-two.md
+   └─ ⛓️ brief 04b depends on 04a
 
 ⛔ blocked:
-/spec:run @specs/20261103/05-gated.md
-   └─ ⏳ 02-lane-c
+/spec:plan @specs/20261103/01-rounds.md
+   └─ ⏳ brief 99
+q10  /spec:plan wait for rounds
+   └─ ⏳ after brief 03
+q12  /spec:plan after export a
+   └─ ⏳ after 06-export-a
+q13  /spec:plan after a ghost
+   └─ ⏳ after 99-ghost
+/spec:run @specs/20261104/08-gated.md
+   └─ ⏳ after brief 03
+/spec:run @specs/20261104/07-export-b.md
+   ├─ ⏳ 06-export-a
+   └─ ⏳ 01-rounds
 
-🧹 Hygiene (1) — /spec:doctor
-   [stale sidecar] specs/20261101/09-ghost.run — rm -r specs/20261101/09-ghost.run
+⚠️ Brief 07 (export) moved on, but its dependency 06 (reports) was never planned.
+   Plan it now?  /spec:plan @docs/roadmap/06-reports.md
+⚠️ Brief 05 (settings) is unplanned while later brief 07 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/05-settings.md
+⚠️ Brief 05a (alpha) is unplanned while later brief 07 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/05A-alpha.md
+⚠️ Brief 05b (beta) is unplanned while later brief 07 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/05B-beta.md
+⚠️ Brief 05c (gamma) is unplanned while later brief 07 has moved on.
+   Still wanted?  /spec:plan @docs/roadmap/05C-gamma.md
 
-🟢 next is ready · 8 more open · 1 hygiene finding (/spec:doctor)
-```
+🧹 Hygiene (7) — /spec:doctor
+   [queue-orphan] spec-queue.json item points at brief 77, which has no docs/roadmap/77-*.md — remove it with `/spec:queue done 77`, reorder it away with `/spec:queue move 77 <n>`, or restore the brief file
+   [unknown-status] specs/20261104/11-wip.md has status: wip — not in the spec lifecycle (draft → hardened → implementing → done); fix the frontmatter (to retire a preserved spec: status: superseded)
+   [orphan-stamp] specs/20261104/12-orphan.md stamps brief: 99 but no docs/roadmap/99-*.md exists (brief renamed/deleted, or typo)
+   [unparsed-dependency] docs/roadmap/05-settings.md Depends on: item "2026-style" is not a brief id (NN or NNa) — ignored; if it names a spec-level gate, move it into the brief body
+   [unknown-dependency] docs/roadmap/03-rounds.md depends on brief 99, which doesn't exist
+   [skipped-spec] specs/20261101/02-schema.md is done but its dependency specs/20261103/01-rounds.md is still draft
+   [hand-tracked-status] docs/roadmap/00-overview.md Sequence table carries hand-tracked status cell(s): done — statuses live only in this derivation; strip that column
+🟢 next is ready · 19 more open · 7 hygiene findings (/spec:doctor)

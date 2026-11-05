@@ -1,353 +1,373 @@
 'use strict'
+// The status screen is v7's: the oracle runs v7's spec-status.js (tag spec-v7-final) beside status.js on
+// three fixture hosts and the outputs must be byte-identical; the other tests pin what the oracle cannot.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { tmpdir, gitRepo, runNode } = require('./helpers')
+const { spawnSync } = require('child_process')
+const { SPEC, ROOT, tmpdir, gitRepo, runNode, v7Scripts, v1Queue } = require('./helpers')
+const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 
 const w = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
-const spec = (st, brief, files) => `---\nstatus: ${st}\nbrief: ${brief}\n---\n# S\n\n## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n${files.map((f) => `| ${f} | MODIFY | x |`).join('\n')}\n`
-const run = (d, ...a) => runNode('scripts/status.js', [...a, '--root', d, '--json'])
-const queue = (d, ...a) => runNode('scripts/queue.js', [...a, '--root', d])
-
-test('roadmap states: done needs every spec done and the brief item closed; any spec means implementing', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'docs/roadmap/00-overview.md', '# Overview\n')
-  for (const n of ['01-a', '02-b', '03-c', '04-d', '05-e']) w(d, `docs/roadmap/${n}.md`, `# ${n.slice(0, 2)} — T${n}\n` + (n === '04-d' ? '\n> Superseded by 01\n' : ''))
-  w(d, 'specs/20261104/01-x.md', spec('done', '01', ['a.js']))
-  w(d, 'specs/20261104/02-y.md', spec('done', '02', ['b.js']))
-  w(d, 'specs/20261104/03-y2.md', spec('hardened', '02', ['b2.js'])) // one done + one hardened
-  w(d, 'specs/20261104/04-v.md', spec('done', '05', ['e.js']))
-  queue(d, 'add', 'docs/roadmap/05-e.md') // all specs done: spec 04 D5 ticks the brief item on the next queue read
-  const r = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(r.roadmap.map((b) => b.state), ['done', 'implementing', 'open', 'superseded', 'done'])
-  queue(d, 'done', '05')
-  assert.strictEqual(JSON.parse(run(d).stdout).roadmap[4].state, 'done', 'closing the brief item by number completes it')
-  queue(d, 'add', 'undefined') // a v7-migrated brief item with no number must not crash status
-  assert.strictEqual(run(d).status, 0)
-  const text = runNode('scripts/status.js', ['--root', d]).stdout
-  for (const e of ['✅', '🔨', '⬜', '⛔', '🗺️']) assert.ok(text.includes(e))
-})
-
-test('empty queue verdict; next ready verdict', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  assert.match(JSON.parse(run(d).stdout).verdict, /^⬜/)
-  assert.ok(!runNode('scripts/status.js', ['--root', d]).stdout.includes('Roadmap'), 'no briefs → no roadmap header')
-  queue(d, 'add', 'do a thing')
-  const r = JSON.parse(run(d).stdout)
-  assert.strictEqual(r.next, '/spec:plan do a thing')
-  assert.match(r.verdict, /^🟢/)
-})
-
-test('lanes: hardened queue specs in order, File Plan overlap regardless', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'specs/20261104/01-a.md', spec('hardened', 'n/a', ['x.js']))
-  w(d, 'specs/20261104/02-b.md', spec('hardened', 'n/a', ['x.js', 'y.js']))
-  w(d, 'specs/20261104/03-c.md', spec('hardened', 'n/a', ['z.js']))
-  w(d, 'specs/20261104/04-d.md', spec('draft', 'n/a', ['w.js']))
-  for (const n of ['01-a', '02-b', '03-c', '04-d']) queue(d, 'add', `specs/20261104/${n}.md`)
-  const r = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(r.lanes, ['specs/20261104/01-a.md', 'specs/20261104/02-b.md', 'specs/20261104/03-c.md'], 'overlapping 02-b is a lane too; the draft is not')
-  assert.match(runNode('scripts/status.js', ['--root', d]).stdout, /⚡ 3 parallel lanes ready[\s\S]*\/spec:run @specs\/20261104\/03-c\.md/)
-})
-
-test('pending questions in root and worktrees turn the verdict yellow', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  queue(d, 'add', 'task')
-  w(d, '.claude/worktrees/spec-1/.claude/pending-question.json', JSON.stringify({ lane: 'spec-1', question: 'which?', options: [], answer: null }))
-  w(d, '.claude/pending-question.json', JSON.stringify({ lane: 'root', question: 'done?', options: [], answer: { label: 'x' } }))
-  const r = JSON.parse(run(d).stdout)
-  assert.strictEqual(r.questions.length, 1)
-  assert.match(r.verdict, /^🟡/)
-})
-
-test('Next skips a brief that already has specs in progress, shows an unqueued run in flight, and names fanout', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'docs/roadmap/01-a.md', '# 01 — A\n')
-  queue(d, 'add', 'docs/roadmap/01-a.md'); queue(d, 'add', 'do a thing')
-  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:plan docs/roadmap/01-a.md')
-  w(d, 'specs/20261104/01-x.md', spec('draft', '01', ['a.js']))
-  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:plan specs/20261104/01-x.md', 'a brief mid-plan points at its draft')
-  w(d, 'specs/20261104/01-x.md', spec('hardened', '01', ['a.js']))
-  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:queue add specs/20261104/01-x.md', 'a hardened spec nobody queued is the next step')
-  queue(d, 'add', 'specs/20261104/01-x.md')
-  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:plan do a thing', 'a planned brief is not offered for planning again; its spec waits its turn')
-  w(d, 'specs/20261104/01-x.run/state.json', '{"step":"REVIEW"}')
-  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:run specs/20261104/01-x.md', 'a run started by hand comes first')
-  fs.rmSync(path.join(d, 'specs/20261104/01-x.run'), { recursive: true })
-  w(d, 'specs/20261104/02-y.md', spec('hardened', 'n/a', ['b.js']))
-  queue(d, 'add', 'specs/20261104/01-x.md'); queue(d, 'add', 'specs/20261104/02-y.md')
-  assert.match(runNode('scripts/status.js', ['--root', d]).stdout, /2 parallel lanes ready — \/spec:fanout/)
-})
-
-test('a live fan-out owns Next; a run whose spec already merged (stopped at CONFLICTS) still counts as in flight', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  const st = require(path.join(require('./helpers').SPEC, 'scripts/lib/state.js'))
-  w(d, 'specs/20261104/01-x.md', spec('done', 'n/a', ['a.js']))
-  queue(d, 'add', 'specs/20261104/01-x.md')
-  w(d, 'specs/20261104/01-x.run/state.json', JSON.stringify({ step: 'CONFLICTS', spec: 'specs/20261104/01-x.md' }))
-  let r = JSON.parse(run(d).stdout)
-  assert.strictEqual(r.next, '/spec:run specs/20261104/01-x.md', 'the sidecar, not the frontmatter, says it is in flight')
-  assert.strictEqual(JSON.parse(runNode('scripts/queue.js', ['list', '--json', '--root', d]).stdout).items.length, 1, 'the queue item is not closed while the run is in flight')
-  st.writeFanout(d, { step: 'WAIT', batch: [] })
-  r = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual([r.next, r.lanes], ['/spec:fanout', []])
-  assert.match(r.verdict, /fan-out is in flight/)
-})
-
-test('a run resting at CONFLICTS or ESCALATE is "waiting on you", and every run in flight is counted', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'specs/20261104/01-x.md', spec('implementing', 'n/a', ['a.js'])); w(d, 'specs/20261104/01-x.run/state.json', '{"step":"ESCALATE"}')
-  w(d, 'specs/20261104/02-y.md', spec('implementing', 'n/a', ['b.js'])); w(d, 'specs/20261104/02-y.run/state.json', '{"step":"BUILD"}')
-  const r = JSON.parse(run(d).stdout)
-  assert.match(r.verdict, /🟡 a run is waiting on you \(2 runs\)/)
-})
-
-// ---- the dashboard (spec 20261105/01) ------------------------------------------------------
-
-const SPEC_DIR = require('./helpers').SPEC
 const GOLD = (n) => fs.readFileSync(path.join(__dirname, 'fixtures', 'status', n), 'utf8')
-const text = (d, ...a) => runNode('scripts/status.js', [...a, '--root', d])
+const status = (d, ...a) => runNode('scripts/status.js', [...a, '--root', d])
+const json = (d) => JSON.parse(status(d, '--json').stdout)
 const brief = (nn, title, phase, deps, extra = '') => `# ${nn} — ${title}\n\nPhase: ${phase} · Depends on: ${deps} · Primary workspaces: app\n\n## Result\n\nx\n${extra}`
-const specD = (st, b, files, deps) => `---\nstatus: ${st}\nbrief: ${b}\n${deps ? `depends_on: [${deps.join(', ')}]\n` : ''}---\n# S\n\n## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n${files.map((f) => `| ${f} | MODIFY | x |`).join('\n')}\n`
-const config = (d, cfg) => { w(d, '.claude/spec.config.json', JSON.stringify({ testCommand: 'true', ...cfg })); require(path.join(SPEC_DIR, 'scripts/init.js')).ensureGitignore(d) }
+const SUPERSEDED = '\n> **Superseded by** 04\n'
+const plan = (files) => `## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n${files.map((f) => `| ${f} | MODIFY | x |`).join('\n')}\n`
+const specDoc = (stat, { brief: b = 'n/a', deps, files = ['x.js'], tail = '' } = {}) =>
+  `---\n${stat === null ? '' : `status: ${stat}\n`}${b === null ? '' : `brief: ${b}\n`}${deps ? `depends_on: ${deps}\n` : ''}---\n# S\n\n${plan(files)}${tail}`
+const A = 'specs/20261104'
 
-// Briefs 01..05 (Phase P0,P0,P0,P1,P1,P1 by file order 01,02,02a,03,04,05), specs in every state,
-// a queue of two prompts and five specs, and exactly one hygiene finding (a stale sidecar).
-function fixture() {
+// v7 on the host's v1 twin, normalised by the three edits the spec allows.
+function v7Screen(host, ...flags) {
+  const twin = v1Queue(host)
+  const r = spawnSync(process.execPath, [path.join(v7Scripts(), 'spec-status.js'), '--root', twin, ...flags], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stderr)
+  const lines = []
+  for (const l of r.stdout.split('\n')) {
+    if (l.startsWith('📈')) { if (lines[lines.length - 1] === '') lines.pop(); continue }
+    lines.push(l)
+  }
+  return lines.join('\n').replace(/ · \d+ done since last release| · \d+ done, never released/g, '')
+    .replace(/`spec-queue (done|move) /g, '`/spec:queue $1 ').replace(/`spec-queue next`/g, '`/spec:queue next`')
+}
+
+// ---- the fixture hosts ---------------------------------------------------------------------
+
+function fullHost() {
   const d = tmpdir('status'); gitRepo(d)
-  config(d, { lanes: 3 })
-  w(d, 'docs/roadmap/00-overview.md', '# Overview\n')
+  w(d, 'docs/roadmap/00-overview.md', '# Overview\n\n| # | Brief | Status |\n|---|---|---|\n| 01 | foundation | done |\n| 02 | schema | |\n')
   w(d, 'docs/roadmap/01-foundation.md', brief('01', 'Foundation', 'P0', '—'))
   w(d, 'docs/roadmap/02-schema.md', brief('02', 'Schema', 'P0', '01'))
-  w(d, 'docs/roadmap/02a-primitives.md', brief('02a', 'Primitives', 'P0', '02'))
-  w(d, 'docs/roadmap/03-rounds.md', brief('03', 'Rounds', 'P1', '02a, 02'))
-  w(d, 'docs/roadmap/04-boards.md', brief('04', 'Boards', 'P1', '03, 99'))
-  w(d, 'docs/roadmap/05-old.md', brief('05', 'Old', 'P1', '—', '\n> Superseded by 04\n'))
-  w(d, 'specs/20261101/01-foundation.md', specD('done', '01', ['a.js']))
-  w(d, 'specs/20261101/02-schema.md', specD('done', '02', ['b.js']))
-  w(d, 'specs/20261101/09-ghost.run/keep', '')
-  fs.rmSync(path.join(d, 'specs/20261101/09-ghost.run/keep'))
-  for (const n of ['01-prim-a', '02-prim-b', '03-prim-c']) w(d, `specs/20261102/${n}.md`, specD('done', '02a', ['p.js']))
-  w(d, 'specs/20261102/04-prim-d.md', specD('hardened', '02a', ['src/shared.js', 'src/a.js']))
-  w(d, 'specs/20261103/06-drafty.md', specD('draft', 'n/a', ['src/g.js']))
-  w(d, 'specs/20261103/01-lane-b.md', specD('hardened', 'n/a', ['src/shared.js', 'src/b.js']))
-  w(d, 'specs/20261103/02-lane-c.md', specD('hardened', 'n/a', ['src/c.js']))
-  w(d, 'specs/20261103/03-capped.md', specD('hardened', 'n/a', ['src/d.js']))
-  w(d, 'specs/20261103/04-unqueued.md', specD('hardened', 'n/a', ['src/e.js']))
-  w(d, 'specs/20261103/05-gated.md', specD('hardened', 'n/a', ['src/f.js'], ['specs/20261103/02-lane-c.md']))
-  queue(d, 'add', 'tighten the retry copy on the failed-send banner')
-  queue(d, 'add', 'notifications: a removed or soft-deleted staff person has no ended suppression rule so the lookup returns a stale row and the digest still goes out')
-  for (const s of ['20261102/04-prim-d', '20261103/01-lane-b', '20261103/02-lane-c', '20261103/03-capped', '20261103/05-gated']) queue(d, 'add', `specs/${s}.md`)
+  w(d, 'docs/roadmap/03-rounds.md', brief('03', 'Rounds', 'P1', '02, 99'))
+  w(d, 'docs/roadmap/04A-boards.md', brief('04A', 'Boards', 'P1', '03'))
+  w(d, 'docs/roadmap/04B-views.md', brief('04B', 'Views', 'P1', '04a'))
+  w(d, 'docs/roadmap/05-settings.md', '# 05 — Settings\n\nPhase: P1 · Depends on: 02-B (02a-2; parts of 02a-3a),\n brief 04, 2026-style, none <!-- note -->\n · Primary workspaces: app\n\n## Result\n\nx\n')
+  for (const [n, slug] of [['05A', 'alpha'], ['05B', 'beta'], ['05C', 'gamma']]) w(d, `docs/roadmap/${n}-${slug}.md`, brief(n, slug, 'P1', '—'))
+  w(d, 'docs/roadmap/06-reports.md', brief('06', 'Reports', 'P2', '05'))
+  w(d, 'docs/roadmap/07-export.md', brief('07', 'Export', 'P2', '06, 04a'))
+  w(d, 'docs/roadmap/08-legacy.md', brief('08', 'Legacy', 'P2', '—', SUPERSEDED))
+  w(d, 'docs/roadmap/09-retired.md', brief('09', 'Retired', 'P2', '—', SUPERSEDED))
+  w(d, 'specs/20261101/01-foundation.md', specDoc('done', { brief: '01' }))
+  w(d, 'specs/20261101/02-schema.md', specDoc('done', { brief: '02', deps: '[specs/20261103/01-rounds.md]' }))
+  w(d, 'specs/20261103/01-rounds.md', specDoc('draft', { brief: '03' }))
+  w(d, `${A}/01-boards.md`, specDoc('hardened', { brief: '04a', files: ['src/shared.ts', 'src/boards.ts'] }))
+  w(d, '.claude/worktrees/spec-01-boards/specs/20261104/01-boards.run/state.json', '{"step":"BUILD"}')
+  w(d, `${A}/13-boards-two.md`, specDoc('hardened', { brief: '04a' }))
+  w(d, `${A}/02-views.md`, specDoc('hardened', { brief: '4B' }))
+  w(d, `${A}/14-views-two.md`, specDoc('hardened', { brief: '04b' }))
+  w(d, `${A}/03-views-done.md`, specDoc('done', { brief: '04b' }))
+  w(d, `${A}/04-adhoc-a.md`, specDoc('hardened', {
+    files: ['src/shared.ts + src/a.ts'],
+    tail: '\n### Second table\n\n| File | Why |\n|------|-----|\n| src/z.ts | z |\n| src/y.ts | y |\n| src/x.ts | x |\n',
+  }))
+  w(d, `${A}/05-adhoc-b.md`, specDoc('hardened', {
+    files: ['`src/{shared,b}.ts` (generated)', 'src/z.ts, src/y.ts', 'src/x.ts'],
+  }))
+  w(d, '.claude/worktrees/spec-05-adhoc-b/specs/20261104/05-adhoc-b.run/state.json', '{"step":"PARKED","ended":true}')
+  w(d, `${A}/06-export-a.md`, specDoc('hardened', { brief: '07', deps: `[${A}/09-retired.md]` }))
+  w(d, `${A}/07-export-b.md`, specDoc('hardened', { brief: '07', deps: '06-export-a.md, 01-rounds.md' }))
+  w(d, `${A}/08-gated.md`, specDoc('hardened'))
+  w(d, `${A}/09-retired.md`, specDoc('superseded', { brief: '06' }))
+  w(d, `${A}/10-nostatus.md`, specDoc(null))
+  w(d, `${A}/11-wip.md`, specDoc('wip'))
+  w(d, `${A}/12-orphan.md`, specDoc('done', { brief: '99' }))
+  w(d, `${A}/15-legacy.md`, specDoc('done', { brief: '08' }))
+  const long = 'notifications: a removed or soft-deleted staff person has no ended suppression rule so the lookup returns a stale row and the digest still goes out'
+  const items = [
+    { id: 'q1', kind: 'prompt', payload: 'already finished', type: 'plan', done: '2026-11-02T00:00:00.000Z' },
+    { id: 'q2', kind: 'brief', payload: 'docs/roadmap/04A-boards.md' },
+    { id: 'q3', kind: 'prompt', payload: 'tighten the retry copy', type: 'plan' },
+    { id: 'q4', kind: 'prompt', payload: 'the board drag handle', type: 'prototype' },
+    { id: 'q5', kind: 'prompt', payload: 'digest sends twice', type: 'fix' },
+    { id: 'q6', kind: 'prompt', payload: 'drop the legacy export?', type: 'decide' },
+    { id: 'q7', kind: 'prompt', payload: long },
+    { id: 'q8', kind: 'brief', payload: '3' },
+    { id: 'q9', kind: 'brief', payload: 'docs/roadmap/03-rounds.md' },
+    { id: 'q10', kind: 'prompt', payload: 'wait for rounds', type: 'plan', after: { brief: '03' } },
+    { id: 'q11', kind: 'prompt', payload: 'after schema', type: 'fix', after: { brief: '02' } },
+    { id: 'q12', kind: 'prompt', payload: 'after export a', type: 'plan', after: { spec: `${A}/06-export-a.md` } },
+    { id: 'q13', kind: 'prompt', payload: 'after a ghost', type: 'plan', after: { spec: `${A}/99-ghost.md` } },
+    { id: 'q14', kind: 'prompt', payload: 'after retired', type: 'plan', after: { spec: `${A}/09-retired.md` } },
+    { id: 'q15', kind: 'spec', payload: `${A}/08-gated.md`, after: { brief: '03' } },
+    { id: 'q16', kind: 'brief', payload: '01' },
+    { id: 'q17', kind: 'brief', payload: '77' },
+    { id: 'q18', kind: 'brief', payload: '07' },
+  ].map((i) => ({ added: '2026-11-01T00:00:00.000Z', ...i }))
+  st.writeQueue(d, { version: 2, seq: 18, items })
+  st.writeFanout(d, { step: 'WAIT', batch: [] })
+  w(d, '.claude/pending-question.json', JSON.stringify({ lane: 'root', question: 'which?', options: [], answer: null }))
   return d
 }
 
-test('AC-20261105-01-1 the bare screen matches the golden render: collapsed ranges, phase column, bar, lanes, footer', () => {
-  const d = fixture()
-  const r = text(d)
-  assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stdout, GOLD('bare.txt'))
-})
+const emptyHost = () => { const d = tmpdir('status'); gitRepo(d); return d }
 
-test('AC-20261105-01-5 AC-20261105-01-4 AC-20261105-01-6 --all adds after that, blocked and hygiene, and matches the golden render', () => {
-  const d = fixture()
-  w(d, 'marker.sh', 'touch ran.marker\n')
-  config(d, { lanes: 3, testCommand: 'sh marker.sh' })
-  const r = text(d, '--all')
-  assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stdout, GOLD('all.txt'))
-  assert.ok(!fs.existsSync(path.join(d, 'ran.marker')), 'status never runs the host testCommand')
-  assert.ok(!/blocked:|after that:|Hygiene/.test(text(d).stdout), 'the default screen has none of the --all sections')
-})
-
-test('AC-20261105-01-8 NN reports one brief\'s dependency readiness with an exit code', () => {
-  const d = fixture()
-  const met = text(d, '03'); assert.strictEqual(met.status, 0, met.stderr); assert.strictEqual(met.stdout, GOLD('brief-met.txt'))
-  const unmet = text(d, '04'); assert.strictEqual(unmet.status, 1); assert.strictEqual(unmet.stdout, GOLD('brief-unmet.txt'))
-  const none = text(d, '07'); assert.strictEqual(none.status, 2); assert.match(none.stderr, /docs\/roadmap/)
-  assert.deepStrictEqual(JSON.parse(text(d, '03', '--json').stdout), { brief: '03', name: 'rounds', dependencies: [{ brief: '02a', status: 'implementing', met: true }, { brief: '02', status: 'done', met: true }], ready: true })
-  const j = JSON.parse(text(d, '04', '--json').stdout)
-  assert.deepStrictEqual([j.ready, j.dependencies.map((x) => [x.brief, x.status, x.met])], [false, [['03', 'open', false], ['99', 'missing', false]]])
-  assert.strictEqual(text(d, '04', '--json').status, 1)
-  const hardenedOnly = tmpdir('status'); gitRepo(hardenedOnly)
-  w(hardenedOnly, 'docs/roadmap/02a-prim.md', brief('02a', 'Prim', 'P0', '—')); w(hardenedOnly, 'docs/roadmap/03-x.md', brief('03', 'X', 'P0', '02a'))
-  w(hardenedOnly, 'specs/20261104/01-h.md', specD('hardened', '02a', ['a.js']))
-  assert.match(text(hardenedOnly, '03').stdout, /^brief 03 \(x\): UNMET dependencies — 02a \(implementing\)$/m, 'a brief with only a hardened spec is built-not-yet')
-  assert.match(text(d, '01').stdout, /^brief 01 \(foundation\): all zero dependencies met$/m)
-})
-
-test('AC-20261105-01-2 queued prompts print as qNN rows before any command, padded and cut to 100 columns', () => {
+function allDoneHost(unplanned) {
   const d = tmpdir('status'); gitRepo(d)
-  const st = require(path.join(SPEC_DIR, 'scripts/lib/state.js'))
-  const long = 'word '.repeat(40).trim()
-  st.writeQueue(d, { version: 2, seq: 12, items: [{ id: 'q7', kind: 'prompt', payload: 'short\n  prompt  text', added: '2026-11-01T00:00:00Z' }, { id: 'q12', kind: 'prompt', payload: long, added: '2026-11-01T00:00:00Z' }] })
-  w(d, 'specs/20261104/01-a.md', specD('hardened', 'n/a', ['a.js'])); queue(d, 'add', 'specs/20261104/01-a.md')
-  const lines = text(d).stdout.split('\n')
-  const i7 = lines.indexOf('q7   short prompt text')
-  assert.ok(i7 > 0, lines.join('\n'))
-  const l12 = lines[i7 + 1]
-  assert.ok(l12.startsWith('q12  word word') && l12.endsWith('…') && [...l12].length === 100, l12)
-  assert.ok(lines.indexOf('/spec:run @specs/20261104/01-a.md') > i7 + 1, 'prompts come before the command line')
-  const j = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(j.prompts, [{ id: 'q7', payload: 'short\n  prompt  text' }, { id: 'q12', payload: long }])
+  w(d, 'docs/roadmap/01-foundation.md', brief('01', 'Foundation', 'P0', '—'))
+  if (unplanned) w(d, 'docs/roadmap/02-later.md', brief('02', 'Later', 'P1', '99'))
+  w(d, 'specs/20261101/01-foundation.md', specDoc('done', { brief: '01' }))
+  w(d, 'specs/20261101/02-extra.md', specDoc('done'))
+  return d
+}
+
+// ---- the oracle ----------------------------------------------------------------------------
+
+test('AC-20261105-05-1 v7\'s own script and status.js print the same bytes on the full, empty and all-done hosts', () => {
+  const hosts = { full: fullHost(), empty: emptyHost(), allDone: allDoneHost(true), allDoneNoBrief: allDoneHost(false) }
+  for (const [name, host] of Object.entries(hosts)) {
+    for (const flags of [[], ['--all']]) {
+      const mine = status(host, ...flags)
+      assert.strictEqual(mine.status, 0, mine.stderr)
+      assert.strictEqual(mine.stdout, v7Screen(host, ...flags), `${name} ${flags.join(' ') || 'bare'}`)
+    }
+  }
 })
 
-test('AC-20261105-01-3 one unblocked hardened spec among other open work is solo; lane pairs that share a File Plan path get a risk line', () => {
+test('AC-20261105-05-1 a missing v7 tag fails the oracle, it never skips', () => {
+  const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--verify', 'refs/tags/spec-v7-final'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'tag spec-v7-final must exist: the oracle has no skip path')
+  assert.ok(fs.existsSync(path.join(v7Scripts(), 'spec-status.js')))
+})
+
+test('the goldens are the full host\'s render (UPDATE_GOLDENS=1 regenerates them)', () => {
+  const d = fullHost()
+  const runs = { 'bare.txt': status(d), 'all.txt': status(d, '--all'), 'brief-met.txt': status(d, '04b'), 'brief-unmet.txt': status(d, '05') }
+  for (const [name, r] of Object.entries(runs)) {
+    if (process.env.UPDATE_GOLDENS) fs.writeFileSync(path.join(__dirname, 'fixtures', 'status', name), r.stdout)
+    assert.strictEqual(r.stdout, GOLD(name), name)
+  }
+  assert.deepStrictEqual(Object.values(runs).map((r) => r.status), [0, 0, 0, 1])
+})
+
+// ---- what the oracle cannot say ------------------------------------------------------------
+
+const lines = (r) => r.stdout.split('\n')
+const small = (files, queue) => {
   const d = tmpdir('status'); gitRepo(d)
-  w(d, 'specs/20261104/01-a.md', specD('hardened', 'n/a', ['x.js'])); w(d, 'specs/20261104/02-b.md', specD('draft', 'n/a', ['y.js']))
-  queue(d, 'add', 'specs/20261104/01-a.md')
-  assert.match(text(d).stdout, /\/spec:run @specs\/20261104\/01-a\.md\n   └─ 🚦 solo\n/)
-  fs.rmSync(path.join(d, 'specs/20261104/02-b.md')); queue(d, 'done', '01-a.md')
-  queue(d, 'add', 'specs/20261104/01-a.md')
-  assert.ok(!/solo/.test(text(d).stdout), 'nothing else open → no solo line')
-  // three lanes, two overlapping pairs: one line per pair, the last one closes the branch
-  for (const [n, f] of [['02-b', ['x.js', 'q.js', 'r.js']], ['03-c', ['x.js', 'z.js', 'q.js']]]) { w(d, `specs/20261104/${n}.md`, specD('hardened', 'n/a', f)); queue(d, 'add', `specs/20261104/${n}.md`) }
-  const out = text(d).stdout
-  assert.match(out, /⚡ 3 parallel lanes ready — \/spec:fanout\n\/spec:run @specs\/20261104\/01-a\.md\n\/spec:run @specs\/20261104\/02-b\.md\n\/spec:run @specs\/20261104\/03-c\.md\n/)
-  assert.match(out, /   ├─ 🔶 01-a\.md × 02-b\.md: merge-conflict risk: x\.js\n   ├─ 🔶 01-a\.md × 03-c\.md: merge-conflict risk: x\.js\n   └─ 🔶 02-b\.md × 03-c\.md: merge-conflict risk: x\.js, q\.js\n/)
-  w(d, 'specs/20261104/02-b.md', specD('hardened', 'n/a', ['x.js', 'q.js', 'r.js', 's.js'])); w(d, 'specs/20261104/03-c.md', specD('hardened', 'n/a', ['x.js', 'q.js', 'r.js', 's.js']))
-  assert.match(text(d).stdout, /02-b\.md × 03-c\.md: merge-conflict risk: x\.js, q\.js \(\+2 more\)/)
+  for (const [rel, text] of Object.entries(files)) w(d, rel, text)
+  if (queue) st.writeQueue(d, { version: 2, seq: queue.length, items: queue.map((i, n) => ({ id: 'q' + (n + 1), added: '2026-11-01T00:00:00.000Z', ...i })) })
+  return d
+}
+const rm = (d, rel) => fs.rmSync(path.join(d, rel), { recursive: true, force: true })
+
+test('AC-20261105-05-2 queued prompts print as typed qNN rows; gated ones wait under ⛔ blocked', () => {
+  const d = fullHost()
+  const bare = lines(status(d)); const all = lines(status(d, '--all'))
+  const next = bare.slice(bare.indexOf('🎯 Next'), bare.indexOf('⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):'))
+  assert.deepStrictEqual(next.slice(0, 5), ['🎯 Next', 'q3   /spec:plan tighten the retry copy', 'q4   /spec:prototype the board drag handle', 'q5   /spec:fix digest sends twice', 'q6   📌 decide: drop the legacy export?'])
+  const q7 = next.find((l) => l.startsWith('q7   notifications'))
+  assert.ok(q7.endsWith('…') && [...q7].length === 100, 'an untyped payload prints verbatim, cut to 100 columns')
+  assert.ok(next.includes('q11  /spec:fix after schema') && next.includes('q14  /spec:plan after retired'), 'a met brief gate and a superseded spec gate print')
+  for (const gated of ['q10', 'q12', 'q13']) assert.ok(!next.some((l) => l.startsWith(gated + ' ')), `${gated} is gated`)
+  assert.ok(!next.some((l) => l.startsWith('q1 ')), 'a done item prints nothing')
+  const blocked = all.slice(all.indexOf('⛔ blocked:'))
+  for (const [row, why] of [['q10  /spec:plan wait for rounds', '   └─ ⏳ after brief 03'], ['q12  /spec:plan after export a', '   └─ ⏳ after 06-export-a'], ['q13  /spec:plan after a ghost', '   └─ ⏳ after 99-ghost']]) {
+    assert.strictEqual(blocked[blocked.indexOf(row) + 1], why)
+  }
 })
 
-test('AC-20261105-01-4 a spec whose depends_on is not done is no lane and no top pick; --all lists it as blocked', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'specs/20261104/01-base.md', specD('hardened', 'n/a', ['a.js'])); w(d, 'specs/20261104/02-top.md', specD('hardened', 'n/a', ['b.js'], ['01-base']))
-  w(d, 'specs/20261104/03-by-path.md', specD('hardened', 'n/a', ['c.js'], ['specs/20261104/01-base.md']))
-  queue(d, 'add', 'specs/20261104/02-top.md'); queue(d, 'add', 'specs/20261104/03-by-path.md'); queue(d, 'add', 'specs/20261104/01-base.md')
-  const j = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(j.lanes, ['specs/20261104/01-base.md'])
-  assert.strictEqual(j.top.path, 'specs/20261104/01-base.md')
-  assert.deepStrictEqual(j.blocked.map((b) => [b.path, b.blockers]), [['specs/20261104/02-top.md', ['specs/20261104/01-base.md']], ['specs/20261104/03-by-path.md', ['specs/20261104/01-base.md']]])
-  assert.ok(!/blocked:|⏳/.test(text(d).stdout))
-  assert.match(text(d, '--all').stdout, /⛔ blocked:\n\/spec:run @specs\/20261104\/02-top\.md\n   └─ ⏳ 01-base\n\/spec:run @specs\/20261104\/03-by-path\.md\n   └─ ⏳ 01-base\n/)
-  w(d, 'specs/20261104/01-base.md', specD('done', 'n/a', ['a.js']))
-  const j2 = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual([j2.top.path, j2.blocked], ['specs/20261104/02-top.md', []], 'a done dependency unblocks')
+test('AC-20261105-05-3 a queue gate keeps a spec out of the lanes and the top pick; a gate on a missing spec reads (missing)', () => {
+  const d = small({ 'docs/roadmap/03-x.md': brief('03', 'X', 'P0', '99'), [`${A}/01-g.md`]: specDoc('hardened', { brief: '03' }), [`${A}/02-d.md`]: specDoc('draft', { brief: '03' }) },
+    [{ kind: 'spec', payload: `${A}/01-g.md`, after: { spec: `${A}/99-none.md` } }, { kind: 'brief', payload: '03', after: { brief: '03' } }])
+  const j = json(d)
+  assert.deepStrictEqual(j.specs.find((s) => s.path === `${A}/01-g.md`).blockers, [`after ${A}/99-none.md (missing)`])
+  const out = status(d, '--all').stdout
+  assert.match(out, /\/spec:run @specs\/20261104\/01-g\.md\n   └─ ⏳ after 99-none\n/)
+  assert.ok(!out.includes('parallel lanes') && !out.includes('🚦'), 'a blocked spec is no lane')
+  assert.match(out, /🟠 next is blocked · waiting on after 99-none/)
+  const e = small({ 'docs/roadmap/03-x.md': brief('03', 'X', 'P0', '99'), [`${A}/01-g.md`]: specDoc('hardened', { brief: '03' }), [`${A}/02-d.md`]: specDoc('draft', { brief: '03' }) },
+    [{ kind: 'spec', payload: `${A}/01-g.md`, after: { brief: '03' } }])
+  assert.match(status(e).stdout, /🟠 next is blocked · waiting on after brief 03/)
 })
 
-test('a draft spec inherits its brief\'s unbuilt dependency briefs as blockers', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'docs/roadmap/01-a.md', brief('01', 'A', 'P0', '—')); w(d, 'docs/roadmap/02-b.md', brief('02', 'B', 'P0', '01'))
-  w(d, 'specs/20261104/01-x.md', specD('draft', '02', ['a.js']))
-  const j = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(j.blocked.map((b) => b.blockers), [['brief 01 (open)']])
-  assert.match(text(d, '--all').stdout, /⛔ blocked:[\s\S]*\/spec:plan @specs\/20261104\/01-x\.md\n   └─ ⏳ brief 01\n/)
-  assert.strictEqual(j.top.action, '/spec:plan', 'the unplanned brief with all dependencies met is the top pick')
-  assert.strictEqual(j.top.path, 'docs/roadmap/01-a.md')
-  assert.match(text(d).stdout, /\n\/spec:plan @docs\/roadmap\/01-a\.md\n/)
+test('AC-20261105-05-4 brief rows: ranges, bars, banner forms, UTF-16 padding', () => {
+  const full = status(fullHost()).stdout
+  assert.match(full, /✅ 01–02 +P0 +done \(2 briefs, 2 specs\)\n/)
+  assert.match(full, /🔨 03 rounds +P1 +░░░░░░░░░░ 0\/1\n/)
+  assert.match(full, /⬜ 05–06 +P1–P2 +unplanned \(5 briefs\)\n/)
+  assert.match(full, /⛔ 08–09 +P2 +superseded \(2 briefs\)\n/)
+  const d = small({
+    'docs/roadmap/01-plain.md': brief('01', 'Plain', 'P0', '—', '\n> Superseded by 03\n'),
+    'docs/roadmap/02-bold.md': brief('02', 'Bold', 'P0', '—', '\n> **Superseded by** 03\n'),
+    'docs/roadmap/03-wide😀.md': brief('03', 'Wide', 'P1', '—'),
+    'docs/roadmap/04-abcdefgh.md': brief('04', 'Abc', 'P1', '—'),
+    [`${A}/01-p.md`]: specDoc('done', { brief: '01' }), [`${A}/02-b.md`]: specDoc('hardened', { brief: '02' }),
+    [`${A}/03-w.md`]: specDoc('hardened', { brief: '03' }), [`${A}/04-a.md`]: specDoc('hardened', { brief: '04' }),
+  })
+  const rows = lines(status(d))
+  assert.ok(rows.includes('   ⛔ 01 plain     P0  ▓▓▓▓▓▓▓▓▓▓ 1/1'), 'a `> Superseded by` brief with done members is ⛔ with a full bar')
+  assert.ok(rows.some((l) => l.startsWith('   🔨 02 bold ')), 'a `> **Superseded by**` brief with a hardened member stays in flight')
+  assert.ok(rows.includes('   🔨 03 wide😀    P1  ░░░░░░░░░░ 0/1'), `padding counts UTF-16 units: ${rows.join('|')}`)
+  const one = small({ 'docs/roadmap/01-only.md': brief('01', 'Only', 'P0', '—'), [`${A}/01-s.md`]: specDoc('superseded', { brief: '01' }) })
+  assert.ok(lines(status(one)).some((l) => /^ {3}⬜ 01 only +P0 +unplanned$/.test(l)), 'a superseded-only brief is unplanned')
 })
 
-test('AC-20261105-01-7 the footer: more open, hygiene count, nothing else open, nothing waits; verdict is the footer line', () => {
-  const d = tmpdir('status'); gitRepo(d); config(d, {})
-  w(d, 'specs/20261104/01-a.md', specD('hardened', 'n/a', ['a.js'])); queue(d, 'add', 'specs/20261104/01-a.md')
-  assert.match(text(d).stdout, /\n🟢 next is ready · nothing else open\n```\n$/)
-  for (const p of ['p1', 'p2', 'p3', 'p4', 'p5']) queue(d, 'add', `prompt ${p}`)
-  w(d, 'specs/20261104/09-x.run/k', ''); fs.rmSync(path.join(d, 'specs/20261104/09-x.run/k')); w(d, 'specs/20261104/08-y.run/k', ''); fs.rmSync(path.join(d, 'specs/20261104/08-y.run/k'))
-  const j = JSON.parse(run(d).stdout)
-  assert.strictEqual(j.verdict, '🟢 next is ready · 5 more open · 2 hygiene findings (/spec:doctor)')
-  assert.strictEqual(j.hygiene.length, 2); assert.strictEqual(j.open, 6)
-  assert.ok(text(d).stdout.endsWith(`${j.verdict}\n\`\`\`\n`))
-  const e = tmpdir('status'); gitRepo(e); config(e, {})
-  assert.strictEqual(JSON.parse(run(e).stdout).verdict, '⬜ nothing waits')
+test('AC-20261105-05-5 lanes: the implementing spec first, pair prefixes only with three lanes, 🚦 solo beside other work', () => {
+  const bare = status(fullHost()).stdout
+  const L = lines({ stdout: bare })
+  const at = L.indexOf('⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):')
+  assert.deepStrictEqual(L.slice(at + 1, at + 4), [`/spec:run @${A}/01-boards.md`, `/spec:run @${A}/04-adhoc-a.md`, `/spec:run @${A}/05-adhoc-b.md`])
+  assert.strictEqual(L[at + 6], '   └─ 🔶 04-adhoc-a.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts, src/z.ts (+2 more)', 'every table, `a + b`, `{a,b}`, `(generated)` count')
+  assert.strictEqual(bare.split(`/spec:run @${A}/01-boards.md`).length, 2, 'nothing above ⚡ repeats the top pick')
+  const two = small({ [`${A}/01-a.md`]: specDoc('hardened', { files: ['s.js', 'a.js'] }), [`${A}/02-b.md`]: specDoc('hardened', { files: ['s.js'] }) })
+  assert.match(status(two).stdout, /⚡ 2 parallel lanes[^\n]*\n[^\n]+\n[^\n]+\n   └─ 🔶 merge-conflict risk: s\.js\n/)
+  const solo = small({ [`${A}/01-a.md`]: specDoc('hardened'), [`${A}/02-b.md`]: specDoc('draft', { brief: '03' }), 'docs/roadmap/03-x.md': brief('03', 'X', 'P0', '99') })
+  assert.match(status(solo).stdout, /\/spec:run @specs\/20261104\/01-a\.md\n   └─ 🚦 solo\n/)
+  const alone = small({ [`${A}/01-a.md`]: specDoc('hardened') })
+  assert.ok(!status(alone).stdout.includes('solo'))
 })
 
-test('AC-20261105-01-9 --json keeps every key and adds the dashboard keys', () => {
-  const d = fixture()
-  const j = JSON.parse(run(d).stdout)
-  for (const k of ['roadmap', 'next', 'lanes', 'questions', 'verdict', 'prompts', 'top', 'after', 'blocked', 'hygiene', 'open']) assert.ok(k in j, k)
-  assert.ok(j.roadmap.every((b) => ['done', 'implementing', 'open', 'superseded'].includes(b.state)))
-  assert.deepStrictEqual(j.roadmap.map((b) => [b.brief, b.phase, b.done, b.total, b.name]), [['01', 'P0', 1, 1, 'foundation'], ['02', 'P0', 1, 1, 'schema'], ['02a', 'P0', 3, 4, 'primitives'], ['03', 'P1', 0, 0, 'rounds'], ['04', 'P1', 0, 0, 'boards'], ['05', 'P1', 0, 0, 'old']])
-  assert.deepStrictEqual(j.top, { action: '/spec:run', path: 'specs/20261102/04-prim-d.md', blockers: [] })
-  assert.deepStrictEqual(j.after.map((x) => [x.action, x.path, x.reason]), [
-    ['/spec:run', 'specs/20261103/03-capped.md', '🤷 beyond the lane cap (3)'],
-    ['/spec:run', 'specs/20261103/04-unqueued.md', '🤷 not queued — /spec:queue add specs/20261103/04-unqueued.md'],
-    ['/spec:plan', 'specs/20261103/06-drafty.md', '🤷 draft — /spec:plan first']])
-  assert.deepStrictEqual(j.blocked, [{ action: '/spec:run', path: 'specs/20261103/05-gated.md', blockers: ['specs/20261103/02-lane-c.md'] }])
-  assert.strictEqual(j.open, 9)
-  assert.strictEqual(j.hygiene.length, 1)
-  assert.strictEqual(j.next, '/spec:plan tighten the retry copy on the failed-send banner', 'next keeps its v8 derivation: the queue head')
+test('AC-20261105-05-6 --all: after-that reasons share lines, blocked lists specs and prompts, hygiene is the derivation\'s own', () => {
+  const out = status(fullHost(), '--all').stdout
+  assert.match(out, /🕓 after that:\n[^\n]+13-boards-two\.md\n   └─ ⛓️ shared brief 04a\n[^\n]+06-export-a\.md\n   └─ ⛓️ brief 07 depends on 04a\n[^\n]+02-views\.md\n[^\n]+14-views-two\.md\n   └─ ⛓️ brief 04b depends on 04a\n/)
+  assert.ok(!out.includes('🤷'))
+  assert.match(out, /⛔ blocked:\n\/spec:plan @specs\/20261103\/01-rounds\.md\n   └─ ⏳ brief 99\n/)
+  assert.match(out, /🧹 Hygiene \(7\) — \/spec:doctor\n/)
+  for (const k of ['queue-orphan', 'unknown-status', 'orphan-stamp', 'unparsed-dependency', 'unknown-dependency', 'skipped-spec', 'hand-tracked-status']) assert.ok(out.includes(`   [${k}] `), k)
+  assert.match(out, /\[queue-orphan\][^\n]*`\/spec:queue done 77`[^\n]*`\/spec:queue move 77 <n>`/)
+  for (const bad of ['[prototype-open]', '[leftover worktree]', '[stale sidecar]', '[doctor]']) assert.ok(!out.includes(bad), bad)
+  const d = fullHost()
+  fs.writeFileSync(path.join(st.gitCommonDir(d), 'spec-queue.json'), '{ not json')
+  const broken = status(d, '--all').stdout
+  assert.strictEqual(broken.split('\n').filter((l) => l.startsWith('   [queue-unparseable]')).length, 1)
+  assert.match(broken, /\[queue-unparseable\][^\n]*`\/spec:queue next`\)/)
+  assert.ok(!/^q\d+ /m.test(broken), 'no overlay, no qNN row')
+  assert.match(broken, /🎯 Next\n⚡ 4 parallel lanes[^\n]*\n\/spec:run @specs\/20261104\/01-boards\.md\n/)
 })
 
-test('briefs sort by number then letter suffix: 11 before 11a, 02a after 02', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  for (const n of ['11a-x', '11-y', '3-z', '02a-w', '02-v', '10-u']) w(d, `docs/roadmap/${n}.md`, `# ${n}\n`)
-  assert.deepStrictEqual(JSON.parse(run(d).stdout).roadmap.map((b) => b.brief), ['02', '02a', '3', '10', '11', '11a'])
+test('AC-20261105-05-7 decide lines: wording, the cap of three, the overflow clause', () => {
+  const d = small({
+    'docs/roadmap/01-a.md': brief('01', 'A', 'P0', '—'), 'docs/roadmap/02-b.md': brief('02', 'B', 'P0', '—'),
+    'docs/roadmap/03-c.md': brief('03', 'C', 'P0', '02'), 'docs/roadmap/04-d.md': brief('04', 'D', 'P0', '—'),
+    [`${A}/01-c.md`]: specDoc('hardened', { brief: '03' }), [`${A}/02-d.md`]: specDoc('hardened', { brief: '04' }),
+  })
+  const out = status(d).stdout
+  assert.ok(out.includes('⚠️ Brief 03 (c) moved on, but its dependency 02 (b) was never planned.\n   Plan it now?  /spec:plan @docs/roadmap/02-b.md\n'))
+  assert.ok(out.includes('⚠️ Brief 01 (a) is unplanned while later brief 04 has moved on.\n   Still wanted?  /spec:plan @docs/roadmap/01-a.md\n'))
+  const full = status(fullHost()).stdout
+  assert.strictEqual(full.split('\n').filter((l) => l.startsWith('⚠️ ')).length, 3)
+  assert.match(full, /· 2 more to decide \(--all\) · 7 hygiene findings/)
+  const all = status(fullHost(), '--all').stdout
+  assert.strictEqual(all.split('\n').filter((l) => l.startsWith('⚠️ ')).length, 5)
+  assert.ok(!all.includes('more to decide'))
 })
 
-test('AC-20261105-01-11 a fan-out in flight owns the only command line; a run in flight is the top pick with no lanes header', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  const st = require(path.join(SPEC_DIR, 'scripts/lib/state.js'))
-  for (const n of ['01-a', '02-b']) { w(d, `specs/20261104/${n}.md`, specD('hardened', 'n/a', [n + '.js'])); queue(d, 'add', `specs/20261104/${n}.md`) }
-  queue(d, 'add', 'a prompt row')
-  w(d, 'specs/20261104/02-b.run/state.json', '{"step":"BUILD"}')
-  let out = text(d).stdout
-  assert.match(out, /\nq3  a prompt row\n\/spec:run @specs\/20261104\/02-b\.md\n/)
-  assert.ok(!/⚡|solo/.test(out), out)
-  assert.strictEqual(JSON.parse(run(d).stdout).top.path, 'specs/20261104/02-b.md')
-  fs.rmSync(path.join(d, 'specs/20261104/02-b.run'), { recursive: true })
-  st.writeFanout(d, { step: 'WAIT', batch: [] })
-  out = text(d).stdout
-  assert.match(out, /🎯 Next\nq3  a prompt row\n\/spec:fanout\n/)
-  assert.ok(!/\/spec:run|⚡/.test(out.split('🎯 Next')[1]), 'fanout is the only command line')
-  assert.match(out, /\n🟢 a fan-out is in flight · \/spec:fanout · 3 more open/)
+test('AC-20261105-05-8 roadmap heads, supersession, bracketless depends_on, stamps, status-less specs', () => {
+  const d = small({
+    'docs/roadmap/01-sch.md': brief('01', 'Sch', 'P0', '—'),
+    'docs/roadmap/03-x.md': '# 03 — X\n\nPhase: P1 · Depends on: 02-B (02a-2; parts of 02a-3a),\n brief 04 · Risk: low\n\n## Result\n\nx\n',
+    'docs/roadmap/04A-boards.md': brief('04A', 'Boards', 'P1', '—'),
+    [`${A}/01-x.md`]: specDoc('draft', { brief: '03' }),
+  })
+  const out = status(d, '--all').stdout
+  assert.match(out, /\/spec:plan @specs\/20261104\/01-x\.md\n   ├─ ⏳ brief 02\n   └─ ⏳ brief 04\n/)
+  assert.ok(!out.includes('3a') && /04a boards/.test(out))
+  const full = fullHost()
+  const j = json(full)
+  const sp = (n) => j.specs.find((s) => s.path.endsWith(n))
+  assert.deepStrictEqual(sp('07-export-b.md').blockers, [`${A}/06-export-a.md (hardened)`, 'specs/20261103/01-rounds.md (draft)'])
+  assert.deepStrictEqual(sp('06-export-a.md').blockers, [], 'a superseded dependency never blocks')
+  assert.strictEqual(sp('02-views.md').brief, '04b')
+  assert.ok(!j.specs.some((s) => s.path.includes('10-nostatus')) && !JSON.stringify(j.anomalies).includes('10-nostatus'))
+  assert.ok(j.superseded.some((s) => s.path.endsWith('09-retired.md')))
 })
 
-test('AC-20261105-01-10 drivers and plan lock treat @specs/x.md as specs/x.md', () => {
-  const dir = tmpdir('drv'); const file = path.join(dir, 'echo.js')
-  fs.writeFileSync(file, `'use strict'
-const { makeDriver } = require(${JSON.stringify(path.join(SPEC_DIR, 'scripts/lib/driver.js'))})
-process.exitCode = makeDriver({ name: 'echo', specArg: 'spec', load: (ctx) => ({ arg: ctx.arg }), save: () => {}, derive: (s) => ({ name: 'arg=' + s.arg }) })()
-`)
-  assert.strictEqual(runNode(file, ['@specs/x.md', '--root', dir, '--state']).stdout, 'arg=specs/x.md\n')
-  assert.strictEqual(runNode(file, ['specs/x.md', '--root', dir, '--state']).stdout, 'arg=specs/x.md\n')
-  const d = tmpdir('plan'); gitRepo(d)
-  const f = runNode('scripts/plan.js', ['new', 'first', '--root', d]).stdout.trim()
-  const p = path.join(d, f); fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/no \| yes — <what>, needs your yes/, 'no').replace(/<[^<>\n]+>/g, 'x'))
-  const r = runNode('scripts/plan.js', ['lock', '@' + f, '--root', d])
-  assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /spec hardened & locked — specs\/\d{8}\/01-first\.md/)
+test('AC-20261105-05-9 a spec built in a lane worktree is implementing, first, not done in its bar; PARKED reads the frontmatter', () => {
+  const d = fullHost()
+  const j = json(d)
+  const state = (n) => j.specs.find((s) => s.path.endsWith(n)).status
+  assert.strictEqual(state('01-boards.md'), 'implementing')
+  assert.strictEqual(state('05-adhoc-b.md'), 'hardened', 'a parked sidecar is no run')
+  assert.match(status(d).stdout, /🔨 04a boards +P1 +░░░░░░░░░░ 0\/2/)
+  const e = small({
+    'docs/roadmap/01-a.md': brief('01', 'A', 'P0', '—'), 'docs/roadmap/02-b.md': brief('02', 'B', 'P0', '01'),
+    [`${A}/01-a.md`]: specDoc('hardened', { brief: '01' }), [`${A}/02-b.md`]: specDoc('draft', { brief: '02' }),
+    '.claude/worktrees/spec-01-a/specs/20261104/01-a.run/state.json': '{"step":"BUILD"}',
+  })
+  assert.deepStrictEqual(json(e).specs.map((s) => [s.path.slice(-8), s.status, s.blockers]), [['/01-a.md', 'implementing', []], ['/02-b.md', 'draft', []]])
 })
 
-test('AC-20261105-01-5 an unblocked spec that shares a brief with, or whose brief depends on, an admitted lane waits for it', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'docs/roadmap/01-a.md', brief('01', 'A', 'P0', '—')); w(d, 'docs/roadmap/02-b.md', brief('02', 'B', 'P0', '01'))
-  w(d, 'specs/20261104/01-x.md', specD('hardened', '01', ['a.js'])); w(d, 'specs/20261104/02-y.md', specD('draft', '01', ['b.js'])); w(d, 'specs/20261104/03-z.md', specD('hardened', '02', ['c.js']))
-  queue(d, 'add', 'specs/20261104/01-x.md')
-  assert.match(text(d, '--all').stdout, /🕓 after that:\n\/spec:run @specs\/20261104\/03-z\.md\n   └─ ⛓️ brief 02 depends on 01\n\/spec:plan @specs\/20261104\/02-y\.md\n   └─ ⛓️ shared brief 01\n/)
-  w(d, 'specs/20261104/04-w.md', specD('draft', '01', ['d.js']))
-  assert.match(text(d, '--all').stdout, /\/spec:plan @specs\/20261104\/02-y\.md\n\/spec:plan @specs\/20261104\/04-w\.md\n   └─ ⛓️ shared brief 01\n/, 'consecutive equal reasons print one branch')
+test('AC-20261105-05-10 queue positions: first occurrence, done items count, unqueued briefs last, no overlay in a linked worktree', () => {
+  const files = {
+    'docs/roadmap/01-a.md': brief('01', 'A', 'P0', '—'), 'docs/roadmap/02-b.md': brief('02', 'B', 'P0', '—'), 'docs/roadmap/03-x.md': brief('03', 'X', 'P0', '—'),
+    [`${A}/01-a.md`]: specDoc('hardened', { brief: '01', files: ['a.js'] }), [`${A}/02-b.md`]: specDoc('hardened', { brief: '02', files: ['b.js'] }), [`${A}/03-x.md`]: specDoc('hardened', { brief: '03', files: ['c.js'] }),
+  }
+  const d = small(files, [{ kind: 'prompt', payload: 'old', type: 'fix', done: '2026-11-02T00:00:00.000Z' }, { kind: 'brief', payload: '3' }, { kind: 'brief', payload: 'docs/roadmap/03-x.md' }, { kind: 'brief', payload: '02' }, { kind: 'brief', payload: 'docs/roadmap/03-x.md' }])
+  const o = status(d, '--all').stdout
+  assert.ok(!o.includes('queue-orphan'), '`3` is brief 03')
+  assert.deepStrictEqual(json(d).next, `/spec:run ${A}/03-x.md`, 'queued 03 first, then 02, then the unqueued 01')
+  assert.match(o, /⚡ 3 parallel lanes[^\n]*\n[^\n]+03-x\.md\n[^\n]+02-b\.md\n[^\n]+01-a\.md\n/)
+  const e = small(files, [{ kind: 'prompt', payload: 'hello', type: 'plan' }])
+  assert.match(status(e).stdout, /^q1 {2}\/spec:plan hello$/m)
+  const wt = path.join(path.dirname(e), 'linked')
+  spawnSync('git', ['-C', e, 'worktree', 'add', '-q', '-b', 'side', wt], { encoding: 'utf8' })
+  const linked = status(wt).stdout
+  assert.ok(!/^q\d/m.test(linked) && linked.includes('🎯 Next'), 'a linked worktree renders without the overlay')
 })
 
-test('unqueued hardened specs: the count and every /spec:queue add line are printed, in path order; the first stays the Next paste', () => {
-  const d = tmpdir('status'); gitRepo(d)
-  w(d, 'specs/20261104/03-c.md', spec('hardened', 'n/a', ['c.js']))
-  w(d, 'specs/20261104/01-a.md', spec('hardened', 'n/a', ['a.js']))
-  w(d, 'specs/20261105/01-d.md', spec('hardened', 'n/a', ['d.js']))
-  w(d, 'specs/20261104/02-b.md', spec('draft', 'n/a', ['b.js']))
-  const r = JSON.parse(run(d).stdout)
-  assert.strictEqual(r.next, '/spec:queue add specs/20261104/01-a.md')
-  assert.deepStrictEqual(r.unqueued, ['specs/20261104/01-a.md', 'specs/20261104/03-c.md', 'specs/20261105/01-d.md'])
-  const out = text(d).stdout
-  assert.match(out, /3 hardened specs are not queued/, out)
-  for (const p of r.unqueued) assert.ok(out.includes('/spec:queue add ' + p), p)
-  assert.ok(out.indexOf('/spec:queue add specs/20261104/03-c.md') < out.indexOf('/spec:queue add specs/20261105/01-d.md'), 'path order')
-  queue(d, 'add', 'specs/20261104/01-a.md')
-  const r2 = JSON.parse(run(d).stdout)
-  assert.deepStrictEqual(r2.unqueued, ['specs/20261104/03-c.md', 'specs/20261105/01-d.md'], 'a queued spec leaves the list')
-  assert.match(text(d).stdout, /2 hardened specs are not queued/)
-  queue(d, 'add', 'specs/20261104/03-c.md')
-  assert.ok(!/hardened specs are not queued/.test(text(d).stdout), 'a single unqueued spec is left to the Next paste and --all')
+test('AC-20261105-05-11 the empty states and the unplanned-brief pick', () => {
+  const ready = small({ 'docs/roadmap/01-a.md': brief('01', 'A', 'P0', '—'), 'docs/roadmap/02-b.md': brief('02', 'B', 'P0', '01') })
+  assert.match(status(ready).stdout, /🎯 Next\n\/spec:plan @docs\/roadmap\/01-a\.md\n/)
+  const e = status(emptyHost()).stdout
+  assert.ok(e.includes('   ✨ nothing next — no specs or briefs found\n') && e.endsWith('⬜ nothing waits\n'))
+  assert.ok(status(allDoneHost(true)).stdout.includes('   ✨ nothing actionable — all specs done; 1 unplanned brief(s) blocked on unmet dependencies\n'))
+  assert.ok(status(allDoneHost(false)).stdout.includes('   ✨ nothing next — all specs done, no unplanned briefs\n'))
 })
 
-test('the dashboard redraws from the top on a terminal only, as v7 did: a TTY run starts with the reset, piped, --json and NN runs never carry it', () => {
-  const { execFileSync } = require('child_process')
-  const { SPEC } = require('./helpers')
-  const d = tmpdir('status-tty'); gitRepo(d)
-  w(d, 'docs/roadmap/01-a.md', '# 01 — A\n')
-  // `script` (util-linux) gives the child a real pseudo-terminal; a missing binary fails here loudly.
-  const tty = (...a) => execFileSync('script', ['-qec', [process.execPath, path.join(SPEC, 'scripts/status.js'), ...a, '--root', d].map((s) => `'${s}'`).join(' '), '/dev/null'], { encoding: 'utf8' })
-  assert.ok(tty().startsWith('\x1Bc'), 'a terminal run clears the screen before the dashboard')
-  assert.ok(!tty('--json').includes('\x1Bc'), '--json never clears')
-  assert.ok(!tty('01').includes('\x1Bc'), 'the NN line never clears')
-  assert.ok(!runNode('scripts/status.js', ['--root', d]).stdout.includes('\x1Bc'), 'piped output stays escape-free')
+test('AC-20261105-05-12 no fence, no ledger lines, none of v8\'s retired tails; blank first line; reset only on a TTY', () => {
+  for (const d of [fullHost(), emptyHost()]) {
+    for (const flags of [[], ['--all']]) {
+      const out = status(d, ...flags).stdout
+      assert.ok(out.startsWith('\n') && !out.startsWith('\n\n'))
+      assert.ok(!out.includes('```') && !out.includes('\x1B'))
+      for (const bad of ['📈', '/spec:fanout', 'fan-out is in flight', 'run is in flight', 'waiting on you', 'Pending questions', 'hardened specs are not queued', 'parallel lanes ready', 'queue empty', '🤷', 'implementing —', 'superseded —', 'done since last release', 'never released', '📥', '🟡']) {
+        assert.ok(!out.includes(bad), `${bad} on ${flags.join('') || 'bare'}`)
+      }
+    }
+  }
+  const written = []
+  const { write } = process.stdout; const tty = process.stdout.isTTY
+  process.stdout.isTTY = true; process.stdout.write = (c) => { written.push(String(c)); return true }
+  try { require(path.join(SPEC, 'scripts/status.js')).main(['--root', emptyHost()]) } finally { process.stdout.write = write; process.stdout.isTTY = tty }
+  assert.strictEqual(written[0], '\x1Bc')
+  assert.ok(written[1].startsWith('\n'))
+})
+
+test('AC-20261105-05-13 NN: v7\'s words and codes; v7\'s refusals; --json is exactly the five keys', () => {
+  const d = fullHost()
+  const met = status(d, '04b'); assert.deepStrictEqual([met.status, met.stdout], [0, 'brief 04b (views): all 1 dependencies met\n'])
+  const unmet = status(d, '03'); assert.deepStrictEqual([unmet.status, unmet.stdout], [1, 'brief 03 (rounds): UNMET dependencies — 99 (missing)\n'])
+  assert.match(status(d, '01').stdout, /^brief 01 \(foundation\): all zero dependencies met$/m)
+  const none = status(d, '98'); assert.deepStrictEqual([none.status, none.stderr], [2, 'no docs/roadmap/98-*.md found\n'])
+  const usage = 'usage: status.js [NN] [--all] [--json] [--root <dir>]\n'
+  for (const argv of [['--brief', '03'], ['--next'], ['--lanes'], ['--pretty'], ['03', '04']]) {
+    const r = status(d, ...argv); assert.deepStrictEqual([r.status, r.stderr, r.stdout], [2, usage, ''], argv.join(' '))
+  }
+  const both = status(d, '03', '--all'); assert.deepStrictEqual([both.status, both.stderr], [2, 'usage: --all cannot combine with NN\n'])
+  assert.deepStrictEqual(JSON.parse(status(d, '04b', '--json').stdout), { brief: '04b', name: 'views', status: 'in-flight', depends_on: [{ brief: '04a', status: 'in-flight', met: true }], ready: true })
+  const j = json(d)
+  assert.deepStrictEqual(Object.keys(j), ['briefs', 'specs', 'superseded', 'anomalies', 'next'])
+  assert.ok(j.briefs.every((b) => ['unplanned', 'in-flight', 'done', 'superseded'].includes(b.status)))
+  assert.deepStrictEqual(j.anomalies.filter((a) => a.audience === 'decide').length, 5)
+  assert.strictEqual(j.next, `/spec:run ${A}/01-boards.md`)
+  assert.strictEqual(json(emptyHost()).next, null)
+})
+
+test('AC-20261105-05-15 the contract, the architecture note and the command doc say the same screen', () => {
+  const doc = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8')
+  const para = doc('docs/v8/interface-contract.md').split('\n').find((l) => l.startsWith('`/spec:status` prints'))
+  const archDoc = doc('docs/v8/architecture.md')
+  const arch = archDoc.slice(archDoc.indexOf('- `status.js`'), archDoc.indexOf('- `init.js`'))
+  assert.ok(para && arch.includes('lib/next.js'))
+  for (const need of ['⚡ N parallel lanes — first stays on main', '🚦 solo', '⏳ after', '⚠️', '· N more to decide (--all)', 'queue-orphan', 'hand-tracked-status', '{briefs, specs, superseded, anomalies, next}']) {
+    assert.ok(para.includes(need), `contract §5 names ${need}`)
+  }
+  for (const text of [para, arch]) for (const bad of ['📈', '📥', 'parallel lanes ready', 'Pending questions', '🤷']) assert.ok(!text.includes(bad), `status docs carry ${bad}`)
+  assert.ok(arch.includes('{briefs, specs, superseded, anomalies, next}') && arch.includes('⚡ N parallel lanes — first stays on main'))
+  const cmd = doc('spec/commands/status.md')
+  assert.match(cmd, /fenced block/)
+  assert.ok(!cmd.includes('📈'))
 })

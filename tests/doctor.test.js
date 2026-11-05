@@ -92,3 +92,16 @@ test('gitignore is judged by git: a broader pattern that covers the sidecars is 
   const f = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout).findings
   assert.ok(!f.some((x) => /gitignore: missing/.test(x)), f.join('\n'))
 })
+
+test('check(root, { probe: false }) returns the same findings without running the test command', () => {
+  const marker = 'probed.marker'
+  const d = setup({ testCommand: `touch ${marker}; exit 3` })
+  const doctor = require(path.join(require('./helpers').SPEC, 'scripts/doctor.js'))
+  const quiet = doctor.check(d, { probe: false })
+  assert.ok(!fs.existsSync(path.join(d, marker)), 'the test command did not run')
+  assert.ok(!quiet.findings.some((x) => /^testCommand:/.test(x)))
+  const full = doctor.check(d)
+  assert.ok(fs.existsSync(path.join(d, marker)), 'the default check still probes')
+  assert.deepStrictEqual(full.findings.filter((x) => !/^testCommand:/.test(x)), quiet.findings)
+  assert.ok(full.findings.some((x) => /^testCommand: exited 3/.test(x)))
+})

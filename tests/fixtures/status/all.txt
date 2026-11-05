@@ -1,0 +1,33 @@
+```
+🗺️ Roadmap
+   ✅ 01–02           P0  done (2 briefs, 2 specs)
+   🔨 02a primitives  P0  ▓▓▓▓▓▓▓░░░ 3/4
+   ⬜ 03–04           P1  unplanned (2 briefs)
+   ⛔ 05 old          P1  superseded
+
+🎯 Next
+q1  tighten the retry copy on the failed-send banner
+q2  notifications: a removed or soft-deleted staff person has no ended suppression rule so the look…
+⚡ 3 parallel lanes ready — /spec:fanout
+/spec:run @specs/20261102/04-prim-d.md
+/spec:run @specs/20261103/01-lane-b.md
+/spec:run @specs/20261103/02-lane-c.md
+   └─ 🔶 04-prim-d.md × 01-lane-b.md: merge-conflict risk: src/shared.js
+
+🕓 after that:
+/spec:run @specs/20261103/03-capped.md
+   └─ 🤷 beyond the lane cap (3)
+/spec:run @specs/20261103/04-unqueued.md
+   └─ 🤷 not queued — /spec:queue add specs/20261103/04-unqueued.md
+/spec:plan @specs/20261103/06-drafty.md
+   └─ 🤷 draft — /spec:plan first
+
+⛔ blocked:
+/spec:run @specs/20261103/05-gated.md
+   └─ ⏳ 02-lane-c
+
+🧹 Hygiene (1) — /spec:doctor
+   [stale sidecar] specs/20261101/09-ghost.run — rm -r specs/20261101/09-ghost.run
+
+🟢 next is ready · 8 more open · 1 hygiene finding (/spec:doctor)
+```

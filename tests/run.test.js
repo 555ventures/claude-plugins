@@ -125,6 +125,28 @@ test('the whole loop: OPEN → BUILD → GATE → REVIEW → COMMIT → MERGE �
   assert.strictEqual(h.run().status, 2, 'a done spec is refused')
 })
 
+test('briefs: a v7 spec with only ## Goal fills Intent from it; a Decisions row with JSX survives, a template placeholder row is dropped', () => {
+  const doc = SPEC_DOC
+    .replace(/## Intent[\s\S]*?(?=## Goal)/, '')
+    .replace('| D1 | plain text, no JSON \\| no YAML | ADR-0001 |', '| D1 | plain text, no JSON \\| no YAML | ADR-0001 |\n| D3 | renders <MessageThread items={x} /> | because |\n| <id> | <decision> | <why> |')
+  assert.ok(!doc.includes('## Intent') && doc.includes('## Goal'), 'the fixture spec has Goal and no Intent')
+  const h = fixture({ files: { [REL]: doc } })
+  const build = ok(h.run())
+  assert.ok(build.includes('## Intent\nfeature.txt exists.'), 'the build brief falls back to Goal under the Intent heading:\n' + build)
+  assert.ok(build.includes('- D3: renders <MessageThread items={x} /> — because'), 'a decision mentioning JSX reaches the builder:\n' + build)
+  const OTHER = 'Other sections (File Plan, Contracts, UI, Behavior, Assumptions) are not printed here — read them in the spec file.'
+  assert.ok(build.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done THE SYSTEM SHALL have feature.txt.\n\n' + OTHER), 'the build brief points at the unprinted sections after the ACs:\n' + build)
+  assert.ok(!build.includes('<id>') && !build.includes('<decision>'), 'a template placeholder row is dropped')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  const j = JSON.parse(ok(h.run('--json')))
+  assert.strictEqual(j.step, 'REVIEW')
+  assert.ok(j.body.includes('## Intent\nfeature.txt exists.'), 'the review brief falls back to Goal too')
+  assert.ok(j.body.includes('- D3: renders <MessageThread items={x} /> — because') && !j.body.includes('<id>'), 'the reviewer brief keeps the JSX decision and drops the placeholder row')
+  assert.ok(j.body.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done THE SYSTEM SHALL have feature.txt.\n\n' + OTHER), 'the review brief points at the unprinted sections after the ACs:\n' + j.body)
+  assert.ok(j.body.includes("Files changed outside the File Plan: none\nThe spec's frontmatter status line changes during the run; that is bookkeeping, not a finding."), 'the review brief tells the reviewer the status flip is bookkeeping:\n' + j.body)
+})
+
 test('red gate: two repairs then ESCALATE; retry bumps to opus with fresh attempts; park queues a fix', () => {
   const h = fixture()
   ok(h.run())

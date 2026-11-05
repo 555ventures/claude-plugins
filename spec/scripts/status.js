@@ -87,7 +87,9 @@ function derive(root, { hygiene = true } = {}) {
     if (draft) { head = i; paste = `/spec:plan ${draft.path}`; break }
     if (loose) { head = i; paste = `/spec:queue add ${loose.path}`; break }
   }
-  if (!head && !running) { const loose = specs.find((s) => s.status === 'hardened' && !queued(s.path)); if (loose) paste = `/spec:queue add ${loose.path}` }
+  // Every hardened spec nobody queued, in path order: the first is the paste; with more than one, the screen lists them all.
+  const unqueued = specs.filter((s) => s.status === 'hardened' && !queued(s.path)).map((s) => s.path).sort()
+  if (!head && !running && unqueued.length) paste = `/spec:queue add ${unqueued[0]}`
   const qs = questions(root)
 
   // ---- readiness: a brief is built enough to plan against when a spec of it is implementing or done ----
@@ -180,7 +182,7 @@ function derive(root, { hygiene = true } = {}) {
   const res = {
     roadmap: bs.map((b) => ({ brief: b.num, title: b.title, state: b.state, phase: b.phase, done: b.done, total: b.total, name: b.slug })),
     next: fan ? '/spec:fanout' : running ? `/spec:run ${running.path}` : paste,
-    lanes: fan ? [] : laneSet.map((e) => e.path),
+    lanes: fan ? [] : laneSet.map((e) => e.path), unqueued,
     questions: qs, verdict, prompts, top, after, blocked, hygiene: findings, open: entries.length + prompts.length,
   }
   return { res, view: { shownLanes: shownLanes.map((e) => e.path), overlaps, blockedPick, topInLanes: !!(top && shownLanes.some((e) => e.path === top.path)), fan: !!fan, running: !!running } }
@@ -243,6 +245,8 @@ function render(r, v, all) {
     } else if (v.blockedPick) L.push(cmd(v.blockedPick), ...blockers(v.blockedPick))
   }
   if (L.length === cmds && !r.prompts.length) L.push('   ✨ queue empty')
+  // Several hardened specs nobody queued look like an empty queue: name the count and every add line.
+  if (r.unqueued.length > 1) L.push(`📥 ${r.unqueued.length} hardened specs are not queued — add each:`, ...r.unqueued.map((p) => `/spec:queue add ${p}`))
   if (all) {
     if (r.after.length) {
       L.push('', '🕓 after that:')

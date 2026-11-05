@@ -46,10 +46,15 @@ const specIn = (state, ctx) => path.join(wtOf(state, ctx), state.spec)
 const runFile = (ctx, name) => path.join(st.runDir(specInfo(ctx).abs), name)
 const mainRoot = (root) => git.worktreeList(root)[0]
 const sectionText = (spec, name) => spec.sections[Object.keys(spec.sections).find((k) => k === name || k.startsWith(name + ' ')) || ''] || ''
+// v7-era specs carry ## Goal and no ## Intent; the brief's Intent falls back to it.
+const intentText = (spec) => sectionText(spec, 'Intent') || sectionText(spec, 'Goal')
+const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Assumptions) are not printed here — read them in the spec file.'
 // Decisions table rows as bullets; the ADR constraints the planner wrote must reach builder and reviewer.
+// A row is a template leftover only when a cell is exactly a <placeholder>; JSX or generics in a decision stay.
+const placeholderRow = (cells) => cells.some((c) => /^<[^>]+>$/.test(c))
 const decisions = (spec) => {
-  const rows = sectionText(spec, 'Decisions').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l) && !/<[^>]*>/.test(l))
-    .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))).filter((c) => c.length >= 2 && !/^id$/i.test(c[0]))
+  const rows = sectionText(spec, 'Decisions').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l))
+    .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))).filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !placeholderRow(c))
   return rows.length ? rows.map((c) => `- ${c[0]}: ${c[1]}${c.length > 2 && c[c.length - 1] ? ` — ${c[c.length - 1]}` : ''}`) : ['- none']
 }
 
@@ -247,10 +252,11 @@ function builderBrief(state, ctx, kind) {
     `Spec: ${specPath}`,
     `Test command: ${cfg.testCommand} (run it in the worktree)`,
     '',
-    '## Intent', sectionText(spec, 'Intent'), '',
+    '## Intent', intentText(spec), '',
     '## Decisions', ...decisions(spec), '',
     '## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '',
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
+    OTHER_SECTIONS, '',
   ]
   if (kind === 'repair') out.push(`${/^git commit was rejected/.test(state.gate.output_tail || '') ? 'The commit hook rejected the build' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```', '')
   if (kind === 'fix') {
@@ -290,10 +296,12 @@ function reviewerBrief(state, ctx) {
     `Spec: ${specPath}`,
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
     `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec).join(', ') || 'none'}`,
+    "The spec's frontmatter status line changes during the run; that is bookkeeping, not a finding.",
     '',
-    '## Intent', sectionText(spec, 'Intent'), '',
+    '## Intent', intentText(spec), '',
     '## Decisions', ...decisions(spec), '',
-    '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`),
+    '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
+    OTHER_SECTIONS,
   ].join('\n')
 }
 

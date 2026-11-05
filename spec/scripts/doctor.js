@@ -24,6 +24,15 @@ function walkRuns(dir, out, depth = 0) {
   return out
 }
 
+// Probe cap: SPEC_DOCTOR_PROBE_MS wins, then config doctorProbeMs, then 10 min (real gates take
+// minutes cold; a short cap reported healthy repos as "not proven healthy").
+function probeCap(cfg) {
+  const env = Number(process.env.SPEC_DOCTOR_PROBE_MS)
+  if (env > 0) return env
+  const c = cfg && Number(cfg.doctorProbeMs)
+  return c > 0 ? c : 600000
+}
+
 // probe:false skips the testCommand run (status counts hygiene findings and must stay fast).
 function check(root, { probe = true } = {}) {
   const f = []; const info = [] // info: runs in flight, printed but not a finding
@@ -35,12 +44,12 @@ function check(root, { probe = true } = {}) {
     else if (!cfg.testCommand) f.push('config: testCommand is not set — run /spec:init')
   }
   if (probe && cfg && cfg.testCommand) {
-    const cap = Number(process.env.SPEC_DOCTOR_PROBE_MS) || 120000
+    const cap = probeCap(cfg)
     process.stderr.write(`running testCommand: ${cfg.testCommand} …\n`)
     const t0 = Date.now()
     const r = run(cfg.testCommand, { cwd: root, timeoutMs: cap })
     process.stderr.write(`testCommand finished in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`)
-    if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand}`)
+    if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand} (raise the cap with doctorProbeMs in .claude/spec.config.json, or SPEC_DOCTOR_PROBE_MS)`)
     else if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
     else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.pop() || ''}`) }
   }
@@ -88,4 +97,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))
-module.exports = { check }
+module.exports = { check, probeCap }

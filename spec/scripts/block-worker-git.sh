@@ -99,7 +99,7 @@ while IFS=$'\t' read -r verb harmless d; do
     lane="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$d")"
     {
       echo "BLOCKED: git $verb inside a spec lane worktree ($lane) — agents never run git here; /spec:run commits and merges at its own steps."
-      echo "  stale marker (no run in flight)? /spec:doctor says"
+      echo "  stale marker (no run in flight)? /spec:doctor names it; remove it with rm '$g/spec-lane-open'"
     } >&2
     exit 2
   fi

@@ -15,7 +15,7 @@ const ARCH = 'docs/archive/v7'
 const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design']
 const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-runs.stopped.jsonl', '.claude/spec-session.json',
   '.claude/spec-preimage', '.claude/spec-manifest.json', '.claude/release-manifest.json', '.claude/rules/enforcement.json',
-  '.claude/rules/conventions', 'scripts/spec-patterns.sh']
+  'scripts/spec-patterns.sh'] // .claude/rules/conventions is repo-owned (tests and lint messages read it): never archived
 const SKILLS = ['run', 'spec-verify']
 const LABEL = { ref: 'git-dir refs/spec-review/* (v7 review bookkeeping, deleted)' }
 const SIDECAR = /\.(build|review|design)$/
@@ -41,10 +41,15 @@ function trimConfig(root, cfg) {
   const seats = { ...(cfg.seats || {}) }
   if (seat(models.workers) && !seats.builder) seats.builder = seat(models.workers)
   if (seat(models.reviewer) && !seats.reviewer) seats.reviewer = seat(models.reviewer)
-  let test = cfg.testCommand || (cfg.gateCommand && !/\{\w+\}/.test(cfg.gateCommand) ? cfg.gateCommand : null) || detectTestCommand(root)
+  // v8's testCommand is the whole gate. A v7 gateCommand without {placeholders} already is one
+  // (typecheck, lint, build, tests); a thin testCommand beside it would silently drop those. A
+  // v7 typecheckCommand is often per-file (needs an argument), so it is prepended only to a plain
+  // test command, never to a chosen gate.
+  const gate = cfg.gateCommand && !/\{\w+\}/.test(cfg.gateCommand) ? cfg.gateCommand : null
+  let test = gate || cfg.testCommand || detectTestCommand(root)
   const post = cfg.postGateCommand
   if (test && post && post !== '{testCommand}' && !test.includes(post)) test = `${test} && ${post}`
-  if (test && cfg.typecheckCommand && !test.includes(cfg.typecheckCommand)) test = `${cfg.typecheckCommand} && ${test}`
+  if (!gate && test && cfg.typecheckCommand && !test.includes(cfg.typecheckCommand)) test = `${cfg.typecheckCommand} && ${test}`
   const src = { ...cfg, testCommand: test, seats: Object.keys(seats).length ? seats : undefined,
     mergeStrategy: cfg.mergeStrategy || pol.mergeStrategy, worktreePerSpec: cfg.worktreePerSpec ?? pol.worktreePerSpec,
     setupCommand: cfg.setupCommand }
@@ -99,9 +104,11 @@ function plan(root) {
   const cfgFile = configPath(root)
   const cfg = readJson(cfgFile, null)
   const dropped = []
+  let testCommand = null // the gate v8 gets, printed beside the dropped keys so the user sees it
   if (cfg) {
     const trimmed = trimConfig(root, cfg)
     if (!same(trimmed, cfg)) {
+      testCommand = trimmed.testCommand || null
       for (const k of Object.keys(cfg)) if (!(k in trimmed) && cfg[k] != null && !['generatedBy', 'contractHash'].includes(k)) dropped.push(k)
       add('config', '.claude/spec.config.json', null, 'trim to v8 keys')
     }
@@ -165,7 +172,7 @@ function plan(root) {
   if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) warns.push('.claude/settings.local.json is tracked and may hold a token — run: git rm --cached .claude/settings.local.json')
   const wts = git.worktreeList(root).slice(1).filter((w) => path.relative(fs.realpathSync(root), w).startsWith('..'))
   if (wts.length) warns.push('git worktree entries outside this repo (copied repo?) — never touched: ' + wts.join('; '))
-  return { ops, dropped, lost, listed, owned, warns }
+  return { ops, dropped, lost, listed, owned, warns, testCommand }
 }
 
 // ---- apply ----------------------------------------------------------------------------------
@@ -248,6 +255,7 @@ function main(argv) {
   if (!doApply) bullets.push(...p.ops.map((o) => `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}`))
   const warns = [...p.warns, ...applyWarns]
   if (p.dropped.length) warns.push('dropped config keys: ' + p.dropped.join(', '))
+  if (p.testCommand) warns.push(`testCommand: ${p.testCommand}`)
   if (p.lost.length) warns.push('queue items now plain prompts (ledger predicate dropped): ' + p.lost.join(', '))
   if (p.owned.length) warns.push('left alone (user-owned): ' + p.owned.join(', '))
   if (p.listed.length) warns.push('left in place, review them: ' + p.listed.join('; '))

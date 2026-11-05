@@ -71,9 +71,10 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.deepStrictEqual(q.items.map((i) => [i.id, i.kind, i.payload]), [['q1', 'brief', 'docs/roadmap/33-x.md'], ['q2', 'spec', 'specs/20260101/01-a.md'], ['q3', 'prompt', 'do it'], ['q4', 'prompt', 'plain'], ['q5', 'prompt', 'ms']])
   assert.deepStrictEqual(q.items.slice(3).map((i) => i.added), ['2024-10-27T03:33:20.000Z', '2024-10-27T03:33:20.000Z'])
   for (const f of ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-session.json', '.claude/spec-manifest.json', '.claude/rules/enforcement.json',
-    '.claude/rules/conventions', '.claude/skills/run', '.claude/agents/gen.md', '.claude/rules/spec-pipeline.md', 'scripts/spec-patterns.sh',
+    '.claude/skills/run', '.claude/agents/gen.md', '.claude/rules/spec-pipeline.md', 'scripts/spec-patterns.sh',
     'specs/20260101/01-a.deviations.md', 'specs/20260101/01-a.build', 'specs/20260101/01-a.review', '.git/spec-fanout.json', '.git/spec-wave-open', '.git/spec-run-cache', '.git/spec-queue-done.json']) assert.ok(!e(f), f + ' still present')
-  for (const f of ['spec-runs.jsonl', 'spec-runs/rp_1.json', 'rules/enforcement.json', 'rules/conventions/a.md', 'agents/gen.md', 'rules/spec-pipeline.md', 'scripts/spec-patterns.sh', 'deviations/20260101/01-a.deviations.md', 'spec-queue-done.json', 'skills/run/SKILL.md']) assert.ok(e('docs/archive/v7/' + f), f + ' not archived')
+  assert.ok(e('.claude/rules/conventions/a.md') && !e('docs/archive/v7/rules/conventions'), '.claude/rules/conventions is repo-owned and left alone')
+  for (const f of ['spec-runs.jsonl', 'spec-runs/rp_1.json', 'rules/enforcement.json', 'agents/gen.md', 'rules/spec-pipeline.md', 'scripts/spec-patterns.sh', 'deviations/20260101/01-a.deviations.md', 'spec-queue-done.json', 'skills/run/SKILL.md']) assert.ok(e('docs/archive/v7/' + f), f + ' not archived')
   assert.ok(e('.claude/agents/mine.md') && e('.claude/skills/spec-verify/SKILL.md') && e('.claude/skills/other/SKILL.md') && !e('docs/archive/v7/skills/spec-verify')); assert.ok(e('docs/adr/0001-a.md')); assert.ok(e('docs/roadmap/33-x.md')); assert.ok(e('specs/20260101/01-a.md'))
   const gotchas = fs.readFileSync(path.join(d, '.claude/rules/spec-gotchas.md'), 'utf8')
   assert.ok(gotchas.includes('paths:') && gotchas.includes('g1') && gotchas.includes('r1') && !gotchas.includes('## Build'))
@@ -120,6 +121,25 @@ test('seats: mapped from policy.models; absent writes none; existing v8 seats ke
   assert.ok(!('seats' in trimConfig('/nonexistent', { testCommand: 't' })))
   const kept = { builder: { model: 'x' }, reviewer: { model: 'y' } }
   assert.deepStrictEqual(trimConfig('/nonexistent', { testCommand: 't', seats: kept, policy: { models: { workers: 'haiku' } } }).seats, kept)
+})
+
+test('gate: a full gateCommand beats a thin testCommand and is not prefixed with typecheckCommand; the report names the gate', () => {
+  const { trimConfig } = require('../spec/scripts/migrate')
+  const GATE = 'pnpm typegen && pnpm typecheck && pnpm lint && pnpm test'
+  const v7 = { testCommand: 'pnpm exec vitest run', gateCommand: GATE, typecheckCommand: 'scripts/typecheck-file.sh', trunk: 'main' }
+  assert.strictEqual(trimConfig('/nonexistent', v7).testCommand, GATE)
+  assert.strictEqual(trimConfig('/nonexistent', { testCommand: 'npm test', gateCommand: 'g {testFiles}', typecheckCommand: 'tsc' }).testCommand, 'tsc && npm test', 'a templated gateCommand still falls back to testCommand with typecheck prepended')
+  const d = tmpdir('mig-gate')
+  fs.mkdirSync(path.join(d, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify(v7))
+  gitRepo(d)
+  const r = runNode('scripts/migrate.js', ['--root', d])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.ok(r.stdout.includes('testCommand: ' + GATE), 'the plan prints the gate it chose:\n' + r.stdout)
+  assert.ok(r.stdout.includes('dropped config keys: ') && r.stdout.includes('typecheckCommand'), r.stdout)
+  const a = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.ok(a.stdout.includes('testCommand: ' + GATE), 'apply prints it too:\n' + a.stdout)
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(d, '.claude/spec.config.json'), 'utf8')).testCommand, GATE)
 })
 
 test('real v7 host copy: plan, apply, idempotent', { skip: !real || !hasTag(), timeout: 120000 }, () => {

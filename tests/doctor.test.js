@@ -50,6 +50,26 @@ test('probe timeout is a finding, not healthy; probe is announced', () => {
   assert.match(r.stderr, /finished in/)
 })
 
+test('probe cap: default 10 min, config doctorProbeMs overrides, env wins; the timeout remedy names doctorProbeMs', () => {
+  const { probeCap } = require(path.join(require('./helpers').SPEC, 'scripts/doctor.js'))
+  const env = process.env.SPEC_DOCTOR_PROBE_MS
+  delete process.env.SPEC_DOCTOR_PROBE_MS
+  try {
+    assert.strictEqual(probeCap({ testCommand: 'true' }), 600000)
+    assert.strictEqual(probeCap({ testCommand: 'true', doctorProbeMs: 900000 }), 900000)
+    assert.strictEqual(probeCap({ testCommand: 'true', doctorProbeMs: 'soon' }), 600000, 'a non-number is ignored')
+    process.env.SPEC_DOCTOR_PROBE_MS = '42'
+    assert.strictEqual(probeCap({ testCommand: 'true', doctorProbeMs: 900000 }), 42)
+  } finally { if (env === undefined) delete process.env.SPEC_DOCTOR_PROBE_MS; else process.env.SPEC_DOCTOR_PROBE_MS = env }
+  const d = setup({ testCommand: 'sleep 5', doctorProbeMs: 300 })
+  runNode('scripts/init.js', ['--root', d])
+  const r = runNode('scripts/doctor.js', ['--root', d, '--json'], { env: { SPEC_DOCTOR_PROBE_MS: undefined } })
+  assert.strictEqual(r.status, 1)
+  const f = JSON.parse(r.stdout).findings.find((x) => /timed out after 0\.3s/.test(x))
+  assert.ok(f, 'the config cap applied: ' + r.stdout)
+  assert.match(f, /doctorProbeMs/)
+})
+
 test('tracked settings.local.json and uncommitted migration are findings', () => {
   const d = setup({ testCommand: 'true' })
   runNode('scripts/init.js', ['--root', d])

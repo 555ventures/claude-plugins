@@ -52,7 +52,7 @@ function candidates(root) {
 // Runnable = hardened, its lane did not end, and not already in a lane; in queue (or argument) order.
 function eligible(root) {
   const ok = []
-  const held = [] // not hardened, queue-only: silent at PLAN, named when picked
+  const held = [] // not hardened, queue-only: one summary line at PLAN, so no queued spec seems to vanish
   const waited = []
   for (const spec of candidates(root)) {
     const doc = specDoc(path.join(root, spec))
@@ -71,10 +71,12 @@ function eligible(root) {
 }
 
 function plan(root, config) {
-  const { ok, waited } = eligible(root)
+  const { ok, waited, held } = eligible(root)
   for (const o of ok.slice(config.lanes)) waited.push({ spec: o.spec, why: `all ${config.lanes} lanes are taken` })
-  return { picked: ok.slice(0, config.lanes).map((o) => o.spec), waited }
+  return { picked: ok.slice(0, config.lanes).map((o) => o.spec), waited, held }
 }
+
+const heldLine = (held) => `Held (not hardened, not shown as lanes): ${held.length} — ${held.map((h) => `${stemOf(h.spec)} (${h.why.replace(/^status is (\S+), not hardened$/, '$1')})`).join(', ')}`
 
 // SELF-PICK: up to 4 questions of up to 4 boxes, labels = spec titles.
 function pickBody(ok, cap) {
@@ -94,7 +96,7 @@ function derivePlan(ctx) {
   const config = st.readConfig(root)
   const branch = git.currentBranch(root)
   if (branch !== config.trunk) refuse(`${root} is on ${branch}, not trunk ${config.trunk} — run /spec:fanout from the main checkout`)
-  const { picked, waited } = plan(root, config)
+  const { picked, waited, held } = plan(root, config)
   const extra = EXPLICIT.slice(1)
   if (picked.length && PICK) {
     return { name: 'PLAN', body: pickBody(eligible(root).ok, config.lanes), mark: ['picked --label <title>', '[--label <title> …]', ...extra].join(' '), accepts: ['planned'] }
@@ -107,6 +109,7 @@ function derivePlan(ctx) {
   }
   const lines = [`📌 Auto-picked batch: ${picked.length} lane(s), in queue order`, ...picked.map((p, i) => `  lane ${i + 1}: ${p}`)]
   if (waited.length) lines.push('', 'Waiting:', ...waitLines(waited).map((w) => '  ' + w))
+  if (held.length) lines.push('', heldLine(held))
   lines.push('', 'Mark planned; the driver then creates the worktrees and prints the dispatch.')
   return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...extra].join(' '), accepts: ['picked'] }
 }

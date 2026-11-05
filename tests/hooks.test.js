@@ -37,6 +37,7 @@ test('block-worker-git blocks git writes only in a marked lane worktree', () => 
     const r = p(c)
     assert.strictEqual(r.status, 2, `${c} must be blocked in a lane`)
     assert.match(r.stderr, /^BLOCKED:/)
+    assert.match(r.stderr, /stale marker \(no run in flight\)\? \/spec:doctor names it; remove it with rm '\S*\/\.git\/spec-lane-open'/, 'the lane block names the marker to remove')
   }
   for (const c of ['git status', 'git diff HEAD', 'git log -1', 'echo commit', 'node run.js x --mark built',
     'git add src/a.js', 'git rebase --continue', 'git add -A && GIT_EDITOR=true git rebase --continue']) {

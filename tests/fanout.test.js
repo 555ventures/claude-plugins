@@ -168,6 +168,17 @@ test('an empty queue prints the drained report and no mark', () => {
   assert.match(j.body, /queue drained/)
 })
 
+test('AUTO PLAN names queued specs held back for not being hardened, in one line', () => {
+  const h = host()
+  st.writeStatus(path.join(h.dir, specPath('02-beta')), 'draft')
+  const j = JSON.parse(h.ok('--json').stdout)
+  assert.strictEqual(j.step, 'PLAN')
+  assert.ok(j.body.includes('lane 1: ' + specPath('01-alpha')) && j.body.includes('lane 2: ' + specPath('03-gamma')))
+  const held = j.body.split('\n').filter((l) => l.startsWith('Held (not hardened, not shown as lanes): '))
+  assert.strictEqual(held.length, 1, j.body)
+  assert.strictEqual(held[0], 'Held (not hardened, not shown as lanes): 1 — 02-beta (draft)')
+})
+
 test('explicit spec paths limit the plan; the mark line carries them', () => {
   const h = host()
   const r = h.ok(specPath('03-gamma'), specPath('01-alpha'), '--json')

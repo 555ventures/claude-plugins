@@ -107,6 +107,13 @@ test('commitWip commits staged, tracked and untracked work, never the relay file
   assert.strictEqual(G.sh(['status', '--porcelain', '--untracked-files=all'], wt), '?? .claude/pending-question.json', 'only the relay file is left')
   assert.strictEqual(G.commitWip(wt, 'wip(spec): x'), null, 'a second call finds nothing')
 
+  // a host that gitignores the relay file (niko-hub does): the add must not refuse the pathspec
+  fs.writeFileSync(path.join(wt, '.gitignore'), '.claude/pending-question.json\n')
+  fs.writeFileSync(path.join(wt, 'more.txt'), 'm\n')
+  const sha2 = G.commitWip(wt, 'wip(spec): y')
+  assert.strictEqual(sha2, G.headSha(wt), 'the wip commit lands with the relay file ignored')
+  assert.deepStrictEqual(G.sh(['show', '--name-only', '--format=', 'HEAD'], wt).split('\n').sort(), ['.gitignore', 'more.txt'])
+
   // a rebase in progress: a commit now would land inside the rebase
   fs.rmSync(path.join(root, '.git/hooks/pre-commit'))
   fs.writeFileSync(path.join(wt, 'a.txt'), 'lane\n'); G.commitAll(wt, 'lane edit')

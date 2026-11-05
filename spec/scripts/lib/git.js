@@ -73,7 +73,10 @@ function commitAll(cwd, message, { noVerify } = {}) {
 // when nothing was staged or a rebase is in progress (a commit would land inside the rebase).
 function commitWip(wt, message) {
   if (rebasing(wt)) return null
-  sh(['add', '-A', '--', '.', ':(exclude).claude/pending-question.json'], wt)
+  // Not an :(exclude) pathspec: when a host gitignores the relay file, git add refuses the
+  // pathspec itself ("paths are ignored") and nothing is staged.
+  sh(['add', '-A', '--', '.'], wt)
+  raw(['rm', '--cached', '-q', '--ignore-unmatch', '--', '.claude/pending-question.json'], wt)
   if (raw(['diff', '--cached', '--quiet'], wt).status === 0) return null
   sh(['commit', '-q', '--no-verify', '-m', message], wt)
   return headSha(wt)

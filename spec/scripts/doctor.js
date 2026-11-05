@@ -24,7 +24,8 @@ function walkRuns(dir, out, depth = 0) {
   return out
 }
 
-function check(root) {
+// probe:false skips the testCommand run (status counts hygiene findings and must stay fast).
+function check(root, { probe = true } = {}) {
   const f = []; const info = [] // info: runs in flight, printed but not a finding
   let cfg = null
   if (!fs.existsSync(configPath(root))) f.push('config: .claude/spec.config.json is missing — run /spec:init')
@@ -33,7 +34,7 @@ function check(root) {
     if (!cfg || typeof cfg !== 'object') f.push('config: .claude/spec.config.json does not parse')
     else if (!cfg.testCommand) f.push('config: testCommand is not set — run /spec:init')
   }
-  if (cfg && cfg.testCommand) {
+  if (probe && cfg && cfg.testCommand) {
     const cap = Number(process.env.SPEC_DOCTOR_PROBE_MS) || 120000
     process.stderr.write(`running testCommand: ${cfg.testCommand} …\n`)
     const t0 = Date.now()

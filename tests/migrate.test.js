@@ -125,18 +125,29 @@ test('seats: mapped from policy.models; absent writes none; existing v8 seats ke
 test('real v7 host copy: plan, apply, idempotent', { skip: !real || !hasTag(), timeout: 120000 }, () => {
   const d = tmpdir('v7copy')
   fs.cpSync(V7, d, { recursive: true, mode: fs.constants.COPYFILE_FICLONE, filter: (s) => !/\/(node_modules|\.claude\/worktrees)(\/|$)/.test(s) })
-  // Once the source repo itself is migrated, rebuild its v7 state: the spec-v7-final tag plus
-  // the newest git-dir backup migrate left. This also proves the documented rollback path.
+  // Once the source repo itself is migrated, rebuild its v7 state from durable records only: the
+  // spec-v7-final tag's tree, plus a v7 git dir rebuilt from the done-queue the migration commit
+  // archived byte-for-byte. The live v7 queue was rewritten in place, so it is rebuilt from those
+  // same real v7 items; the v7 git-dir leftovers and review refs are synthesized as in synthetic().
+  let v7done = null
   if (!fs.existsSync(path.join(d, '.claude/spec-runs.jsonl'))) {
+    const archived = 'docs/archive/v7/spec-queue-done.json'
+    const at = git(d, 'log', '--format=%H', '--diff-filter=A', 'HEAD', '--', archived).trim().split('\n').pop()
+    assert.match(at, /^[0-9a-f]{40}$/, 'the migration commit that archived the v7 done-queue is in history')
+    v7done = git(d, 'show', `${at}:${archived}`)
     git(d, 'checkout', '-q', '-f', 'spec-v7-final'); git(d, 'clean', '-fdq', '-e', 'node_modules')
-    const bk = path.join(d, '.git/spec-v7-backup'); const last = fs.readdirSync(bk).sort().pop()
-    for (const f of fs.readdirSync(path.join(bk, last))) {
-      if (f === 'refs.txt') continue
-      fs.cpSync(path.join(bk, last, f), path.join(d, '.git', f), { recursive: true })
-    }
-    for (const line of fs.readFileSync(path.join(bk, last, 'refs.txt'), 'utf8').split('\n').filter(Boolean)) {
-      const [sha, ref] = line.split(' '); git(d, 'update-ref', ref, sha)
-    }
+    const c = path.join(d, '.git')
+    for (const f of ['spec-queue.json', 'spec-queue-done.json', 'spec-run-cache', 'spec-fanout.json', 'spec-wave-open']) fs.rmSync(path.join(c, f), { recursive: true, force: true })
+    const done = JSON.parse(v7done)
+    assert.strictEqual(done.version, 1); assert.ok(done.items.length > 0)
+    const live = done.items.map(({ archived: _a, ticked: _t, ...it }) => it)
+    const seq = Math.max(...live.map((i) => Number(String(i.id).replace(/^q/, '')) || 0))
+    fs.writeFileSync(path.join(c, 'spec-queue.json'), JSON.stringify({ version: 1, seq, items: live }, null, 2) + '\n')
+    fs.writeFileSync(path.join(c, 'spec-queue-done.json'), v7done)
+    for (const f of ['spec-fanout.json', 'spec-wave-open']) fs.writeFileSync(path.join(c, f), '{}')
+    fs.mkdirSync(path.join(c, 'spec-run-cache')); fs.writeFileSync(path.join(c, 'spec-run-cache/x.json'), '{}')
+    for (const r of git(d, 'for-each-ref', '--format=%(refname)', 'refs/spec-review/').split('\n').filter(Boolean)) git(d, 'update-ref', '-d', r)
+    git(d, 'update-ref', 'refs/spec-review/rv_v7/judged', 'HEAD')
   }
   const adrs = fs.readdirSync(path.join(d, 'docs/adr')).length
   const p = mig(d)
@@ -150,5 +161,10 @@ test('real v7 host copy: plan, apply, idempotent', { skip: !real || !hasTag(), t
   assert.ok(fs.existsSync(path.join(d, '.claude/rules/spec-gotchas.md')))
   assert.ok(!fs.existsSync(path.join(d, '.claude/spec-runs.jsonl')))
   assert.strictEqual(fs.readdirSync(path.join(d, 'docs/adr')).length, adrs)
+  if (v7done !== null) {
+    assert.strictEqual(fs.readFileSync(path.join(d, 'docs/archive/v7/spec-queue-done.json'), 'utf8'), v7done, 'the v7 done-queue is archived byte-identical')
+    for (const f of ['spec-queue-done.json', 'spec-run-cache', 'spec-fanout.json', 'spec-wave-open']) assert.ok(!fs.existsSync(path.join(d, '.git', f)), f + ' still in the git dir')
+    assert.strictEqual(git(d, 'for-each-ref', 'refs/spec-review/').trim(), '')
+  }
   assert.strictEqual(mig(d, '--apply').ops.length, 0)
 })

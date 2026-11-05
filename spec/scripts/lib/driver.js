@@ -91,7 +91,7 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
 
   function run(argv) {
     const a = parseArgv(argv)
-    const ctx = { root: a.root, arg: a.pos[0] || '', json: a.json, script: scriptPath, flags: a.flags }
+    const ctx = { root: a.root, arg: (a.pos[0] || '').replace(/^@/, ''), json: a.json, script: scriptPath, flags: a.flags }
     if (specArg && !ctx.arg) refuse(`usage: /spec:${name} <${specArg}> [--root <dir>] [--state] [--mark <verb>]`)
     let state = load(ctx)
     if (a.state) return writeOut(1, derive(state, ctx).name + '\n')

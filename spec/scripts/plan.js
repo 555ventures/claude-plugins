@@ -25,7 +25,7 @@ function create(root, slug) {
 }
 
 function lock(root, arg, confirmed) {
-  const typed = arg || ''
+  const typed = (arg || '').replace(/^@/, '') // `/spec:run @path` pastes the file mention
   const file = fs.existsSync(path.resolve(root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(root, typed) : path.resolve(process.cwd(), typed)
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Refusal(`no such spec: ${arg || '(none)'}`)
   if (path.relative(root, file).startsWith('..')) throw new Refusal(`${file} is outside ${root}`)

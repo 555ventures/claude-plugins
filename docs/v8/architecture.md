@@ -169,8 +169,11 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 ## 9. Other drivers
 
 - `queue.js`: `next|list|add|move|done|show`. ≤ 150 LOC. Duplicate payload refused.
-- `status.js`: roadmap (✅/⬜ per brief by spec status), 🎯 Next (queue head + runnable
-  lanes), ⚠️ pending questions, verdict line. ≤ 200 LOC. `--json`.
+- `status.js`: the dashboard. Roadmap (collapsed ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔),
+  🎯 Next (`qNN` prompt rows, top pick, `⚡` lanes with `🚦 solo` / `🔶` overlap markers), ⚠️ pending
+  questions, footer verdict; `--all` adds 🕓 after that, ⛔ blocked and 🧹 hygiene
+  (`doctor.check(root, {probe: false})`); `NN` reports one brief's dependency readiness. `--json`
+  extends, never renames.
 - `init.js`: detect test command (package.json scripts.test, pytest, go test, cargo test),
   trunk, write config; ask only what cannot be detected (one AskUserQuestion). ≤ 150 LOC.
 - `doctor.js`: config valid, testCommand runs (exit 0 or 1, never "command not found"),
@@ -273,7 +276,7 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   line in the BUILD brief. Otherwise OPEN makes `.claude/worktrees/spec-<stem>` on `spec/<stem>` from
   trunk. `setupCommand` runs in a new worktree and in a lane.
 - **Spec status.** A worktree run never writes to the main checkout: the run sidecar is the
-  in-flight state, and `status.js` shows 🔶 implementing when a spec has a sidecar or a
+  in-flight state, and `status.js` shows 🔨 implementing when a spec has a sidecar or a
   `.claude/worktrees/spec-<stem>` worktree (frontmatter only says `done`). The branch copy is
   synced from root and set to `done` at OPEN, so the gated tree is the tree that merges and the
   trunk gate after an unchanged merge is a cache hit; spec text edited in the branch (a FIX

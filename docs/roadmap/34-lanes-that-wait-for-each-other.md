@@ -48,6 +48,11 @@ lane never rewrites a locked decision on its own:
   MERGE_READY is rebased and fast-forwarded at once when no other lane in the batch is sent back
   or mid-rebase. The trunk gate runs per landing as today. A later lane's rebase onto the moved
   trunk is the existing path.
+- **One dispatch resolves and lands.** A lane sent back for a rebase conflict resolves it and
+  continues into GATE and REVIEW in the same dispatch; the hand-back-then-resend round trip goes
+  (shop-bltr's lane 08 was dispatched six times for one spec: build, retry, resolve, re-gate,
+  resolve, re-gate). The gate and review after a resolution stay: on shop-bltr they caught a
+  semantic conflict the textual rebase missed. The resolve prompt names the live trunk head.
 - **A lane never edits Decisions.** run.md and doctrine say it in one line each; at FIX a
   decision that cannot be met is a pending question (`amend` with the proposed text as the
   option description), never an edit to the spec or to another spec. REVIEW blocks a diff that

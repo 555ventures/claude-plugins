@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: implementing
+status: done
 area: doctrine
 depends_on: [specs/20261105/02-lanes-that-wait-for-each-other.md]
 brief: 35

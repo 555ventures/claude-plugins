@@ -61,7 +61,7 @@ Lost? Run `/spec:status`.
 | `/spec:prototype <idea \| brief \| stem> [--stem <name>]` | A throwaway app you pin notes on until you approve. It ends in a behaviour contract |
 | `/spec:plan <description \| spec \| brief \| contract.json>` | Writes a spec with an Intent block, asks only the real forks, then locks and queues it |
 | `/spec:run <spec> [--in-place]` | Builds, gates, reviews and merges one spec in its own worktree |
-| `/spec:fanout [<spec>…]` | Drains the queue as parallel lanes and merges them in order with the gate green after each |
+| `/spec:fanout [<spec>…] [--pick]` | Drains the queue as parallel lanes. Bare picks the batch for you; `--pick` lets you tick it. Each lane rebases onto main as it lands, with the gate green after each |
 | `/spec:fix [symptom]` | Root cause in one sentence, a regression test, the fix, the gate, then `/git:commit` |
 | `/spec:queue [next\|list\|add\|move\|done\|show]` | Your intended work order |
 | `/spec:status` | Roadmap, what to run next, and waiting questions |
@@ -85,9 +85,15 @@ Override any seat with `seats` in `.claude/spec.config.json`.
 
 ## Upgrading from v7
 
-Run `/spec:migrate`. It trims the config, archives v7-only files under `docs/archive/v7/`,
-and leaves specs, briefs, ADRs, mocks and prototypes as they are. It refuses while a fanout
-or an unmerged build is in flight.
+Commit or stash your work, then run `/spec:migrate`. It prints a plan, and on your yes trims
+the config, archives v7-only files under `docs/archive/v7/`, and commits it all as one
+`chore(spec): migrate v7 → v8`. Specs, briefs, ADRs, mocks and prototypes stay as they are.
+Before touching the git folder it backs up the v7 queue, fan-out state and review refs to
+`.git/spec-v7-backup/<time>/`.
+
+To roll back a repo: `git revert <migrate commit>`, then copy the backup files back into
+`.git` and restore the refs listed in `refs.txt` with `git update-ref`. The last v7 plugin
+is tagged `spec-v7-final`; branch `v7-legacy` has the retirement notes.
 
 ## For plugin authors
 

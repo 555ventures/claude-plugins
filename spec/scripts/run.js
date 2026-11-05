@@ -45,6 +45,12 @@ const specIn = (state, ctx) => path.join(wtOf(state, ctx), state.spec)
 const runFile = (ctx, name) => path.join(st.runDir(specInfo(ctx).abs), name)
 const mainRoot = (root) => git.worktreeList(root)[0]
 const sectionText = (spec, name) => spec.sections[Object.keys(spec.sections).find((k) => k === name || k.startsWith(name + ' ')) || ''] || ''
+// Decisions table rows as bullets; the ADR constraints the planner wrote must reach builder and reviewer.
+const decisions = (spec) => {
+  const rows = sectionText(spec, 'Decisions').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l) && !/<[^>]*>/.test(l))
+    .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))).filter((c) => c.length >= 2 && !/^id$/i.test(c[0]))
+  return rows.length ? rows.map((c) => `- ${c[0]}: ${c[1]}${c.length > 2 && c[c.length - 1] ? ` — ${c[c.length - 1]}` : ''}`) : ['- none']
+}
 
 function go(state, step, extra = {}) {
   state.history = [...(state.history || []), { step, at: new Date().toISOString() }]
@@ -221,7 +227,9 @@ function builderBrief(state, ctx, kind) {
     `Test command: ${cfg.testCommand} (run it in the worktree)`,
     '',
     '## Intent', sectionText(spec, 'Intent'), '',
+    '## Decisions', ...decisions(spec), '',
     '## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '',
+    '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
   ]
   if (kind === 'repair') out.push('The gate is red. Repair the code (never weaken a test). Failure tail:', '```', state.gate.output_tail, '```', '')
   if (kind === 'fix') {
@@ -263,6 +271,7 @@ function reviewerBrief(state, ctx) {
     `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec).join(', ') || 'none'}`,
     '',
     '## Intent', sectionText(spec, 'Intent'), '',
+    '## Decisions', ...decisions(spec), '',
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`),
   ].join('\n')
 }

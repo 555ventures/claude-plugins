@@ -2,8 +2,8 @@
 // status.js — the four-part status block: roadmap, next (+ parallel lanes), questions, verdict.
 const fs = require('fs')
 const path = require('path')
-const { readQueue, readSpec, readConfig, readJson, runPath } = require('./lib/state')
-const { pasteLine, pending, reconcile } = require('./queue')
+const { readQueue, readSpec, readConfig, readJson } = require('./lib/state')
+const { pasteLine, pending, reconcile, briefNo } = require('./queue')
 
 const ls = (d) => { try { return fs.readdirSync(d) } catch { return [] } }
 
@@ -22,19 +22,18 @@ function allSpecs(root) {
   return out
 }
 
-// In flight = a run sidecar beside the spec or a lane worktree for it; frontmatter only says done.
-const inFlight = (root, rel) => fs.existsSync(runPath(path.join(root, rel)))
-  || fs.existsSync(path.join(root, '.claude', 'worktrees', 'spec-' + path.basename(rel, '.md')))
-
-function roadmap(root, specs) {
+// Done = every spec of the brief is done and its queue item is closed (`/spec:queue done <NN>`),
+// so a half-planned brief stays implementing. Any spec at all means implementing.
+function roadmap(root, specs, q) {
+  const planning = (nn) => pending(q).some((i) => i.kind === 'brief' && briefNo(i.payload) === briefNo(nn))
   return ls(path.join(root, 'docs', 'roadmap')).filter((f) => /^\d+[a-z]?-.*\.md$/.test(f) && f !== '00-overview.md').sort().map((f) => {
     const nn = f.split('-')[0]
     const text = fs.readFileSync(path.join(root, 'docs', 'roadmap', f), 'utf8')
     const title = ((/^# +(.+)$/m.exec(text) || [])[1] || f).replace(/^\d+[a-z]?\s*[—–-]\s*/, '')
-    const mine = specs.filter((s) => String(s.spec.frontmatter.brief) === nn)
+    const mine = specs.filter((s) => briefNo(String(s.spec.frontmatter.brief)) === briefNo(nn))
     const state = /^>\s*Superseded by/m.test(text) ? 'superseded'
-      : mine.some((s) => s.spec.frontmatter.status === 'done') ? 'done'
-        : mine.some((s) => inFlight(root, s.path)) ? 'implementing' : 'open'
+      : !mine.length ? 'open'
+        : mine.every((s) => s.spec.frontmatter.status === 'done') && !planning(nn) ? 'done' : 'implementing'
     return { brief: nn, title, state }
   })
 }
@@ -57,7 +56,7 @@ function build(root) {
   const qs = questions(root)
   const verdict = qs.length ? `🟡 waiting on you — ${qs.length} pending question${qs.length > 1 ? 's' : ''}`
     : head ? `🟢 next is ready · ${pasteLine(root, head)}` : '⚪ queue empty'
-  const res = { roadmap: roadmap(root, specs), next: head ? pasteLine(root, head) : null, lanes: parallel, questions: qs, verdict }
+  const res = { roadmap: roadmap(root, specs, q), next: head ? pasteLine(root, head) : null, lanes: parallel, questions: qs, verdict }
   return res
 }
 

@@ -52,10 +52,16 @@ function age(iso) {
   return m < 60 ? Math.floor(m) + 'm' : m < 1440 ? Math.floor(m / 60) + 'h' : Math.floor(m / 1440) + 'd'
 }
 
+// A brief number names the brief item first (`done 02` closes brief 02, never the 2nd row); a
+// zero-padded ref is never a row position, so a brief that was never queued is "no match".
+const briefNo = (p) => { const m = BRIEF_RE.exec(p); return m ? String(Number.parseInt(m[1], 10)) + m[1].replace(/^\d+/, '') : null }
+
 function resolve(q, ref) {
   const list = pending(q)
   const hit = (xs) => (xs.length === 1 ? xs[0] : null)
-  if (/^\d+$/.test(ref) && list[Number(ref) - 1]) return list[Number(ref) - 1]
+  const brief = BRIEF_RE.test(ref) && list.find((i) => i.kind === 'brief' && briefNo(i.payload) === briefNo(ref))
+  if (brief) return brief
+  if (/^[1-9]\d*$/.test(ref) && list[Number(ref) - 1]) return list[Number(ref) - 1]
   return q.items.find((i) => i.id === ref) ||
     hit(list.filter((i) => i.payload === ref || path.basename(i.payload) === ref)) ||
     hit(list.filter((i) => i.payload.includes(ref)))
@@ -119,5 +125,5 @@ function main(argv) {
   return 0
 }
 
-module.exports = { kindOf, pasteLine, pending, reconcile, main }
+module.exports = { kindOf, briefNo, pasteLine, pending, reconcile, main }
 if (require.main === module) process.exitCode = main(process.argv.slice(2))

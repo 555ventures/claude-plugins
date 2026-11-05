@@ -10,18 +10,21 @@ const spec = (st, brief, files) => `---\nstatus: ${st}\nbrief: ${brief}\n---\n# 
 const run = (d, ...a) => runNode('scripts/status.js', [...a, '--root', d, '--json'])
 const queue = (d, ...a) => runNode('scripts/queue.js', [...a, '--root', d])
 
-test('roadmap states: done, implementing (from a run sidecar or lane worktree), open, superseded', () => {
+test('roadmap states: done needs every spec done and the brief item closed; any spec means implementing', () => {
   const d = tmpdir('status'); gitRepo(d)
   w(d, 'docs/roadmap/00-overview.md', '# Overview\n')
   for (const n of ['01-a', '02-b', '03-c', '04-d', '05-e']) w(d, `docs/roadmap/${n}.md`, `# ${n.slice(0, 2)} — T${n}\n` + (n === '04-d' ? '\n> Superseded by 01\n' : ''))
   w(d, 'specs/20261104/01-x.md', spec('done', '01', ['a.js']))
-  w(d, 'specs/20261104/02-y.md', spec('hardened', '02', ['b.js']))
-  w(d, 'specs/20261104/02-y.run/state.json', '{"step":"BUILD"}')
-  w(d, 'specs/20261104/03-z.md', spec('implementing', '03', ['c.js'])) // stale frontmatter, nothing in flight
-  w(d, 'specs/20261104/05-v.md', spec('hardened', '05', ['e.js']))
-  fs.mkdirSync(path.join(d, '.claude/worktrees/spec-05-v'), { recursive: true })
+  w(d, 'specs/20261104/02-y.md', spec('done', '02', ['b.js']))
+  w(d, 'specs/20261104/03-y2.md', spec('hardened', '02', ['b2.js'])) // one done + one hardened
+  w(d, 'specs/20261104/04-v.md', spec('done', '05', ['e.js']))
+  queue(d, 'add', 'docs/roadmap/05-e.md') // all specs done, but the brief is still being planned
   const r = JSON.parse(run(d).stdout)
   assert.deepStrictEqual(r.roadmap.map((b) => b.state), ['done', 'implementing', 'open', 'superseded', 'implementing'])
+  queue(d, 'done', '05')
+  assert.strictEqual(JSON.parse(run(d).stdout).roadmap[4].state, 'done', 'closing the brief item by number completes it')
+  queue(d, 'add', 'undefined') // a v7-migrated brief item with no number must not crash status
+  assert.strictEqual(run(d).status, 0)
   const text = runNode('scripts/status.js', ['--root', d]).stdout
   for (const e of ['✅', '🔶', '⬜', '⛔', '🗺️']) assert.ok(text.includes(e))
 })

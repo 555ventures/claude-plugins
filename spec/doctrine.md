@@ -50,4 +50,4 @@ question to `.claude/pending-question.json` for the orchestrator to relay.
 - **seat**: a role with a model and effort.
 - **checkpoint**: the line after an accepted mark.
 - **Intent block**: the top of every spec (asked, will build, won't touch, architecture
-  change), given verbatim to builder and reviewer.
+  change), given verbatim to builder and reviewer with the Decisions table.

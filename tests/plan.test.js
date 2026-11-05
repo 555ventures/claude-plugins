@@ -3,7 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { tmpdir, runNode } = require('./helpers')
+const { tmpdir, runNode, gitRepo } = require('./helpers')
 
 const plan = (d, ...a) => runNode('scripts/plan.js', [...a, '--root', d])
 const status = (f) => /^status:\s*(\S+)/m.exec(fs.readFileSync(f, 'utf8'))[1]
@@ -42,4 +42,17 @@ test('architecture: true needs --confirmed', () => {
   assert.strictEqual(status(f), 'draft')
   assert.strictEqual(plan(d, 'lock', f, '--confirmed').status, 0)
   assert.strictEqual(status(f), 'hardened')
+})
+
+test('lock commits new or edited ADRs and briefs with the spec; an empty docs/adr is fine', () => {
+  const d = tmpdir('plan'); const g = gitRepo(d)
+  fs.mkdirSync(path.join(d, 'docs/adr'), { recursive: true })
+  assert.strictEqual(plan(d, 'lock', fresh(d, 'plain')).status, 0, 'empty docs/adr does not break the commit')
+  const f = fresh(d, 'arch')
+  fs.mkdirSync(path.join(d, 'docs/roadmap'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'docs/adr/0002-orm.md'), '# 0002. ORM\n\n- Status: accepted\n')
+  fs.writeFileSync(path.join(d, 'docs/roadmap/03-old.md'), '# 03 — Old\n\n> Superseded by 01\n')
+  assert.strictEqual(plan(d, 'lock', f).status, 0)
+  assert.strictEqual(g('status', '--porcelain'), '', 'spec, ADR and brief are all committed')
+  assert.match(g('show', '--stat', '--format=%s', 'HEAD'), /chore\(spec\): lock[\s\S]*docs\/adr\/0002-orm\.md[\s\S]*docs\/roadmap\/03-old\.md/)
 })

@@ -36,8 +36,11 @@ function lock(root, arg, confirmed) {
   const rel = path.relative(root, file)
   if (git.raw(['rev-parse', '--git-dir'], root).status === 0) {
     const id = (/(\d{8})\/(\d+)-/.exec(rel.split(path.sep).join('/')) || []).slice(1).join('/') || path.basename(rel, '.md')
-    git.sh(['add', '--', rel], root)
-    git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel], root)
+    // ADR and brief edits the plan made travel with the spec, so lanes branch with them.
+    const docs = git.raw(['status', '--porcelain', '--untracked-files=all', '--', 'docs/adr', 'docs/roadmap'], root).stdout
+      .split('\n').filter(Boolean).map((l) => l.slice(3).trim())
+    git.sh(['add', '--', rel, ...docs], root)
+    git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel, ...docs], root)
   }
   return `✅ spec hardened & locked — ${rel}\nNext: /spec:queue add ${rel}`
 }

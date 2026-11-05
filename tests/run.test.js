@@ -34,6 +34,12 @@ architecture: false
 
 feature.txt exists.
 
+## Decisions
+
+| ID | Decision | Why |
+|----|----------|-----|
+| D1 | plain text, no JSON \\| no YAML | ADR-0001 |
+
 ## File Plan
 
 | Path | Action | Summary |
@@ -87,6 +93,8 @@ test('the whole loop: OPEN → BUILD → GATE → REVIEW → COMMIT → MERGE �
   assert.match(out, /^▶ BUILD\n/, 'OPEN is automatic and settles on BUILD')
   assert.ok(out.includes('- You asked: make a thing') && out.includes('  - feature.txt holding the thing'), 'the builder brief carries the Intent block verbatim')
   assert.ok(out.includes(h.wt) && out.includes('feature.txt'), 'the brief names the worktree and the File Plan')
+  assert.ok(out.includes('## Decisions\n- D1: plain text, no JSON | no YAML — ADR-0001'), 'the builder brief carries the Decisions, escaped pipes unescaped')
+  assert.ok(out.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done'), 'the builder brief carries the ACs')
   assert.ok(fs.existsSync(path.join(h.wt, REL)), 'OPEN creates the worktree')
   assert.strictEqual(h.state().branch, 'spec/01-thing')
   assert.strictEqual(h.status(), 'hardened', "OPEN leaves the main checkout's copy alone")
@@ -101,6 +109,7 @@ test('the whole loop: OPEN → BUILD → GATE → REVIEW → COMMIT → MERGE �
   const j = JSON.parse(ok(h.run('--json')))
   assert.strictEqual(j.step, 'REVIEW')
   assert.match(j.mark, /--mark reviewed --file \S+findings\.json/, 'the reviewer is told where to write findings')
+  assert.ok(j.body.includes('## Decisions\n- D1: plain text, no JSON | no YAML — ADR-0001'), 'the reviewer brief carries the Decisions')
 
   const cp = ok(h.run('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', summary: 'nit' }])))
   assert.match(cp, /REVIEW → DONE/, 'no blocking findings → commit, merge, done without the session')

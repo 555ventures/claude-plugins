@@ -40,6 +40,8 @@ function toIso(v) {
 
 // A spec item whose spec is done counts as done; the timestamp is written with the next write.
 function reconcile(root, q) {
+  // A v7 brief item carried `brief: "NN"` and no payload; it renders as `undefined` otherwise.
+  for (const i of q.items) if (i.payload === undefined && i.brief !== undefined) { i.payload = String(i.brief); i.kind = i.kind || 'brief'; delete i.brief }
   for (const i of q.items) if (i.added !== undefined) i.added = toIso(i.added)
   const inFlight = (p) => { const r = readRun(path.join(root, p)); return r && !r.ended }
   for (const i of q.items) if (!i.done && i.kind === 'spec' && specStatus(root, i.payload) === 'done' && !inFlight(i.payload)) i.done = new Date().toISOString()

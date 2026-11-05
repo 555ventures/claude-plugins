@@ -129,3 +129,10 @@ test('a bare number that names a roadmap brief is that brief even unqueued and u
   assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 12, 'row 12 was not closed')
   assert.strictEqual(q(d, 'show', '3').stdout.trim(), 'task 2', 'a number that is no brief is still a row')
 })
+
+test('a v7 brief item with `brief` and no payload lists as the brief number, not undefined', () => {
+  const { reconcile } = require('../spec/scripts/queue')
+  const q = reconcile(process.cwd(), { version: 2, seq: 1, items: [{ id: 'q1', kind: 'brief', brief: '33' }] })
+  assert.strictEqual(q.items[0].payload, '33')
+  assert.strictEqual(q.items[0].brief, undefined)
+})

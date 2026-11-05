@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: implementing
 area: run
 depends_on: [specs/20261105/06-the-client-says-yes.md, specs/20261105/07-a-batch-ends-clean.md]
 brief: 33

@@ -10,6 +10,7 @@
 //   steps[verb](state, flags, ctx) → state (or mutate in place and return nothing)
 //   save(state, ctx)
 //   after(verb, state, ctx) → line?   optional; printed under the checkpoint (e.g. the gate result)
+//   markArgs(ctx) → words   optional; extra argv printed after the argument in every mark line (a spec-less fix's --fix)
 //   applied(verb, state, flags, ctx) → boolean   optional; true when a mark the settled step refuses
 //     has already taken effect: the frame prints a checkpoint saying so and exits 0, running no step
 // Refusals: throw {exit: 2, message} (or call die). Exit 0 ok · 1 error · 2 refusal.
@@ -62,12 +63,12 @@ function parseArgv(argv) {
   return out
 }
 
-function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after, applied }) {
+function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after, applied, markArgs }) {
   const scriptPath = script || (require.main && require.main.filename) || name
   const MAX_AUTO = 50
 
   function markLine(ctx, mark) {
-    const arg = ctx.arg ? ' ' + shq(ctx.arg) : ''
+    const arg = (ctx.arg ? ' ' + shq(ctx.arg) : '') + (markArgs ? markArgs(ctx).map((w) => ' ' + shq(w)).join('') : '')
     return `node ${shq(scriptPath)}${arg} --root ${shq(ctx.root)} --mark ${mark}`
   }
 
@@ -95,7 +96,7 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
   function run(argv) {
     const a = parseArgv(argv)
     const ctx = { root: a.root, arg: (a.pos[0] || '').replace(/^@/, ''), json: a.json, script: scriptPath, flags: a.flags }
-    if (specArg && !ctx.arg) refuse(`usage: /spec:${name} <${specArg}> [--root <dir>] [--state] [--mark <verb>]`)
+    if (specArg && !ctx.arg && a.flags.fix === undefined) refuse(`usage: /spec:${name} <${specArg}> [--root <dir>] [--state] [--mark <verb>]`)
     let state = load(ctx)
     if (a.state) return writeOut(1, derive(state, ctx).name + '\n')
     if (!a.mark) {

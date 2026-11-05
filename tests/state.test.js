@@ -303,3 +303,23 @@ test('AC-20261105-10-6 filePlanTables reads a path cell `a|b.js` as one path and
   assert.strictEqual(s.filePlan[0].summary, 'pipes `x|y` kept')
   assert.deepStrictEqual(s.filePaths, ['a|b.js', 'c.js'])
 })
+
+test('AC-20261105-09-2 slugOf is the first six words plus six hex of the whole symptom, at most 47 characters; symptoms differing after the sixth word differ', () => {
+  const s = S.slugOf('Login button stays disabled after a failed submit, every time')
+  assert.match(s, /^login-button-stays-disabled-after-a-[0-9a-f]{6}$/)
+  assert.ok(s.length <= 47)
+  assert.notStrictEqual(S.slugOf('one two three four five six seven'), S.slugOf('one two three four five six eight'))
+  assert.strictEqual(S.slugOf('  one two three four five six seven '), S.slugOf('one two three four five six seven'), 'surrounding blanks are not part of the symptom')
+  const long = S.slugOf('internationalization-misconfiguration characteristically unreasonably overcomplicated extraordinarily x')
+  assert.ok(long.length <= 47 && /-[0-9a-f]{6}$/.test(long) && !/--/.test(long), long)
+  assert.match(S.slugOf('ログインできない'), /^fix-[0-9a-f]{6}$/, 'a symptom with no ascii words still gets a slug')
+})
+
+test('AC-20261105-09-1 fixRunPath is <git-common-dir>/spec-fix/<slug>.run/state.json, shared by every worktree of the host', () => {
+  const d = tmpdir('fixrun'); const g = gitRepo(d)
+  const p = S.fixRunPath(d, 'x-abcdef')
+  assert.strictEqual(p, path.join(fs.realpathSync(d), '.git', 'spec-fix', 'x-abcdef.run', 'state.json'))
+  assert.strictEqual(S.fixRunDir(d, 'x-abcdef'), path.dirname(p))
+  const wt = path.join(d, '.claude/worktrees/w'); g('worktree', 'add', '-q', '-b', 'w', wt, 'main')
+  assert.strictEqual(S.fixRunPath(wt, 'x-abcdef'), p, 'a worktree resolves to the same dir')
+})

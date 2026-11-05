@@ -10,7 +10,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/fanout.js $ARGUMENTS`.
 
 - **Bare (AUTO)**: the driver picks the batch (📌 Auto-picked) and asks nothing; mark `planned`. A queued
-  `/spec:fix <spec> — <symptom>` item is a fix lane, picked after the runnable specs.
+  `/spec:fix …` item is a fix lane: with a spec path `fix-<stem>`, without one `fix-<slug>`; both are picked
+  after the runnable specs. A lane that ends `NEEDS_PLAN` queued `/spec:plan` and is reported.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
 - **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane
@@ -18,7 +19,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   rebased again, and gated, when it lands). Every mark prints, under the checkpoint,
   what it did to each lane it touched: `lane N landed as <sha>`, `lane N sent back — conflicts: …` or
   `lane N gate red after rebase: …` with that lane's Agent call to re-send, or `lane N held — trunk gate is red`.
-  A PARKED or AMENDED lane is dismissed by it, and a
+  A PARKED, AMENDED or NEEDS_PLAN lane is dismissed by it, and a
   lane that marked `waiting --on` becomes waiting. A lane whose rebase conflicts is re-sent (mark
   `resent`): it resolves the conflict, continues the rebase, gates and reviews inside that one
   dispatch, and lands when marked returned. A lane that needs another spec done first: mark

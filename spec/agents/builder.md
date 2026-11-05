@@ -25,5 +25,9 @@ Leave git alone: the driver commits, and a hook blocks git writes. Evidence an A
 (listings, renders, counts) goes in the `evidence.md` the brief names; the driver appends it to the build commit.
 What you built differently from the spec, and why, goes in the `as-built.md` the brief names, one line each; the driver appends it to the spec as `## As built`.
 
+On a fix brief, reproduce before the first edit, write `fix.json` as the brief says, set `needsPlan`
+and make no edit when the cause needs an architecture or behaviour change, and list every string you
+authored and every display or policy choice you made.
+
 Reply briefly: files changed, the last test result, any file outside the plan and why, and
 anything in the spec you could not honour.

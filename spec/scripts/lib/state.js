@@ -4,6 +4,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 
 // ---- atomic io ----------------------------------------------------------------------------
@@ -311,6 +312,16 @@ function gitCommonDir(root) {
   return path.resolve(root, r.stdout.trim())
 }
 
+// A fix with no spec keeps its run state here, under the git common dir: shared by every worktree of
+// the host, never tracked. slugOf keys it: the first six words of the symptom plus a hash of all of it.
+const slugOf = (symptom) => {
+  const s = String(symptom).trim()
+  const words = s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 6).join('-').slice(0, 40).replace(/-+$/, '')
+  return `${words || 'fix'}-${crypto.createHash('sha1').update(s).digest('hex').slice(0, 6)}`
+}
+const fixRunDir = (root, slug) => path.join(gitCommonDir(root), 'spec-fix', slug + '.run')
+const fixRunPath = (root, slug) => path.join(fixRunDir(root, slug), 'state.json')
+
 const queuePath = (root) => path.join(gitCommonDir(root), 'spec-queue.json')
 const readQueue = (root) => readJson(queuePath(root), null) || { version: 2, seq: 0, items: [] }
 const writeQueue = (root, q) => writeJson(queuePath(root), q)
@@ -353,6 +364,6 @@ module.exports = {
   DEFAULTS, readConfig, writeConfig, configPath,
   readSpec, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
-  gitCommonDir, readQueue, writeQueue, readFanout, writeFanout,
+  gitCommonDir, slugOf, fixRunDir, fixRunPath, readQueue, writeQueue, readFanout, writeFanout,
   readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,
 }

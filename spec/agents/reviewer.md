@@ -29,5 +29,5 @@ pricing, limits or a paid service; a breaking change; a hard-to-reverse architec
 departed from a Decision with a reason you find plausible; the summary states what the spec implied
 and what the diff did. The user decides it, not a fix round. Anything else is `advisory`. A Decisions
 row the driver appended (`<id> ruled: …`, `scope widened: …`, `reviewer: …`) records the user's
-ruling and is not a finding. Files marked `(askPaths)` are on paths the host watches. The verdict is `fix` if anything blocks, else `clean`. Reply
+ruling and is not a finding. Files marked `(askPaths)` are on paths the host watches. On a fix, confirm the regression test fails for the stated cause and the fix is at the root. The verdict is `fix` if anything blocks, else `clean`. Reply
 with the path and the verdict.

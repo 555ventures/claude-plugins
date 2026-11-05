@@ -650,12 +650,13 @@ test('AC-20261105-07-4 run.js --fix in a fanout lane opens a done spec at BUILD 
   h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
   const brief = ok(h.runIn(h.wt, '--fix', 'x'))
   assert.match(brief, /^▶ BUILD/)
-  assert.ok(brief.includes('## Fix\nx\nReproduce it, write a regression test that fails for that reason, fix the cause.'), brief)
+  assert.ok(brief.includes('## Fix\nx\n1. Reproduce it and state the root cause in one sentence before the first edit.'), brief)
   assert.ok(!brief.includes('## File Plan') && !brief.includes('## Intent'), 'no File Plan, no Intent')
   assert.ok(brief.includes('## Decisions\n- D1:') && brief.includes('## Acceptance Criteria\n- AC-20261104-01-1:'), 'Decisions and ACs as today')
-  assert.strictEqual(h.state(h.wt).fix, 'x')
+  assert.strictEqual(h.state(h.wt).fix.symptom, 'x')
   assert.strictEqual(h.status(h.wt), 'done', 'no status is written into the spec')
   fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  st.writeJson(path.join(h.wt, 'specs/20261104/01-thing.run/fix.json'), { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null })
   ok(h.runIn(h.wt, '--mark', 'built'))
   const review = JSON.parse(ok(h.runIn(h.wt, '--json')))
   assert.ok(review.body.includes('## Fix\nx') && !review.body.includes('## Intent'), 'the reviewer brief carries the Fix block')
@@ -663,11 +664,11 @@ test('AC-20261105-07-4 run.js --fix in a fanout lane opens a done spec at BUILD 
   assert.strictEqual(h.g('log', '-1', '--format=%s', 'spec/01-thing').trim(), 'fix(20261104/01): x')
 })
 
-test('AC-20261105-07-4 --fix outside a lane is refused with exit 2 naming /spec:fix', () => {
+test('AC-20261105-07-4 --fix outside a lane and not in place is refused with exit 2 naming --in-place and the fanout lane', () => {
   const h = fixture({ status: 'done' })
   const r = h.run('--fix', 'x')
   assert.strictEqual(r.status, 2)
-  assert.match(r.stderr, /--fix runs only as a fanout lane — use \/spec:fix here/)
+  assert.match(r.stderr, /--fix works in place \(--in-place\) or as a fanout lane/)
   assert.strictEqual(h.state(), null, 'nothing started')
   const g = fixture()
   assert.strictEqual(g.run('--fix').status, 2, '--fix needs a symptom too')
@@ -1210,4 +1211,223 @@ test('AC-20261105-10-10 an in-place build appends ## As built into the build com
   ok(h.run('--mark', 'built'))
   ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.strictEqual(asBuiltOf(h.g('show', 'main:' + REL)).trim(), '- used a map')
+})
+
+// ---- spec 20261105/09: fix is a driver and every fix is a lane -----------------------------------
+
+const SYMPTOM = 'login button stays disabled after a failed submit'
+const CAUSE = { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null }
+
+// A fix with no spec: in place in the checkout, or a lane worktree. fx(...) runs run.js --fix; fix(obj) writes fix.json.
+function specless(h, { lane = false, symptom = SYMPTOM } = {}) {
+  const slug = st.slugOf(symptom)
+  let root = h.dir
+  if (lane) {
+    root = path.join(h.dir, '.claude/worktrees/fix-' + slug)
+    h.g('worktree', 'add', '-q', '-b', 'fix/' + slug, root, 'main')
+    pending.markLane(root)
+  }
+  const runDir = st.fixRunDir(h.dir, slug)
+  const fx = (...a) => runNode('scripts/run.js', ['--fix', symptom, ...(lane ? [] : ['--in-place']), '--root', root, ...a], { env: { RUN_COUNTER: h.counter } })
+  return {
+    slug, root, runDir, fx, lane,
+    state: () => st.readJson(path.join(runDir, 'state.json')),
+    fix: (obj) => st.writeJson(path.join(runDir, 'fix.json'), obj),
+    // up to REVIEW or ESCALATE: a builder round (feature.txt) with the given fix.json
+    built: (obj = CAUSE) => { ok(fx()); fs.writeFileSync(path.join(root, 'feature.txt'), 'thing\n'); st.writeJson(path.join(runDir, 'fix.json'), obj); return ok(fx('--mark', 'built')) },
+  }
+}
+
+test('AC-20261105-09-1 run.js --fix in place opens at BUILD with no spec, the four steps and fix.json in the brief, and its state under the git common dir; without --in-place outside a lane it refuses', () => {
+  const h = fixture()
+  const f = specless(h)
+  const brief = ok(f.fx())
+  assert.match(brief, /^▶ BUILD/)
+  for (const s of ['## Fix\n' + SYMPTOM, '1. Reproduce it and state the root cause in one sentence before the first edit.', '2. Write a regression test that fails for that reason.', '3. Fix the cause.', '4. Run the test command until green.', 'fix.json', '"needsPlan"', 'When needsPlan is set, make no edit.'])
+    assert.ok(brief.includes(s), s + '\n' + brief)
+  assert.ok(!brief.includes('## File Plan') && !brief.includes('## Intent') && !brief.includes('Spec:'), 'no spec, no File Plan')
+  assert.match(f.slug, /^login-button-stays-disabled-after-a-[0-9a-f]{6}$/)
+  assert.strictEqual(f.runDir, path.join(h.dir, '.git', 'spec-fix', f.slug + '.run'))
+  assert.ok(fs.existsSync(path.join(f.runDir, 'state.json')), 'the state is under the git common dir')
+  assert.strictEqual(h.g('status', '--porcelain', '--untracked-files=all'), '', 'nothing in the checkout: no gitignore line needed')
+  assert.match(brief, new RegExp(`--fix '${SYMPTOM}' --root \\S+ --mark built`), 'the mark line carries the symptom, so a spec-less run finds its state')
+
+  const bare = fixture()
+  const r = runNode('scripts/run.js', ['--fix', 'x', '--root', bare.dir])
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('--in-place') && r.stderr.includes('fanout lane'), r.stderr)
+  assert.strictEqual(runNode('scripts/run.js', ['--root', bare.dir]).status, 2, 'no spec and no --fix is still a usage refusal')
+})
+
+test('AC-20261105-09-1 a spec path beside --fix keeps the spec-bound behaviour: <spec>.run/ and the spec Decisions and ACs in the brief', () => {
+  const h = fixture({ status: 'done' })
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
+  const brief = ok(h.runIn(h.wt, '--fix', 'x'))
+  assert.ok(brief.includes('## Decisions\n- D1:') && brief.includes('- AC-20261104-01-1:'))
+  assert.ok(fs.existsSync(path.join(h.wt, 'specs/20261104/01-thing.run/state.json')))
+  assert.ok(brief.includes(path.join(h.wt, 'specs/20261104/01-thing.run/fix.json')), 'fix.json sits in the spec run dir')
+})
+
+test('AC-20261105-09-3 built on a fix needs fix.json with a cause and a test; a good one is stored and goes to GATE', () => {
+  const h = fixture()
+  const f = specless(h)
+  ok(f.fx())
+  const need = (r) => { assert.strictEqual(r.status, 2, r.stderr); assert.ok(r.stderr.includes('fix.json needs cause and test'), r.stderr) }
+  need(f.fx('--mark', 'built'))
+  f.fix({ cause: 'c', test: ' ', strings: [], choices: [], needsPlan: null }); need(f.fx('--mark', 'built'))
+  f.fix({ cause: '', test: 't', needsPlan: '' }); need(f.fx('--mark', 'built'))
+  fs.writeFileSync(path.join(f.runDir, 'fix.json'), '{not json'); need(f.fx('--mark', 'built'))
+  assert.strictEqual(f.state().step, 'BUILD', 'a refusal leaves the step')
+  f.fix(CAUSE)
+  fs.writeFileSync(path.join(h.dir, 'feature.txt'), 'thing\n')
+  assert.match(ok(f.fx('--mark', 'built')), /BUILD → REVIEW;/, 'a green gate with empty lists goes to REVIEW')
+  assert.deepStrictEqual([f.state().fix.cause, f.state().fix.test, f.state().fix.symptom], ['c', 't.test.js :: guards c', SYMPTOM])
+})
+
+test('AC-20261105-09-4 needsPlan restores the tree, queues /spec:plan with the diagnosis and ends at NEEDS_PLAN; a second built is refused', () => {
+  const h = fixture()
+  const f = specless(h, { lane: true })
+  ok(f.fx())
+  fs.writeFileSync(path.join(f.root, 'a.txt'), 'edited\n'); fs.writeFileSync(path.join(f.root, 'new.txt'), 'new\n')
+  f.fix({ ...CAUSE, cause: '', test: '', needsPlan: 'the handler needs a new table' })
+  const out = ok(f.fx('--mark', 'built'))
+  assert.match(out, /BUILD → NEEDS_PLAN;/)
+  assert.ok(out.includes('🚫 needs a spec — the handler needs a new table') && out.includes(`📋 queued /spec:plan ${SYMPTOM} — the handler needs a new table`), out)
+  assert.strictEqual(fs.readFileSync(path.join(f.root, 'a.txt'), 'utf8'), 'a\n', 'tracked edits are gone')
+  assert.ok(!fs.existsSync(path.join(f.root, 'new.txt')), 'untracked files the builder added are gone')
+  assert.strictEqual(h.g('-C', f.root, 'status', '--porcelain'), '')
+  const items = st.readQueue(h.dir).items
+  assert.deepStrictEqual(items.map((i) => [i.kind, i.type, i.payload]), [['prompt', 'plan', `/spec:plan ${SYMPTOM} — the handler needs a new table`]])
+  assert.deepStrictEqual([f.state().step, f.state().needsPlan], ['NEEDS_PLAN', 'the handler needs a new table'], 'a lane keeps its ending for fanout')
+  const again = f.fx('--mark', 'built')
+  assert.strictEqual(again.status, 2); assert.ok(again.stderr.includes('not accepted at NEEDS_PLAN'), again.stderr)
+  assert.strictEqual(st.readQueue(h.dir).items.length, 1, 'nothing is queued twice')
+
+  const solo = fixture()
+  const g = specless(solo)
+  fs.writeFileSync(path.join(solo.dir, 'untracked-before.txt'), 'mine\n')
+  ok(g.fx()); fs.writeFileSync(path.join(solo.dir, 'added.txt'), 'x\n'); g.fix({ needsPlan: 'why' })
+  assert.match(ok(g.fx('--mark', 'built')), /BUILD → NEEDS_PLAN;/)
+  assert.ok(fs.existsSync(path.join(solo.dir, 'untracked-before.txt')) && !fs.existsSync(path.join(solo.dir, 'added.txt')), "in place the user's own untracked files stay")
+  assert.strictEqual(g.state(), null, 'in place the ending clears the run state')
+})
+
+const STRING = 'Your session expired — sign in again'
+const CHOICE = 'hide the retry button after three failures'
+
+test('AC-20261105-09-5 a green gate with an authored string and choice asks keep / revert / plan; a lane writes a decision question and prints PENDING_QUESTION', () => {
+  const h = fixture()
+  const f = specless(h)
+  const cp = f.built({ ...CAUSE, strings: [STRING], choices: [CHOICE] })
+  assert.match(cp, /BUILD → ESCALATE;/)
+  const q = ok(f.fx())
+  assert.ok(q.includes('authored 1 user-facing string(s) and 1 display or policy choice(s)') && q.includes(STRING) && q.includes(CHOICE), q)
+  assert.deepStrictEqual([...q.matchAll(/^- (keep|revert|plan) —/gm)].map((m) => m[1]), ['keep', 'revert', 'plan'])
+  assert.match(q, /--mark escalate <keep\|revert\|plan>/)
+  assert.strictEqual(f.fx('--mark', 'escalate', 'retry').status, 2, 'only the three are offered')
+  const more = fixture(); const m = specless(more)
+  m.built({ ...CAUSE, strings: ['s1', 's2'], choices: ['c1', 'c2'] })
+  assert.ok(ok(m.fx()).includes('s1; s2; c1; +1 more. Keep them?'), 'at most three, then +N more')
+
+  const l = fixture(); const lf = specless(l, { lane: true })
+  lf.built({ ...CAUSE, strings: [STRING], choices: [CHOICE] })
+  assert.match(ok(lf.fx()), /PENDING_QUESTION/, 'a lane never asks: the re-run prints the stop line')
+  const doc = pending.readPending(lf.root)
+  assert.strictEqual(doc.kind, 'decision')
+  assert.deepStrictEqual(doc.options.map((o) => o.label), ['keep', 'revert', 'plan'])
+  assert.ok(doc.question.includes('authored 1 user-facing string(s)'))
+})
+
+test('AC-20261105-09-6 keep goes to REVIEW; revert is one uncounted builder round and the stop does not return; plan ends as needs-a-spec', () => {
+  const k = fixture(); const kf = specless(k)
+  kf.built({ ...CAUSE, strings: [STRING], choices: [CHOICE] })
+  assert.match(ok(kf.fx('--mark', 'escalate', 'keep')), /ESCALATE → REVIEW;/)
+  assert.deepStrictEqual(kf.state().attempts, { repair: 0, fix: 0 })
+
+  const r = fixture(); const rf = specless(r)
+  rf.built({ ...CAUSE, strings: [STRING], choices: [CHOICE] })
+  const brief = ok(rf.fx('--mark', 'escalate', 'revert'))
+  assert.match(brief, /ESCALATE → FIX;/)
+  const fixBrief = ok(rf.fx())
+  assert.ok(fixBrief.includes('Undo every listed string and choice back to the pre-fix behaviour; keep the fix and its test:') && fixBrief.includes(STRING) && fixBrief.includes(CHOICE), fixBrief)
+  fs.writeFileSync(path.join(r.dir, 'feature.txt'), 'thing, undone\n'); rf.fix(CAUSE)
+  assert.match(ok(rf.fx('--mark', 'fixed')), /FIX → REVIEW;/)
+  assert.deepStrictEqual(rf.state().attempts, { repair: 0, fix: 0 }, 'the revert round is not counted')
+  assert.strictEqual(rf.state().fixFor, undefined)
+
+  const again = fixture(); const af = specless(again)
+  af.built({ ...CAUSE, strings: [STRING], choices: [] })
+  ok(af.fx('--mark', 'escalate', 'revert'))
+  fs.writeFileSync(path.join(again.dir, 'feature.txt'), 'round\n') // the builder forgot to empty the lists
+  assert.match(ok(af.fx('--mark', 'fixed')), /FIX → REVIEW;/, 'the stop fires once per run')
+
+  const p = fixture(); const pf = specless(p)
+  pf.built({ ...CAUSE, strings: [STRING], choices: [] })
+  const end = ok(pf.fx('--mark', 'escalate', 'plan'))
+  assert.match(end, /ESCALATE → NEEDS_PLAN;/)
+  assert.ok(end.includes('🚫 needs a spec — the user sent the fix to plan'))
+  assert.deepStrictEqual(st.readQueue(p.dir).items.map((i) => [i.type, i.payload]), [['plan', `/spec:plan ${SYMPTOM} — the user sent the fix to plan`]])
+  assert.ok(!fs.existsSync(path.join(p.dir, 'feature.txt')), 'the fix is discarded')
+})
+
+test('AC-20261105-09-7 empty strings and choices: no ESCALATE step, straight to REVIEW', () => {
+  const h = fixture(); const f = specless(h)
+  assert.match(f.built(), /BUILD → REVIEW;/)
+  assert.ok(!f.state().history.some((x) => x.step === 'ESCALATE'))
+})
+
+test('AC-20261105-09-8 the fix reviewer brief carries the cause, the test and the check; a spec-bound fix adds the Decisions', () => {
+  const h = fixture(); const f = specless(h)
+  f.built()
+  const body = JSON.parse(ok(f.fx('--json'))).body
+  for (const s of ['## Fix\n' + SYMPTOM, 'Root cause: c', 'Regression test: t.test.js :: guards c', 'fails for the stated cause']) assert.ok(body.includes(s), s + '\n' + body)
+  assert.ok(!body.includes('## Intent') && !body.includes('## Decisions'))
+
+  const b = fixture({ status: 'done' })
+  b.g('worktree', 'add', '-q', '-b', 'spec/01-thing', b.wt, 'main'); pending.markLane(b.wt)
+  ok(b.runIn(b.wt, '--fix', 'x'))
+  fs.writeFileSync(path.join(b.wt, 'feature.txt'), 'thing\n')
+  st.writeJson(path.join(b.wt, 'specs/20261104/01-thing.run/fix.json'), CAUSE)
+  ok(b.runIn(b.wt, '--mark', 'built'))
+  const sb = JSON.parse(ok(b.runIn(b.wt, '--json'))).body
+  assert.ok(sb.includes('Root cause: c') && sb.includes('## Decisions\n- D1:') && sb.includes('fails for the stated cause'))
+})
+
+test('AC-20261105-09-9 a clean review commits fix(<slug>): <symptom> with the cause and the test in the body; spec-bound uses the spec id; the report is fixed', () => {
+  const h = fixture(); const f = specless(h, { lane: true })
+  f.built()
+  const out = ok(f.fx('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(out, /REVIEW → MERGE_READY/)
+  const msg = h.g('log', '-1', '--format=%B', 'fix/' + f.slug).trim()
+  assert.strictEqual(msg, `fix(${f.slug}): ${SYMPTOM}\n\nRoot cause: c\nRegression test: t.test.js :: guards c`)
+  assert.ok(f.state().report.startsWith(`**✅ fixed — ${SYMPTOM}**`) && f.state().report.includes('- root cause: c') && f.state().report.includes('- regression test: t.test.js :: guards c'), f.state().report)
+
+  const p = fixture(); const pf = specless(p)
+  pf.built()
+  const done = ok(pf.fx('--mark', 'reviewed', '--file', p.findings([])))
+  assert.match(done, /REVIEW → DONE;/)
+  assert.ok(done.includes(`✅ fixed — ${SYMPTOM}`) && done.includes('- root cause: c'), done)
+  assert.strictEqual(p.g('log', '-1', '--format=%s').trim(), `fix(${pf.slug}): ${SYMPTOM}`, 'in place commits on the current branch')
+  assert.strictEqual(pf.state(), null)
+
+  const b = fixture({ status: 'done' })
+  b.g('worktree', 'add', '-q', '-b', 'spec/01-thing', b.wt, 'main'); pending.markLane(b.wt)
+  ok(b.runIn(b.wt, '--fix', 'x'))
+  fs.writeFileSync(path.join(b.wt, 'feature.txt'), 'thing\n')
+  st.writeJson(path.join(b.wt, 'specs/20261104/01-thing.run/fix.json'), CAUSE)
+  ok(b.runIn(b.wt, '--mark', 'built'))
+  ok(b.runIn(b.wt, '--mark', 'reviewed', '--file', b.findings([])))
+  assert.strictEqual(b.g('log', '-1', '--format=%s', 'spec/01-thing').trim(), 'fix(20261104/01): x')
+})
+
+test('a spec-less fix has no Decisions to be unmet; its regate line names the symptom, not a spec', () => {
+  const h = fixture(); const f = specless(h, { lane: true })
+  ok(f.fx())
+  assert.strictEqual(f.fx('--mark', 'unmet', '--decision', 'D1', '--why', 'x').status, 2)
+  fs.writeFileSync(path.join(f.root, 'RED'), '')
+  f.fix(CAUSE)
+  ok(f.fx('--mark', 'built'))
+  const repair = ok(f.fx())
+  assert.match(repair, /^▶ REPAIR/)
+  assert.ok(repair.includes(`--fix '${SYMPTOM}' --root`) && !repair.includes(' null '), repair)
 })

@@ -46,6 +46,7 @@ lane's driver writes the question to `.claude/pending-question.json` and the orc
 every lane question verbatim in one AskUserQuestion per RELAY. The orchestrator never answers for
 the user; only `📌 Auto-picked` lines are unrelayed. A lane never edits a spec, and only the user
 waives a Decision (`amend`): an unmet Decision or false Assumption is a question (`unmet`).
+`/spec:fix` asks once, after green, when it authored strings or choices (keep / revert / plan); a fix that needs an architecture or behaviour change is sent to `/spec:plan`, never asked.
 Otherwise decide and print `📌 Auto-picked <choice> — <reason> (veto anytime)`.
 
 Question style: plain words, every option carrying its consequence, the recommended option first,

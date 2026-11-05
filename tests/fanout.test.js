@@ -738,6 +738,7 @@ test('AC-20261105-07-3 a fix lane runs through run.js --fix and lands as fix(<id
   assert.match(first.stdout, /^▶ BUILD/)
   assert.ok(first.stdout.includes('## Fix\nRED file left') && !first.stdout.includes('## File Plan'), first.stdout)
   fs.writeFileSync(path.join(w, 'src-fix.txt'), 'fixed\n')
+  st.writeJson(path.join(st.runDir(path.join(w, P('01-alpha'))), 'fix.json'), { cause: 'c', test: 't :: guards c', strings: [], choices: [], needsPlan: null })
   assert.strictEqual(laneRun('--mark', 'built').status, 0)
   const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
   assert.match(laneRun('--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)
@@ -1128,4 +1129,137 @@ test('AC-20261105-10-14 fanout.md, the contract and the architecture note carry 
   assert.ok(read('spec/agents/builder.md').includes('as-built.md'), 'builder.md')
   const head = read('spec/scripts/fanout.js').split('\n').slice(0, 20).join('\n')
   assert.ok(!/no other lane is sent back or mid-rebase/.test(head), 'the header comment')
+})
+
+// ---- spec 20261105/09: fix is a driver and every fix is a lane -----------------------------------
+
+const SYMPTOM = 'login button stays disabled after a failed submit'
+const SLUG = st.slugOf(SYMPTOM)
+const LESS = `/spec:fix ${SYMPTOM}`
+const goodFix = { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null }
+
+// A host whose queue holds one spec-less fix item (and optionally more).
+function lessHost(opts = {}) {
+  const h = fixHost({ payload: LESS, ...opts })
+  return h
+}
+const lessWt = (h) => path.join(h.dir, '.claude/worktrees/fix-' + SLUG)
+const lessRun = (h, ...a) => runNode('scripts/run.js', ['--fix', SYMPTOM, '--root', lessWt(h), ...a])
+const putFix = (h, obj) => st.writeJson(path.join(st.fixRunDir(h.dir, SLUG), 'fix.json'), obj)
+
+test('AC-20261105-09-10 a spec-less /spec:fix item is auto-picked as lane fix-<slug> with its own worktree, branch and a --fix prompt; lanes order spec, spec-bound fix, spec-less fix', () => {
+  const h = lessHost()
+  const plan = h.ok().stdout
+  assert.ok(plan.includes(`lane 1: fix-${SLUG} — fix: ${SYMPTOM}`), plan)
+  h.ok('--mark', 'planned')
+  const lane = st.readFanout(h.dir).batch[0]
+  assert.deepStrictEqual([lane.kind, lane.spec, lane.stem, lane.worktree, lane.branch, lane.symptom, lane.slug], ['fix', null, 'fix-' + SLUG, '.claude/worktrees/fix-' + SLUG, 'fix/' + SLUG, SYMPTOM, SLUG])
+  assert.match(SLUG, /^login-button-stays-disabled-after-a-[0-9a-f]{6}$/)
+  const disp = h.ok().stdout
+  assert.ok(fs.existsSync(lessWt(h)) && pending.isLane(lessWt(h)))
+  const prompt = JSON.parse(/prompt: ("[^\n]+") \}\)/.exec(disp)[1])
+  assert.strictEqual(prompt, `/spec:run --fix '${SYMPTOM}' --root ${lessWt(h)}`)
+
+  const o = fixHost({ more: [['02-beta', 'src/b.js']], host: { lanes: 4 } })
+  const q = st.readQueue(o.dir)
+  q.items.unshift({ id: 'q90', kind: 'prompt', type: 'fix', payload: LESS, added: '2026-11-05' })
+  q.items.push({ id: 'q91', kind: 'spec', payload: P('02-beta'), added: '2026-11-05' })
+  st.writeQueue(o.dir, q)
+  const text = o.ok().stdout
+  const at = (s) => text.indexOf(s)
+  assert.ok(at(`lane 1: ${P('02-beta')}`) >= 0 && at(`lane 2: ${P('01-alpha')} — fix: RED file left`) > at('lane 1:') && at(`lane 3: fix-${SLUG}`) > at('lane 2:'), text)
+})
+
+test('AC-20261105-09-10 a spec-less fix waits on its after gate, on a lane already in flight, and a duplicate item is one lane', () => {
+  const h = lessHost()
+  addFix(h, LESS)
+  assert.ok(h.ok().stdout.match(/lane \d+: fix-/g).length === 1, 'two items with the same text are one lane')
+  const w = lessHost()
+  const q = st.readQueue(w.dir); q.items[0].after = { spec: P('02-nope') }; st.writeQueue(w.dir, q)
+  assert.ok(JSON.parse(w.ok('--json').stdout).body.includes(`${LESS} waits — after ${P('02-nope')} (missing)`))
+  const l = lessHost()
+  st.writeFanout(l.dir, { step: 'PLAN' })
+  l.g('worktree', 'add', '-q', '-b', 'fix/' + SLUG, lessWt(l)); pending.markLane(lessWt(l), 'fanout')
+  assert.ok(JSON.parse(l.ok('--json').stdout).body.includes(`${LESS} waits — already in a lane at .claude/worktrees/fix-${SLUG}`))
+})
+
+test('AC-20261105-09-11 a spec-less fix lane lands as fix(<slug>): <symptom>, ticks its item, flips no spec, makes no done commit and cleans up; REPORT names the sha', () => {
+  const h = lessHost()
+  const item = st.readQueue(h.dir).items[0]
+  h.ok('--mark', 'planned'); h.ok(); h.ok('--mark', 'dispatched')
+  const w = lessWt(h)
+  const first = lessRun(h)
+  assert.strictEqual(first.status, 0, first.stderr)
+  assert.match(first.stdout, /^▶ BUILD/)
+  assert.ok(first.stdout.includes('## Fix\n' + SYMPTOM) && !first.stdout.includes('## File Plan'))
+  fs.writeFileSync(path.join(w, 'src-fix.txt'), 'fixed\n')
+  putFix(h, goodFix)
+  assert.strictEqual(lessRun(h, '--mark', 'built').status, 0)
+  const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
+  assert.match(lessRun(h, '--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)
+  assert.strictEqual(st.readJson(st.fixRunPath(h.dir, SLUG)).step, 'MERGE_READY')
+  h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'REPORT')
+  assert.strictEqual(h.g('log', '-1', '--format=%s', 'main').trim(), `fix(${SLUG}): ${SYMPTOM}`)
+  assert.ok(h.g('log', '-1', '--format=%B', 'main').includes('Root cause: c\nRegression test: t.test.js :: guards c'))
+  assert.ok(!/chore\(spec\):.*done/.test(h.g('log', '--format=%s', 'main')), 'no done commit')
+  assert.strictEqual(st.readSpec(path.join(h.dir, P('01-alpha'))).frontmatter.status, 'done', 'no spec status flips')
+  assert.ok(fs.existsSync(path.join(h.dir, 'src-fix.txt')))
+  assert.ok(st.readQueue(h.dir).items.find((i) => i.id === item.id).done, 'the item is ticked')
+  assert.ok(!fs.existsSync(w) && !h.g('branch', '--list', 'fix/' + SLUG).trim(), 'worktree and branch are gone')
+  assert.ok(!fs.existsSync(st.fixRunDir(h.dir, SLUG)), 'the run state is gone')
+  const rep = h.ok().stdout
+  assert.match(rep, new RegExp(`- merged fix-${SLUG} as [0-9a-f]+ into trunk`))
+})
+
+test('AC-20261105-09-12 a lane that ends NEEDS_PLAN is reported, waits with its ending, and leaves the item pending beside the queued plan', () => {
+  const h = lessHost()
+  h.ok('--mark', 'planned'); h.ok(); h.ok('--mark', 'dispatched')
+  assert.strictEqual(lessRun(h).status, 0)
+  putFix(h, { needsPlan: 'the handler needs a new table' })
+  const end = lessRun(h, '--mark', 'built')
+  assert.strictEqual(end.status, 0, end.stderr)
+  assert.strictEqual(st.readJson(st.fixRunPath(h.dir, SLUG)).step, 'NEEDS_PLAN')
+  h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'REPORT')
+  const rep = h.ok().stdout
+  assert.ok(rep.includes(`needs a spec: fix-${SLUG} — the handler needs a new table; /spec:plan queued`), rep)
+  assert.ok(!rep.includes('parked'), 'not reported as parked')
+  h.ok('--mark', 'reported')
+  const items = st.readQueue(h.dir).items
+  assert.ok(!items.find((i) => i.payload === LESS).done, 'the fix item stays pending')
+  assert.ok(items.some((i) => i.type === 'plan' && i.payload === `/spec:plan ${SYMPTOM} — the handler needs a new table`))
+  const next = JSON.parse(h.ok('--json').stdout).body
+  assert.ok(next.includes(`${LESS} waits — its lane ended NEEDS_PLAN`), next)
+
+  // once its worktree is gone the stale ending does not hold the fix: the next lane starts over
+  h.g('worktree', 'remove', '--force', lessWt(h)); h.g('branch', '-D', 'fix/' + SLUG)
+  assert.ok(h.ok().stdout.includes(`lane 1: fix-${SLUG}`), 'runnable again')
+  h.ok('--mark', 'planned'); h.ok()
+  assert.ok(!fs.existsSync(st.fixRunDir(h.dir, SLUG)), 'the stale ending is cleared when the fresh lane is prepared')
+})
+
+test('AC-20261105-09-13 --discard on a spec-less fix lane removes its worktree, branch and run state and leaves the item pending', () => {
+  const h = lessHost()
+  h.ok('--mark', 'planned'); h.ok(); h.ok('--mark', 'dispatched')
+  assert.strictEqual(lessRun(h).status, 0)
+  assert.ok(fs.existsSync(st.fixRunPath(h.dir, SLUG)))
+  fs.writeFileSync(path.join(lessWt(h), 'half.txt'), 'x\n')
+  const out = h.ok('--mark', 'dismissed', '--lane', '1', '--discard').stdout
+  assert.ok(out.includes('discarded lane 1'), out)
+  assert.ok(!fs.existsSync(lessWt(h)) && !h.g('branch', '--list', 'fix/' + SLUG).trim())
+  assert.ok(!fs.existsSync(st.fixRunDir(h.dir, SLUG)), 'the run state under the git dir is gone')
+  assert.ok(!st.readQueue(h.dir).items.find((i) => i.payload === LESS).done, 'the item stays pending')
+})
+
+test('AC-20261105-09-14 the fix command drives the driver; the commands, builder, doctrine and contract say the new fix mode', () => {
+  const read = (f) => fs.readFileSync(path.join(SPEC, f), 'utf8').replace(/\s+/g, ' ')
+  const fix = read('commands/fix.md')
+  assert.ok(fix.includes('run.js --fix') && fix.includes('--in-place') && !fix.includes('AskUserQuestion of at most four'), fix)
+  assert.ok(read('commands/fanout.md').includes('fix-<slug>'))
+  const builder = read('agents/builder.md')
+  assert.ok(builder.includes('fix.json') && builder.includes('needsPlan'))
+  assert.ok(read('doctrine.md').includes('keep / revert / plan'))
+  const contract = fs.readFileSync(path.join(SPEC, '..', 'docs/v8/interface-contract.md'), 'utf8')
+  for (const s of ['fix-<slug>', 'NEEDS_PLAN', 'fix-choices']) assert.ok(contract.includes(s), 'the contract names ' + s)
 })

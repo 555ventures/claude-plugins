@@ -7,12 +7,13 @@
 // Bare = AUTO (the batch is the first `lanes` runnable specs); --pick = SELF-PICK (a checkbox question).
 // State: <git-common-dir>/spec-fanout.json (lib/state readFanout/writeFanout). Lanes run in parallel
 // whatever their File Plans share; MERGE rebases each finished lane onto trunk in its worktree,
-// fast-forwards trunk, gates, removes the worktree and ticks the queue, as each lane returns when no
-// other lane is sent back or mid-rebase. A rebase conflict sends the lane back to its agent, which
-// resolves, gates and reviews it in that one dispatch. A hardened spec whose depends_on (or a lane's
+// fast-forwards trunk, gates, removes the worktree and ticks the queue, as each lane returns, also while
+// another lane is sent back or resolving a rebase. A rebase conflict sends the lane back to its agent,
+// which resolves, gates and reviews it in that one dispatch; it is rebased again when it lands. A hardened spec whose depends_on (or a lane's
 // waitingOn) is not done waits. The session only dispatches agents and relays questions.
 // A lane whose base is older than trunk is gated on the rebased tree before the fast-forward; red sends
-// it back to its own /spec:run at GATE. A queued `/spec:fix <spec> — <symptom>` item is a fix lane
+// it back to its own /spec:run at GATE. Every lane-touching mark bumps s.seq and mergeLane stamps lane.last,
+// so the `after` hook prints what the mark landed, sent back or held. A queued `/spec:fix <spec> — <symptom>` item is a fix lane
 // (`run.js --fix`). REPORT ends the turn: the next bare run plans.
 // Lane mode contract with run.js: architecture.md §11 "fanout.js notes".
 
@@ -256,22 +257,28 @@ function laneRunStep(root, lane) {
   return run ? run.step : 'no run state yet'
 }
 
+// The run-step cell of a WAIT lane line: a lane mid-rebase or red after one says so, not its stale run step.
+function laneCell(root, lane) {
+  if (lane.status === 'sent-back' && lane.red) return 'gate red after rebase'
+  if (lane.status === 'sent-back' && lane.conflicts) return `resolving rebase (${lane.conflicts.length} files)`
+  if (lane.status === 'dispatched' && git.rebasing(wtAbs(root, lane))) return `resolving rebase (${git.conflictsIn(wtAbs(root, lane)).length} files)`
+  return laneRunStep(root, lane)
+}
+
 function deriveWait(s, ctx) {
   const active = s.batch.filter((l) => !['dismissed', 'merged', 'waiting'].includes(l.status))
   if (active.every((l) => l.status === 'done' || l.status === 'stopped')) {
     return { name: 'WAIT', auto: (x) => ({ ...x, step: active.some((l) => l.status === 'stopped') ? 'RELAY' : 'MERGE' }) }
   }
   const back = s.batch.filter((l) => l.status === 'sent-back')
-  // A finished lane lands as it returns, unless a lane is sent back or a dispatched lane is mid-rebase
-  // (its resolution may change what the landing rebases onto).
+  // A finished lane lands as it returns, also while another lane is sent back or resolving a rebase: the
+  // resolver is rebased again, and its tree gated, when it lands. Only a red trunk holds a landing.
   const early = s.batch.find((l) => l.status === 'done')
-  if (early && !back.length && !s.batch.some((l) => l.status === 'dispatched' && git.rebasing(wtAbs(ctx.root, l)))) {
-    return { name: 'WAIT', auto: (x) => mergeLane(x, ctx, x.batch.find((l) => l.id === early.id)) }
-  }
-  if (back.length) return { name: 'WAIT', body: dispatchBody(ctx.root, back, 'These lanes hit a rebase conflict onto trunk, or their gate went red on the rebased tree; each resolves or repairs it, then continues, gates and reviews the result in this one dispatch:'), mark: 'resent', accepts: ['dismissed', 'returned', 'waiting'] }
+  if (early && !s.red) return { name: 'WAIT', auto: (x) => mergeLane(x, ctx, x.batch.find((l) => l.id === early.id)) }
   const config = st.readConfig(ctx.root)
   const asks = (l) => { const q = l.status === 'dispatched' && pending.readPending(wtAbs(ctx.root, l)); return q && !q.answer ? ' (question waiting — mark returned)' : '' }
-  const lines = ['Lanes (status · run step):', ...s.batch.map((l) => `  lane ${l.id} — ${l.stem}: ${l.status}${l.status === 'merged' ? '' : ` · ${laneRunStep(ctx.root, l)}`}${asks(l)}`)]
+  const lines = ['Lanes (status · run step):', ...s.batch.map((l) => `  lane ${l.id} — ${l.stem}: ${l.status}${l.status === 'merged' ? '' : ` · ${laneCell(ctx.root, l)}`}${asks(l)}`)]
+  if (back.length) return { name: 'WAIT', body: dispatchBody(ctx.root, back, 'These lanes hit a rebase conflict onto trunk, or their gate went red on the rebased tree; each resolves or repairs it, then continues, gates and reviews the result in this one dispatch:') + '\n\n' + lines.join('\n'), mark: 'resent', accepts: ['dismissed', 'returned', 'waiting'] }
   lines.push('', 'As each lane agent returns, mark it returned; a MERGE_READY lane lands as it returns. A lane that stopped without writing a pending question: add --stopped "<reason>".',
     `A lane that needs another spec done first: node ${shq(ctx.script)} --root ${shq(ctx.root)} --mark waiting --lane <id> --on <spec path>`,
     'After a crash or /clear: a lane at MERGE_READY or ended is marked returned; re-send any other lane whose agent is no longer running (/spec:run resumes where it stopped):',
@@ -354,6 +361,8 @@ function gateAfter(s, ctx, lane) {
 
 // Rebase the lane onto trunk in its worktree, then fast-forward trunk to it, then gate. The run state
 // stays MERGE_READY until the rebase lands, so a sent-back lane's /spec:run is a no-op.
+const stamp = (s, lane, outcome, detail) => { lane.last = { seq: s.seq || 0, outcome, detail } }
+
 function mergeLane(s, ctx, lane) {
   const root = ctx.root
   const config = st.readConfig(root)
@@ -371,7 +380,7 @@ function mergeLane(s, ctx, lane) {
     lane.conflicts = r.conflicts
     delete lane.red
     if (lane.conflictAt === at) { lane.status = 'stopped'; lane.reason = 'second rebase conflict'; lane.question = null }
-    else { lane.status = 'sent-back'; lane.conflictAt = at } // its own /spec:run resolves, gates and reviews it
+    else { lane.status = 'sent-back'; lane.conflictAt = at; stamp(s, lane, 'conflict', r.conflicts) } // its own /spec:run resolves, gates and reviews it
     return s
   }
   delete lane.conflicts
@@ -383,6 +392,7 @@ function mergeLane(s, ctx, lane) {
       st.writeRun(spec, { ...run, step: 'GATE', base: git.sh(['merge-base', config.trunk, 'HEAD'], wt), review: null, attempts: { repair: 0, fix: 0 } })
       lane.status = 'sent-back'
       lane.red = host.firstRedLine(g.tail)
+      stamp(s, lane, 'red', lane.red)
       return s
     }
   }
@@ -397,6 +407,7 @@ function mergeLane(s, ctx, lane) {
   const m = git.mergeBack(root, lane.branch, 'ff-only')
   if (!m.merged) refuse(`fast-forward of ${config.trunk} to ${lane.branch} failed: ${m.reason}`, 1)
   lane.landed = m.sha
+  stamp(s, lane, 'landed', m.sha)
   return gateAfter(s, ctx, lane)
 }
 
@@ -530,7 +541,7 @@ const steps = {
     if (git.rebasing(wt)) refuse(`lane ${lane.id} (${lane.stem}) still has a rebase in progress — re-dispatch it, or mark dismissed --lane ${lane.id}`)
     if (!FINISHED.includes(step)) refuse(`lane ${lane.id} (${lane.stem}) is at ${step}, not MERGE_READY — re-dispatch it, mark returned --lane ${lane.id} --stopped "<reason>", or mark dismissed --lane ${lane.id}`)
     if (run.gate) { lane.reruns = run.gate.reruns || 0; lane.lockWaitMs = run.gate.lockWaitMs || 0 }
-    lane.status = 'done' // WAIT lands it as soon as no lane is sent back or mid-rebase
+    lane.status = 'done' // WAIT lands it as it returns, unless the trunk gate is red
   },
   answered(s, flags, ctx) {
     const lane = findLane(s, flags)
@@ -607,6 +618,37 @@ const steps = {
   reported() { return { step: 'PLAN' } },
 }
 
+// A mark that touches lanes bumps s.seq before its step runs; mergeLane stamps what it did to a lane with
+// that seq (lane.last), and a landing held back by a red trunk stamps every done lane `held`. The `after`
+// hook prints the lanes stamped by this mark.
+const TOUCHING = ['returned', 'resent', 'dismissed', 'waiting', 'answered', 'resumed', 'gate-repaired']
+for (const verb of TOUCHING) {
+  const step = steps[verb]
+  steps[verb] = (s, flags, ctx) => {
+    s.seq = (s.seq || 0) + 1
+    const out = step(s, flags, ctx)
+    const t = out || s
+    if (t.red) for (const l of t.batch) if (l.status === 'done') stamp(t, l, 'held', 'trunk gate is red')
+    return out
+  }
+}
+
+// What the mark just run did to each lane it touched, in batch order, under the checkpoint.
+function reportLines(verb, s, ctx) {
+  if (!TOUCHING.includes(verb) || !s.batch) return []
+  const config = st.readConfig(ctx.root)
+  const lines = []
+  for (const l of s.batch) {
+    if (!l.last || l.last.seq !== (s.seq || 0)) continue
+    const { outcome, detail } = l.last
+    if (outcome === 'landed') lines.push(`lane ${l.id} landed as ${detail}`)
+    else if (outcome === 'held') lines.push(`lane ${l.id} held — ${detail}`)
+    else if (outcome === 'conflict' && l.status === 'sent-back') lines.push(`lane ${l.id} sent back — conflicts: ${detail.join(', ')}`, '  ' + agentLine(ctx.root, config, l))
+    else if (outcome === 'red' && l.status === 'sent-back') lines.push(`lane ${l.id} gate red after rebase: ${detail}`, '  ' + agentLine(ctx.root, config, l))
+  }
+  return lines
+}
+
 // Lane markers under <common>/worktrees/*/ whose owner is fanout: lanes that are open on disk.
 function openLaneMarkers(common) {
   const dir = path.join(common, 'worktrees')
@@ -655,7 +697,9 @@ const driverMain = makeDriver({
   applied,
   after: (verb, s, ctx) => {
     const lane = verb === 'dismissed' && ctx.flags.discard && s.batch.find((l) => l.id === String(ctx.flags.lane))
-    return lane && lane.discarded ? `discarded lane ${lane.id} — wip ${lane.wip || 'none'}, recoverable for a day via git reflog` : null
+    const discard = lane && lane.discarded ? `discarded lane ${lane.id} — wip ${lane.wip || 'none'}, recoverable for a day via git reflog` : null
+    const lines = [...reportLines(verb, s, ctx), ...(discard ? [discard] : [])]
+    return lines.length ? lines.join('\n') : null
   },
   // PLAN holds nothing worth keeping: the fanout file is cleared and PLAN is re-derived.
   save: (s, ctx) => st.writeFanout(ctx.root, s.step === 'PLAN' ? null : s),

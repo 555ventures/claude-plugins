@@ -68,6 +68,7 @@ const intentText = (spec) => sectionText(spec, 'Intent') || sectionText(spec, 'G
 // A fix lane's brief replaces the Intent with the symptom.
 const fixBlock = (state) => ['## Fix', state.fix, 'Reproduce it, write a regression test that fails for that reason, fix the cause.', '']
 const EVIDENCE = (ctx) => `Evidence an AC asks to record (listings, renders, counts) goes in ${runFile(ctx, 'evidence.md')}; the driver appends it to the build commit.`
+const AS_BUILT = (ctx) => `Anything you built differently from the spec, and why, goes in ${runFile(ctx, 'as-built.md')} (one line each); the driver appends it to the spec as \`## As built\`.`
 const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
 const hasDelta = (spec) => Object.keys(spec.sections).some((k) => k === 'Canonical Delta' || k.startsWith('Canonical Delta '))
 // Every `- A<n>:` line of the spec, verbatim: the builder and reviewer see what the plan assumed and what to do when it is false.
@@ -186,7 +187,7 @@ function redCheck(state, wt) {
 // Spec text a build may not change: any other spec file, and the own spec's Decisions section.
 // The own spec's status line and its other sections (an AC correction in a FIX round) pass.
 // Rows the driver itself appended (state.rulings) are not the build's edits.
-const stripRows = (text, ids) => (ids && ids.length ? text.split('\n').filter((l) => !(l.trim().startsWith('|') && ids.includes(l.trim().replace(/^\|/, '').split('|')[0].trim()))).join('\n') : text)
+const stripRows = (text, ids) => (ids && ids.length ? text.split('\n').filter((l) => !(l.trim().startsWith('|') && ids.includes(st.splitCells(l)[0]))).join('\n') : text)
 const decisionsText = (text, rulings) => {
   const m = /^## +Decisions(?: [^\n]*)?\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n/g, '\n'))
   return m ? stripRows(m[1], rulings).trim() : ''
@@ -254,9 +255,45 @@ const loadBullet = (state) => {
 }
 const readyReport = (state, ctx) => render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: [`commit ${state.commit || 'none (nothing changed)'}`, ...loadBullet(state)], next: 'nothing needs you — fanout merges the lane' })
 
+// What the build did differently from the spec, one bullet each: the builder's as-built.md, the review's
+// advisories, and (outside a fix lane, which has no File Plan) every file outside the File Plan.
+function departures(state, ctx, spec) {
+  const lines = st.readText(runFile(ctx, 'as-built.md'), '').replace(/\r\n/g, '\n').split('\n')
+    .map((l) => l.trim().replace(/^[-*]\s+/, '').trim()).filter(Boolean)
+  const advisories = ((state.review && state.review.findings) || []).filter((f) => f.severity === 'advisory')
+    .map((f) => `${f.file || ''}${f.file && f.line ? ':' + f.line : ''} ${f.summary || ''}`.trim()).filter(Boolean)
+  const outside = state.fix ? [] : outsideFiles(state, ctx, spec).map((f) => `touched outside the File Plan: ${f}`)
+  const prefix = state.fix ? `(fix: ${state.fix}) ` : ''
+  return [...new Set([...lines, ...advisories, ...outside].map((d) => prefix + d))]
+}
+
+// Appends the bullets under `## As built` (created after the last section when absent), skipping any
+// already there, so the build commit carries what was built. Decisions are never touched.
+function appendAsBuilt(file, bullets) {
+  const text = st.readText(file, '')
+  const eol = text.includes('\r\n') ? '\r\n' : '\n'
+  const lines = text.split(/\r?\n/)
+  const at = lines.findIndex((l) => /^## +As built\s*$/.test(l))
+  const have = new Set(lines.slice(at < 0 ? lines.length : at).map((l) => l.trim()))
+  const fresh = bullets.map((b) => `- ${b}`).filter((b) => !have.has(b))
+  if (!fresh.length) return
+  if (at < 0) {
+    st.writeText(file, text.replace(/\s+$/, '') + eol + eol + ['## As built', '', ...fresh].join(eol) + eol)
+    return
+  }
+  let end = lines.findIndex((l, i) => i > at && /^## /.test(l))
+  if (end < 0) end = lines.length
+  let last = end - 1
+  while (last > at && !lines[last].trim()) last--
+  lines.splice(last + 1, 0, ...(last === at ? [''] : []), ...fresh)
+  st.writeText(file, lines.join(eol))
+}
+
 function commit(state, ctx) {
   const spec = st.readSpec(specIn(state, ctx))
   if (state.inPlace && !state.lane) st.writeStatus(specIn(state, ctx), 'done')
+  const asBuilt = departures(state, ctx, spec)
+  if (asBuilt.length) appendAsBuilt(specIn(state, ctx), asBuilt)
   const wt = wtOf(state, ctx)
   // Safety-net commits fanout made for a stopped or waiting lane never reach trunk: fold them, and the
   // work still in the tree, into the one build commit.
@@ -366,7 +403,7 @@ function builderBrief(state, ctx, kind) {
   out.push(kind === 'build' ? `Write failing tests first, then code, and run \`${cfg.testCommand}\` until green.` : `Run \`${cfg.testCommand}\` until green.`,
     state.fix ? 'List every file you changed in your final summary.' : 'Do not touch files outside the File Plan without listing them in your final summary.',
     'If a Decision cannot be honoured as written, or an Assumption with an `ask` arm proves false, stop and say which in your reply — do not pick.',
-    EVIDENCE(ctx))
+    EVIDENCE(ctx), AS_BUILT(ctx))
   return out.join('\n')
 }
 

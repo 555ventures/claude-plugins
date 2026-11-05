@@ -278,3 +278,28 @@ test('AC-20261105-06-8 readConfig defaults askPaths to an empty list', () => {
   fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ askPaths: ['a/**'] }))
   assert.deepStrictEqual(S.readConfig(d).askPaths, ['a/**'])
 })
+
+test('AC-20261105-10-7 splitCells keeps a pipe inside a backtick span, reads an escaped pipe, and runs an unclosed span to the line end', () => {
+  assert.deepStrictEqual(S.splitCells('| x | ``y|z`` | w |'), ['x', '``y|z``', 'w'])
+  assert.deepStrictEqual(S.splitCells('| a | `b|c` |'), ['a', '`b|c`'])
+  assert.deepStrictEqual(S.splitCells('| `a``b|c` | d |'), ['`a``b|c`', 'd'], 'a one-backtick run does not close a two-backtick span')
+  assert.deepStrictEqual(S.splitCells('| a \\| b | c |'), ['a | b', 'c'])
+  assert.deepStrictEqual(S.splitCells('| a | `b | c | d'), ['a', '`b | c | d'], 'unclosed span: the rest of the line is inside it')
+  assert.deepStrictEqual(S.splitCells('| a | b'), ['a', 'b'], 'no trailing pipe')
+})
+
+test('AC-20261105-10-6 decisionRows keeps a regex cell with pipes in backticks intact and still splits on a bare pipe', () => {
+  const re = '`/\\b(cannot|only \\w+ can)\\b/i`'
+  const rows = S.decisionRows(['| ID | Decision | Why |', '|----|----|----|', `| D1 | ${re} | because |`, '| D2 | a \\| b | outside backticks |'].join('\n'))
+  assert.deepStrictEqual(rows[0], ['D1', re, 'because'])
+  assert.deepStrictEqual(rows[1], ['D2', 'a | b', 'outside backticks'])
+})
+
+test('AC-20261105-10-6 filePlanTables reads a path cell `a|b.js` as one path and keeps the columns aligned', () => {
+  const body = `# T\n\n## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n| \`a|b.js\` | MODIFY | pipes \`x|y\` kept |\n| c.js | CREATE | plain |\n`
+  const s = S.readSpec(writeSpec(tmpdir('pipes'), body))
+  assert.deepStrictEqual(s.filePlan.map((r) => r.path), ['a|b.js', 'c.js'])
+  assert.strictEqual(s.filePlan[0].action, 'MODIFY')
+  assert.strictEqual(s.filePlan[0].summary, 'pipes `x|y` kept')
+  assert.deepStrictEqual(s.filePaths, ['a|b.js', 'c.js'])
+})

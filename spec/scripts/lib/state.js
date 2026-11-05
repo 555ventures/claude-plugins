@@ -131,6 +131,31 @@ function parseIntent(text) {
   return intent
 }
 
+// A table row as trimmed cells. One leading and one trailing `|` are stripped, then the line splits on `|`
+// that is neither inside a backtick span (a run of backticks opens a span that a run of the same length
+// closes; an unclosed span runs to the end of the line) nor escaped as `\|`, which reads `|`.
+function splitCells(line) {
+  const t = String(line).trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '')
+  const cells = []
+  let cur = ''
+  let span = 0
+  for (let i = 0; i < t.length;) {
+    const c = t[i]
+    if (c === '\\' && t[i + 1] === '|') { cur += '|'; i += 2; continue }
+    if (c === '`') {
+      let n = 0
+      while (t[i + n] === '`') n++
+      span = span === 0 ? n : span === n ? 0 : span
+      cur += t.slice(i, i + n); i += n
+      continue
+    }
+    if (c === '|' && !span) { cells.push(cur.trim()); cur = ''; i++; continue }
+    cur += c; i++
+  }
+  cells.push(cur.trim())
+  return cells
+}
+
 // A path cell split into paths: backticks and a trailing `(generated)` dropped, `{a,b}` expanded,
 // then cut on `+` and commas.
 function splitPlanCell(cell) {
@@ -148,7 +173,7 @@ function filePlanTables(text) {
   for (const line of text.split('\n')) {
     const t = line.trim()
     if (!t.startsWith('|')) { cur = null; continue }
-    const cells = t.replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
+    const cells = splitCells(t)
     if (cells.every((c) => !c || /^:?-{2,}:?$/.test(c))) continue
     if (!cur) {
       cur = { header: false, path: 0, action: -1, summary: -1, rows: [] }
@@ -224,7 +249,7 @@ function globToRe(glob) {
 // A Decisions table as rows of cells; the header and template leftovers (a cell exactly <placeholder>) are dropped.
 function decisionRows(text) {
   return String(text || '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l))
-    .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|')))
+    .map(splitCells)
     .filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !c.some((x) => /^<[^>]+>$/.test(x)))
 }
 
@@ -326,7 +351,7 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 module.exports = {
   writeText, writeJson, readJson, readText,
   DEFAULTS, readConfig, writeConfig, configPath,
-  readSpec, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows,
+  readSpec, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
   gitCommonDir, readQueue, writeQueue, readFanout, writeFanout,
   readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,

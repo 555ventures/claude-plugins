@@ -10,7 +10,7 @@ const { pasteLine, reconcile } = require('../queue')
 
 const KNOWN = ['draft', 'hardened', 'implementing', 'done']
 const RANK = { implementing: 0, hardened: 1, draft: 2 }
-const DECIDE = new Set(['skipped-brief', 'out-of-order'])
+const DECIDE = new Set(['skipped-brief', 'out-of-order', 'brief-done-queued'])
 const done = (s) => s === 'done'
 const landed = (s) => s === 'done' || s === 'implementing'
 
@@ -66,6 +66,11 @@ function derive(root) {
       if (num !== null) {
         posBrief.set(num, i)
         if (!byNum.has(num) && !it.done) note({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${num}, which has no docs/roadmap/${num}-*.md — remove it with \`/spec:queue done ${num}\`, reorder it away with \`/spec:queue move ${num} <n>\`, or restore the brief file` })
+        const own = byNum.get(num)
+        if (own && !it.done && own.status === 'done') {
+          const line = `Brief ${num} (${own.name}) has every spec done but is still queued.`
+          note({ kind: 'brief-done-queued', detail: line, line, ask: 'Close it?', paste: `/spec:queue done ${num}` })
+        }
       } else if (it.kind === 'spec') posSpec.set(it.payload, i)
       const why = work.gateWhy(root, it.after, cache)
       if (it.kind === 'brief') { if (why) gateBrief.set(num, 'after ' + why) } else if (it.kind === 'spec') { if (why) gateSpec.set(it.payload, 'after ' + why) } else if (it.kind === 'prompt' && !it.done) {

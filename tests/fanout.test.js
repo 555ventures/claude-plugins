@@ -565,7 +565,7 @@ test('AC-20261105-02-10 waiting --lane N --on is accepted at WAIT for a dispatch
   assert.strictEqual(st.readFanout(g.dir).batch[0].status, 'waiting')
 })
 
-test('AC-20261105-02-11 a MERGE_READY lane lands inside its returned mark while another lane is out; not while a sent-back lane holds a rebase', () => {
+test('AC-20261105-02-11 AC-20261105-10-1 AC-20261105-10-15 a MERGE_READY lane lands inside its returned mark while another lane is out, also while a sent-back lane holds a rebase', () => {
   const h = host()
   dispatchTwo(h)
   h.finish('02-beta', 'src/b.js')
@@ -576,7 +576,7 @@ test('AC-20261105-02-11 a MERGE_READY lane lands inside its returned mark while 
   assert.strictEqual(h.step(), 'WAIT')
   assert.match(h.ok().stdout, /lane 1 — 01-alpha: dispatched/, 'WAIT lists the lane still out')
 
-  // alpha and gamma conflict; beta finishes after gamma was sent back
+  // alpha and gamma conflict; beta finishes after gamma was sent back and lands anyway
   const g = host({ lanes: 3 })
   g.ok(P('01-alpha'), P('03-gamma'), P('02-beta'), '--mark', 'planned')
   g.ok('--mark', 'dispatched')
@@ -584,9 +584,26 @@ test('AC-20261105-02-11 a MERGE_READY lane lands inside its returned mark while 
   g.ok('--mark', 'returned', '--lane', '1')
   g.ok('--mark', 'returned', '--lane', '2')
   assert.strictEqual(st.readFanout(g.dir).batch[1].status, 'sent-back')
-  g.ok('--mark', 'returned', '--lane', '3')
-  assert.strictEqual(st.readFanout(g.dir).batch[2].status, 'done', 'lane 3 waits for the sent-back lane')
-  assert.ok(!fs.existsSync(path.join(g.dir, 'src/b.js')))
+  const three = g.ok('--mark', 'returned', '--lane', '3').stdout
+  const batch = st.readFanout(g.dir).batch
+  assert.deepStrictEqual(batch.map((l) => l.status), ['merged', 'sent-back', 'merged'], 'lane 3 landed while lane 2 stays sent back')
+  assert.ok(fs.existsSync(path.join(g.dir, 'src/b.js')) && st.readQueue(g.dir).items[1].done && !fs.existsSync(g.wt('02-beta')), 'trunk holds it, ticked, worktree removed')
+  assert.ok(three.includes(`lane 3 landed as ${g.g('rev-parse', 'HEAD').trim()}`), three)
+
+  // lane 2 resolves, gates and reviews in its own dispatch; its return is rebased onto the moved trunk and lands
+  g.ok('--mark', 'resent')
+  const w = g.wt('03-gamma')
+  const laneRun = (...a) => runNode('scripts/run.js', [P('03-gamma'), '--root', w, ...a])
+  laneRun()
+  fs.writeFileSync(path.join(w, 'src/a.js'), 'alpha\ngamma\n')
+  assert.match(laneRun().stdout, /^▶ REVIEW/, 'the resolution continues to review')
+  const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
+  assert.match(laneRun('--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)
+  g.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(g.step(), 'REPORT')
+  assert.strictEqual(fs.readFileSync(path.join(g.dir, 'src/a.js'), 'utf8'), 'alpha\ngamma\n')
+  assert.ok(fs.existsSync(path.join(g.dir, 'src/b.js')), 'lane 3 is still on trunk')
+  assert.deepStrictEqual(st.readFanout(g.dir).batch.map((l) => l.status), ['merged', 'merged', 'merged'])
 })
 
 test('AC-20261105-02-16 the interface contract lists the real fanout arguments and marks', () => {
@@ -998,4 +1015,117 @@ test('AC-20261105-06-12 RELAY groups lane questions by kind (assumption before e
   assert.ok(out.includes('--mark answered --lane 2 --label "<label>"'), 'the answered line is still printed')
   assert.strictEqual(JSON.parse(h.run('--json').stdout).step, 'RELAY')
   assert.strictEqual(st.readFanout(h.dir).batch.find((l) => String(l.id) === '2').question.kind, 'assumption', 'the lane keeps the kind it stopped with')
+})
+
+// ---- spec 20261105/10: a batch tells the truth ---------------------------------------------------
+
+const THREE = [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js'], ['03-gamma', 'src/a.js']]
+// alpha and gamma share src/a.js; beta is clear of both. Lanes 1..3 = alpha, gamma, beta, all out.
+function threeOut(opts = {}) {
+  const g = host({ lanes: 3, specs: THREE, ...opts })
+  g.ok(P('01-alpha'), P('03-gamma'), P('02-beta'), '--mark', 'planned')
+  g.ok('--mark', 'dispatched')
+  return g
+}
+const lastLines = (out) => out.split('\n')
+
+test('AC-20261105-10-2 AC-20261105-10-5 a lane resolving a rebase does not hold a ready lane; WAIT lists it as resolving rebase', () => {
+  const g = threeOut()
+  g.finish('01-alpha', 'src/a.js', 'alpha\n'); g.finish('03-gamma', 'src/a.js', 'gamma\n')
+  g.ok('--mark', 'returned', '--lane', '1')
+  g.ok('--mark', 'returned', '--lane', '2')
+  const sent = g.ok().stdout
+  assert.ok(sent.includes('lane 2 — 03-gamma: sent-back · resolving rebase (1 files)'), sent)
+  assert.ok(sent.includes('lane 3 — 02-beta: dispatched · '), 'the lane still out is listed beside it')
+  g.ok('--mark', 'resent')
+  const out = g.ok().stdout
+  assert.ok(out.includes('lane 2 — 03-gamma: dispatched · resolving rebase (1 files)'), out)
+  assert.ok(/lane 3 — 02-beta: dispatched · (?!resolving)/.test(out), 'a dispatched lane with no rebase lists its run step as today')
+  g.finish('02-beta', 'src/b.js')
+  const mark = g.ok('--mark', 'returned', '--lane', '3').stdout
+  assert.match(mark, /lane 3 landed as [0-9a-f]{40}/, 'lane 3 landed in that mark')
+  assert.deepStrictEqual(st.readFanout(g.dir).batch.map((l) => l.status), ['merged', 'dispatched', 'merged'])
+})
+
+test('AC-20261105-10-2 AC-20261105-10-3 a red trunk holds a returning lane and the mark says so', () => {
+  const h = host()
+  dispatchTwo(h)
+  const f = st.readFanout(h.dir)
+  f.red = { lane: '1', runId: 'x', tail: 'FAIL: trunk' }
+  st.writeFanout(h.dir, f)
+  h.finish('02-beta', 'src/b.js')
+  const trunk = mainHead(h)
+  const out = h.ok('--mark', 'returned', '--lane', '2').stdout
+  assert.ok(out.includes('lane 2 held — trunk gate is red'), out)
+  assert.strictEqual(mainHead(h), trunk, 'trunk did not move')
+  assert.strictEqual(st.readFanout(h.dir).batch[1].status, 'done')
+})
+
+test('AC-20261105-10-3 a returned mark that sends a lane back prints the conflict files and its Agent call; --json prints neither', () => {
+  const g = threeOut()
+  g.finish('01-alpha', 'src/a.js', 'alpha\n'); g.finish('03-gamma', 'src/a.js', 'gamma\n')
+  const one = g.ok('--mark', 'returned', '--lane', '1').stdout
+  assert.ok(one.includes(`lane 1 landed as ${mainHead(g)}`), one)
+  const lines = lastLines(g.ok('--mark', 'returned', '--lane', '2').stdout)
+  const i = lines.indexOf('lane 2 sent back — conflicts: src/a.js')
+  assert.ok(i > 0 && lines[0].startsWith('✅ checkpoint'), lines.join('\n'))
+  assert.ok(lines[i + 1].startsWith('  Agent({') && lines[i + 1].includes(`lane 2: 03-gamma`) && lines[i + 1].includes(g.wt('03-gamma')), lines[i + 1])
+
+  const j = threeOut()
+  j.finish('01-alpha', 'src/a.js', 'alpha\n')
+  const json = j.ok('--mark', 'returned', '--lane', '1', '--json').stdout
+  assert.ok(!json.includes('landed as'), json)
+})
+
+const COLLIDE_ABC = 'if test -f src/a.js && test -f src/b.js; then echo "FAIL: a and b collide"; exit 1; fi'
+
+test('AC-20261105-10-3 AC-20261105-10-5 a red pre-ff gate prints gate red after rebase with the Agent call, and the list says gate red after rebase', () => {
+  const h = host({ testCommand: COLLIDE_ABC, lanes: 3, specs: [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js'], ['03-gamma', 'src/c.js']] })
+  commitAll(h, 'config')
+  h.ok('--mark', 'planned')
+  h.ok('--mark', 'dispatched')
+  h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
+  h.ok('--mark', 'returned', '--lane', '1')
+  const lines = lastLines(h.ok('--mark', 'returned', '--lane', '2').stdout)
+  const i = lines.indexOf('lane 2 gate red after rebase: FAIL: a and b collide')
+  assert.ok(i > 0 && lines[i + 1].startsWith('  Agent({'), lines.join('\n'))
+  assert.ok(h.ok().stdout.includes('lane 2 — 02-beta: sent-back · gate red after rebase'))
+})
+
+test('AC-20261105-10-4 a mark that lands two lanes prints one landed line each in batch order; a lane landed earlier is not printed again', () => {
+  const h = host({ lanes: 3, specs: [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js'], ['03-gamma', 'src/c.js']], files: { 'check.sh': 'test ! -f RED\n' } })
+  h.ok(P('01-alpha'), P('02-beta'), P('03-gamma'), '--mark', 'planned')
+  h.ok('--mark', 'dispatched')
+  h.finish('01-alpha', 'RED')
+  const first = h.ok('--mark', 'returned', '--lane', '1').stdout
+  assert.match(first, /lane 1 landed as [0-9a-f]{40}/)
+  assert.strictEqual(h.step(), 'MERGE_RED')
+  h.finish('02-beta', 'src/b.js'); h.finish('03-gamma', 'src/c.js')
+  const f = st.readFanout(h.dir)
+  for (const l of f.batch.slice(1)) l.status = 'done'
+  st.writeFanout(h.dir, f)
+  h.g('rm', '-q', 'RED'); h.g('commit', '-q', '-m', 'repair')
+  const out = h.ok('--mark', 'gate-repaired').stdout
+  const landed = out.split('\n').filter((l) => /^lane \d+ landed as /.test(l))
+  assert.deepStrictEqual(landed.map((l) => l.split(' ')[1]), ['2', '3'], out)
+  assert.ok(!out.includes('lane 1 landed'), 'a lane landed by an earlier mark is not printed again')
+  const shas = landed.map((l) => l.split(' ').pop())
+  assert.strictEqual(shas[1], mainHead(h))
+  assert.notStrictEqual(shas[0], shas[1])
+  h.g('merge-base', '--is-ancestor', shas[0], shas[1])
+  assert.ok(h.g('log', '--format=%s', shas[0]).includes('chore(spec): 02-beta done'), 'the first sha is the head after lane 2 landed')
+})
+
+test('AC-20261105-10-14 fanout.md, the contract and the architecture note carry the landing rule, the mark output and the brief rules; the header comment drops the guards', () => {
+  const root = path.join(__dirname, '..')
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8')
+  assert.match(read('spec/commands/fanout.md'), /lands as it returns[^\n]*sent-back|sent-back[^\n]*lands as it returns/i)
+  const ic = read('docs/v8/interface-contract.md'); const arch = read('docs/v8/architecture.md')
+  for (const t of ['lane N landed as', 'As built', 'brief-done-queued', '✔ specs done']) assert.ok(ic.includes(t), 'contract: ' + t)
+  assert.ok(arch.includes('brief-done-queued') && arch.includes('lane.last'), 'architecture note')
+  const queueMd = read('spec/commands/queue.md')
+  assert.ok(queueMd.includes('/spec:queue done') && /finished brief|specs done/.test(queueMd), 'queue.md')
+  assert.ok(read('spec/agents/builder.md').includes('as-built.md'), 'builder.md')
+  const head = read('spec/scripts/fanout.js').split('\n').slice(0, 20).join('\n')
+  assert.ok(!/no other lane is sent back or mid-rebase/.test(head), 'the header comment')
 })

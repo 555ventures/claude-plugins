@@ -92,7 +92,7 @@ function fullHost() {
     { id: 'q13', kind: 'prompt', payload: 'after a ghost', type: 'plan', after: { spec: `${A}/99-ghost.md` } },
     { id: 'q14', kind: 'prompt', payload: 'after retired', type: 'plan', after: { spec: `${A}/09-retired.md` } },
     { id: 'q15', kind: 'spec', payload: `${A}/08-gated.md`, after: { brief: '03' } },
-    { id: 'q16', kind: 'brief', payload: '01' },
+    { id: 'q16', kind: 'brief', payload: '01', done: '2026-11-02T00:00:00.000Z' }, // brief 01 is done: the driver no longer ticks it, so the host does
     { id: 'q17', kind: 'brief', payload: '77' },
     { id: 'q18', kind: 'brief', payload: '07' },
   ].map((i) => ({ added: '2026-11-01T00:00:00.000Z', ...i }))
@@ -370,4 +370,18 @@ test('AC-20261105-05-15 the contract, the architecture note and the command doc 
   const cmd = doc('spec/commands/status.md')
   assert.match(cmd, /fenced block/)
   assert.ok(!cmd.includes('📈'))
+})
+
+test('AC-20261105-10-13 a queued brief with every spec done raises a decide line and a brief-done-queued anomaly; an unqueued done brief raises nothing', () => {
+  const d = small({
+    'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—'), 'docs/roadmap/04-boards.md': brief('04', 'Boards', 'P1', '—'),
+    [`${A}/01-rounds.md`]: specDoc('done', { brief: '03' }), [`${A}/02-boards.md`]: specDoc('done', { brief: '04' }),
+  }, [{ kind: 'brief', payload: '03' }])
+  const out = status(d).stdout
+  assert.ok(out.includes('⚠️ Brief 03 (rounds) has every spec done but is still queued.\n   Close it?  /spec:queue done 03\n'), out)
+  assert.ok(!out.includes('Brief 04 (boards) has every spec done'), 'brief 04 is not queued')
+  const a = json(d).anomalies.filter((x) => x.kind === 'brief-done-queued')
+  assert.deepStrictEqual(a.map((x) => [x.kind, x.audience]), [['brief-done-queued', 'decide']])
+  assert.strictEqual(a[0].detail, 'Brief 03 (rounds) has every spec done but is still queued.')
+  assert.ok(!status(small({ 'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—'), [`${A}/01-rounds.md`]: specDoc('done', { brief: '03' }) })).stdout.includes('still queued'))
 })

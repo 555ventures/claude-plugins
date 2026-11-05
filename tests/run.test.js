@@ -116,7 +116,7 @@ test('the whole loop: OPEN → BUILD → GATE → REVIEW → COMMIT → MERGE �
   assert.match(j.mark, /--mark reviewed --file \S+findings\.json/, 'the reviewer is told where to write findings')
   assert.ok(j.body.includes('## Decisions\n- D1: plain text, no JSON | no YAML — ADR-0001'), 'the reviewer brief carries the Decisions')
 
-  const cp = ok(h.run('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', summary: 'nit' }])))
+  const cp = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.match(cp, /REVIEW → DONE/, 'no blocking findings → commit, merge, done without the session')
   assert.match(cp, /^review: clean$/m, 'the checkpoint shows the review result')
   assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n', 'the build is merged into trunk')
@@ -1126,4 +1126,88 @@ test('AC-20261105-06-13 doctrine and the commands carry the sign-off test, the r
   const builder = read('agents/builder.md')
   assert.ok(builder.includes('Canonical Delta') && builder.includes('do not pick'))
   assert.ok(read('agents/reviewer.md').includes('needs-decision'))
+})
+
+// ---- spec 20261105/10: the spec on trunk says what was built; a pipe in backticks survives ------------
+
+const RE_CELL = '`/\\b(cannot|only \\w+ can)\\b/i`'
+const OTHER_TEXT = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
+const asBuiltOf = (text) => (/\n## As built\n([\s\S]*)$/.exec(text) || [])[1]
+
+test('AC-20261105-10-6 AC-20261105-10-10 the BUILD and REVIEW briefs carry a regex cell with pipes in backticks verbatim; the builder brief names as-built.md', () => {
+  const doc = SPEC_DOC.replace('| D1 | plain text', `| D2 | ${RE_CELL} | because |\n| D1 | plain text`)
+  const h = fixture({ files: { [REL]: doc } })
+  const build = ok(h.run())
+  assert.ok(build.includes(`- D2: ${RE_CELL} — because`), 'the builder brief carries the whole cell:\n' + build)
+  assert.ok(build.includes('01-thing.run/as-built.md'), 'the builder brief names as-built.md')
+  assert.ok(build.includes(OTHER_TEXT), 'OTHER_SECTIONS is unchanged')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  const review = JSON.parse(ok(h.run('--json')))
+  assert.ok(review.body.includes(`- D2: ${RE_CELL} — because`), 'the reviewer brief carries the whole cell:\n' + review.body)
+})
+
+test('AC-20261105-10-8 the build commit ends the spec with ## As built: as-built.md lines, advisories and files outside the File Plan', () => {
+  const h = fixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.mkdirSync(path.join(h.wt, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(h.wt, 'src/extra.js'), 'x\n')
+  fs.writeFileSync(path.join(h.dir, 'specs/20261104/01-thing.run/as-built.md'), '- migration renumbered 0041 → 0047\n\nplain line\n')
+  ok(h.run('--mark', 'built'))
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', file: 'src/x.js', line: 12, summary: 'count is now 36' }])))
+  const spec = h.g('show', 'main:' + REL)
+  const tail = asBuiltOf(spec)
+  assert.ok(tail !== undefined && spec.trimEnd().split('\n').includes('## As built'), 'the section is on trunk:\n' + spec)
+  assert.strictEqual(tail.trim(), ['- migration renumbered 0041 → 0047', '- plain line', '- src/x.js:12 count is now 36', '- touched outside the File Plan: src/extra.js'].join('\n'))
+  assert.ok(spec.indexOf('## Acceptance Criteria') < spec.indexOf('## As built'), 'created after the last section')
+  assert.ok(spec.includes('| D1 | plain text, no JSON \\| no YAML | ADR-0001 |'), 'Decisions stay as locked')
+})
+
+test('AC-20261105-10-8 with no as-built.md, no advisory and nothing outside the File Plan the spec gains no section', () => {
+  const h = fixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([{ severity: 'blocking', file: 'feature.txt', summary: 'wrong' }])))
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing 2\n')
+  ok(h.run('--mark', 'fixed'))
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(!h.g('show', 'main:' + REL).includes('As built'))
+})
+
+test('AC-20261105-10-9 AC-20261105-10-10 a fix lane appends the (fix: <symptom>) bullet under an existing ## As built once, and reaches MERGE_READY', () => {
+  const existing = SPEC_DOC.replace('status: hardened', 'status: done') + '\n## As built\n\n- (fix: x) already there\n'
+  const h = fixture({ files: { [REL]: existing } })
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
+  const brief = ok(h.runIn(h.wt, '--fix', 'x'))
+  assert.ok(brief.includes('as-built.md'), 'the fix brief names as-built.md')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.mkdirSync(path.join(h.wt, 'src'), { recursive: true }); fs.writeFileSync(path.join(h.wt, 'src/extra.js'), 'x\n')
+  fs.writeFileSync(path.join(h.wt, 'specs/20261104/01-thing.run/as-built.md'), 'already there\nrenamed the column\n')
+  ok(h.runIn(h.wt, '--mark', 'built'))
+  assert.match(ok(h.runIn(h.wt, '--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → MERGE_READY/)
+  const spec = h.g('show', 'spec/01-thing:' + REL)
+  assert.strictEqual(asBuiltOf(spec).trim(), '- (fix: x) already there\n- (fix: x) renamed the column', 'the old bullet is not appended twice; a fix lane lists no outside files')
+})
+
+test('AC-20261105-10-9 a fix lane on a spec with no ## As built creates it after the last section', () => {
+  const h = fixture({ status: 'done' })
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
+  ok(h.runIn(h.wt, '--fix', 'x'))
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.wt, 'specs/20261104/01-thing.run/as-built.md'), '- moved the count\n')
+  ok(h.runIn(h.wt, '--mark', 'built'))
+  ok(h.runIn(h.wt, '--mark', 'reviewed', '--file', h.findings([])))
+  assert.strictEqual(asBuiltOf(h.g('show', 'spec/01-thing:' + REL)).trim(), '- (fix: x) moved the count')
+})
+
+test('AC-20261105-10-10 an in-place build appends ## As built into the build commit and reaches MERGE', () => {
+  const h = fixture()
+  ok(h.run('--in-place'))
+  fs.writeFileSync(path.join(h.dir, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.dir, 'specs/20261104/01-thing.run/as-built.md'), '- used a map\n')
+  ok(h.run('--mark', 'built'))
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.strictEqual(asBuiltOf(h.g('show', 'main:' + REL)).trim(), '- used a map')
 })

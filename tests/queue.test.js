@@ -199,12 +199,12 @@ test('AC-20261105-04-4 next skips a gated head, list marks it, an all-gated queu
   q(d, 'done', 'free')
   const none = q(d, 'next')
   assert.strictEqual(none.status, 0)
-  assert.strictEqual(none.stdout.trim(), 'nothing ready — 1 waiting on after gates')
+  assert.strictEqual(none.stdout.trim(), 'nothing ready — 1 waiting on after gates or finished briefs')
   assert.deepStrictEqual(JSON.parse(q(d, 'next', '--json').stdout), { empty: false, waiting: 1 })
   q(d, 'add', 'by spec', '--after', 'specs/20261102/08-server-timeouts.md')
   assert.match(q(d, 'list').stdout, /by spec {2}⏳ after 08-server-timeouts$/m)
   w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('hardened', '03'))
-  assert.strictEqual(q(d, 'next').stdout.trim(), 'nothing ready — 2 waiting on after gates', 'a hardened live spec keeps brief 03 open')
+  assert.strictEqual(q(d, 'next').stdout.trim(), 'nothing ready — 2 waiting on after gates or finished briefs', 'a hardened live spec keeps brief 03 open')
   w(d, 'specs/20261104/03-b.md', sp('done', '03'))
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan gated')
   assert.strictEqual(items(d)[0].after.brief, '03', 'list --json carries after as stored')
@@ -226,16 +226,16 @@ test('AC-20261105-04-5 a superseded spec meets a spec gate; a path with no file 
   assert.match(q(d, 'list').stdout, /ghost gate {2}⏳ after brief 77/)
 })
 
-test('AC-20261105-04-6 a brief item ticks when its live specs are done; a spec item ticks only with no live sidecar', () => {
+test('AC-20261105-04-6 AC-20261105-10-15 a brief item is never ticked by the driver (it stays pending); a spec item ticks only with no live sidecar', () => {
   const d = repo()
   w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'docs/roadmap/04-boards.md', '# 04\n')
   w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('superseded', '03'))
   w(d, 'specs/20261104/04-a.md', sp('done', '04')); w(d, 'specs/20261104/04-b.md', sp('hardened', '04'))
   q(d, 'add', '03'); q(d, 'add', '04')
   const l = JSON.parse(q(d, 'list', '--json').stdout)
-  assert.deepStrictEqual(l.items.map((i) => i.payload), ['04'], 'brief 03 is ticked, 04 (done + hardened) stays')
+  assert.deepStrictEqual(l.items.map((i) => i.payload), ['03', '04'], 'brief 03 has every spec done and its item stays pending')
   q(d, 'add', 'poke')
-  assert.ok(JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items.find((i) => i.payload === '03').done, 'the tick is written on the next write')
+  assert.ok(!JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items.find((i) => i.payload === '03').done, 'no done timestamp is written on the next write either')
   w(d, 'specs/20261104/01-a.md', sp('done'))
   q(d, 'add', 'specs/20261104/01-a.md')
   const wtRun = path.join(d, '.claude/worktrees/spec-01-a/specs/20261104/01-a.run/state.json')
@@ -268,4 +268,42 @@ test('AC-20261105-07-14 --type or --after with no value exits 2 with needs a val
     assert.strictEqual(mid.status, 2, flag + ' before another flag')
   }
   assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 0, 'nothing was added')
+})
+
+// ---- spec 20261105/10: a brief closes when the user says so -----------------------------------
+
+function finishedBrief() {
+  const d = repo()
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n')
+  w(d, 'specs/20261104/03-a.md', sp('done', '03'))
+  q(d, 'add', '03')
+  return d
+}
+
+test('AC-20261105-10-11 a queued brief with every spec done stays pending; next skips it, list tags it', () => {
+  const d = finishedBrief()
+  q(d, 'add', 'poke')
+  assert.deepStrictEqual(items(d).map((i) => [i.payload, !!i.done]), [['03', false], ['poke', false]])
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan poke', 'a finished brief is skipped the way a gated head is')
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}\d+m {2}03 {2}✔ specs done — \/spec:queue done 03$/m)
+  q(d, 'done', 'poke')
+  const none = q(d, 'next')
+  assert.strictEqual(none.stdout.trim(), 'nothing ready — 1 waiting on after gates or finished briefs')
+  assert.deepStrictEqual(JSON.parse(q(d, 'next', '--json').stdout), { empty: false, waiting: 1 })
+  const raw = JSON.parse(q(d, 'list', '--json').stdout).items[0]
+  assert.deepStrictEqual(Object.keys(raw).sort(), ['added', 'id', 'kind', 'payload'], '--json rows are unchanged')
+  const f = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8'))
+  assert.ok(!f.items.find((i) => i.payload === '03').done, 'no done timestamp on disk')
+})
+
+test('AC-20261105-10-12 done NN ticks a finished brief; a superseded brief lists with its own tail and stays pending until done', () => {
+  const d = finishedBrief()
+  w(d, 'docs/roadmap/05-old.md', '# 05\n\n> **Superseded by 06**\n'); w(d, 'specs/20261104/05-a.md', sp('done', '05'))
+  q(d, 'add', '05')
+  assert.match(q(d, 'list').stdout, /^2 {2}q2 {2}\d+m {2}05 {2}⛔ superseded — \/spec:queue done 05$/m)
+  assert.strictEqual(items(d).length, 2)
+  assert.match(q(d, 'done', '03').stdout, /^done q1: 03/)
+  assert.deepStrictEqual(items(d).map((i) => i.payload), ['05'])
+  q(d, 'done', '05')
+  assert.deepStrictEqual(items(d), [])
 })

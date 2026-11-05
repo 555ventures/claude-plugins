@@ -43,18 +43,14 @@ function toIso(v) {
   return Number.isFinite(t) ? new Date(t).toISOString() : v
 }
 
-// A spec item whose spec is done (or superseded) and not live, and a brief item whose brief is done,
-// count as done; the timestamp is written with the next write.
+// A spec item whose spec is done (or superseded) and not live counts as done; the timestamp is written
+// with the next write. A brief item is never ticked here: only `done` closes it.
 function reconcile(root, q) {
   // A v7 brief item carried `brief: "NN"` and no payload; it renders as `undefined` otherwise.
   for (const i of q.items) if (i.payload === undefined && i.brief !== undefined) { i.payload = String(i.brief); i.kind = i.kind || 'brief'; delete i.brief }
   for (const i of q.items) if (i.added !== undefined) i.added = toIso(i.added)
   const now = new Date().toISOString()
   for (const i of q.items) if (!i.done && i.kind === 'spec' && ['done', 'superseded'].includes(specStatus(root, i.payload)) && !liveRun(root, i.payload)) i.done = now
-  if (q.items.some((i) => !i.done && i.kind === 'brief')) {
-    const briefs = work.readBriefs(root)
-    for (const i of q.items) if (!i.done && i.kind === 'brief' && (briefs.find((b) => b.num === work.normBrief(i.payload)) || {}).status === 'done') i.done = now
-  }
   return q
 }
 
@@ -114,13 +110,26 @@ function main(argv) {
   // The row tag of an unmet gate: `after brief 03` / `after 08-server-timeouts`; null when there is none or it is met.
   const waitsOn = (it) => (work.gateWhy(root, it.after, cache) ? 'after ' + (it.after.brief !== undefined ? 'brief ' + work.normBrief(it.after.brief) : path.basename(it.after.spec || '', '.md')) : null)
 
+  // A brief item whose brief has every spec done (or is superseded) stays queued until the user closes it.
+  let briefs
+  const finished = (it) => {
+    if (it.kind !== 'brief') return null
+    briefs = briefs || work.readBriefs(root)
+    const b = briefs.find((x) => x.num === work.normBrief(it.payload))
+    return b && ['done', 'superseded'].includes(b.status) ? b.status : null
+  }
+  const closeTail = (it) => {
+    const f = finished(it)
+    return f ? `  ${f === 'done' ? '✔ specs done' : '⛔ superseded'} — /spec:queue done ${work.normBrief(it.payload)}` : ''
+  }
+
   if (cmd === 'next') {
     if (!list.length) return out('queue empty', { empty: true }), 0
-    const head = list.find((i) => !waitsOn(i))
-    if (!head) return out(`nothing ready — ${list.length} waiting on after gates`, { empty: false, waiting: list.length }), 0
+    const head = list.find((i) => !waitsOn(i) && !finished(i))
+    if (!head) return out(`nothing ready — ${list.length} waiting on after gates or finished briefs`, { empty: false, waiting: list.length }), 0
     out(pasteLine(root, head), { ...head, paste: pasteLine(root, head) })
   } else if (cmd === 'list') {
-    const rows = list.map((it, i) => `${i + 1}  ${it.id}  ${age(it.added)}  ${it.payload}${waitsOn(it) ? '  ⏳ ' + waitsOn(it) : ''}`)
+    const rows = list.map((it, i) => `${i + 1}  ${it.id}  ${age(it.added)}  ${it.payload}${waitsOn(it) ? '  ⏳ ' + waitsOn(it) : ''}${closeTail(it)}`)
     const done = q.items.length - list.length
     if (flags.json) return console.log(JSON.stringify({ items: list, done })), 0
     console.log([...rows, `— ${done} done`].join('\n'))

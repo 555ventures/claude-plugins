@@ -13,8 +13,12 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   `/spec:fix <spec> — <symptom>` item is a fix lane, picked after the runnable specs.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
-- **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane lands as it
-  returns, while the others are still building. A PARKED or AMENDED lane is dismissed by it, and a
+- **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane
+  lands as it returns, also while another lane is sent-back or resolving a rebase (the resolver is
+  rebased again, and gated, when it lands). Every mark prints, under the checkpoint,
+  what it did to each lane it touched: `lane N landed as <sha>`, `lane N sent back — conflicts: …` or
+  `lane N gate red after rebase: …` with that lane's Agent call to re-send, or `lane N held — trunk gate is red`.
+  A PARKED or AMENDED lane is dismissed by it, and a
   lane that marked `waiting --on` becomes waiting. A lane whose rebase conflicts is re-sent (mark
   `resent`): it resolves the conflict, continues the rebase, gates and reviews inside that one
   dispatch, and lands when marked returned. A lane that needs another spec done first: mark

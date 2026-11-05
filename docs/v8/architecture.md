@@ -179,11 +179,11 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 
 ## 9. Other drivers
 
-- `queue.js`: `next|list|add|move|done|show`. ≤ 200 LOC. Duplicate payload refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done briefs and specs.
+- `queue.js`: `next|list|add|move|done|show`. ≤ 200 LOC. Duplicate payload refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done specs, never a brief (only `done` closes one): `next` skips a finished brief, `list` tags it `✔ specs done`.
 - `status.js` (≤ 400 LOC): the dashboard, v7's screen drawn from `lib/next.js`. Roadmap (collapsed
   ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔), 🎯 Next (`qNN` prompt rows, then
   `⚡ N parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):` with `🔶`
-  overlap pairs, a lone pick with `🚦 solo`, or a blocked pick with `⏳ after …` branches), up to three `⚠️` decide lines, footer
+  overlap pairs, a lone pick with `🚦 solo`, or a blocked pick with `⏳ after …` branches), up to three `⚠️` decide lines (`skipped-brief`, `out-of-order`, `brief-done-queued`), footer
   (`🟢`/`🟠`/`⬜`, `· N more open`, `· N more to decide (--all)`, `· H hygiene findings (/spec:doctor)`);
   `--all` adds 🕓 after that, ⛔ blocked, all decide lines and 🧹 hygiene (the derivation's own
   anomalies: `queue-unparseable`, `queue-orphan`, `unknown-status`, `orphan-stamp`,
@@ -317,6 +317,16 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   applied` and exits 0. With `spec-fanout.json` missing while fanout lane markers are open, `load` refuses
   and names the newest `spec-v7-backup` copy to restore.
 - **Evidence.** `run.js` COMMIT appends `<spec>.run/evidence.md` to the build commit body.
+- **Landing rule.** `deriveWait` lands the first `done` lane (batch order) whenever the trunk gate is not red
+  (`s.red`); a `sent-back` lane or a `dispatched` lane mid-rebase no longer holds it. The sent-back lane
+  keeps resolving onto the trunk it was rebased onto; when it returns, `mergeLane` rebases it again and gates
+  the rebased tree before the fast-forward, and a new conflict is a fresh `conflictAt`.
+- **What a mark did.** Lane-touching marks (`returned`, `resent`, `dismissed`, `waiting`, `answered`, `resumed`,
+  `gate-repaired`) bump `s.seq`; `mergeLane` stamps the lane it worked on with `lane.last = {seq, outcome,
+  detail}` (`landed` + sha, `conflict` + files, `red` + first failing line), and a landing held by `s.red`
+  stamps `held` on every `done` lane. The `after` hook prints one line per lane with `last.seq === s.seq`, in
+  batch order, with the Agent call after `sent back` and `gate red`; `--json` prints nothing extra. WAIT's
+  lane list shows `resolving rebase (<n> files)` or `gate red after rebase` instead of a stale run step.
 
 ### run.js notes
 
@@ -362,6 +372,8 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   `conflicts-resolved` refuses while a file the merge reported still holds `<<<<<<<`/`>>>>>>>`
   lines, then commits the merge in the main checkout.
 
+- **As built.** The builder writes departures to `<spec>.run/as-built.md`; COMMIT (before `commitAll`) appends them, the review's advisories and, outside a fix lane, the files outside the File Plan as bullets under `## As built` in the spec (a fix lane prefixes `(fix: <symptom>) `; bullets already there are not repeated). `specEdits` compares Decisions only and `outsidePlan` runs at REVIEW, so neither sees the section. Table rows are split by `lib/state.js` `splitCells`, which keeps a pipe inside a backtick span.
+
 ### integration notes
 
 - The Agent tool takes no working directory: every agent runs from the main checkout. Lanes get
@@ -372,7 +384,7 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - `lib/driver.js`: when a mark settles on a terminal step (no mark), its body is printed after the
   checkpoint (the run sidecar is already cleared, so a re-run would refuse).
 - `queue.js` reconciles: a spec item whose spec is `done` counts as done (written on the next
-  write); `run.js` DONE also ticks it and sets Next to the queue head. The REVIEW brief lists
+  write; a brief item is never ticked by the driver — the `brief-done-queued` decide anomaly asks the user to close it); `run.js` DONE also ticks it and sets Next to the queue head. The REVIEW brief lists
   `Files changed outside the File Plan`.
 - Removed as unused by any prose: fanout `--batch` (and `--include-fixes`, `--override-serial`, `--ask`), queue `--at`, status `--all`, plan `check`/`--date`,
   pending.js CLI, prototype `check`, mocks `reply`, walkthrough `reply`/`mark`, the `scratch-worktree` sink.

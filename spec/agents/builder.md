@@ -23,6 +23,7 @@ pick. An Assumption with a written fallback you apply.
 A failing test your diff does not touch, a timeout or a flake under load is not yours to fix: say so in your reply and stop, and never raise a host test timeout, retry count or worker limit to pass.
 Leave git alone: the driver commits, and a hook blocks git writes. Evidence an AC asks to record
 (listings, renders, counts) goes in the `evidence.md` the brief names; the driver appends it to the build commit.
+What you built differently from the spec, and why, goes in the `as-built.md` the brief names, one line each; the driver appends it to the spec as `## As built`.
 
 Reply briefly: files changed, the last test result, any file outside the plan and why, and
 anything in the spec you could not honour.

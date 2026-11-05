@@ -15,7 +15,7 @@ This is the user-visible surface of the `spec` and `git` plugins as of `claude-p
 | `/spec:prototype` | `<idea words \| docs/roadmap/NN-*.md \| stem> [--stem <name>]` | Throwaway pin-loop prototype that ends in a behaviour contract |
 | `/spec:plan` | `<feature description \| spec path \| roadmap brief path \| design/prototypes/<stem>/contract.json>` | Writes and locks a spec |
 | `/spec:run` | `<spec path> [--in-place]` | Takes a spec from build through review to merge |
-| `/spec:fanout` | `[<spec path>…] [--batch <ids\|all>] [--include-fixes] [--override-serial] [--ask <key\|all>]` (`--ask` can repeat) | Runs several lanes from one session |
+| `/spec:fanout` | `[--pick] [<spec path>…]` | Runs several lanes from one session |
 | `/spec:fix` | `[symptom in plain words]` (bare = taken from the conversation) | Root-cause repair in the Direct lane |
 | `/spec:queue` | `[next\|list\|add\|move\|done\|show\|groom] [args…]` (bare = `next`) | Session work queue |
 | `/spec:status` | `[NN] [--all]` | Dashboard |
@@ -33,8 +33,8 @@ The session runs `node {driver} …`, does exactly the one step printed, runs th
 | Driver | States printed (driver-only states in parentheses) | `--mark` verbs |
 |---|---|---|
 | build (`/spec:run`) | (PREFLIGHT) → TESTS → (RED_CHECK) → RED_FINDINGS? → RED_ATTRIBUTION? → `WAVE:<label>`… → INTEGRATION → (GATE) → REPAIR? (cap 3) → ESCALATE (terminal) \| REPLAY? (prototype owner only) → COMMIT → DONE | `tests-authored`, `red-attributed`, `wave-done --wave <l> --workers <n>`, `integrated`, `repair-applied --continued <n> --spawned <n>`, `escalate-choice <re-arm\|cold\|park\|amend>`, `committed`, `replayed`, `looked`, `incident --class <id>` (allowed at any live step, never moves state) |
-| review (`/spec:run`) | (LEGS) → STOPPED (red gate) \| SKIPS? → REVIEWER → DISPOSITIONS → FIX? (cap 2) → ESCALATE \| CLOSE → MERGE / CONFLICTS → DONE. A lane ends at MERGE_READY. Also printed: REVIEWER_FAILED, CLEAN, UNVERIFIED | `skips-extracted --file`, `reviewer-returned --file <json>`, `dispositions [--file] --waived N --rejected N --fix-dispatched N`, `fix-applied`, `repair-round`, `closed`, `merge-strategy <merge-commit\|ff-only\|squash\|rebase-ff> [--prototype delete\|keep]`, `conflicts-resolved` |
-| fanout | PLAN → DISPATCH → WAIT → RELAY → MERGE (MERGE_RED) → REPORT | `planned`, `dispatched`, `returned --lane <id> [--stopped "<reason>"]`, `answered`, `dismissed`, `resumed`, `merged`, `gate-repaired`, `reported` |
+| review (`/spec:run`) | (LEGS) → STOPPED (red gate) \| SKIPS? → REVIEWER → DISPOSITIONS → FIX? (cap 2) → ESCALATE \| CLOSE → MERGE / CONFLICTS → DONE. A lane ends at MERGE_READY. Also printed: REVIEWER_FAILED, CLEAN, UNVERIFIED | `skips-extracted --file`, `reviewer-returned --file <json>`, `dispositions [--file] --waived N --rejected N --fix-dispatched N`, `fix-applied`, `repair-round`, `closed`, `merge-strategy <merge-commit\|ff-only\|squash\|rebase-ff> [--prototype delete\|keep]`, `conflicts-resolved`, `waiting --on <spec>` (lane only), `unmet --decision <id> --why <text>`, `escalate <retry\|park\|amend\|revert>` |
+| fanout | PLAN → DISPATCH → WAIT → RELAY → MERGE (MERGE_RED) → REPORT | `planned`, `picked --label <title>…`, `dispatched`, `returned --lane <id> [--stopped "<reason>"]`, `resent`, `answered --lane <id> [--label <label>]`, `resumed`, `dismissed --lane <id>`, `waiting --lane <id> --on <spec>`, `gate-repaired`, `reported` |
 | genesis | DISCOVERY → BRIEF → MENUS → [FINALISTS → (RACE) → PROBE → PICK] → DECIDE → (SCAFFOLD) → SKELETON → (GATE) → GATE_RED \| [DESIGN_BRIEF → DESIGN_KIT → DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL] → ROADMAP → HANDOFF → GROUNDED. The status file also records DEFERRED and SCAFFOLD_RED. Bracketed states run only for tournament archetypes or visual Storybook archetypes | `discovery-done`, `brief-written`, `menu-written --file <f>`, `menus-done`, `finalists-written`, `finalists-skipped`, `probe-done`, `picked`, `decided`, `skeleton-landed`, `design-brief-written`, `kit-landed`, `journeys-drawn`, `design-approved`, `roadmap-written`, `profile-written --file <f> [--refresh]` |
 | mocks | SEED → SCREENS → APPROVED | `seed-done`, `journey-drawn --journey <j>`, `journey-approved --journey <j> [--waive --reason <r>]`, `approved`. Also `round push`, `round pull`, `--reopen journey:<j>` |
 | prototype | OPEN → ROUND → APPROVED → TESTS → CONTRACTED → CLOSED | `opened`, `round-done`, `approved`, `contracted`, `tests-derived`, `closed` (accepted from any resting state). Also `serve --port <n>`, `check [--json]` |
@@ -79,7 +79,7 @@ All questions go through `AskUserQuestion`: at most 4 per call, recommended opti
 | plan | Real forks while drafting. Critical tier only: "This spec is critical tier because it touches <trigger>. Lock it now?" → Lock it / Keep it as a draft |
 | run/build | RED_FINDINGS on a critical tier (remove mention / rewrite red / pause). ESCALATE (re-arm / restart cold / park and queue /spec:fix / amend), unless `stops.buildEscalate` answers. REPLAY look stop: only a literal `close enough` advances. Out-of-plan files and unwritten-fallback forks |
 | run/review | STOPPED (repair round, then queue /spec:fix / abandon). DISPOSITIONS: only the user waives. ESCALATE (abandon+queue fix / waive-reject via disposer / abandon / re-plan). MERGE: strategy is derived and never asked; conflicts are asked; "The prototype has N commits that were never merged. Delete the prototype now?" |
-| fanout | RELAY: every lane question in one batch. MERGE_RED stops the queue until `gate-repaired` |
+| fanout | RELAY: every lane question in one batch, and the dependency stop (a lane that needs another spec done first: `waiting --lane <id> --on <spec>`, or `answered`, or `dismissed`). MERGE_RED stops the queue until `gate-repaired` |
 | fix | Missing symptom. One decisions stop listing authored strings and policy choices. One waive/reject stop. At most 3 calls |
 | genesis | Discovery interview rounds with research menus. Hard-to-reverse forks. DESIGN_BRIEF. Literal `approve` at AWAITING_DESIGN_APPROVAL |
 | mocks | Asks for the idea only when `.claude/genesis/brief.md` is missing. Service mode: prints `🎨 ready for review — <link>` and ends the turn. Terminal mode: ends on `approve all, or name the ones to change` |
@@ -98,7 +98,7 @@ Every command ends with one report rendered by `report-render`. Fixed order: **b
 |---|---|
 | plan | `✅ spec hardened & locked — {path}`; `status: hardened`; commit `chore(spec): lock {YYYYMMDD/NN}` |
 | run | Spec `done`, Canonical Delta applied, close commit, branch merged into `build_base`, worktree removed (never pushed). Next = status --next |
-| fanout | Each lane merged one at a time with the gate green on main. One REPORT, then the next bare run starts the next batch |
+| fanout | Each lane lands one at a time, as it returns, with the gate green on main; a spec whose `depends_on` is not done waits. One REPORT, then the next bare run starts the next batch |
 | fix | `✅ fixed — {symptom}`: root cause, regression test, findings disposed, fix/escape row appended |
 | genesis | `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes, roadmap of {M} briefs`, `Chain: …`, `Next: /spec:enforce` |
 | mocks | `✅ wireframe approved — {N} journeys`, `Next: /spec:genesis` |

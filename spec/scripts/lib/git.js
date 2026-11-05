@@ -69,6 +69,16 @@ function commitAll(cwd, message, { noVerify } = {}) {
   return headSha(cwd)
 }
 
+// A lane's safety-net commit: everything but the relay file, hooks skipped. Returns the sha, or null
+// when nothing was staged or a rebase is in progress (a commit would land inside the rebase).
+function commitWip(wt, message) {
+  if (rebasing(wt)) return null
+  sh(['add', '-A', '--', '.', ':(exclude).claude/pending-question.json'], wt)
+  if (raw(['diff', '--cached', '--quiet'], wt).status === 0) return null
+  sh(['commit', '-q', '--no-verify', '-m', message], wt)
+  return headSha(wt)
+}
+
 // The right words for a dirty checkout: a merge another run left half-done is not "stash it".
 function dirtyMessage(root) {
   if (raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], root).status === 0) return `${root} is mid-merge (another /spec:run at CONFLICTS?) — finish that run there, then re-run`
@@ -140,5 +150,5 @@ const changedFiles = (base, cwd) =>
 module.exports = {
   repoRoot, dirtyMessage,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
-  commitAll, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
+  commitAll, commitWip, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
 }

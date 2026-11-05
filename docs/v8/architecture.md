@@ -116,22 +116,31 @@ Builder agent brief must include the Intent block verbatim and the line
 
 PLAN → DISPATCH → WAIT → RELAY → MERGE → REPORT, then back to PLAN until the queue is
 empty. PLAN, bare (AUTO): the first `lanes` (default 4) runnable queue specs in queue order —
-runnable = `hardened`, its lane did not end PARKED/AMENDED, not already in a lane — File Plan
-overlap regardless; prints a 📌 Auto-picked batch line, mark `planned`. `--pick` (SELF-PICK): the
+runnable = `hardened`, its lane did not end PARKED/AMENDED, not already in a lane, and every
+`depends_on` entry (plus the lane's run-state `waitingOn`) done on trunk — File Plan
+overlap regardless; a spec with an unmet entry is printed under Waiting with the reason (`lane N this batch`,
+`draft — it cannot land in this fan-out`, or `<status>, not done`); prints a 📌 Auto-picked batch line, mark `planned`. `--pick` (SELF-PICK): the
 runnable specs as checkbox questions (≤ 4 boxes × ≤ 4 questions, labels = titles), mark `picked
 --label <title>` (repeatable; same validity checks, ≤ `lanes`). DISPATCH prints one Agent
 call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec> --root
 .claude/worktrees/spec-<stem>` (absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
 run state. RELAY: all `pending-question.json` batched into one message; `answered --lane`.
-MERGE, per done lane in batch order: `git.rebaseOnto(<worktree>, trunk)` (run state still
-MERGE_READY), then status done + commit in the lane, `mergeBack` ff-only, gate on trunk
-(`MERGE_RED` → `gate-repaired` on red). A rebase conflict leaves the rebase in progress, sets the
-lane `sent-back` with its conflict files, and prints the re-dispatch Agent line (prompt plus "a
-rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git
-rebase --continue`, re-run the test command, then stop"); mark `resent`; on return it lands on the next
-pass (`returned` refuses while the rebase is in progress). `block-worker-git.sh` allows `git add`
-and `git rebase --continue` in a lane. A second conflict against the same trunk sha → lane
-`stopped`, reason "second rebase conflict", relayed at RELAY. REPORT: one report, queue items ticked `done`.
+Landing, per done lane: WAIT lands the first `done` lane as soon as it returns when no lane is
+`sent-back` and no dispatched lane is mid-rebase (early landing); MERGE lands whatever is left in batch
+order. `git.rebaseOnto(<worktree>, trunk)` (run state still MERGE_READY), then status done + commit in
+the lane, `mergeBack` ff-only (`lane.landed` = trunk sha), gate on trunk (`MERGE_RED` → `gate-repaired` on
+red). A rebase conflict leaves the rebase in progress, sets the lane `sent-back` with its conflict files,
+and prints the re-dispatch Agent line (the bare `/spec:run`); mark `resent`. The lane's own `run.js`
+resolves it in that one dispatch: it continues the rebase, moves `base`, gates and reviews (rebase guard,
+below); `returned` then lands the lane (it refuses while the rebase is in progress). `block-worker-git.sh`
+allows `git add` and `git rebase --continue` in a lane. A second conflict against the same trunk sha → lane
+`stopped`, reason "second rebase conflict", relayed at RELAY. A stopped, waiting or dismissed lane is
+committed first (`wip(spec): <stem>`, `git.commitWip`, the pending file excluded). `waiting --lane N --on
+<spec>` (or a `returned` lane whose run state carries `waitingOn`) takes a lane out of the batch with a
+wip commit and `waitingOn` in its run state; PLAN re-picks it once that spec is done. A reused worktree
+(PLAN picks a lane whose worktree or branch exists) is wip-committed and rebased onto trunk by the
+driver at DISPATCH (`lane.reused`, `lane.rebased` / `lane.conflicts`); its run state's `base` moves and
+`waitingOn` goes. REPORT: one report, queue items ticked `done`, `merged <stem> as <sha>`.
 
 ## 6. Plan (`plan.js` + `templates/spec.md`)
 
@@ -265,6 +274,17 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   `/spec:run <spec>` after fanout records the answer, run.js reads `readPending(<worktree>).answer`,
   `consumePending`s it, and continues. fanout treats a pending doc with `answer: null` as "stopped".
 - run.js must not refuse a re-run in a lane whose state is already MERGE_READY (no-op exit 0).
+- **Rebase guard.** At the top of `derive`, a lane (`state.lane`) whose worktree is mid-rebase is resolved
+  at any step except ESCALATE/PARKED/AMENDED: while a conflicted file carries markers the step keeps its
+  name and prints the resolve text naming the live trunk head; once none does, `add -A` and
+  `rebase --continue`; when the rebase completes `base` = `merge-base(trunk, HEAD)`, `commit` follows
+  HEAD, and a MERGE_READY lane goes to GATE (`review: null`, fresh attempts), so REVIEW prints in the same
+  invocation. fanout writes no `resolving`.
+- **WIP folding.** COMMIT runs `reset --soft` to `merge-base(trunk, HEAD)` when a commit above it has a
+  `wip(spec):` subject, so a branch carries exactly one `build(...)` commit and trunk never sees WIP.
+- **`waitingOn`.** `run.js --mark waiting --on <spec>` (lane only; BUILD, REPAIR, FIX, REVIEW) writes
+  `waitingOn` into the run state; fanout's `returned` then sets the lane `waiting` and PLAN holds it until
+  `<spec>` is done.
 
 ### run.js notes
 
@@ -296,6 +316,12 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - **Attempts.** `attempts = {repair, fix}`. The builder attempt is `1 + repair + fix`, plus 1 for
   REPAIR/FIX briefs. Attempt 2 and up, or `escalate retry`, uses opus. Retry clears both counters
   and returns to REPAIR (gate escalation) or FIX (review escalation).
+- **Spec edits and unmet Decisions.** After a green gate `specEdits` lists every changed `specs/**/*.md`
+  except the own spec, plus the own spec when its Decisions section differs from base; non-empty →
+  ESCALATE `why: 'spec-edit'` with `revert` (checkout from base, own status line kept, back to GATE) and
+  `amend`. `--mark unmet --decision <id> --why <text>` (BUILD, REPAIR, FIX, REVIEW, or a rebase being
+  resolved) goes to ESCALATE `why: 'decision'` with `retry` (back to the step it came from, on opus,
+  fresh attempts), `park` and `amend`; a lane writes it as a pending question.
 - **Extra terminal names** beyond §4: `PARKED`, `AMENDED`, and `MERGE_READY` (lane only). A
   trunk gate that goes red after the merge still ends at DONE, with a 🚫 block and
   `Next: /spec:fix …`. A ff-only divergence is a refusal.
@@ -316,5 +342,5 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - `queue.js` reconciles: a spec item whose spec is `done` counts as done (written on the next
   write); `run.js` DONE also ticks it and sets Next to the queue head. The REVIEW brief lists
   `Files changed outside the File Plan`.
-- Removed as unused by any prose: fanout `--batch`, queue `--at`, status `--all`, plan `check`/`--date`,
+- Removed as unused by any prose: fanout `--batch` (and `--include-fixes`, `--override-serial`, `--ask`), queue `--at`, status `--all`, plan `check`/`--date`,
   pending.js CLI, prototype `check`, mocks `reply`, walkthrough `reply`/`mark`, the `scratch-worktree` sink.

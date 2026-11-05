@@ -13,7 +13,8 @@ as `cd <worktree> && …`.
 
 On a build, write a failing test per criterion first, then code. Always run the test command
 until green. Honour every Decision. Repair the code; never weaken a test. Do not touch files outside the File Plan without listing them in your
-final summary. Leave git alone: the driver commits, and a hook blocks git writes.
+final summary. Never edit the spec or any other spec file; a Decision you cannot honour goes in your reply.
+Leave git alone: the driver commits, and a hook blocks git writes.
 
 Reply briefly: files changed, the last test result, any file outside the plan and why, and
 anything in the spec you could not honour.

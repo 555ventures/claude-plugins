@@ -40,7 +40,8 @@ Only before anything irreversible (production promote, deleting unmerged work, d
 git), for a yes on an `architecture: true` Intent (asked once, at `plan.js lock --confirmed`;
 never at run), or when a step says to. Use AskUserQuestion, recommended option first. Otherwise
 decide; print `📌 Auto-picked <choice> — <reason> (veto anytime)`. A lane never asks: its driver writes the
-question to `.claude/pending-question.json` for the orchestrator to relay.
+question to `.claude/pending-question.json` for the orchestrator to relay. A lane never edits a spec;
+an unmet Decision is a question (`unmet`), not an edit.
 
 ## Glossary
 

@@ -5,8 +5,9 @@
 // commits and merges.
 //
 // node run.js <spec> [--in-place] [--root <dir>] [--state] [--json] [--mark <verb>]
-// Marks: built · repaired · reviewed --file <json> · fixed · escalate <retry|park|amend> ·
-// conflicts-resolved. Exit 0 ok · 1 error · 2 refusal.
+// Marks: built · repaired · reviewed --file <json> · fixed · escalate <retry|park|amend|revert> ·
+// conflicts-resolved · waiting --on <spec> (lane) · unmet --decision <id> --why <text>.
+// Exit 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
 const path = require('path')
@@ -22,7 +23,9 @@ const queue = require('./queue')
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2
 const FIX_CAP = 1
-const CHOICES = ['retry', 'park', 'amend']
+const CHOICES = ['retry', 'park', 'amend', 'revert']
+const OFFERED = { 'spec-edit': ['revert', 'amend'] } // every other escalation offers retry, park, amend
+const offered = (state) => OFFERED[state.why] || ['retry', 'park', 'amend']
 const SEVERITIES = ['blocking', 'advisory']
 // Only while a builder or reviewer is out is the checkout marked for block-worker-git.sh.
 const AGENT_STEPS = ['BUILD', 'REPAIR', 'FIX', 'REVIEW']
@@ -52,9 +55,10 @@ const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Assu
 // Decisions table rows as bullets; the ADR constraints the planner wrote must reach builder and reviewer.
 // A row is a template leftover only when a cell is exactly a <placeholder>; JSX or generics in a decision stay.
 const placeholderRow = (cells) => cells.some((c) => /^<[^>]+>$/.test(c))
+const decisionRows = (spec) => sectionText(spec, 'Decisions').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l))
+  .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))).filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !placeholderRow(c))
 const decisions = (spec) => {
-  const rows = sectionText(spec, 'Decisions').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l))
-    .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))).filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !placeholderRow(c))
+  const rows = decisionRows(spec)
   return rows.length ? rows.map((c) => `- ${c[0]}: ${c[1]}${c.length > 2 && c[c.length - 1] ? ` — ${c[c.length - 1]}` : ''}`) : ['- none']
 }
 
@@ -151,6 +155,22 @@ function redCheck(state, wt) {
     : `red-check: ${doc.files.length} new test file(s), none vacuous`
 }
 
+// Spec text a build may not change: any other spec file, and the own spec's Decisions section.
+// The own spec's status line and its other sections (an AC correction in a FIX round) pass.
+const decisionsText = (text) => {
+  const m = /^## +Decisions(?: [^\n]*)?\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n/g, '\n'))
+  return m ? m[1].trim() : ''
+}
+function specEdits(state, ctx) {
+  const wt = wtOf(state, ctx)
+  const own = state.spec.split(path.sep).join('/')
+  const files = git.changedFiles(state.base, wt).filter((f) => /^specs\/.+\.md$/.test(f) && f !== own)
+  const was = git.raw(['show', `${state.base}:${own}`], wt)
+  const now = st.readText(specIn(state, ctx), null)
+  if (was.status === 0 && now !== null && decisionsText(was.stdout) !== decisionsText(now)) files.push(own)
+  return files
+}
+
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx)
   const wt = wtOf(state, ctx)
@@ -161,15 +181,24 @@ function gateStep(state, ctx) {
   const tail = red && cfg.testFileCommand ? g.tail + '\n' + redCheck(state, wt) : g.tail
   state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail }
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
+  const edits = specEdits(state, ctx)
+  if (edits.length) return go(state, 'ESCALATE', { why: 'spec-edit', specEdits: edits })
   st.writeText(runFile(ctx, 'diff.patch'), git.diff(state.base, wt) + '\n')
   fs.rmSync(runFile(ctx, 'findings.json'), { force: true }) // never re-read an earlier round's findings
   return go(state, 'REVIEW')
 }
 
+// A lane stops here, committed: fanout writes done, merges in queue order and cleans up.
+const readyReport = (state, ctx) => render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: `commit ${state.commit || 'none (nothing changed)'}`, next: 'nothing needs you — fanout merges the lane' })
+
 function commit(state, ctx) {
   const spec = st.readSpec(specIn(state, ctx))
   if (state.inPlace && !state.lane) st.writeStatus(specIn(state, ctx), 'done')
   const wt = wtOf(state, ctx)
+  // Safety-net commits fanout made for a stopped or waiting lane never reach trunk: fold them, and the
+  // work still in the tree, into the one build commit.
+  const mb = git.raw(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt)
+  if (mb.status === 0 && git.sh(['log', '--format=%s', `${mb.stdout.trim()}..HEAD`], wt).split('\n').some((l) => l.startsWith('wip(spec):'))) git.sh(['reset', '-q', '--soft', mb.stdout.trim()], wt)
   // A re-run after a crash between the commit and the save finds a clean tree: report that commit.
   try {
     state.commit = git.commitAll(wt, `build(${specInfo(ctx).id}): ${spec.title}`) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
@@ -179,8 +208,7 @@ function commit(state, ctx) {
     state.gate = { ...(state.gate || {}), status: 'red', output_tail: `git commit was rejected (a commit hook?):\n${e.message}` }
     return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   }
-  // A lane stops here, committed: fanout writes done, merges in queue order and cleans up.
-  if (state.lane) return go(state, 'MERGE_READY', { report: render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: `commit ${state.commit || 'none (nothing changed)'}`, next: 'nothing needs you — fanout merges the lane' }) })
+  if (state.lane) return go(state, 'MERGE_READY', { report: readyReport(state, ctx) })
   return go(state, 'MERGE')
 }
 
@@ -315,7 +343,8 @@ function ask(state, ctx, question, options) {
     ...options.map((o) => `- ${o.label} — ${o.description}`)].join('\n')
 }
 
-const rebaseLeft = () => 'a rebase onto trunk is in progress in this worktree: edit each conflicted file to both sides\' intent (no markers left), re-run this driver, then stop — it continues the rebase, and fanout gates and reviews the result before it lands'
+// trunkSha is the live trunk head the rebase is onto; a resolution that cannot keep a Decision asks, it never decides.
+const rebaseLeft = (trunkSha) => `a rebase onto trunk is in progress in this worktree: edit each conflicted file to both sides' intent (no markers left), re-run this driver — it continues the rebase onto trunk ${trunkSha}, then gates and reviews the result in this same dispatch. If a resolution cannot keep a Decision, mark \`unmet --decision <id> --why <text>\` instead of deciding.`
 
 // The line of a red tail worth reading first.
 const redLine = (tail) => {
@@ -323,32 +352,73 @@ const redLine = (tail) => {
   return ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.find((l) => /\bfail|error|rejected/i.test(l)) || ls[0] || 'gate red'
 }
 
+const ESCALATE_MARK = (state) => `escalate <${offered(state).join('|')}>`
+
 function escalateBody(state, ctx) {
   const id = specInfo(ctx).id
+  const amend = { label: 'amend', description: 'set the spec to draft so you can amend it with /spec:plan' }
+  if (state.why === 'spec-edit') {
+    return ask(state, ctx, `${id} edited spec text it may not: ${state.specEdits.join(', ')}. How should it continue?`, [
+      { label: 'revert', description: 'restore those files from the base, keep the build, and gate it again' }, amend,
+    ]) + '\n\n```\n' + state.specEdits.map((f) => `- ${f}`).join('\n') + '\n```'
+  }
+  const options = [
+    { label: 'retry', description: 're-run the builder on Opus with fresh attempts' },
+    { label: 'park', description: 'queue a /spec:fix item and set the spec back to hardened' },
+    amend,
+  ]
+  if (state.why === 'decision') {
+    options[2] = { label: 'amend', description: `set the spec to draft; proposed amendment: ${state.unmet.text}` }
+    return ask(state, ctx, `${id} cannot meet ${state.unmet.decision}: ${state.unmet.text}. How should it continue?`, options)
+  }
   const q = state.why === 'gate' ? `${id} is still red after ${REPAIR_CAP} repairs. How should it continue?`
     : `${id} still has blocking review findings after ${FIX_CAP} fix round. How should it continue?`
   const detail = state.why === 'gate' ? state.gate.output_tail
     : state.review.findings.filter((f) => f.severity === 'blocking').map((f) => `- ${f.file || ''} ${f.summary || ''}`).join('\n')
-  return ask(state, ctx, q, [
-    { label: 'retry', description: 're-run the builder on Opus with fresh attempts' },
-    { label: 'park', description: 'queue a /spec:fix item and set the spec back to hardened' },
-    { label: 'amend', description: 'set the spec to draft so you can amend it with /spec:plan' },
-  ]) + '\n\n```\n' + detail + '\n```'
+  return ask(state, ctx, q, options) + '\n\n```\n' + detail + '\n```'
+}
+
+// A lane's rebase that fanout or a reused worktree left in progress: resolved here, whatever the step.
+// Not at ESCALATE, PARKED or AMENDED: the lane has stopped and a question is out.
+const rebaseGuard = (state, ctx) => state.lane && state.worktree && !['ESCALATE', 'PARKED', 'AMENDED'].includes(state.step) && git.rebasing(wtOf(state, ctx))
+const hasMarkers = (wt, f) => /^(<{7}|>{7})( |$)/m.test(st.readText(path.join(wt, f), ''))
+
+// Continues the resolved rebase. Once it completes, base is the merge-base with trunk, and a lane that
+// had landed (MERGE_READY) goes back through GATE and REVIEW: the resolution is ungated and unreviewed.
+function finishRebase(state, ctx) {
+  const wt = wtOf(state, ctx)
+  git.sh(['add', '-A'], wt); git.raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt) // a later commit may conflict again
+  if (git.rebasing(wt)) {
+    if (!git.conflictsIn(wt).length) refuse(`the rebase in ${wt} stopped without a conflict — finish it with git rebase --continue or --skip there, then re-run`, 1)
+    return state
+  }
+  state.base = git.sh(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt)
+  if (state.commit) state.commit = git.headSha(wt)
+  if (state.report) state.report = readyReport(state, ctx)
+  if (state.step === 'MERGE_READY') return go(state, 'GATE', { review: null, attempts: { repair: 0, fix: 0 } })
+  return state
 }
 
 function derive(state, ctx) {
+  if (rebaseGuard(state, ctx)) {
+    const wt = wtOf(state, ctx)
+    if (git.conflictsIn(wt).some((f) => hasMarkers(wt, f))) {
+      return { name: state.step, body: rebaseLeft(git.sh(['rev-parse', cfgOf(ctx).trunk], wt)), accepts: ['waiting', 'unmet'] }
+    }
+    return { name: state.step, auto: finishRebase }
+  }
   switch (state.step) {
     case 'OPEN': return { name: 'OPEN', auto: open }
-    case 'BUILD': return { name: 'BUILD', body: builderBrief(state, ctx, 'build'), mark: 'built' }
+    case 'BUILD': return { name: 'BUILD', body: builderBrief(state, ctx, 'build'), mark: 'built', accepts: LANE_ASKS }
     case 'GATE': return { name: 'GATE', auto: gateStep }
-    case 'REPAIR': return { name: 'REPAIR', body: builderBrief(state, ctx, 'repair'), mark: 'repaired' }
-    case 'REVIEW': return { name: 'REVIEW', body: reviewerBrief(state, ctx), mark: `reviewed --file ${shq(runFile(ctx, 'findings.json'))}` }
-    case 'FIX': return { name: 'FIX', body: builderBrief(state, ctx, 'fix'), mark: 'fixed' }
+    case 'REPAIR': return { name: 'REPAIR', body: builderBrief(state, ctx, 'repair'), mark: 'repaired', accepts: LANE_ASKS }
+    case 'REVIEW': return { name: 'REVIEW', body: reviewerBrief(state, ctx), mark: `reviewed --file ${shq(runFile(ctx, 'findings.json'))}`, accepts: LANE_ASKS }
+    case 'FIX': return { name: 'FIX', body: builderBrief(state, ctx, 'fix'), mark: 'fixed', accepts: LANE_ASKS }
     case 'ESCALATE': {
       // A lane re-dispatched after fanout recorded the answer continues with it.
       const doc = state.lane && pending.readPending(ctx.root)
       if (doc && doc.answer) return { name: 'ESCALATE', auto: (s) => steps.escalate(s, { choice: doc.answer.label }, ctx) }
-      return { name: 'ESCALATE', body: escalateBody(state, ctx), mark: 'escalate <retry|park|amend>' }
+      return { name: 'ESCALATE', body: escalateBody(state, ctx), mark: ESCALATE_MARK(state) }
     }
     case 'COMMIT': return { name: 'COMMIT', auto: commit }
     case 'MERGE': return { name: 'MERGE', auto: merge }
@@ -361,13 +431,7 @@ function derive(state, ctx) {
         { label: 'abort', description: 'run `git reset --merge` there (from your own shell if the hook refuses); marking conflicts-resolved later retries the merge' },
       ]),
     }
-    case 'MERGE_READY': {
-      const wt = wtOf(state, ctx)
-      if (git.rebasing(wt) && !git.conflictsIn(wt).some((f) => /^(<{7}|>{7})( |$)/m.test(st.readText(path.join(wt, f), '')))) {
-        git.sh(['add', '-A'], wt); git.raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt) // resolved: continue; a later commit may conflict again
-      }
-      return { name: 'MERGE_READY', body: git.rebasing(wt) ? rebaseLeft() : state.report || '' }
-    }
+    case 'MERGE_READY': return { name: 'MERGE_READY', body: state.report || '' }
     default: return { name: state.step, body: state.report || '' }
   }
 }
@@ -381,6 +445,33 @@ function endRun(state, ctx, status, outcome, extra = {}) {
   const report = render({ outcome, artifacts: s.rel, ...extra })
   return go(state, status === 'draft' ? 'AMENDED' : 'PARKED', { ended: !state.lane, report })
 }
+
+// A --on value as a repo-relative spec path; it must be a file under the checkout.
+function specFileUnder(on, ctx) {
+  if (typeof on !== 'string') refuse('waiting needs --on <spec>: the spec file this one waits for')
+  const abs = path.resolve(ctx.root, on.replace(/^@/, ''))
+  const rel = path.relative(ctx.root, abs).split(path.sep).join('/')
+  if (rel.startsWith('..') || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) refuse(`--on ${on} is not a spec file under ${ctx.root}`)
+  return rel
+}
+
+// The build's spec edits are undone: other specs from base (a file base lacks is removed), the own spec
+// from base with its status line kept. Then the gate runs again.
+function revertSpecEdits(state, ctx) {
+  const wt = wtOf(state, ctx)
+  const own = state.spec.split(path.sep).join('/')
+  const status = st.readSpec(specIn(state, ctx)).frontmatter.status
+  for (const f of state.specEdits || []) {
+    if (git.raw(['cat-file', '-e', `${state.base}:${f}`], wt).status === 0) git.sh(['checkout', state.base, '--', f], wt)
+    else { git.raw(['rm', '-q', '-f', '--cached', '--ignore-unmatch', '--', f], wt); fs.rmSync(path.join(wt, f), { force: true }) }
+  }
+  if ((state.specEdits || []).includes(own)) st.writeStatus(specIn(state, ctx), status)
+  delete state.specEdits
+  return go(state, 'GATE')
+}
+
+// The marks a lane agent may use while a builder or reviewer is out: stop for another spec, or ask about a Decision.
+const LANE_ASKS = ['waiting', 'unmet']
 
 const steps = {
   built: (state) => go(state, 'GATE'),
@@ -401,15 +492,30 @@ const steps = {
     state.review = { findings: doc.findings, verdict }
     return go(state, verdict === 'clean' ? 'COMMIT' : verdict === 'fix' ? 'FIX' : 'ESCALATE', { why: 'review' })
   },
+  waiting(state, flags, ctx) {
+    const on = specFileUnder(flags.on, ctx)
+    if (!state.lane) refuse(`not a lane — run /spec:run ${on} first, then re-run`)
+    state.waitingOn = on
+  },
+  unmet(state, flags, ctx) {
+    const spec = specInfo(ctx)
+    const known = decisionRows(st.readSpec(specIn(state, ctx))).map((c) => c[0])
+    if (typeof flags.decision !== 'string' || !known.includes(flags.decision)) refuse(`--decision ${flags.decision === true ? '<id>' : flags.decision} is not a row of ${spec.rel}'s Decisions table — known: ${known.join(', ') || 'none'}`)
+    if (typeof flags.why !== 'string' || !flags.why.trim()) refuse('unmet needs --why <text>: what keeps the Decision from being met')
+    return go(state, 'ESCALATE', { why: 'decision', from: state.step, unmet: { decision: flags.decision, text: flags.why.trim() } })
+  },
   escalate(state, flags, ctx) {
     const c = flags.choice
-    if (!CHOICES.includes(c)) refuse(`escalate needs one of ${CHOICES.join(' | ')}, e.g. --mark escalate retry`)
+    if (!CHOICES.includes(c)) refuse(`escalate needs one of ${offered(state).join(' | ')}, e.g. --mark escalate ${offered(state)[0]}`)
+    if (!offered(state).includes(c)) refuse(`escalate ${c} is not offered here — one of ${offered(state).join(' | ')}`)
     if (state.lane) pending.consumePending(ctx.root)
-    if (c === 'retry') return go(state, state.why === 'review' ? 'FIX' : 'REPAIR', { attempts: { repair: 0, fix: 0 }, opus: true })
+    if (c === 'revert') return revertSpecEdits(state, ctx)
+    if (c === 'retry') return go(state, state.why === 'decision' ? state.from : state.why === 'review' ? 'FIX' : 'REPAIR', { attempts: { repair: 0, fix: 0 }, opus: true })
     const s = specInfo(ctx)
     if (c === 'amend') return endRun(state, ctx, 'draft', `⏸️ ${s.id} set back to draft for amending`, { next: `/spec:plan ${s.rel}` })
-    const first = state.why === 'gate' ? redLine(state.gate.output_tail)
-      : (state.review.findings.find((f) => f.severity === 'blocking') || {}).summary || 'blocking review findings'
+    const first = state.why === 'decision' ? state.unmet.text
+      : state.why === 'gate' ? redLine(state.gate.output_tail)
+        : (state.review.findings.find((f) => f.severity === 'blocking') || {}).summary || 'blocking review findings'
     const payload = `/spec:fix ${s.rel} — ${first.trim()}`
     const q = st.readQueue(ctx.root)
     if (!q.items.some((i) => !i.done && i.payload === payload)) {
@@ -434,12 +540,14 @@ const steps = {
 }
 
 // One line under the checkpoint so the session sees what the mark led to.
-function afterMark(verb, state) {
+function afterMark(verb, state, ctx) {
   const g = state.gate
   if (['built', 'repaired', 'fixed'].includes(verb) && g) {
     if (g.status === 'red') return `gate: red — ${redLine(g.output_tail)}`
     return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}`
   }
+  if (verb === 'waiting') return `WAITING — ${state.spec} waits on ${state.waitingOn}; the lane stops here and fanout re-picks it once ${state.waitingOn} is done on trunk`
+  if (verb === 'unmet' && state.lane) return pending.stopLine(ctx.root)
   if (verb === 'reviewed' && state.gate && /^git commit was rejected/.test(state.gate.output_tail || '')) return `commit: rejected — ${redLine(state.gate.output_tail.split('\n').slice(1).join('\n'))}`
   if (verb === 'reviewed' && state.review) {
     const n = state.review.findings.filter((f) => f.severity === 'blocking').length

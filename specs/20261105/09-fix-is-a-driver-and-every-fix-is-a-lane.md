@@ -94,3 +94,7 @@ A fix, in session or as a lane, walks the same steps every time: reproduce, root
 - A8: Review dispositions for a fix are the run's own (blocking → FIX, `needs-decision` → the spec 06 question, advisory relayed); no separate fix-dispositions stop — if false: add a `fix-dispositions` question listing waive/reject per finding.
 - A9: No new pending-question kind: the fix stop is kind `decision`; the brief's five kinds map to existing kinds or refusals (Intent "I will not touch") — if false: add `fix-choices` to `pending.KINDS` and the contract's kinds table.
 - A10: Spec-less fix lanes order after spec-bound ones in queue order, and never before a runnable spec — if false: pure queue order across all three.
+
+## As built
+
+- spec/scripts/run.js:722 D3 names git.restoreFrom(base) for tracked files; the diff uses git reset --hard (HEAD when in-place), which also moves nothing but is a different primitive than the Decision names.

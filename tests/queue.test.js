@@ -116,5 +116,6 @@ test('a brief number names the brief item, not the row; 1 and 01 are the same br
   assert.match(q(d, 'done', '02').stdout, /docs\/roadmap\/02-y\.md/, 'done 02 closes brief 02, not the 2nd row')
   assert.match(q(d, 'done', '07').stdout, /done q3: 7/, 'padding does not matter')
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run specs/20261104/01-a.md', 'the spec was never touched')
-  assert.strictEqual(q(d, 'done', '03').status, 1, 'an unqueued brief number is no match, never row 3')
+  const r = q(d, 'done', '03'); assert.strictEqual(r.status, 0); assert.match(r.stdout, /nothing queued for brief 03/, 'an unqueued brief number is never row 3, and not an error either')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run specs/20261104/01-a.md', 'row 3 is untouched')
 })

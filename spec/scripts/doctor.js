@@ -41,12 +41,9 @@ function check(root) {
     process.stderr.write(`testCommand finished in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`)
     if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand}`)
     else if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
-    else if (r.status !== 0) f.push(`testCommand: exited ${r.status} — the suite is not green: ${(r.tail || '').trim().split('\n').pop()}`)
+    else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b|\bfail|error/i.test(l)) || ls.pop() || ''}`) }
   }
-  let ig = ''
-  try { ig = fs.readFileSync(path.join(root, '.gitignore'), 'utf8') } catch { /* none */ }
-  const have = new Set(ig.split('\n').map((l) => l.trim()))
-  for (const e of IGNORE) if (!have.has(e)) f.push(`gitignore: missing ${e}`)
+  for (const e of IGNORE) if (git.raw(['check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e}`)
   const ENDED = ['DONE', 'PARKED', 'AMENDED']
   const used = new Set() // worktrees a live run points at
   for (const d of walkRuns(path.join(root, 'specs'), [])) {

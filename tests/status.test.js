@@ -79,3 +79,18 @@ test('Next skips a brief that already has specs in progress, shows an unqueued r
   queue(d, 'add', 'specs/20261104/01-x.md'); queue(d, 'add', 'specs/20261104/02-y.md')
   assert.match(runNode('scripts/status.js', ['--root', d]).stdout, /2 parallel lanes ready — \/spec:fanout/)
 })
+
+test('a live fan-out owns Next; a run whose spec already merged (stopped at CONFLICTS) still counts as in flight', () => {
+  const d = tmpdir('status'); gitRepo(d)
+  const st = require(path.join(require('./helpers').SPEC, 'scripts/lib/state.js'))
+  w(d, 'specs/20261104/01-x.md', spec('done', 'n/a', ['a.js']))
+  queue(d, 'add', 'specs/20261104/01-x.md')
+  w(d, 'specs/20261104/01-x.run/state.json', JSON.stringify({ step: 'CONFLICTS', spec: 'specs/20261104/01-x.md' }))
+  let r = JSON.parse(run(d).stdout)
+  assert.strictEqual(r.next, '/spec:run specs/20261104/01-x.md', 'the sidecar, not the frontmatter, says it is in flight')
+  assert.strictEqual(JSON.parse(runNode('scripts/queue.js', ['list', '--json', '--root', d]).stdout).items.length, 1, 'the queue item is not closed while the run is in flight')
+  st.writeFanout(d, { step: 'WAIT', batch: [] })
+  r = JSON.parse(run(d).stdout)
+  assert.deepStrictEqual([r.next, r.lanes], ['/spec:fanout', []])
+  assert.match(r.verdict, /fan-out is in flight/)
+})

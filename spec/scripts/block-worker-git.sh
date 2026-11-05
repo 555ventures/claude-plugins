@@ -94,7 +94,7 @@ while IFS=$'\t' read -r verb harmless d; do
     lane="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$d")"
     {
       echo "BLOCKED: git $verb inside a spec lane worktree ($lane) — agents never run git here; /spec:run commits and merges at its own steps."
-      echo "  stale marker (no run in flight)? remove $g/spec-lane-open"
+      echo "  stale marker (no run in flight)? rm '$g/spec-lane-open'"
     } >&2
     exit 2
   fi
@@ -106,7 +106,7 @@ while IFS=$'\t' read -r verb harmless d; do
     if [ -f "$m" ]; then
       {
         echo "BLOCKED: git $verb while a spec lane is open ($m) — it can discard work in this checkout; the driver owns git until the run ends."
-        echo "  stale marker (no run in flight)? rm $m"
+        echo "  stale marker (no run in flight)? rm '$m'"
       } >&2
       exit 2
     fi

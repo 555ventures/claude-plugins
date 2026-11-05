@@ -2,7 +2,7 @@
 // status.js — the four-part status block: roadmap, next (+ parallel lanes), questions, verdict.
 const fs = require('fs')
 const path = require('path')
-const { readQueue, readSpec, readConfig, readJson, runPath } = require('./lib/state')
+const { readQueue, readSpec, readConfig, readJson, runPath, readFanout } = require('./lib/state')
 const { pasteLine, pending, reconcile, briefNo } = require('./queue')
 
 const ls = (d) => { try { return fs.readdirSync(d) } catch { return [] } }
@@ -64,12 +64,14 @@ function build(root) {
     if (loose) { head = i; paste = `/spec:queue add ${loose.path}`; break }
   }
   // A run in flight, queued or started by hand, is the thing to finish first.
-  const running = specs.find((s) => s.spec.frontmatter.status !== 'done' && fs.existsSync(runPath(path.join(root, s.path))))
+  const running = specs.find((s) => fs.existsSync(runPath(path.join(root, s.path))) && !(readJson(runPath(path.join(root, s.path))) || {}).ended)
+  const fan = readFanout(root)
+  if (!head && !running) { const loose = specs.find((s) => s.spec.frontmatter.status === 'hardened' && !queued(s.path)); if (loose) paste = `/spec:queue add ${loose.path}` }
   const parallel = lanes(root, q, readConfig(root).lanes)
   const qs = questions(root)
   const verdict = qs.length ? `🟡 waiting on you — ${qs.length} pending question${qs.length > 1 ? 's' : ''}`
-    : running ? `🟢 a run is in flight · /spec:run ${running.path}` : head ? `🟢 next is ready · ${paste}` : '⚪ queue empty'
-  const res = { roadmap: roadmap(root, specs, q), next: running ? `/spec:run ${running.path}` : paste, lanes: parallel, questions: qs, verdict }
+    : fan ? `🟢 a fan-out is in flight · /spec:fanout` : running ? `🟢 a run is in flight · /spec:run ${running.path}` : paste ? `🟢 next is ready · ${paste}` : '⚪ queue empty'
+  const res = { roadmap: roadmap(root, specs, q), next: fan ? '/spec:fanout' : running ? `/spec:run ${running.path}` : paste, lanes: fan ? [] : parallel, questions: qs, verdict }
   return res
 }
 

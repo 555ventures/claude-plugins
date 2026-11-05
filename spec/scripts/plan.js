@@ -25,7 +25,8 @@ function create(root, slug) {
 }
 
 function lock(root, arg, confirmed) {
-  const file = path.resolve(root, arg || '')
+  const typed = arg || ''
+  const file = fs.existsSync(path.resolve(root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(root, typed) : path.resolve(process.cwd(), typed)
   if (!fs.existsSync(file)) throw new Refusal(`no such spec: ${arg}`)
   const s = readSpec(file)
   const missing = REQUIRED.filter((n) => !Object.keys(s.sections).some((k) => k === n || k.startsWith(n + ' ') || k.startsWith(n + '(')))

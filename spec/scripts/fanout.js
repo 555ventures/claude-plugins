@@ -114,7 +114,7 @@ function derivePlan(ctx) {
 // ---- DISPATCH ---------------------------------------------------------------------------------
 
 // The Agent tool takes no working directory, so the lane's prompt points run.js at its worktree.
-const REBASE = 'a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git rebase --continue`, re-run the test command, then stop'
+const REBASE = 'a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git rebase --continue`, run the test command until green, then stop'
 function agentLine(root, config, lane) {
   const seat = config.seats.orchestrator || {}
   const model = seat.model || 'opus'
@@ -158,8 +158,11 @@ function deriveWait(s, ctx) {
   }
   const back = s.batch.filter((l) => l.status === 'sent-back')
   if (back.length) return { name: 'WAIT', body: dispatchBody(ctx.root, back, 'These lanes resolved a rebase conflict; they gate and review the resolved diff before landing:'), mark: 'resent', accepts: ['dismissed', 'returned'] }
-  const lines = ['Lanes (status · run step):', ...s.batch.map((l) => `  lane ${l.id} — ${l.stem}: ${l.status} · ${laneRunStep(ctx.root, l)}`)]
-  lines.push('', 'As each lane agent returns, mark it returned. A lane that stopped without writing a pending question: add --stopped "<reason>".')
+  const config = st.readConfig(ctx.root)
+  const lines = ['Lanes (status · run step):', ...s.batch.map((l) => `  lane ${l.id} — ${l.stem}: ${l.status}${l.status === 'merged' ? '' : ` · ${laneRunStep(ctx.root, l)}`}`)]
+  lines.push('', 'As each lane agent returns, mark it returned. A lane that stopped without writing a pending question: add --stopped "<reason>".',
+    'After a crash or /clear, re-send any lane whose agent is no longer running (/spec:run resumes where it stopped):',
+    ...s.batch.filter((l) => l.status === 'dispatched').map((l) => '  ' + agentLine(ctx.root, config, l)))
   return { name: 'WAIT', body: lines.join('\n'), mark: 'returned --lane <id> [--stopped "<reason>"]', accepts: ['dismissed'] }
 }
 

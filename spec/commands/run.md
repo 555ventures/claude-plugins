@@ -3,7 +3,7 @@ description: Take one hardened spec through build, review and merge in its own w
 argument-hint: <spec path> [--in-place]
 model: opus
 effort: medium
-allowed-tools: Bash(node *), Read, Grep, Glob, Agent, AskUserQuestion
+allowed-tools: Bash(node *), Bash(git add *), Bash(GIT_EDITOR=true git rebase --continue), Read, Edit, Grep, Glob, Agent, AskUserQuestion
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
@@ -18,6 +18,7 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
   on them.
 - **ESCALATE**: ask the printed question and mark `escalate <choice>`.
 - **CONFLICTS**: ask; on `resolve`, fix each file by both sides' intent in the main checkout
-  and mark `conflicts-resolved`.
+  and mark `conflicts-resolved`. A lane at **MERGE_READY** with a rebase in progress resolves
+  it as printed, then stops.
 
 As a lane, stop and return on `PENDING_QUESTION`.

@@ -2,7 +2,7 @@
 // queue.js — the session queue: next | list | add | move | done | show. Storage: lib/state.js.
 const fs = require('fs')
 const path = require('path')
-const { readQueue, writeQueue, readSpec } = require('./lib/state')
+const { readQueue, writeQueue, readSpec, readRun } = require('./lib/state')
 
 const BRIEF_RE = /^(?:docs\/roadmap\/)?(\d+[a-z]?)(?:-[^/]*\.md)?$/
 
@@ -41,7 +41,8 @@ function toIso(v) {
 // A spec item whose spec is done counts as done; the timestamp is written with the next write.
 function reconcile(root, q) {
   for (const i of q.items) if (i.added !== undefined) i.added = toIso(i.added)
-  for (const i of q.items) if (!i.done && i.kind === 'spec' && specStatus(root, i.payload) === 'done') i.done = new Date().toISOString()
+  const inFlight = (p) => { const r = readRun(path.join(root, p)); return r && !r.ended }
+  for (const i of q.items) if (!i.done && i.kind === 'spec' && specStatus(root, i.payload) === 'done' && !inFlight(i.payload)) i.done = new Date().toISOString()
   return q
 }
 
@@ -117,6 +118,7 @@ function main(argv) {
     out(`moved ${it.id} to ${n}`, it)
   } else if (cmd === 'done' || cmd === 'show') {
     const it = resolve(q, arg)
+    if (!it && cmd === 'done' && /^0\d+[a-z]?$/.test(arg)) return out(`nothing queued for brief ${arg}`, { none: true }), 0
     if (!it) return fail(`no item matches "${arg}"`)
     if (cmd === 'show') return out(it.payload, it), 0
     it.done = new Date().toISOString()

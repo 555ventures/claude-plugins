@@ -242,7 +242,7 @@ test('a rebase conflict sends the lane back with the rebase in progress; resolve
   assert.ok(fs.existsSync(path.join(gd, 'rebase-merge')) || fs.existsSync(path.join(gd, 'rebase-apply')), 'the rebase is left in progress in the lane worktree')
   const out = h.ok().stdout
   assert.ok(out.includes(`/spec:run ${specPath('03-gamma')} --root ${h.wt('03-gamma')} — a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent`), 'the re-dispatch prompt carries the rebase instruction')
-  assert.match(out, /re-run the test command, then stop/)
+  assert.match(out, /run the test command until green, then stop/)
   assert.match(out, /lane 2 conflicts: src\/a\.js/)
   h.ok('--mark', 'resent')
   assert.strictEqual(h.step(), 'WAIT')
@@ -322,4 +322,16 @@ test('MERGE refuses while the main checkout is off trunk instead of fast-forward
   h.g('checkout', '-q', 'main')
   h.ok()
   assert.strictEqual(h.step(), 'REPORT')
+})
+
+test('WAIT prints the Agent line of every lane still out, so a crashed session can re-send them', () => {
+  const h = host()
+  dispatchTwo(h)
+  const out = h.ok().stdout
+  assert.match(out, /re-send any lane whose agent is no longer running/)
+  assert.match(out, new RegExp(`Agent\\(\\{[^\\n]*lane 1: 01-alpha[^\\n]*/spec:run ${specPath('01-alpha').replace(/[/.]/g, '\\$&')} --root`))
+  assert.match(out, /lane 2: 02-beta/)
+  h.finish('01-alpha', 'src/a.js'); h.ok('--mark', 'returned', '--lane', '1')
+  const again = h.ok().stdout
+  assert.ok(!/lane 1: 01-alpha[^\n]*--root/.test(again) && /lane 2: 02-beta[^\n]*--root/.test(again), 'only lanes still out are re-sent')
 })

@@ -78,3 +78,10 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   assert.ok(f.some((x) => /in flight: \.claude\/worktrees\/spec-03-busy/.test(x)), 'uncommitted work is never a leftover')
   assert.ok(f.some((x) => /leftover worktree: \.claude\/worktrees\/spec-04-idle — git worktree remove/.test(x)))
 })
+
+test('gitignore is judged by git: a broader pattern that covers the sidecars is not missing', () => {
+  const d = setup({ testCommand: 'true' })
+  fs.writeFileSync(path.join(d, '.gitignore'), '*.run/\n.claude/\n')
+  const f = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout).findings
+  assert.ok(!f.some((x) => /gitignore: missing/.test(x)), f.join('\n'))
+})

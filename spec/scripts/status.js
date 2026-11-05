@@ -295,6 +295,8 @@ function main(argv) {
     return r.code
   }
   const { res, view } = derive(root)
+  // Redraw from the top of the viewport, as v7 did: only on a TTY so piped output stays escape-free.
+  if (!flags.json && process.stdout.isTTY) process.stdout.write('\x1Bc')
   console.log(flags.json ? JSON.stringify(res, null, 2) : render(res, view, flags.all))
   return 0
 }

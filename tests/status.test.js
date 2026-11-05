@@ -338,3 +338,16 @@ test('unqueued hardened specs: the count and every /spec:queue add line are prin
   queue(d, 'add', 'specs/20261104/03-c.md')
   assert.ok(!/hardened specs are not queued/.test(text(d).stdout), 'a single unqueued spec is left to the Next paste and --all')
 })
+
+test('the dashboard redraws from the top on a terminal only, as v7 did: a TTY run starts with the reset, piped, --json and NN runs never carry it', () => {
+  const { execFileSync } = require('child_process')
+  const { SPEC } = require('./helpers')
+  const d = tmpdir('status-tty'); gitRepo(d)
+  w(d, 'docs/roadmap/01-a.md', '# 01 — A\n')
+  // `script` (util-linux) gives the child a real pseudo-terminal; a missing binary fails here loudly.
+  const tty = (...a) => execFileSync('script', ['-qec', [process.execPath, path.join(SPEC, 'scripts/status.js'), ...a, '--root', d].map((s) => `'${s}'`).join(' '), '/dev/null'], { encoding: 'utf8' })
+  assert.ok(tty().startsWith('\x1Bc'), 'a terminal run clears the screen before the dashboard')
+  assert.ok(!tty('--json').includes('\x1Bc'), '--json never clears')
+  assert.ok(!tty('01').includes('\x1Bc'), 'the NN line never clears')
+  assert.ok(!runNode('scripts/status.js', ['--root', d]).stdout.includes('\x1Bc'), 'piped output stays escape-free')
+})

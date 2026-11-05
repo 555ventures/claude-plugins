@@ -229,3 +229,52 @@ test('AC-20261105-04-9 a bracketless depends_on splits like the bracketed form; 
   assert.strictEqual(fm('x').status, 'x')
   assert.strictEqual(S.parseFrontmatter('---\nstatus: a, b\n---\n').frontmatter.status, 'a, b', 'only depends_on splits')
 })
+
+// ---- spec 20261105/06: the client says yes ------------------------------------------------------
+
+test('AC-20261105-06-2 parseIntent reads the Client sign-off line: none is null, anything else is the text; frontmatter breaking is a boolean', () => {
+  const doc = (line, fm = '') => `---\nstatus: draft\n${fm}---\n# T\n\n## Intent\n- You asked: x\n${line}\n`
+  const at = (text) => S.readSpec(writeSpec(tmpdir('signoff'), text))
+  assert.strictEqual(at(doc('- Client sign-off: none')).intent.signoff, null)
+  assert.strictEqual(at(doc('- Client sign-off: none — JJ wrote the brief')).intent.signoff, null, 'none followed by a reason is still none')
+  assert.strictEqual(at(doc('- Client sign-off: None | x — x')).intent.signoff, null)
+  assert.strictEqual(at(doc('- Client sign-off: cut-off time — JJ chose 18:00')).intent.signoff, 'cut-off time — JJ chose 18:00')
+  assert.strictEqual(at(doc('')).intent.signoff, null, 'no line reads as null')
+  assert.strictEqual(at(doc('', 'breaking: true\n')).frontmatter.breaking, true)
+  assert.strictEqual(at(doc('', 'breaking: false\n')).frontmatter.breaking, false)
+})
+
+test('AC-20261105-06-3 parseAssumptions reads A<n> lines: ask, ask with options, or a written fallback', () => {
+  const rows = S.parseAssumptions([
+    '- A1: the table is empty — if false: delete the rows in the migration',
+    '- A2: old rows exist (D4) — if false: ask: keep the old rows | delete them',
+    '- A3: a plain question — if false: ask',
+    '- A4: **bold** — **if false:** ask: one | two | three',
+    'not an assumption',
+  ].join('\n'))
+  assert.deepStrictEqual(rows.map((r) => r.id), ['A1', 'A2', 'A3', 'A4'])
+  assert.deepStrictEqual(rows[0], { id: 'A1', text: 'the table is empty', line: '- A1: the table is empty — if false: delete the rows in the migration', arm: { ask: false, text: 'delete the rows in the migration', options: [] } })
+  assert.deepStrictEqual(rows[1].arm, { ask: true, text: 'ask: keep the old rows | delete them', options: ['keep the old rows', 'delete them'] })
+  assert.strictEqual(rows[1].text, 'old rows exist (D4)')
+  assert.deepStrictEqual(rows[2].arm, { ask: true, text: 'ask', options: [] })
+  assert.deepStrictEqual(rows[3].arm.options, ['one', 'two', 'three'])
+})
+
+test('AC-20261105-06-8 globToRe: ** crosses directories, * and ? stay inside one, and the match is root-anchored', () => {
+  const m = (glob, f) => S.globToRe(glob).test(f)
+  assert.ok(m('apps/server/src/db/**', 'apps/server/src/db/schema.ts'))
+  assert.ok(m('apps/server/src/db/**', 'apps/server/src/db/deep/er/x.ts'))
+  assert.ok(!m('apps/server/src/db/**', 'apps/web/x.ts'))
+  assert.ok(m('src/*.ts', 'src/a.ts') && !m('src/*.ts', 'src/sub/a.ts'))
+  assert.ok(m('src/?.ts', 'src/a.ts') && !m('src/?.ts', 'src/ab.ts'))
+  assert.ok(m('apps/**/schema.ts', 'apps/schema.ts') && m('apps/**/schema.ts', 'apps/a/b/schema.ts'))
+  assert.ok(!m('db/**', 'x/db/a.ts'), 'root-relative: no match below another directory')
+  assert.ok(!m('a.b', 'axb'), 'a dot is a dot')
+})
+
+test('AC-20261105-06-8 readConfig defaults askPaths to an empty list', () => {
+  assert.deepStrictEqual(S.readConfig(tmpdir('cfg')).askPaths, [])
+  const d = tmpdir('cfg2'); fs.mkdirSync(path.join(d, '.claude'))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ askPaths: ['a/**'] }))
+  assert.deepStrictEqual(S.readConfig(d).askPaths, ['a/**'])
+})

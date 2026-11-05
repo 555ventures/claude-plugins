@@ -3,10 +3,13 @@
 // validates it, locks it and (in a git repo) commits it on the current branch, so lanes branch with it.
 const fs = require('fs')
 const path = require('path')
-const { readSpec, writeStatus, writeText, readText, readQueue } = require('./lib/state')
+const { readSpec, writeStatus, writeText, readText, readQueue, decisionRows } = require('./lib/state')
 const git = require('./lib/git')
 
 const REQUIRED = ['Intent', 'Goal', 'Decisions', 'File Plan', 'Acceptance Criteria', 'Assumptions']
+
+// A Decisions row that takes something away from users needs the client's word: `[asked:]` on the row, or the Intent line.
+const RESTRICT_RE = /\b(cannot|can't|no longer|only (?:an? )?\w+ (?:can|may)|immutable|read-only|requires? (?:a )?reason|hidden from|removed from|locked out)\b/i
 
 class Refusal extends Error { constructor(m) { super(m); this.exit = 2 } }
 
@@ -39,6 +42,15 @@ function lock(root, arg, confirmed) {
   const left = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => prose.includes(t))
   if (left.length) throw new Refusal(`template placeholders left: ${left.join(' ')} — fill them in first`)
   if (s.frontmatter.architecture === true && !confirmed) throw new Refusal("architecture change — needs the user's yes; re-run with --confirmed")
+  // A v7-era spec without an Intent section is unaffected.
+  const intentKey = Object.keys(s.sections).find((k) => k === 'Intent' || k.startsWith('Intent '))
+  if (intentKey !== undefined && s.intent.signoff === null) {
+    const rows = decisionRows(s.sections[Object.keys(s.sections).find((k) => k === 'Decisions' || k.startsWith('Decisions ') || k.startsWith('Decisions(')) || ''])
+    const hit = rows.find((c) => RESTRICT_RE.test(c[1]) && !/\[(asked|guards):/.test(c[1]))
+    const reason = s.frontmatter.breaking === true ? 'the spec is marked breaking: true'
+      : hit ? `Decisions row ${hit[0]} restricts users ("${hit[1].length > 80 ? hit[1].slice(0, 77) + '...' : hit[1]}")` : null
+    if (reason) throw new Refusal(`client sign-off needed: ${reason} — ask, then fill the Intent line`)
+  }
   writeStatus(file, 'hardened')
   const rel = path.relative(root, file)
   if (git.raw(['rev-parse', '--git-dir'], root).status === 0) {

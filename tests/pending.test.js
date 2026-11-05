@@ -42,3 +42,16 @@ test('the lane marker lives in the private git dir of the worktree only', () => 
   P.unmarkLane(wt)
   assert.ok(!P.isLane(wt), 'unmark must clear the marker')
 })
+
+test('AC-20261105-06-11 a pending question stores its kind and readPending returns it; an unknown kind is refused; no kind reads as escalate', () => {
+  for (const kind of P.KINDS) {
+    const root = tmpdir('pqk')
+    P.writePending(root, { ...Q, kind })
+    assert.strictEqual(P.readPending(root).kind, kind)
+  }
+  assert.deepStrictEqual(P.KINDS, ['escalate', 'unmet', 'assumption', 'decision', 'scope', 'spec-edit', 'conflict'])
+  assert.throws(() => P.writePending(tmpdir('pqk'), { ...Q, kind: 'whim' }), (e) => e.exit === 2 && /escalate/.test(e.message), 'the valid kinds are named')
+  const root = tmpdir('pqk')
+  P.writePending(root, Q)
+  assert.strictEqual(P.readPending(root).kind, 'escalate')
+})

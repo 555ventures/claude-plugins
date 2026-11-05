@@ -22,8 +22,11 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   A stopped or waiting lane keeps its work in a `wip(spec):` commit. `dismissed --lane <id> --discard`
   removes the worktree and branch and prints the wip sha; `dismissed` is also accepted at DISPATCH,
   MERGE_RED and REPORT.
-- **RELAY**: ask every lane question in one batch, then run each printed `answered` line, or the
-  printed `waiting` line when the lane stopped for a dependency.
+- **RELAY**: the questions are printed grouped by kind (`[assumption]`, `[decision]`, `[unmet]`,
+  `[scope]`, `[spec-edit]`, `[escalate]`, `[conflict]`), recommended option first. Relay every lane
+  question verbatim in one AskUserQuestion per RELAY (at most 4 per call), then run each printed
+  `answered` line with the user's pick, or the printed `waiting` line when the lane stopped for a
+  dependency. The orchestrator never answers for the user; only `📌 Auto-picked` lines are unrelayed.
 - **MERGE**: whatever is left lands in batch order; a lane whose rebase onto trunk conflicts goes
   back; send its printed Agent call, mark `resent`. **MERGE_RED**: repair the trunk gate, commit,
   mark `gate-repaired` (a flaky failure needs no commit: re-run it as it is). A lane whose base is

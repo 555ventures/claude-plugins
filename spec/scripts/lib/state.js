@@ -44,6 +44,7 @@ const DEFAULTS = {
   walkthrough: { baseUrl: '', project: '', tokenEnv: 'WALKTHROUGH_TOKEN' },
   prototype: { url: 'http://localhost:3000', bootCommand: 'npm run dev', overlay: 'src/main.tsx' },
   release: { deployCommand: '', stagingUrl: '', e2eCommand: '', promoteCommand: '' },
+  askPaths: [], // root-relative globs: an out-of-plan edit under one stops the run with a question
 }
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v)
@@ -109,7 +110,7 @@ function section(sections, name) {
 }
 
 function parseIntent(text) {
-  const intent = { asked: '', build: [], notTouch: [], architecture: false }
+  const intent = { asked: '', build: [], notTouch: [], architecture: false, signoff: null }
   let list = null
   for (const line of text.split('\n')) {
     const top = /^- +([^:]+):\s*(.*)$/.exec(line)
@@ -120,6 +121,7 @@ function parseIntent(text) {
       if (key.startsWith('you asked')) intent.asked = val
       else if (key.startsWith('i will build')) { list = intent.build; if (val) list.push(val) }
       else if (key.startsWith('i will not touch')) { list = intent.notTouch; if (val) list.push(val) }
+      else if (key.startsWith('client sign-off')) intent.signoff = /^none\b/i.test(val) || !val ? null : val
       else if (key.startsWith('architecture')) {
         const y = /^yes\b\s*(?:[—–-]+\s*)?(.*)$/i.exec(val)
         intent.architecture = y ? (y[1].trim() || true) : false
@@ -189,6 +191,41 @@ function parseAcs(text) {
     else open = false
   }
   return acs
+}
+
+// `- A<n>: <text> — if false: <arm>`; arm is `ask`, `ask: <option> | <option>…`, or a written fallback.
+function parseAssumptions(text) {
+  const out = []
+  for (const line of String(text || '').split('\n')) {
+    const m = /^- +(A\d+):\s*(.*?)\s+[—–-]+\s+\**if false:?\**\s*(.*?)\s*$/i.exec(line.trim())
+    if (!m) continue
+    const arm = m[3]
+    const ask = /^ask\b/i.test(arm)
+    const options = ask ? arm.replace(/^ask\s*:?\s*/i, '').split('|').map((o) => o.trim()).filter(Boolean) : []
+    out.push({ id: m[1], text: m[2], line: line.trim(), arm: { ask, text: arm, options } })
+  }
+  return out
+}
+
+// A root-relative glob as a RegExp: `**` crosses directories (`**/` may be empty), `*` and `?` stay in one.
+function globToRe(glob) {
+  let re = ''
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]
+    if (c === '*' && glob[i + 1] === '*') {
+      if (glob[i + 2] === '/') { re += '(?:.*/)?'; i += 2 } else { re += '.*'; i += 1 }
+    } else if (c === '*') re += '[^/]*'
+    else if (c === '?') re += '[^/]'
+    else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  }
+  return new RegExp('^' + re + '$')
+}
+
+// A Decisions table as rows of cells; the header and template leftovers (a cell exactly <placeholder>) are dropped.
+function decisionRows(text) {
+  return String(text || '').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l))
+    .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|')))
+    .filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !c.some((x) => /^<[^>]+>$/.test(x)))
 }
 
 function readSpec(specPath) {
@@ -289,7 +326,7 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 module.exports = {
   writeText, writeJson, readJson, readText,
   DEFAULTS, readConfig, writeConfig, configPath,
-  readSpec, writeStatus, parseFrontmatter,
+  readSpec, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
   gitCommonDir, readQueue, writeQueue, readFanout, writeFanout,
   readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,

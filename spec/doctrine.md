@@ -36,12 +36,20 @@ its remedy. Every command ends with one report rendered by `lib/report.js`.
 
 ## When to ask
 
-Only before anything irreversible (production promote, deleting unmerged work, destructive
-git), for a yes on an `architecture: true` Intent (asked once, at `plan.js lock --confirmed`;
-never at run), or when a step says to. Use AskUserQuestion, recommended option first. Otherwise
-decide; print `📌 Auto-picked <choice> — <reason> (veto anytime)`. A lane never asks: its driver writes the
-question to `.claude/pending-question.json` for the orchestrator to relay. A lane never edits a spec;
-an unmet Decision is a question (`unmet`), not an edit.
+One test for every stop: would the client need to sign this off? If a developer would take it
+to the client (architecture, behaviour, design, direction), ask; otherwise decide. The real
+forks `/spec:plan` names are asked once, batched, before lock; product facts are asked, never
+derived. Also ask before anything irreversible (production promote, deleting unmerged work,
+destructive git), for a yes on an `architecture: true` Intent (asked once, at
+`plan.js lock --confirmed`), or when a step says to. A builder never improvises on a fork; a
+lane's driver writes the question to `.claude/pending-question.json` and the orchestrator relays
+every lane question verbatim in one AskUserQuestion per RELAY. The orchestrator never answers for
+the user; only `📌 Auto-picked` lines are unrelayed. A lane never edits a spec, and only the user
+waives a Decision (`amend`): an unmet Decision or false Assumption is a question (`unmet`).
+Otherwise decide and print `📌 Auto-picked <choice> — <reason> (veto anytime)`.
+
+Question style: plain words, every option carrying its consequence, the recommended option first,
+readable cold in ten seconds by someone with no repo context.
 
 ## Glossary
 
@@ -51,4 +59,4 @@ an unmet Decision is a question (`unmet`), not an edit.
 - **seat**: a role with a model and effort.
 - **checkpoint**: the line after an accepted mark.
 - **Intent block**: the top of every spec (asked, will build, won't touch, architecture
-  change), given verbatim to builder and reviewer with the Decisions table.
+  change, client sign-off), given verbatim to builder and reviewer with the Decisions table.

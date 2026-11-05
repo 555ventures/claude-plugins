@@ -139,8 +139,8 @@ test('briefs: a v7 spec with only ## Goal fills Intent from it; a Decisions row 
   const build = ok(h.run())
   assert.ok(build.includes('## Intent\nfeature.txt exists.'), 'the build brief falls back to Goal under the Intent heading:\n' + build)
   assert.ok(build.includes('- D3: renders <MessageThread items={x} /> — because'), 'a decision mentioning JSX reaches the builder:\n' + build)
-  const OTHER = 'Other sections (File Plan, Contracts, UI, Behavior, Assumptions) are not printed here — read them in the spec file.'
-  assert.ok(build.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done THE SYSTEM SHALL have feature.txt.\n\n' + OTHER), 'the build brief points at the unprinted sections after the ACs:\n' + build)
+  const OTHER = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
+  assert.ok(build.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done THE SYSTEM SHALL have feature.txt.\n\n## Assumptions\n- none\n\n' + OTHER), 'the build brief prints Assumptions, then points at the unprinted sections after the ACs:\n' + build)
   assert.ok(!build.includes('<id>') && !build.includes('<decision>'), 'a template placeholder row is dropped')
   fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
   ok(h.run('--mark', 'built'))
@@ -148,7 +148,7 @@ test('briefs: a v7 spec with only ## Goal fills Intent from it; a Decisions row 
   assert.strictEqual(j.step, 'REVIEW')
   assert.ok(j.body.includes('## Intent\nfeature.txt exists.'), 'the review brief falls back to Goal too')
   assert.ok(j.body.includes('- D3: renders <MessageThread items={x} /> — because') && !j.body.includes('<id>'), 'the reviewer brief keeps the JSX decision and drops the placeholder row')
-  assert.ok(j.body.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done THE SYSTEM SHALL have feature.txt.\n\n' + OTHER), 'the review brief points at the unprinted sections after the ACs:\n' + j.body)
+  assert.ok(j.body.includes('## Acceptance Criteria\n- AC-20261104-01-1: WHEN the build is done THE SYSTEM SHALL have feature.txt.\n\n## Assumptions\n- none\n\n' + OTHER), 'the review brief points at the unprinted sections after the ACs:\n' + j.body)
   assert.ok(j.body.includes("Files changed outside the File Plan: none\nThe spec's frontmatter status line changes during the run; that is bookkeeping, not a finding."), 'the review brief tells the reviewer the status flip is bookkeeping:\n' + j.body)
 })
 
@@ -858,4 +858,272 @@ test('AC-20261105-08-14 AC-20261105-08-15 OPEN copies untracked laneFiles into t
   assert.ok(!/\.env/.test(h.g('-C', h.wt, 'status', '--porcelain')), 'git status in the worktree does not list the copied file')
   assert.match(r.stderr, /laneFiles: skipped a\.txt \(tracked\)/)
   assert.match(r.stderr, /laneFiles: skipped nope\.env \(missing\)/)
+})
+
+// ---- spec 20261105/06: the client says yes ------------------------------------------------------
+
+const A_DOC = SPEC_DOC.replace(/\n$/, '') + `
+
+## Assumptions
+
+- A1: the table is empty — if false: delete the rows in the migration
+- A2: old rows exist (D1) — if false: ask: keep the old rows | delete them
+- A3: the cache is warm — if false: ask
+`
+const a_fixture = (extra = {}) => fixture({ files: { [REL]: A_DOC }, ...extra })
+const laneBuild = (h) => { h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt); ok(h.runIn(h.wt)) }
+const specAt = (h, root = h.wt) => fs.readFileSync(path.join(root, REL), 'utf8')
+
+test('AC-20261105-06-3 both briefs print an ## Assumptions block with every A<n> line; OTHER_SECTIONS no longer names Assumptions', () => {
+  const h = a_fixture()
+  const build = ok(h.run())
+  assert.ok(build.includes('## Assumptions\n- A1: the table is empty — if false: delete the rows in the migration\n- A2: old rows exist (D1) — if false: ask: keep the old rows | delete them\n- A3: the cache is warm — if false: ask\n'), build)
+  assert.ok(build.indexOf('## Acceptance Criteria') < build.indexOf('## Assumptions') && build.indexOf('## Assumptions') < build.indexOf('Other sections'), 'after the ACs, before the pointer')
+  assert.ok(!/Other sections \([^)]*Assumptions/.test(build), 'the pointer does not name Assumptions')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  const rev = JSON.parse(ok(h.run('--json'))).body
+  assert.ok(rev.includes('## Assumptions\n- A1: the table is empty') && rev.includes('- A3: the cache is warm'), 'the reviewer brief prints them too:\n' + rev)
+})
+
+test('AC-20261105-06-4 unmet --assumption writes an assumption question with the arm options and amend last; unknown ids and written fallbacks are refused with the remedy', () => {
+  const h = a_fixture()
+  laneBuild(h)
+  const unknown = h.runIn(h.wt, '--mark', 'unmet', '--assumption', 'A9')
+  assert.strictEqual(unknown.status, 2); assert.match(unknown.stderr, /A9 is not an Assumption of .*known: A1, A2, A3/)
+  const fallback = h.runIn(h.wt, '--mark', 'unmet', '--assumption', 'A1')
+  assert.strictEqual(fallback.status, 2); assert.ok(fallback.stderr.includes('A1 has a written fallback: delete the rows in the migration — apply it'), fallback.stderr)
+  assert.strictEqual(pending.readPending(h.wt), null, 'a refusal writes no question')
+  const out = ok(h.runIn(h.wt, '--mark', 'unmet', '--assumption', 'A2', '--why', '3 rows found'))
+  assert.match(out, /PENDING_QUESTION/)
+  const q = pending.readPending(h.wt)
+  assert.strictEqual(q.kind, 'assumption')
+  assert.ok(q.question.includes('20261104/01 found A2 false: old rows exist (D1) — 3 rows found. How should it continue?'), q.question)
+  assert.deepStrictEqual(q.options.map((o) => o.label), ['keep the old rows', 'delete them', 'amend'])
+  assert.deepStrictEqual([h.state(h.wt).step, h.state(h.wt).from], ['ESCALATE', 'BUILD'])
+
+  const bare = a_fixture()
+  laneBuild(bare)
+  ok(bare.runIn(bare.wt, '--mark', 'unmet', '--assumption', 'A3'))
+  assert.deepStrictEqual(pending.readPending(bare.wt).options.map((o) => o.label), ['retry', 'park', 'amend'], 'a bare ask arm offers the usual three')
+})
+
+test('AC-20261105-06-5 answering an assumption question appends a Decisions row, returns to the step on opus, and the gate does not call the row a spec edit', () => {
+  const h = a_fixture()
+  laneBuild(h)
+  ok(h.runIn(h.wt, '--mark', 'unmet', '--assumption', 'A2'))
+  pending.answerPending(h.wt, 'keep the old rows')
+  assert.match(ok(h.runIn(h.wt)), /^▶ BUILD/, 'back to the step it came from')
+  const s = h.state(h.wt)
+  assert.deepStrictEqual([s.step, s.opus, s.attempts, s.rulings], ['BUILD', true, { repair: 0, fix: 0 }, ['D2']])
+  assert.ok(specAt(h).includes('| D2 | A2 ruled: keep the old rows | asked at BUILD |'), specAt(h))
+  assert.strictEqual(pending.readPending(h.wt), null, 'the answer is consumed')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  assert.match(ok(h.runIn(h.wt, '--mark', 'built')), /BUILD → REVIEW/, 'the ruling row is not a spec-edit stop')
+  assert.ok(!/spec text edited/.test(JSON.parse(ok(h.runIn(h.wt, '--json'))).body), 'nor does the reviewer brief call it a spec edit')
+
+  // a builder-made Decisions edit still escalates, ruling or no
+  const h2 = a_fixture()
+  laneBuild(h2)
+  ok(h2.runIn(h2.wt, '--mark', 'unmet', '--assumption', 'A2'))
+  pending.answerPending(h2.wt, 'delete them')
+  ok(h2.runIn(h2.wt))
+  fs.writeFileSync(path.join(h2.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h2.wt, REL), specAt(h2).replace('plain text', 'rich text'))
+  assert.match(ok(h2.runIn(h2.wt, '--mark', 'built')), /BUILD → ESCALATE/)
+  assert.strictEqual(h2.state(h2.wt).why, 'spec-edit')
+})
+
+test('AC-20261105-06-5 outside a lane the assumption question is printed with the arm options and the label answers it', () => {
+  const h = a_fixture()
+  ok(h.run())
+  ok(h.run('--mark', 'unmet', '--assumption', 'A2'))
+  const out = ok(h.run())
+  assert.match(out, /Ask the user ONE question[\s\S]*A2 false/)
+  assert.match(out, /- keep the old rows —[\s\S]*- delete them —[\s\S]*- amend —/)
+  assert.match(out, /--mark escalate <keep the old rows\|delete them\|amend>/)
+  assert.strictEqual(h.run('--mark', 'escalate', 'retry').status, 2, 'only the offered labels answer')
+  assert.match(ok(h.run('--mark', 'escalate', 'delete them')), /ESCALATE → BUILD/)
+  assert.ok(specAt(h, h.wt).includes('A2 ruled: delete them'))
+})
+
+const ND = [{ severity: 'needs-decision', file: 'feature.txt', line: 1, summary: 'hid the archived rows', evidence: 'filter(a => !a.archived)' }]
+function atReview(h) { ok(h.run()); fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n'); ok(h.run('--mark', 'built')) }
+
+test('AC-20261105-06-6 a needs-decision finding with nothing blocking asks keep / fix / amend before any FIX round; keep records a ruling and commits; fix does not count against the cap', () => {
+  const h = fixture()
+  atReview(h)
+  const cp = ok(h.run('--mark', 'reviewed', '--file', h.findings(ND)))
+  assert.match(cp, /REVIEW → ESCALATE/)
+  assert.match(cp, /review: 1 needs-decision → ESCALATE/)
+  const q = ok(h.run())
+  assert.ok(q.includes('20261104/01 made a choice you did not: hid the archived rows. Keep it?'), q)
+  assert.match(q, /- keep —[\s\S]*- fix —[\s\S]*- amend —/); assert.match(q, /--mark escalate <keep\|fix\|amend>/)
+  assert.strictEqual(h.run('--mark', 'escalate', 'retry').status, 2)
+  assert.match(ok(h.run('--mark', 'escalate', 'keep')), /ESCALATE → DONE/, 'keep goes straight through COMMIT to the end')
+  assert.ok(h.g('show', `main:${REL}`).includes('| D2 | reviewer: hid the archived rows | asked at REVIEW |'), 'the ruling row travels with the build')
+
+  const f = fixture()
+  atReview(f)
+  ok(f.run('--mark', 'reviewed', '--file', f.findings([...ND, { severity: 'needs-decision', summary: 'second' }])))
+  assert.ok(ok(f.run()).includes('hid the archived rows; +1 more. Keep it?'))
+  const fx = ok(f.run('--mark', 'escalate', 'fix'))
+  assert.match(fx, /ESCALATE → FIX/)
+  const brief = ok(f.run())
+  assert.ok(brief.includes('undo this choice; follow the spec') && brief.includes('hid the archived rows') && brief.includes('second'), brief)
+  assert.strictEqual(f.state().attempts.fix, 0)
+  bump(f.wt)
+  ok(f.run('--mark', 'fixed'))
+  assert.strictEqual(f.state().attempts.fix, 0, 'a decision fix round is not counted against FIX_CAP')
+  assert.strictEqual(f.state().step, 'REVIEW')
+  ok(f.run('--mark', 'reviewed', '--file', f.findings(BLOCKING)))
+  assert.strictEqual(f.state().step, 'FIX', 'the one counted FIX round is still available')
+
+  const am = fixture()
+  atReview(am)
+  ok(am.run('--mark', 'reviewed', '--file', am.findings(ND)))
+  ok(am.run('--mark', 'escalate', 'amend'))
+  assert.strictEqual(am.status(), 'draft')
+})
+
+test('AC-20261105-06-7 a blocking finding wins: FIX as today, and the needs-decision finding stays in state.review', () => {
+  const h = fixture()
+  atReview(h)
+  const cp = ok(h.run('--mark', 'reviewed', '--file', h.findings([...BLOCKING, ...ND])))
+  assert.match(cp, /REVIEW → FIX/)
+  assert.deepStrictEqual(h.state().review.findings.map((f) => f.severity), ['blocking', 'needs-decision'])
+  const brief = ok(h.run())
+  assert.ok(brief.includes('wrong thing') && !brief.includes('hid the archived rows'), 'the FIX brief lists the blocking finding only')
+  bump(h.wt)
+  ok(h.run('--mark', 'fixed'))
+  assert.strictEqual(h.state().attempts.fix, 1)
+})
+
+const SCOPE_CFG = { askPaths: ['apps/server/src/db/**'] }
+const touch = (h, ...fs_) => { for (const f of fs_) { fs.mkdirSync(path.dirname(path.join(h.wt, f)), { recursive: true }); fs.writeFileSync(path.join(h.wt, f), 'x\n') } }
+
+test('AC-20261105-06-8 an out-of-plan file under an askPaths glob stops after the green gate with a scope question naming it; other out-of-plan files do not', () => {
+  const h = fixture({ cfg: SCOPE_CFG })
+  laneBuild(h)
+  touch(h, 'feature.txt', 'apps/server/src/db/schema.ts', 'apps/web/x.ts')
+  assert.match(ok(h.runIn(h.wt, '--mark', 'built')), /BUILD → ESCALATE/)
+  const q = pending.readPending(h.wt)
+  assert.strictEqual(q.kind, 'scope')
+  assert.ok(q.question.includes('changed files outside its File Plan on paths you watch: apps/server/src/db/schema.ts. How should it continue?') && !q.question.includes('apps/web'), q.question)
+  assert.deepStrictEqual(q.options.map((o) => o.label), ['widen', 'separate', 'park'])
+  assert.strictEqual(h.state(h.wt).why, 'scope')
+
+  const quiet = fixture({ cfg: SCOPE_CFG })
+  ok(quiet.run())
+  touch(quiet, 'feature.txt', 'apps/web/x.ts')
+  assert.match(ok(quiet.run('--mark', 'built')), /BUILD → REVIEW/, 'an unwatched out-of-plan file widens and is reported, as today')
+  const rev = JSON.parse(ok(quiet.run('--json'))).body
+  assert.ok(rev.includes('Files changed outside the File Plan: apps/web/x.ts'), rev)
+
+  const planned = fixture({ cfg: { askPaths: ['feature.txt'] } })
+  ok(planned.run()); touch(planned, 'feature.txt')
+  assert.match(ok(planned.run('--mark', 'built')), /BUILD → REVIEW/, 'a File Plan file never asks')
+})
+
+test('AC-20261105-06-9 widen records a ruling and goes to REVIEW (marking the file askPaths); separate restores the file, queues a follow-up and gates again; park queues a fix', () => {
+  const FILE = 'apps/server/src/db/schema.ts'
+  const w = fixture({ cfg: SCOPE_CFG })
+  ok(w.run()); touch(w, 'feature.txt', FILE)
+  ok(w.run('--mark', 'built'))
+  assert.match(ok(w.run()), /--mark escalate <widen\|separate\|park>/)
+  assert.match(ok(w.run('--mark', 'escalate', 'widen')), /ESCALATE → REVIEW/)
+  assert.ok(specAt(w).includes(`| D2 | scope widened: ${FILE} | asked at GATE |`), specAt(w))
+  assert.ok(fs.existsSync(path.join(w.wt, FILE)), 'the file stays')
+  assert.ok(fs.existsSync(path.join(w.dir, 'specs/20261104/01-thing.run/diff.patch')), 'REVIEW has its diff')
+  const rev = JSON.parse(ok(w.run('--json'))).body
+  assert.ok(rev.includes(`Files changed outside the File Plan: ${FILE} (askPaths)`), rev)
+  assert.ok(!rev.includes('spec text edited'), 'the ruling row is not a spec edit in the reviewer brief')
+  // the widened file does not ask again on a later gate
+  ok(w.run('--mark', 'reviewed', '--file', w.findings(BLOCKING)))
+  ok(w.run('--mark', 'fixed'))
+  assert.strictEqual(w.state().step, 'REVIEW', 'a later gate round does not re-ask a widened path')
+
+  const s = fixture({ cfg: SCOPE_CFG })
+  ok(s.run()); touch(s, 'feature.txt', FILE)
+  ok(s.run('--mark', 'built'))
+  assert.match(ok(s.run('--mark', 'escalate', 'separate')), /ESCALATE → REVIEW/, 'back through the gate, now clean')
+  assert.ok(!fs.existsSync(path.join(s.wt, FILE)), 'the file is restored from base (absent there)')
+  assert.ok(fs.existsSync(path.join(s.wt, 'feature.txt')), 'the build itself is kept')
+  const item = st.readQueue(s.dir).items.find((i) => i.kind === 'prompt')
+  assert.ok(item.payload.includes(REL) && item.payload.includes(FILE) && item.payload.startsWith('follow-up:'), JSON.stringify(item))
+  assert.ok(!specAt(s).includes('scope widened'))
+
+  const p = fixture({ cfg: SCOPE_CFG })
+  ok(p.run()); touch(p, 'feature.txt', FILE)
+  ok(p.run('--mark', 'built'))
+  assert.match(ok(p.run('--mark', 'escalate', 'park')), /parked; a fix is queued/)
+  assert.strictEqual(p.status(), 'hardened')
+})
+
+test('AC-20261105-06-10 a ## Canonical Delta spec does not list docs/canonical files as outside the File Plan; without the section they are listed', () => {
+  const withDelta = SPEC_DOC.replace(/\n$/, '') + '\n\n## Canonical Delta\n\nThe admin screen gains a Delete button.\n'
+  const h = fixture({ files: { [REL]: withDelta } })
+  ok(h.run()); touch(h, 'feature.txt', 'docs/canonical/admin.md')
+  ok(h.run('--mark', 'built'))
+  const rev = JSON.parse(ok(h.run('--json'))).body
+  assert.ok(rev.includes('Files changed outside the File Plan: none'), rev)
+  const none = fixture()
+  ok(none.run()); touch(none, 'feature.txt', 'docs/canonical/admin.md')
+  ok(none.run('--mark', 'built'))
+  assert.ok(JSON.parse(ok(none.run('--json'))).body.includes('Files changed outside the File Plan: docs/canonical/admin.md'))
+  const brief = ok(fixture({ files: { [REL]: withDelta } }).run())
+  assert.ok(/Canonical Delta/.test(brief), 'the build brief names the Canonical Delta')
+})
+
+test('AC-20261105-06-11 every lane question run.js writes carries its kind', () => {
+  const kind = (h) => pending.readPending(h.wt).kind
+  const g = fixture(); laneBuild(g)
+  fs.writeFileSync(path.join(g.wt, 'RED'), '')
+  ok(g.runIn(g.wt, '--mark', 'built')); bump(g.wt); ok(g.runIn(g.wt, '--mark', 'repaired')); bump(g.wt); ok(g.runIn(g.wt, '--mark', 'repaired'))
+  assert.strictEqual(kind(g), 'escalate', 'gate red')
+  const u = fixture(); laneBuild(u)
+  ok(u.runIn(u.wt, '--mark', 'unmet', '--decision', 'D1', '--why', 'x'))
+  assert.strictEqual(kind(u), 'unmet')
+  const d = fixture(); laneBuild(d)
+  fs.writeFileSync(path.join(d.wt, 'feature.txt'), 'thing\n'); ok(d.runIn(d.wt, '--mark', 'built'))
+  ok(d.runIn(d.wt, '--mark', 'reviewed', '--file', d.findings(ND)))
+  assert.strictEqual(kind(d), 'decision', 'review-decision')
+  const e = fixture(); laneBuild(e)
+  fs.writeFileSync(path.join(e.wt, 'feature.txt'), 'thing\n'); fs.writeFileSync(path.join(e.wt, REL), specAt(e).replace('plain text', 'rich text'))
+  ok(e.runIn(e.wt, '--mark', 'built'))
+  assert.strictEqual(kind(e), 'spec-edit')
+  const c = fixture()
+  const m = path.join(c.dir, 'x'); fs.mkdirSync(m)
+  c.g('worktree', 'add', '-q', '-b', 'spec/01-thing', c.wt, 'main'); pending.markLane(c.wt); ok(c.runIn(c.wt))
+  st.writeRun(path.join(c.wt, REL), { ...c.state(c.wt), step: 'CONFLICTS', conflicts: ['a.txt'], branch: 'spec/01-thing' })
+  ok(c.runIn(c.wt))
+  assert.strictEqual(kind(c), 'conflict')
+})
+
+test('AC-20261105-06-14 the interface contract lists every kind run.js passes to writePending, the needs-decision severity, the sign-off line, breaking and askPaths', () => {
+  const run = fs.readFileSync(path.join(SPEC, 'scripts/run.js'), 'utf8')
+  const map = /const KIND_OF = \{([\s\S]*?)\n\}/.exec(run)
+  assert.ok(map, 'run.js names its kinds in one KIND_OF map')
+  const kinds = [...new Set([...map[1].matchAll(/:\s*'([a-z-]+)'/g)].map((m) => m[1]))]
+  assert.deepStrictEqual([...kinds].sort(), [...pending.KINDS].sort(), 'run.js writes all seven kinds and no other')
+  const contract = fs.readFileSync(path.join(SPEC, '..', 'docs/v8/interface-contract.md'), 'utf8')
+  for (const k of kinds) assert.ok(new RegExp('\\|\\s*`' + k + '`\\s*\\|').test(contract), `the contract's kinds table lists ${k}`)
+  for (const s of ['needs-decision', 'Client sign-off', '`breaking`', 'askPaths']) assert.ok(contract.includes(s), `the contract names ${s}`)
+})
+
+test('AC-20261105-06-13 doctrine and the commands carry the sign-off test, the real-fork list and the stop rules', () => {
+  const read = (f) => fs.readFileSync(path.join(SPEC, f), 'utf8').replace(/\s+/g, ' ')
+  const doctrine = read('doctrine.md')
+  assert.ok(/would the client need to sign this off/i.test(doctrine), 'the sign-off test')
+  assert.ok(!/never at run/i.test(doctrine), '"never at run" is deleted')
+  assert.ok(doctrine.includes('product facts are asked, never derived') && doctrine.includes('never answers for the user') && doctrine.includes('only the user waives a Decision'))
+  const plan = read('commands/plan.md')
+  for (const item of ['UI flow or screen', 'permission, restriction or something taken away', 'existing data', 'pricing, limits or a paid service', 'breaking change', 'hard-to-reverse architecture']) assert.ok(plan.includes(item), 'plan.md lists: ' + item)
+  assert.ok(plan.includes('product facts are asked, never derived') && plan.includes('[asked:') && plan.includes('Client sign-off') && plan.includes('breaking'))
+  assert.ok(read('commands/run.md').includes('unmet --assumption'))
+  assert.ok(/empty list/.test(read('commands/fix.md')) && /stop before the first edit/.test(read('commands/fix.md')))
+  assert.ok(read('commands/fanout.md').includes('never answers for the user'))
+  const builder = read('agents/builder.md')
+  assert.ok(builder.includes('Canonical Delta') && builder.includes('do not pick'))
+  assert.ok(read('agents/reviewer.md').includes('needs-decision'))
 })

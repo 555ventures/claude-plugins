@@ -36,7 +36,7 @@ test('init → plan → lock → queue → status → run --in-place → DONE', 
   text = text.replace(/<[^<>\n]+>/g, 'x') // Goal, Decisions and Assumptions: lock refuses leftover placeholders
   fs.writeFileSync(file, text)
   const spec = st.readSpec(file)
-  assert.deepStrictEqual(spec.intent, { asked: 'make a thing', build: ['feature.txt holding the thing'], notTouch: ['a.txt'], architecture: false })
+  assert.deepStrictEqual(spec.intent, { asked: 'make a thing', build: ['feature.txt holding the thing'], notTouch: ['a.txt'], architecture: false, signoff: null })
   assert.deepStrictEqual(spec.filePlan, [{ path: 'feature.txt', action: 'CREATE', summary: 'the thing' }])
   assert.strictEqual(spec.acs.length, 1)
   assert.match(spec.acs[0].id, /^AC-\d{8}-01-1$/)

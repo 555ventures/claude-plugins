@@ -5,6 +5,7 @@ area: <area>
 depends_on: []
 brief: n/a
 architecture: false
+breaking: false
 ---
 
 # <Title>
@@ -16,6 +17,7 @@ architecture: false
 - I will not touch:
   - <bullets>
 - Architecture or behaviour change: no | yes — <what>, needs your yes
+- Client sign-off: none | <what was asked> — <what JJ chose>
 
 ## Goal
 
@@ -39,4 +41,4 @@ architecture: false
 
 ## Assumptions
 
-- A1: <assumption> — if false: <what changes>
+- A1: <assumption> — if false: <what changes, or ask>

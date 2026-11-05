@@ -282,6 +282,8 @@ function deriveWait(s, ctx) {
   return { name: 'WAIT', body: lines.join('\n'), mark: 'returned --lane <id> [--stopped "<reason>"]', accepts: ['dismissed', 'waiting'] }
 }
 
+const RELAY_ORDER = ['assumption', 'decision', 'unmet', 'scope', 'spec-edit', 'escalate', 'conflict']
+
 function deriveRelay(s, ctx) {
   const root = ctx.root
   const stopped = s.batch.filter((l) => l.status === 'stopped')
@@ -290,11 +292,14 @@ function deriveRelay(s, ctx) {
   if (!stopped.length) {
     return { name: 'RELAY', body: dispatchBody(root, answered, 'Every question is answered. Re-dispatch these lanes; each resumes from its run state:'), mark: 'resumed', accepts: ['dismissed'] }
   }
-  const lines = ['Ask the user these lane questions as ONE batch (one AskUserQuestion call, at most 4 per call), then record each answer.', '']
-  for (const l of stopped) {
-    lines.push(`lane ${l.id} — ${l.stem}`, `  wait for a spec: node ${shq(ctx.script)} --root ${shq(root)} --mark waiting --lane ${l.id} --on <spec path>`)
+  // Client-level questions first, the mechanical ones after; a lane that stopped with no question comes last.
+  const rank = (l) => { const i = RELAY_ORDER.indexOf(l.question ? l.question.kind || 'escalate' : 'stopped'); return i < 0 ? RELAY_ORDER.length : i }
+  const lines = ['Ask the user these lane questions as ONE AskUserQuestion call (at most 4 per call), verbatim, then record each answer.',
+    'The orchestrator never answers for the user: every lane question below goes to the user; only `📌 Auto-picked` lines are not relayed.', '']
+  for (const l of stopped.map((x, i) => [x, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0])) {
+    lines.push(`[${l.question ? l.question.kind || 'escalate' : 'stopped'}] lane ${l.id} — ${l.stem}`, `  wait for a spec: node ${shq(ctx.script)} --root ${shq(root)} --mark waiting --lane ${l.id} --on <spec path>`)
     if (l.question) {
-      lines.push(`  Q: ${l.question.question}`, ...l.question.options.map((o) => `   - ${o.label}${o.description ? ' — ' + o.description : ''}`))
+      lines.push(`  Q: ${l.question.question}`, ...l.question.options.map((o, i) => `   - ${o.label}${i === 0 ? ' (recommended)' : ''}${o.description ? ' — ' + o.description : ''}`))
       lines.push(`  answer: node ${shq(ctx.script)} --root ${shq(root)} --mark answered --lane ${l.id} --label "<label>"`)
     } else {
       lines.push(`  stopped: ${l.reason || 'no reason given'}`, `  answer: node ${shq(ctx.script)} --root ${shq(root)} --mark answered --lane ${l.id}`)
@@ -508,7 +513,7 @@ const steps = {
     if (flags.stopped || (q && !q.answer)) {
       wipLane(ctx.root, lane)
       lane.status = 'stopped'
-      lane.question = q && !q.answer ? { question: q.question, options: q.options } : null
+      lane.question = q && !q.answer ? { question: q.question, options: q.options, kind: q.kind || 'escalate' } : null
       lane.reason = typeof flags.stopped === 'string' ? flags.stopped : null
       return
     }

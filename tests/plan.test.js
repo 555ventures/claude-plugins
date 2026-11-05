@@ -90,3 +90,56 @@ test('lock refuses a spec outside the repo and a missing argument', () => {
   assert.match(fs.readFileSync(f, 'utf8'), /status: draft/, 'nothing was written')
   assert.strictEqual(plan(d, 'lock').status, 2)
 })
+
+// ---- spec 20261105/06: the client says yes ------------------------------------------------------
+
+const withRow = (f, cell) => fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/^\| D1 \|.*$/m, `| D1 | ${cell} | x |`))
+const withSignoff = (f, line) => fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/^- Client sign-off:.*$/m, `- Client sign-off: ${line}`))
+
+test('AC-20261105-06-1 a Decisions row that restricts users needs a recorded yes: refused naming the row, passes with [asked:] or a filled sign-off line', () => {
+  const d = tmpdir('plan')
+  const f = fresh(d, 'restrict')
+  assert.match(fs.readFileSync(f, 'utf8'), /^- Client sign-off: none/m, 'the template carries the line')
+  withSignoff(f, 'none')
+  withRow(f, 'customers cannot cancel after the cut-off')
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 2)
+  assert.match(r.stderr, /client sign-off needed: .*D1.*customers cannot cancel after the cut-off.* — ask, then fill the Intent line/)
+  assert.strictEqual(status(f), 'draft')
+  withRow(f, 'customers cannot cancel after the cut-off [asked: JJ chose cut-off at 18:00]')
+  const rr = plan(d, 'lock', f); assert.strictEqual(rr.status, 0, '[asked:] on the row passes: ' + rr.stderr)
+  assert.strictEqual(status(f), 'hardened')
+
+  const g = fresh(d, 'restrict-two')
+  withSignoff(g, 'none'); withRow(g, 'only an admin can delete a project')
+  assert.strictEqual(plan(d, 'lock', g).status, 2, 'only an <role> can is a restriction')
+  withSignoff(g, 'delete rights — JJ chose admins only')
+  assert.strictEqual(plan(d, 'lock', g).status, 0, 'a filled sign-off line passes')
+
+  for (const [i, cell] of [['a', 'the field is read-only after save'], ['b', 'the old route is no longer served'], ['c', 'requires a reason on refund'], ['d', 'archived rows are hidden from the list']].entries()) {
+    const h = fresh(d, 'restrict-' + cell.length + i)
+    withSignoff(h, 'none'); withRow(h, cell)
+    assert.strictEqual(plan(d, 'lock', h).status, 2, cell)
+    withRow(h, cell + ' [guards: AC-1]')
+    assert.strictEqual(plan(d, 'lock', h).status, 0, '[guards:] exempts the row: ' + cell)
+  }
+  const ok = fresh(d, 'plain'); withRow(ok, 'the list is sorted by date')
+  assert.strictEqual(plan(d, 'lock', ok).status, 0, 'an ordinary decision locks with sign-off none')
+})
+
+test('AC-20261105-06-2 breaking: true with sign-off none refuses the lock; a filled line locks; a spec without Intent keeps its old refusal', () => {
+  const d = tmpdir('plan')
+  const f = fresh(d, 'breaking')
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('breaking: false', 'breaking: true'))
+  withSignoff(f, 'none')
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 2); assert.match(r.stderr, /client sign-off needed: .*breaking.* — ask, then fill the Intent line/)
+  withSignoff(f, 'dropping the v1 API — JJ chose a 90-day sunset')
+  assert.strictEqual(plan(d, 'lock', f).status, 0)
+
+  const v7 = fresh(d, 'v7era')
+  fs.writeFileSync(v7, fs.readFileSync(v7, 'utf8').replace('breaking: false', 'breaking: true').replace(/## Intent[\s\S]*?(?=## Goal)/, ''))
+  const old = plan(d, 'lock', v7)
+  assert.strictEqual(old.status, 2); assert.match(old.stderr, /missing sections: Intent/, 'no Intent section: the refusal is the one it always was, not a sign-off one')
+  assert.doesNotMatch(old.stderr, /sign-off/)
+})

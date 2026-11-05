@@ -18,7 +18,9 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
 - **REVIEW**: dispatch one `spec:reviewer`, then mark `reviewed --file <findings path>`;
   a clean review runs through to DONE itself. Relay advisories in the final report; never act
   on them.
-- **ESCALATE**: ask the printed question and mark `escalate <choice>`.
+- **ESCALATE**: ask the printed question and mark `escalate <label>` with the option picked
+  (`keep|fix|amend` for a reviewer choice, `widen|separate|park` for a watched path, the
+  planner's own labels for a false Assumption). You record the user's pick; you never choose.
 - **CONFLICTS**: ask; on `resolve`, fix each file by both sides' intent in the main checkout
   and mark `conflicts-resolved`. A lane at **MERGE_READY** with a rebase in progress edits the
   conflicted files to both sides' intent, re-runs the driver, then stops.
@@ -28,6 +30,8 @@ symptom, the commit is `fix(<id>): <symptom>`; outside a lane it refuses, use `/
 
 As a lane, stop and return on `PENDING_QUESTION`. A lane never edits its spec's Decisions or any
 other spec. A build that needs another spec done first marks `waiting --on <spec>` (BUILD, REPAIR,
-FIX or REVIEW) and stops; a Decision it cannot honour is marked `unmet --decision <id> --why <text>`,
-which asks instead of editing. A lane with a rebase in progress resolves it at any step: edit the
+FIX or REVIEW) and stops. When a builder replies that a Decision cannot be honoured, mark `unmet --decision <id> --why <text>`;
+when an Assumption with an `ask` arm proved false, mark `unmet --assumption <id> [--why <text>]`
+(an Assumption with a written fallback is the builder's to apply). Both ask instead of editing, and
+the driver, never a builder, writes the user's ruling into the Decisions table. A lane with a rebase in progress resolves it at any step: edit the
 files, re-run the driver; it continues the rebase and prints the next step.

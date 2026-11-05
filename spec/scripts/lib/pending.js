@@ -2,7 +2,7 @@
 // lib/pending.js — the lane question relay: the one reader/writer of .claude/pending-question.json
 // and of the lane marker <git-dir>/spec-lane-open. A lane (worktree sub-agent) never asks the user;
 // it writes the question here, prints PENDING_QUESTION, and exits 0. The parent answers and resumes.
-// No CLI. Exports: writePending, readPending, answerPending, consumePending, stopLine, isLane,
+// No CLI. Exports: KINDS, writePending, readPending, answerPending, consumePending, stopLine, isLane,
 // isFanoutLane, laneOwner, markLane, unmarkLane. An unknown answer label throws {exit: 2}.
 
 const fs = require('fs')
@@ -11,6 +11,9 @@ const { spawnSync } = require('child_process')
 
 const PENDING = 'PENDING_QUESTION'
 const MARKER = 'spec-lane-open'
+
+// Informational for the relay (fanout groups by it); answerPending keys on labels alone.
+const KINDS = ['escalate', 'unmet', 'assumption', 'decision', 'scope', 'spec-edit', 'conflict']
 
 const pendingPath = (root) => path.join(root, '.claude', 'pending-question.json')
 
@@ -50,13 +53,14 @@ function readPending(root) {
 const normOption = (o) => (typeof o === 'string' ? { label: o } : { label: String(o.label), ...(o.description ? { description: String(o.description) } : {}) })
 
 // Never overwrites a pending question: an existing one is returned with written: false.
-function writePending(root, { lane, question, options }) {
+function writePending(root, { lane, question, options, kind = 'escalate' }) {
   const prior = readPending(root)
   if (prior) return { path: pendingPath(root), written: false, doc: prior }
   if (!question || !Array.isArray(options) || options.length < 2) {
     throw Object.assign(new Error('a pending question needs question text and at least two options'), { exit: 2 })
   }
-  const doc = { lane: lane || null, question: String(question), options: options.map(normOption), writtenAt: new Date().toISOString(), answer: null }
+  if (!KINDS.includes(kind)) throw Object.assign(new Error(`unknown question kind '${kind}' — one of: ${KINDS.join(' | ')}`), { exit: 2 })
+  const doc = { lane: lane || null, kind, question: String(question), options: options.map(normOption), writtenAt: new Date().toISOString(), answer: null }
   return { path: save(root, doc), written: true, doc }
 }
 
@@ -80,4 +84,4 @@ function consumePending(root) {
 
 const stopLine = (root) => `${PENDING} — ${pendingPath(root)}; the lane stops here and the parent session relays it`
 
-module.exports = { PENDING, pendingPath, writePending, readPending, answerPending, consumePending, stopLine, isLane, isFanoutLane, laneOwner, markLane, unmarkLane }
+module.exports = { PENDING, KINDS, pendingPath, writePending, readPending, answerPending, consumePending, stopLine, isLane, isFanoutLane, laneOwner, markLane, unmarkLane }

@@ -6,8 +6,9 @@
 //
 // node run.js <spec> [--in-place] [--fix "<symptom>"] [--root <dir>] [--state] [--json] [--mark <verb>]
 // --fix runs only as a fanout lane: the brief is the symptom, the commit is `fix(<id>): <symptom>`.
-// Marks: built · repaired · regate · reviewed --file <json> · fixed · escalate <retry|park|amend|revert> ·
-// conflicts-resolved · waiting --on <spec> (lane) · unmet --decision <id> --why <text>.
+// Marks: built · repaired · regate · reviewed --file <json> · fixed · escalate <label> (the printed options) ·
+// conflicts-resolved · waiting --on <spec> (lane) · unmet --decision <id> --why <text> |
+// unmet --assumption <id> [--why <text>].
 // Exit 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
@@ -24,10 +25,22 @@ const queue = require('./queue')
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2
 const FIX_CAP = 1
-const CHOICES = ['retry', 'park', 'amend', 'revert']
-const OFFERED = { 'spec-edit': ['revert', 'amend'] } // every other escalation offers retry, park, amend
-const offered = (state) => OFFERED[state.why] || ['retry', 'park', 'amend']
-const SEVERITIES = ['blocking', 'advisory']
+const CHOICES = ['retry', 'park', 'amend', 'revert', 'keep', 'fix', 'widen', 'separate']
+const OFFERED = { 'spec-edit': ['revert', 'amend'], 'review-decision': ['keep', 'fix', 'amend'], scope: ['widen', 'separate', 'park'] } // every other escalation offers retry, park, amend
+// An assumption question offers its arm's options (planner-written labels), else retry, park, amend; amend is always last.
+const offered = (state) => state.why === 'assumption' && state.assumption.options.length ? [...state.assumption.options.filter((o) => o !== 'amend'), 'amend'] : OFFERED[state.why] || ['retry', 'park', 'amend']
+const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
+// The kind a pending question carries, from the escalation's `why` (lib/pending KINDS).
+const KIND_OF = {
+  gate: 'escalate',
+  review: 'escalate',
+  decision: 'unmet',
+  assumption: 'assumption',
+  'review-decision': 'decision',
+  scope: 'scope',
+  'spec-edit': 'spec-edit',
+  conflicts: 'conflict',
+}
 // Only while a builder or reviewer is out is the checkout marked for block-worker-git.sh.
 const AGENT_STEPS = ['BUILD', 'REPAIR', 'FIX', 'REVIEW']
 let inPlaceFlag = false
@@ -55,12 +68,16 @@ const intentText = (spec) => sectionText(spec, 'Intent') || sectionText(spec, 'G
 // A fix lane's brief replaces the Intent with the symptom.
 const fixBlock = (state) => ['## Fix', state.fix, 'Reproduce it, write a regression test that fails for that reason, fix the cause.', '']
 const EVIDENCE = (ctx) => `Evidence an AC asks to record (listings, renders, counts) goes in ${runFile(ctx, 'evidence.md')}; the driver appends it to the build commit.`
-const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Assumptions) are not printed here — read them in the spec file.'
+const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
+const hasDelta = (spec) => Object.keys(spec.sections).some((k) => k === 'Canonical Delta' || k.startsWith('Canonical Delta '))
+// Every `- A<n>:` line of the spec, verbatim: the builder and reviewer see what the plan assumed and what to do when it is false.
+const assumptionLines = (spec) => {
+  const l = sectionText(spec, 'Assumptions').split('\n').map((x) => x.trim()).filter((x) => /^- +A\d+:/.test(x))
+  return l.length ? l : ['- none']
+}
 // Decisions table rows as bullets; the ADR constraints the planner wrote must reach builder and reviewer.
 // A row is a template leftover only when a cell is exactly a <placeholder>; JSX or generics in a decision stay.
-const placeholderRow = (cells) => cells.some((c) => /^<[^>]+>$/.test(c))
-const decisionRows = (spec) => sectionText(spec, 'Decisions').split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|') && !/^\|[\s|:-]*$/.test(l))
-  .map((l) => l.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))).filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !placeholderRow(c))
+const decisionRows = (spec) => st.decisionRows(sectionText(spec, 'Decisions'))
 const decisions = (spec) => {
   const rows = decisionRows(spec)
   return rows.length ? rows.map((c) => `- ${c[0]}: ${c[1]}${c.length > 2 && c[c.length - 1] ? ` — ${c[c.length - 1]}` : ''}`) : ['- none']
@@ -168,9 +185,11 @@ function redCheck(state, wt) {
 
 // Spec text a build may not change: any other spec file, and the own spec's Decisions section.
 // The own spec's status line and its other sections (an AC correction in a FIX round) pass.
-const decisionsText = (text) => {
+// Rows the driver itself appended (state.rulings) are not the build's edits.
+const stripRows = (text, ids) => (ids && ids.length ? text.split('\n').filter((l) => !(l.trim().startsWith('|') && ids.includes(l.trim().replace(/^\|/, '').split('|')[0].trim()))).join('\n') : text)
+const decisionsText = (text, rulings) => {
   const m = /^## +Decisions(?: [^\n]*)?\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text.replace(/\r\n/g, '\n'))
-  return m ? m[1].trim() : ''
+  return m ? stripRows(m[1], rulings).trim() : ''
 }
 function specEdits(state, ctx) {
   const wt = wtOf(state, ctx)
@@ -178,7 +197,7 @@ function specEdits(state, ctx) {
   const files = git.changedFiles(state.base, wt).filter((f) => /^specs\/.+\.md$/.test(f) && f !== own)
   const was = git.raw(['show', `${state.base}:${own}`], wt)
   const now = st.readText(specIn(state, ctx), null)
-  if (was.status === 0 && now !== null && decisionsText(was.stdout) !== decisionsText(now)) files.push(own)
+  if (was.status === 0 && now !== null && decisionsText(was.stdout) !== decisionsText(now, state.rulings)) files.push(own)
   return files
 }
 
@@ -209,9 +228,22 @@ function gateStep(state, ctx) {
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   const edits = specEdits(state, ctx)
   if (edits.length) return go(state, 'ESCALATE', { why: 'spec-edit', specEdits: edits })
-  st.writeText(runFile(ctx, 'diff.patch'), git.diff(state.base, wt) + '\n')
+  const scope = askedScope(state, ctx, cfg)
+  if (scope.length) return go(state, 'ESCALATE', { why: 'scope', scope })
+  return toReview(state, ctx)
+}
+
+function toReview(state, ctx) {
+  st.writeText(runFile(ctx, 'diff.patch'), git.diff(state.base, wtOf(state, ctx)) + '\n')
   fs.rmSync(runFile(ctx, 'findings.json'), { force: true }) // never re-read an earlier round's findings
   return go(state, 'REVIEW')
+}
+
+// Out-of-plan files under a host-named askPaths glob that the user has not already widened.
+const watched = (cfg, f) => (cfg.askPaths || []).some((g) => st.globToRe(g).test(f))
+function askedScope(state, ctx, cfg) {
+  if (state.fix || !(cfg.askPaths || []).length) return [] // a fix lane has no File Plan, so nothing is outside it
+  return outsideFiles(state, ctx, st.readSpec(specIn(state, ctx))).filter((f) => watched(cfg, f) && !(state.widened || []).includes(f))
 }
 
 // A lane stops here, committed: fanout writes done, merges in queue order and cleans up.
@@ -290,7 +322,7 @@ function finish(state, ctx) {
     ],
     pins: state.pin,
     warns: [...(rm.removed ? [] : [`worktree kept at ${state.worktree}: ${rm.reason} — git worktree remove --force ${state.worktree}`]),
-      ...findings.filter((f) => f.severity !== 'blocking').map((f) => `advisory: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`)],
+      ...findings.filter((f) => f.severity !== 'blocking').map((f) => `${f.severity}: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`)],
     blocks: tg && tg.status === 'red' ? `trunk gate red after the merge:\n${tg.output_tail}` : null,
     artifacts: s.rel,
     next: tg && tg.status === 'red' ? `/spec:fix trunk gate red after merging ${s.rel}` : head ? queue.pasteLine(ctx.root, head) : undefined,
@@ -320,31 +352,41 @@ function builderBrief(state, ctx, kind) {
     '## Decisions', ...decisions(spec), '',
     ...(state.fix ? [] : ['## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '']),
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
+    '## Assumptions', ...assumptionLines(spec), '',
     OTHER_SECTIONS, '',
   ]
   if (kind === 'repair') out.push(`${/^git commit was rejected/.test(state.gate.output_tail || '') ? 'The commit hook rejected the build' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```',
     'A failing test the diff does not touch, a timeout, or a flake under load is not yours to fix: say so in your reply and stop; the driver re-runs the gate. Never raise a host test timeout, retry count or worker limit to pass.', '')
   if (kind === 'fix') {
-    out.push('The reviewer found blocking issues. Fix each one:')
-    for (const f of state.review.findings.filter((x) => x.severity === 'blocking')) out.push(`- ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}${f.evidence ? ` (evidence: ${f.evidence})` : ''}`)
+    const decided = state.fixFor === 'decision'
+    out.push(decided ? 'The reviewer found choices the spec did not make; the user said to undo them. For each: undo this choice; follow the spec.' : 'The reviewer found blocking issues. Fix each one:')
+    for (const f of state.review.findings.filter((x) => x.severity === (decided ? 'needs-decision' : 'blocking'))) out.push(`- ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}${f.evidence ? ` (evidence: ${f.evidence})` : ''}`)
     out.push('')
   }
   out.push(kind === 'build' ? `Write failing tests first, then code, and run \`${cfg.testCommand}\` until green.` : `Run \`${cfg.testCommand}\` until green.`,
     state.fix ? 'List every file you changed in your final summary.' : 'Do not touch files outside the File Plan without listing them in your final summary.',
+    'If a Decision cannot be honoured as written, or an Assumption with an `ask` arm proves false, stop and say which in your reply — do not pick.',
     EVIDENCE(ctx))
   return out.join('\n')
 }
 
-// The builder may list these in its summary; the reviewer decides whether they block. The spec
-// is listed only when its text (not its status line) differs from base.
-function outsidePlan(state, ctx, spec) {
+// Files changed outside the File Plan (the spec itself and, with a Canonical Delta, docs/canonical are not).
+function outsideFiles(state, ctx, spec) {
   const planned = new Set(spec.filePlan.map((r) => r.path))
   const own = state.spec.split(path.sep).join('/')
   const run = own.replace(/\.md$/, '.run/')
+  const delta = hasDelta(spec)
+  return git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planned.has(f) && f !== own && !f.startsWith(run) && !(delta && f.startsWith('docs/canonical/')))
+}
+
+// The builder may list these in its summary; the reviewer decides whether they block. The spec
+// is listed only when its text (not its status line) differs from base; ruling rows the driver wrote are not an edit.
+function outsidePlan(state, ctx, spec, cfg) {
+  const own = state.spec.split(path.sep).join('/')
   const norm = (t) => t.replace(/\r\n/g, '\n').replace(/^status:.*$/m, 'status:')
   const was = git.raw(['show', `${state.base}:${own}`], wtOf(state, ctx))
-  const edited = was.status === 0 && norm(was.stdout) !== norm(st.readText(specIn(state, ctx), ''))
-  const out = git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planned.has(f) && f !== own && !f.startsWith(run))
+  const edited = was.status === 0 && norm(was.stdout) !== stripRows(norm(st.readText(specIn(state, ctx), '')), state.rulings)
+  const out = outsideFiles(state, ctx, spec).map((f) => (watched(cfg, f) ? `${f} (askPaths)` : f))
   return edited ? [...out, `${own} (spec text edited)`] : out
 }
 
@@ -361,20 +403,21 @@ function reviewerBrief(state, ctx) {
     `Diff (working tree vs base): ${runFile(ctx, 'diff.patch')}`,
     `Spec: ${specPath}`,
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
-    state.fix ? 'Files changed outside the File Plan: n/a (fix lane — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec).join(', ') || 'none'}`,
+    state.fix ? 'Files changed outside the File Plan: n/a (fix lane — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec, cfg).join(', ') || 'none'}`,
     "The spec's frontmatter status line changes during the run; that is bookkeeping, not a finding.",
     '',
     ...(state.fix ? fixBlock(state) : ['## Intent', intentText(spec), '']),
     '## Decisions', ...decisions(spec), '',
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
+    '## Assumptions', ...assumptionLines(spec), '',
     OTHER_SECTIONS,
   ].join('\n')
 }
 
 // A lane never asks: it writes the question for the parent session and stops.
-function ask(state, ctx, question, options) {
+function ask(state, ctx, question, options, why = state.why) {
   if (state.lane) {
-    pending.writePending(ctx.root, { lane: specInfo(ctx).stem, question, options })
+    pending.writePending(ctx.root, { lane: specInfo(ctx).stem, question, options, kind: KIND_OF[why] })
     return pending.stopLine(ctx.root)
   }
   return [`Ask the user ONE question (AskUserQuestion), recommended option first: ${question}`,
@@ -395,6 +438,28 @@ function escalateBody(state, ctx) {
     return ask(state, ctx, `${id} edited spec text it may not: ${state.specEdits.join(', ')}. How should it continue?`, [
       { label: 'revert', description: 'restore those files from the base, keep the build, and gate it again' }, amend,
     ]) + '\n\n```\n' + state.specEdits.map((f) => `- ${f}`).join('\n') + '\n```'
+  }
+  if (state.why === 'assumption') {
+    const a = state.assumption
+    const arm = a.options.length ? [...a.options.filter((o) => o !== 'amend').map((o) => ({ label: o, description: `rule "${a.id}: ${o}" into the Decisions table and continue at ${state.from} on Opus` })), amend] : [
+      { label: 'retry', description: `re-run ${state.from} on Opus with fresh attempts` },
+      { label: 'park', description: 'queue a /spec:fix item and set the spec back to hardened' }, amend]
+    return ask(state, ctx, `${id} found ${a.id} false: ${a.text}${a.note ? ` — ${a.note}` : ''}. How should it continue?`, arm)
+  }
+  if (state.why === 'review-decision') {
+    const nd = state.review.findings.filter((f) => f.severity === 'needs-decision')
+    const more = nd.length > 1 ? `; +${nd.length - 1} more` : ''
+    return ask(state, ctx, `${id} made a choice you did not: ${nd[0].summary || 'see the findings'}${more}. Keep it?`, [
+      { label: 'keep', description: 'record your yes in the Decisions table and carry on to the commit' },
+      { label: 'fix', description: 'one more builder round that undoes the choice and follows the spec (not counted as a fix round)' }, amend,
+    ]) + '\n\n```\n' + nd.map((f) => `- ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}${f.evidence ? ` (evidence: ${f.evidence})` : ''}`).join('\n') + '\n```'
+  }
+  if (state.why === 'scope') {
+    return ask(state, ctx, `${id} changed files outside its File Plan on paths you watch: ${state.scope.join(', ')}. How should it continue?`, [
+      { label: 'widen', description: 'accept the files as part of this spec, record it in the Decisions table, and go on to review' },
+      { label: 'separate', description: 'restore those files from the base, queue a follow-up item for them, and gate the rest again' },
+      { label: 'park', description: 'queue a /spec:fix item and set the spec back to hardened' },
+    ]) + '\n\n```\n' + state.scope.map((f) => `- ${f}`).join('\n') + '\n```'
   }
   const options = [
     { label: 'retry', description: 're-run the builder on Opus with fresh attempts' },
@@ -466,7 +531,7 @@ function derive(state, ctx) {
       body: ask(state, ctx, `merging ${state.branch} into ${cfgOf(ctx).trunk} conflicts in ${state.conflicts.join(', ')}. Resolve them?`, [
         { label: 'resolve', description: `resolve each file by both sides' intent in ${mainRoot(ctx.root)}, leave it uncommitted, then mark conflicts-resolved` },
         { label: 'abort', description: 'run `git reset --merge` there (from your own shell if the hook refuses); marking conflicts-resolved later retries the merge' },
-      ]),
+      ], 'conflicts'),
     }
     case 'MERGE_READY': return { name: 'MERGE_READY', body: state.report || '' }
     default: return { name: state.step, body: state.report || '' }
@@ -492,19 +557,57 @@ function specFileUnder(on, ctx) {
   return rel
 }
 
-// The build's spec edits are undone: other specs from base (a file base lacks is removed), the own spec
-// from base with its status line kept. Then the gate runs again.
-function revertSpecEdits(state, ctx) {
+// Files restored from base (a file base lacks is removed).
+function restoreFromBase(state, ctx, files) {
   const wt = wtOf(state, ctx)
-  const own = state.spec.split(path.sep).join('/')
-  const status = st.readSpec(specIn(state, ctx)).frontmatter.status
-  for (const f of state.specEdits || []) {
+  for (const f of files) {
     if (git.raw(['cat-file', '-e', `${state.base}:${f}`], wt).status === 0) git.sh(['checkout', state.base, '--', f], wt)
     else { git.raw(['rm', '-q', '-f', '--cached', '--ignore-unmatch', '--', f], wt); fs.rmSync(path.join(wt, f), { force: true }) }
   }
+}
+
+// The build's spec edits are undone: other specs from base (a file base lacks is removed), the own spec
+// from base with its status line kept. Then the gate runs again.
+function revertSpecEdits(state, ctx) {
+  const own = state.spec.split(path.sep).join('/')
+  const status = st.readSpec(specIn(state, ctx)).frontmatter.status
+  restoreFromBase(state, ctx, state.specEdits || [])
   if ((state.specEdits || []).includes(own)) st.writeStatus(specIn(state, ctx), status)
   delete state.specEdits
   return go(state, 'GATE')
+}
+
+// The driver, never a builder, adds the user's ruling to the worktree copy of the spec's Decisions table
+// and remembers the ids so the spec-edit check does not call them an edit.
+function recordRuling(state, ctx, text, at) {
+  const file = specIn(state, ctx)
+  const raw = st.readText(file, '')
+  const eol = raw.includes('\r\n') ? '\r\n' : '\n'
+  const lines = raw.split(/\r?\n/)
+  const ids = decisionRows(st.readSpec(file)).map((c) => /^D(\d+)$/i.exec(c[0])).filter(Boolean).map((m) => Number(m[1]))
+  const id = 'D' + (Math.max(0, ...ids) + 1)
+  const row = `| ${id} | ${text.replace(/\|/g, '\\|')} | asked at ${at} |`
+  const h = lines.findIndex((l) => /^## +Decisions\b/.test(l))
+  if (h < 0) lines.push('', '## Decisions', '', '| ID | Decision | Why |', '|----|----------|-----|', row)
+  else {
+    let end = lines.findIndex((l, i) => i > h && /^## /.test(l)); if (end < 0) end = lines.length
+    let last = -1
+    for (let i = h + 1; i < end; i++) if (lines[i].trim().startsWith('|')) last = i
+    if (last >= 0) lines.splice(last + 1, 0, row)
+    else lines.splice(h + 1, 0, '', '| ID | Decision | Why |', '|----|----------|-----|', row)
+  }
+  st.writeText(file, lines.join(eol))
+  state.rulings = [...(state.rulings || []), id]
+  return id
+}
+
+function queuePrompt(ctx, payload) {
+  const q = st.readQueue(ctx.root)
+  if (!q.items.some((i) => !i.done && i.payload === payload)) {
+    q.seq = (q.seq || 0) + 1
+    q.items.push({ id: 'q' + q.seq, kind: 'prompt', payload, added: new Date().toISOString() })
+    st.writeQueue(ctx.root, q)
+  }
 }
 
 // The marks a lane agent may use while a builder or reviewer is out: stop for another spec, or ask about a Decision.
@@ -520,7 +623,8 @@ function unchanged(state, ctx) {
 const steps = {
   built: (state) => go(state, 'GATE'),
   repaired(state, flags, ctx) { unchanged(state, ctx); state.attempts.repair++; return go(state, 'GATE') },
-  fixed(state, flags, ctx) { unchanged(state, ctx); state.attempts.fix++; return go(state, 'GATE') },
+  // A round that undoes a choice (fixFor 'decision') is not counted against FIX_CAP.
+  fixed(state, flags, ctx) { unchanged(state, ctx); if (state.fixFor === 'decision') delete state.fixFor; else state.attempts.fix++; return go(state, 'GATE') },
   // Re-runs the gate on the same tree without counting a repair; once per tree.
   regate(state, flags, ctx) {
     const tree = host.treeSha(wtOf(state, ctx))
@@ -540,8 +644,11 @@ const steps = {
     if (doc.verdict !== undefined && !['clean', 'fix'].includes(doc.verdict)) refuse(`${flags.file}: verdict must be clean or fix, got ${JSON.stringify(doc.verdict)}`)
     const blocking = doc.findings.filter((f) => f.severity === 'blocking')
     if (doc.verdict === 'fix' && !blocking.length) refuse(`${flags.file}: verdict is fix but no finding is blocking — set severity blocking on the finding(s) that must be fixed, or verdict clean`)
-    const verdict = !blocking.length ? 'clean' : state.attempts.fix >= FIX_CAP ? 'escalate' : 'fix'
+    // A needs-decision finding asks only when nothing blocks; beside a blocking one it rides along in state.review.
+    const choices = doc.findings.filter((f) => f.severity === 'needs-decision')
+    const verdict = blocking.length ? (state.attempts.fix >= FIX_CAP ? 'escalate' : 'fix') : choices.length ? 'decision' : 'clean'
     state.review = { findings: doc.findings, verdict }
+    if (verdict === 'decision') return go(state, 'ESCALATE', { why: 'review-decision' })
     return go(state, verdict === 'clean' ? 'COMMIT' : verdict === 'fix' ? 'FIX' : 'ESCALATE', { why: 'review' })
   },
   waiting(state, flags, ctx) {
@@ -551,6 +658,14 @@ const steps = {
   },
   unmet(state, flags, ctx) {
     const spec = specInfo(ctx)
+    if (flags.assumption !== undefined) {
+      const all = st.parseAssumptions(sectionText(st.readSpec(specIn(state, ctx)), 'Assumptions'))
+      const a = typeof flags.assumption === 'string' && all.find((x) => x.id === flags.assumption)
+      if (!a) refuse(`--assumption ${flags.assumption === true ? '<id>' : flags.assumption} is not an Assumption of ${spec.rel} — known: ${all.map((x) => x.id).join(', ') || 'none'}`)
+      if (!a.arm.ask) refuse(`${a.id} has a written fallback: ${a.arm.text} — apply it`)
+      const note = typeof flags.why === 'string' ? flags.why.trim() : ''
+      return go(state, 'ESCALATE', { why: 'assumption', from: state.step, assumption: { id: a.id, text: a.text, options: a.arm.options, note } })
+    }
     const known = decisionRows(st.readSpec(specIn(state, ctx))).map((c) => c[0])
     if (typeof flags.decision !== 'string' || !known.includes(flags.decision)) refuse(`--decision ${flags.decision === true ? '<id>' : flags.decision} is not a row of ${spec.rel}'s Decisions table — known: ${known.join(', ') || 'none'}`)
     if (typeof flags.why !== 'string' || !flags.why.trim()) refuse('unmet needs --why <text>: what keeps the Decision from being met')
@@ -558,23 +673,44 @@ const steps = {
   },
   escalate(state, flags, ctx) {
     const c = flags.choice
-    if (!CHOICES.includes(c)) refuse(`escalate needs one of ${offered(state).join(' | ')}, e.g. --mark escalate ${offered(state)[0]}`)
-    if (!offered(state).includes(c)) refuse(`escalate ${c} is not offered here — one of ${offered(state).join(' | ')}`)
+    const labels = offered(state)
+    if (typeof c !== 'string' || (state.why !== 'assumption' && !CHOICES.includes(c))) refuse(`escalate needs one of ${labels.join(' | ')}, e.g. --mark escalate ${labels[0]}`)
+    if (!labels.includes(c)) refuse(`escalate ${c} is not offered here — one of ${labels.join(' | ')}`)
     if (state.lane) pending.consumePending(ctx.root)
+    const fresh = { attempts: { repair: 0, fix: 0 }, opus: true }
     if (c === 'revert') return revertSpecEdits(state, ctx)
-    if (c === 'retry') return go(state, state.why === 'decision' ? state.from : state.why === 'review' ? 'FIX' : 'REPAIR', { attempts: { repair: 0, fix: 0 }, opus: true })
+    if (state.why === 'assumption' && state.assumption.options.includes(c) && c !== 'amend') {
+      recordRuling(state, ctx, `${state.assumption.id} ruled: ${c}`, state.from)
+      return go(state, state.from, fresh)
+    }
+    if (c === 'keep') {
+      for (const f of state.review.findings.filter((x) => x.severity === 'needs-decision')) recordRuling(state, ctx, `reviewer: ${f.summary || 'a choice the spec did not make'}`, 'REVIEW')
+      state.review.verdict = 'clean'
+      return go(state, 'COMMIT')
+    }
+    if (c === 'fix') return go(state, 'FIX', { fixFor: 'decision' })
+    if (c === 'widen') {
+      recordRuling(state, ctx, `scope widened: ${state.scope.join(', ')}`, 'GATE')
+      state.widened = [...(state.widened || []), ...state.scope]
+      delete state.scope
+      return toReview(state, ctx)
+    }
     const s = specInfo(ctx)
+    if (c === 'separate') {
+      restoreFromBase(state, ctx, state.scope)
+      queuePrompt(ctx, `follow-up: ${s.rel} changed ${state.scope.join(', ')} outside its File Plan — plan it`)
+      delete state.scope
+      return go(state, 'GATE')
+    }
+    if (c === 'retry') return go(state, state.why === 'decision' || state.why === 'assumption' ? state.from : state.why === 'review' ? 'FIX' : 'REPAIR', fresh)
     if (c === 'amend') return endRun(state, ctx, 'draft', `⏸️ ${s.id} set back to draft for amending`, { next: `/spec:plan ${s.rel}` })
     const first = state.why === 'decision' ? state.unmet.text
-      : state.why === 'gate' ? redLine(state.gate.output_tail)
-        : (state.review.findings.find((f) => f.severity === 'blocking') || {}).summary || 'blocking review findings'
+      : state.why === 'assumption' ? `${state.assumption.id} found false: ${state.assumption.text}`
+        : state.why === 'scope' ? `changed files outside its File Plan: ${state.scope.join(', ')}`
+          : state.why === 'gate' ? redLine(state.gate.output_tail)
+            : (state.review.findings.find((f) => f.severity === 'blocking') || {}).summary || 'blocking review findings'
     const payload = `/spec:fix ${s.rel} — ${first.trim()}`
-    const q = st.readQueue(ctx.root)
-    if (!q.items.some((i) => !i.done && i.payload === payload)) {
-      q.seq = (q.seq || 0) + 1
-      q.items.push({ id: 'q' + q.seq, kind: 'prompt', payload, added: new Date().toISOString() })
-      st.writeQueue(ctx.root, q)
-    }
+    queuePrompt(ctx, payload)
     return endRun(state, ctx, 'hardened', `⏸️ ${s.id} parked; a fix is queued`, { queued: payload, next: '/spec:queue next' })
   },
   'conflicts-resolved'(state, flags, ctx) {
@@ -604,7 +740,8 @@ function afterMark(verb, state, ctx) {
   if (verb === 'reviewed' && state.gate && /^git commit was rejected/.test(state.gate.output_tail || '')) return `commit: rejected — ${redLine(state.gate.output_tail.split('\n').slice(1).join('\n'))}`
   if (verb === 'reviewed' && state.review) {
     const n = state.review.findings.filter((f) => f.severity === 'blocking').length
-    return n ? `review: ${n} blocking → ${state.review.verdict === 'fix' ? 'FIX' : 'ESCALATE'}` : 'review: clean'
+    const d = state.review.findings.filter((f) => f.severity === 'needs-decision').length
+    return n ? `review: ${n} blocking → ${state.review.verdict === 'fix' ? 'FIX' : 'ESCALATE'}` : d ? `review: ${d} needs-decision → ESCALATE` : 'review: clean'
   }
   return null
 }

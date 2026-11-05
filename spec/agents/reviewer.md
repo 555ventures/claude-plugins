@@ -21,6 +21,13 @@ to the printed path:
   "summary": "one sentence", "evidence": "quote or output"}], "verdict": "fix"}
 ```
 
-`severity` is exactly `blocking` or `advisory` (any other value is refused). `blocking` means an
-unmet criterion, a broken Decision, wrong behaviour, a security issue or excluded scope; anything else is `advisory`. The verdict is `fix` if anything blocks, else `clean`. Reply
+`severity` is exactly `blocking`, `advisory` or `needs-decision` (any other value is refused).
+`blocking` means an unmet criterion, a broken Decision, wrong behaviour, a security issue or excluded
+scope. `needs-decision` means the diff silently made a choice a developer would take to the client
+(a UI flow or screen changing; something taken away from users; what happens to existing data;
+pricing, limits or a paid service; a breaking change; a hard-to-reverse architecture choice), or
+departed from a Decision with a reason you find plausible; the summary states what the spec implied
+and what the diff did. The user decides it, not a fix round. Anything else is `advisory`. A Decisions
+row the driver appended (`<id> ruled: …`, `scope widened: …`, `reviewer: …`) records the user's
+ruling and is not a finding. Files marked `(askPaths)` are on paths the host watches. The verdict is `fix` if anything blocks, else `clean`. Reply
 with the path and the verdict.

@@ -980,3 +980,22 @@ test('AC-20261105-08-17 the commands and docs name gateConcurrency, laneFiles, r
   assert.ok(contract.includes('`gateConcurrency`') && contract.includes('`laneFiles`'), 'the interface contract config row names both keys')
   assert.ok(contract.includes('`regate`'), 'the interface contract lists the regate mark')
 })
+
+test('AC-20261105-06-12 RELAY groups lane questions by kind (assumption before escalate), marks the first option recommended, and says the orchestrator never answers for the user', () => {
+  const h = host()
+  dispatchTwo(h)
+  pending.writePending(h.wt('01-alpha'), { lane: '1', kind: 'escalate', question: 'Gate red twice?', options: [{ label: 'retry', description: 'again' }, 'park', 'amend'] })
+  pending.writePending(h.wt('02-beta'), { lane: '2', kind: 'assumption', question: 'Old rows exist?', options: ['keep the old rows', 'delete them', 'amend'] })
+  h.ok('--mark', 'returned', '--lane', '1')
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'RELAY')
+  const out = h.ok().stdout
+  const a = out.indexOf('[assumption] lane 2 — 02-beta'); const e = out.indexOf('[escalate] lane 1 — 01-alpha')
+  assert.ok(a >= 0 && e > a, 'assumption is printed before escalate:\n' + out)
+  assert.ok(out.includes('   - keep the old rows (recommended)') && out.includes('   - retry (recommended) — again'), out)
+  assert.ok(!/- delete them \(recommended\)/.test(out) && !/- park \(recommended\)/.test(out), 'only the first option is marked')
+  assert.ok(out.includes('never answers for the user'), 'the relay says who answers')
+  assert.ok(out.includes('--mark answered --lane 2 --label "<label>"'), 'the answered line is still printed')
+  assert.strictEqual(JSON.parse(h.run('--json').stdout).step, 'RELAY')
+  assert.strictEqual(st.readFanout(h.dir).batch.find((l) => String(l.id) === '2').question.kind, 'assumption', 'the lane keeps the kind it stopped with')
+})

@@ -467,11 +467,13 @@ test('the hook blocks destructive git in every checkout while a lane is open, an
   assert.strictEqual(hook(h.dir, 'git branch && git reset --hard').status, 2, 'a harmless verb never unlocks the rest of the command')
   assert.strictEqual(hook(h.dir, 'git commit -m x && git reset --hard').status, 2, 'nor does a lane-only verb placed first')
   assert.strictEqual(hook(h.dir, 'git branch -v --delete --force feat').status, 2, 'long-form delete is not a listing')
+  for (const c of ['git branch -v --mov main gone', 'git branch -a -C side o4', 'git branch -r --dele X', 'git stash -m list', 'git stash -- list', 'timeout 30 git reset --hard', 'nice -n 5 git clean -fdx', 'xargs -0 git checkout -- .']) assert.strictEqual(hook(h.dir, c).status, 2, c)
+  for (const c of ['git branch --merged', 'git branch --format=%(refname)', 'git stash list', 'git stash show -p']) assert.strictEqual(hook(h.dir, c).status, 0, c)
   assert.strictEqual(hook(h.dir, 'git branch -D x').status, 2); assert.strictEqual(hook(h.dir, 'git checkout -b feat').status, 2, 'moving the checkout mid-run breaks the merge')
   assert.strictEqual(hook(h.wt, 'git branch').status, 2, 'inside the lane every blocked verb stays blocked')
   const other = tmpdir('other'); gitRepo(other)
   assert.strictEqual(hook(h.dir, `git -C ${other} reset --hard`).status, 0, 'another repo is not guarded by this one\'s lane')
-  assert.strictEqual(hook(h.dir, `git -C ${other} branch -D x && git commit -m y`).status, 0, 'each verb is judged in its own directory')
+  assert.strictEqual(hook(h.dir, `git -C ${other} reset --hard && git commit -m y`).status, 0, 'each verb is judged in its own directory')
   fs.rmSync(h.wt, { recursive: true, force: true }) // a crash left the marker behind
   const r = hook(h.dir, 'git reset --hard')
   assert.strictEqual(r.status, 2); assert.match(r.stderr, /stale marker.*rm /, 'the way out is printed')
@@ -485,4 +487,13 @@ test('a lane run started from the main checkout finds its spec under --root, not
   assert.strictEqual(r.status, 0, r.stderr)
   assert.match(r.stdout, /^▶ BUILD/)
   assert.strictEqual(h.state(h.wt).lane, true)
+})
+
+test('a main checkout left mid-merge by another run gets the right remedy, not "stash"', () => {
+  const h = fixture()
+  fs.writeFileSync(path.join(h.dir, 'a.txt'), 'trunk\n'); h.g('commit', '-q', '-am', 'trunk')
+  h.g('checkout', '-q', '-b', 'other', 'HEAD~1'); fs.writeFileSync(path.join(h.dir, 'a.txt'), 'other\n'); h.g('commit', '-q', '-am', 'other'); h.g('checkout', '-q', 'main')
+  assert.notStrictEqual(require('child_process').spawnSync('git', ['-C', h.dir, 'merge', 'other']).status, 0, 'conflicts, leaving MERGE_HEAD')
+  const r = h.run()
+  assert.strictEqual(r.status, 2); assert.match(r.stderr, /mid-merge .*CONFLICTS/)
 })

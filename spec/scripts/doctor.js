@@ -5,7 +5,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { readJson, configPath } = require('./lib/state')
+const { readJson, configPath, readFanout } = require('./lib/state')
 const { run } = require('./lib/host')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
@@ -25,7 +25,7 @@ function walkRuns(dir, out, depth = 0) {
 }
 
 function check(root) {
-  const f = []
+  const f = []; const info = [] // info: runs in flight, printed but not a finding
   let cfg = null
   if (!fs.existsSync(configPath(root))) f.push('config: .claude/spec.config.json is missing — run /spec:init')
   else {
@@ -41,15 +41,17 @@ function check(root) {
     process.stderr.write(`testCommand finished in ${((Date.now() - t0) / 1000).toFixed(1)}s\n`)
     if (r.status === 124) f.push(`testCommand: timed out after ${cap / 1000}s — not proven healthy: ${cfg.testCommand}`)
     else if (r.status === 127) f.push(`testCommand: command not found (exit 127): ${cfg.testCommand}`)
-    else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b|\bfail|error/i.test(l)) || ls.pop() || ''}`) }
+    else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.pop() || ''}`) }
   }
-  for (const e of IGNORE) if (git.raw(['check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e}`)
+  for (const e of IGNORE) if (git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e}`)
   const ENDED = ['DONE', 'PARKED', 'AMENDED']
   const used = new Set() // worktrees a live run points at
+  const fan = readFanout(root)
+  if (fan && fan.step && fan.step !== 'PLAN') { info.push(`in flight: fan-out at ${fan.step} — /spec:fanout`); for (const l of fan.batch || []) if (l.worktree) used.add(path.resolve(root, l.worktree)) }
   for (const d of walkRuns(path.join(root, 'specs'), [])) {
     const run = readJson(path.join(d, 'state.json'), null); const rel = path.relative(root, d)
     if (run && run.step && !ENDED.includes(run.step) && !run.ended) {
-      f.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — /spec:run ${rel.replace(/\.run$/, '.md')}`)
+      info.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — ${fan ? '/spec:fanout' : `/spec:run ${rel.replace(/\.run$/, '.md')}`}`)
       if (run.worktree) used.add(path.resolve(root, run.worktree))
     } else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
   }
@@ -58,7 +60,8 @@ function check(root) {
   try {
     for (const n of fs.readdirSync(wt)) {
       const p = path.join(wt, n)
-      f.push(live(p) ? `in flight: .claude/worktrees/${n} (a run in flight, a lane marker or uncommitted work) — leave it to its run` : `leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
+      if (live(p)) info.push(`in flight: .claude/worktrees/${n} (a run in flight, a lane marker or uncommitted work) — leave it to ${fan ? '/spec:fanout' : 'its run'}`)
+      else f.push(`leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
     }
   } catch { /* none */ }
   for (const base of [root, ...(fs.existsSync(wt) ? fs.readdirSync(wt).map((n) => path.join(wt, n)) : [])]) {
@@ -71,15 +74,15 @@ function check(root) {
     if (!tracked || pending) f.push('uncommitted migration: docs/archive/v7/ is untracked or staged — commit it (git add -A && git commit -m "chore(spec): migrate v7 → v8")')
   }
   const plugin = readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {}) || {}
-  return { findings: f, version: plugin.version || null }
+  return { findings: f, info, version: plugin.version || null }
 }
 
 function main(argv) {
   const i = argv.indexOf('--root')
   const root = i >= 0 ? path.resolve(argv[i + 1]) : git.repoRoot(process.cwd())
-  const { findings, version } = check(root)
-  if (argv.includes('--json')) process.stdout.write(JSON.stringify({ ok: !findings.length, version, findings }) + '\n')
-  else process.stdout.write(findings.length ? findings.map((x) => '- ' + x).join('\n') + `\n${findings.length} finding(s)\n` : `✅ healthy — spec ${version || ''}\n`)
+  const { findings, info, version } = check(root)
+  if (argv.includes('--json')) process.stdout.write(JSON.stringify({ ok: !findings.length, version, findings, info }) + '\n')
+  else process.stdout.write([...info.map((x) => '· ' + x), ...findings.map((x) => '- ' + x)].join('\n') + (findings.length ? `\n${findings.length} finding(s)\n` : `${info.length ? '\n' : ''}✅ healthy — spec ${version || ''}\n`))
   return findings.length ? 1 : 0
 }
 

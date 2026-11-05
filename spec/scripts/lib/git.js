@@ -62,11 +62,17 @@ function worktreeRemove(root, wtPath, { deleteBranch, force } = {}) {
 }
 
 // Stages everything and commits; returns the new sha, or null when there was nothing to commit.
-function commitAll(cwd, message) {
+function commitAll(cwd, message, { noVerify } = {}) {
   sh(['add', '-A'], cwd)
   if (raw(['diff', '--cached', '--quiet'], cwd).status === 0) return null
-  sh(['commit', '-q', '-m', message], cwd)
+  sh(['commit', '-q', ...(noVerify ? ['--no-verify'] : []), '-m', message], cwd)
   return headSha(cwd)
+}
+
+// The right words for a dirty checkout: a merge another run left half-done is not "stash it".
+function dirtyMessage(root) {
+  if (raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], root).status === 0) return `${root} is mid-merge (another /spec:run at CONFLICTS?) — finish that run there, then re-run`
+  return `${root} has uncommitted tracked changes — commit or stash them, then re-run`
 }
 
 const conflictsIn = (root) => sh(['diff', '--name-only', '--diff-filter=U'], root).split('\n').filter(Boolean)
@@ -75,7 +81,7 @@ const conflictsIn = (root) => sh(['diff', '--name-only', '--diff-filter=U'], roo
 // session to resolve; the result lists them. A dirty root (tracked changes) is refused.
 function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
   if (sh(['status', '--porcelain', '--untracked-files=no'], root)) {
-    const e = new Error(`${root} has uncommitted tracked changes — commit or stash them, then re-run`)
+    const e = new Error(dirtyMessage(root))
     e.exit = 2
     throw e
   }
@@ -132,7 +138,7 @@ const changedFiles = (base, cwd) =>
   withWorkingIndex(cwd, (env) => sh(['diff', '--cached', '--name-only', base], cwd, env)).split('\n').filter(Boolean)
 
 module.exports = {
-  repoRoot,
+  repoRoot, dirtyMessage,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
   commitAll, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
 }

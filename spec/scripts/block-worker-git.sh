@@ -41,7 +41,11 @@ function scan(cmd, dir, dirs, verbs, depth, cwd = dir) {
   let words = []
   const flush = () => {
     let w = words; words = []
-    while (w.length && (/^[A-Za-z_]\w*=/.test(w[0]) || ["env", "command", "exec", "time", "nohup", "sudo", "builtin"].includes(w[0]))) w = w.slice(1)
+    while (w.length && (/^[A-Za-z_]\w*=/.test(w[0]) || ["env", "command", "exec", "time", "nohup", "sudo", "builtin", "nice", "ionice", "stdbuf", "xargs", "timeout"].includes(w[0]))) {
+      const wrap = w[0]; w = w.slice(1)
+      if (wrap === "timeout") { while (w.length && (w[0].startsWith("-") || /^[\d.]+[smhd]?$/.test(w[0]))) w = w.slice(w[0] === "-k" || w[0] === "-s" ? 2 : 1) }
+      else if (["nice", "ionice", "stdbuf", "xargs"].includes(wrap)) { while (w.length && w[0].startsWith("-")) w = w.slice(/^-[a-zA-Z]$/.test(w[0]) ? 2 : 1) }
+    }
     if (!w.length) return
     const prog = path.basename(w[0])
     if (w[0] === "cd" || w[0] === "pushd") {
@@ -57,8 +61,9 @@ function scan(cmd, dir, dirs, verbs, depth, cwd = dir) {
         else {
           // Read-only or additive forms are harmless in the main checkout (still blocked inside a lane).
           const rest = w.slice(k + 1); const sub = rest.find((x) => !x.startsWith("-")) || ""
-          const harmless = (a === "branch" && !rest.some((x) => /^-[a-zA-Z]*[dDmMfc]|^--(delete|move|copy|force|set-upstream|unset-upstream|edit-description)/.test(x)) && (!sub || rest.some((x) => /^(--list|-l|-v|-vv|-a|-r|--show-current)$/.test(x))))
-            || (a === "worktree" && /^(list|prune)$/.test(sub)) || (a === "stash" && /^(list|show)$/.test(sub))
+          const LIST = /^(--list|-l|-v|-vv|-a|-r|--all|--remotes|--show-current|--verbose|--merged|--no-merged|--contains|--no-contains|--points-at|--sort=.*|--format=.*|--color.*|--no-color|--column.*|--no-column)$/
+          const harmless = (a === "branch" && rest.every((x) => LIST.test(x) || !x.startsWith("-")) && rest.every((x) => !x.startsWith("-") ? rest.some((y) => LIST.test(y)) : true))
+            || (a === "worktree" && /^(list|prune)$/.test(sub)) || (a === "stash" && /^(list|show)$/.test(rest[0] || ""))
           if (a === "rebase" && rest[0] === "--continue") break
           verbs.push({ v: a, harmless, d: require("fs").existsSync(d) ? d : cwd })
           break
@@ -94,7 +99,7 @@ while IFS=$'\t' read -r verb harmless d; do
     lane="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$d")"
     {
       echo "BLOCKED: git $verb inside a spec lane worktree ($lane) — agents never run git here; /spec:run commits and merges at its own steps."
-      echo "  stale marker (no run in flight)? rm '$g/spec-lane-open'"
+      echo "  stale marker (no run in flight)? /spec:doctor says"
     } >&2
     exit 2
   fi

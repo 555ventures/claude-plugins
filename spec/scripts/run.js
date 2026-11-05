@@ -60,7 +60,7 @@ function go(state, step, extra = {}) {
 
 function load(ctx) {
   const s = specInfo(ctx)
-  const ignored = (p) => git.raw(['check-ignore', '-q', p], ctx.root).status !== 1 // 0 ignored; 128 (e.g. a symlinked dir) is not "missing"
+  const ignored = (p) => git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', p], ctx.root).status !== 1 // 0 ignored; 128 (e.g. a symlinked dir) is not "missing"; the repo's own ignores only
   if (!ignored(path.relative(ctx.root, st.runPath(s.abs))) || (cfgOf(ctx).worktreePerSpec !== false && !ignored('.claude/worktrees/x')))
     refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
   return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel }
@@ -95,14 +95,14 @@ function open(state, ctx) {
   const cur = git.currentBranch(ctx.root)
   const lane = pending.isFanoutLane(ctx.root)
   if (!lane && cur === 'HEAD') refuse('detached HEAD — check out a branch, then re-run')
-  if (!lane && !git.branchExists(ctx.root, cfg.trunk)) refuse(`trunk "${cfg.trunk}" is not a branch here — set trunk in .claude/spec.config.json, then re-run`)
+  if (!lane && !inPlaceFlag && cfg.worktreePerSpec !== false && !git.branchExists(ctx.root, cfg.trunk)) refuse(`trunk "${cfg.trunk}" is not a branch here — set trunk in .claude/spec.config.json, then re-run`)
   const why = lane ? 'fanout lane — the driver works in the lane worktree'
     : inPlaceFlag ? '--in-place'
     : cfg.worktreePerSpec === false ? 'host policy worktreePerSpec: false'
       : cur === specBranch ? "this session already sits on the spec's branch"
         : cur !== cfg.trunk ? `on ${cur}, not ${cfg.trunk} — the build lands here, for your PR` : null
   // Tracked dirt would be swept into the build commit in place, or refuse the merge after the build.
-  if (!lane && git.sh(['status', '--porcelain', '--untracked-files=no'], ctx.root)) refuse(`${ctx.root} has uncommitted tracked changes — commit or stash them, then re-run`)
+  if (!lane && git.sh(['status', '--porcelain', '--untracked-files=no'], ctx.root)) refuse(git.dirtyMessage(ctx.root))
   let wt = ctx.root
   let fresh = lane
   if (!why) {
@@ -307,7 +307,7 @@ function ask(state, ctx, question, options) {
     ...options.map((o) => `- ${o.label} — ${o.description}`)].join('\n')
 }
 
-const rebaseLeft = (cfg) => `a rebase onto trunk is in progress in this worktree: resolve each conflict by both sides' intent, \`GIT_EDITOR=true git rebase --continue\`, run \`${cfg.testCommand}\` until green, then stop — fanout gates and reviews the resolved diff before it lands`
+const rebaseLeft = () => 'a rebase onto trunk is in progress in this worktree: edit each conflicted file to both sides\' intent (no markers left), re-run this driver, then stop — it continues the rebase, and fanout gates and reviews the result before it lands'
 
 // The line of a red tail worth reading first.
 const redLine = (tail) => {
@@ -353,7 +353,13 @@ function derive(state, ctx) {
         { label: 'abort', description: 'run `git reset --merge` there (from your own shell if the hook refuses); marking conflicts-resolved later retries the merge' },
       ]),
     }
-    case 'MERGE_READY': return { name: 'MERGE_READY', body: git.rebasing(wtOf(state, ctx)) ? rebaseLeft(cfgOf(ctx)) : state.report || '' }
+    case 'MERGE_READY': {
+      const wt = wtOf(state, ctx)
+      if (git.rebasing(wt) && !git.conflictsIn(wt).some((f) => /^(<{7}|>{7})( |$)/m.test(st.readText(path.join(wt, f), '')))) {
+        git.sh(['add', '-A'], wt); git.raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt) // resolved: continue; a later commit may conflict again
+      }
+      return { name: 'MERGE_READY', body: git.rebasing(wt) ? rebaseLeft() : state.report || '' }
+    }
     default: return { name: state.step, body: state.report || '' }
   }
 }

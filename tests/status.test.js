@@ -94,3 +94,11 @@ test('a live fan-out owns Next; a run whose spec already merged (stopped at CONF
   assert.deepStrictEqual([r.next, r.lanes], ['/spec:fanout', []])
   assert.match(r.verdict, /fan-out is in flight/)
 })
+
+test('a run resting at CONFLICTS or ESCALATE is "waiting on you", and every run in flight is counted', () => {
+  const d = tmpdir('status'); gitRepo(d)
+  w(d, 'specs/20261104/01-x.md', spec('implementing', 'n/a', ['a.js'])); w(d, 'specs/20261104/01-x.run/state.json', '{"step":"ESCALATE"}')
+  w(d, 'specs/20261104/02-y.md', spec('implementing', 'n/a', ['b.js'])); w(d, 'specs/20261104/02-y.run/state.json', '{"step":"BUILD"}')
+  const r = JSON.parse(run(d).stdout)
+  assert.match(r.verdict, /🟡 a run is waiting on you \(2 runs\)/)
+})

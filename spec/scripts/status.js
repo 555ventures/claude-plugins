@@ -64,13 +64,14 @@ function build(root) {
     if (loose) { head = i; paste = `/spec:queue add ${loose.path}`; break }
   }
   // A run in flight, queued or started by hand, is the thing to finish first.
-  const running = specs.find((s) => fs.existsSync(runPath(path.join(root, s.path))) && !(readJson(runPath(path.join(root, s.path))) || {}).ended)
+  const runs = specs.map((s) => ({ s, run: readJson(runPath(path.join(root, s.path))) })).filter((x) => x.run && !x.run.ended)
+  const running = runs[0] && runs[0].s; const waiting = runs.some((x) => ['ESCALATE', 'CONFLICTS'].includes(x.run.step))
   const fan = readFanout(root)
   if (!head && !running) { const loose = specs.find((s) => s.spec.frontmatter.status === 'hardened' && !queued(s.path)); if (loose) paste = `/spec:queue add ${loose.path}` }
   const parallel = lanes(root, q, readConfig(root).lanes)
   const qs = questions(root)
   const verdict = qs.length ? `🟡 waiting on you — ${qs.length} pending question${qs.length > 1 ? 's' : ''}`
-    : fan ? `🟢 a fan-out is in flight · /spec:fanout` : running ? `🟢 a run is in flight · /spec:run ${running.path}` : paste ? `🟢 next is ready · ${paste}` : '⚪ queue empty'
+    : fan ? `🟢 a fan-out is in flight · /spec:fanout` : running ? `${waiting ? '🟡 a run is waiting on you' : '🟢 a run is in flight'}${runs.length > 1 ? ` (${runs.length} runs)` : ''} · /spec:run ${running.path}` : paste ? `🟢 next is ready · ${paste}` : '⚪ queue empty'
   const res = { roadmap: roadmap(root, specs, q), next: fan ? '/spec:fanout' : running ? `/spec:run ${running.path}` : paste, lanes: fan ? [] : parallel, questions: qs, verdict }
   return res
 }

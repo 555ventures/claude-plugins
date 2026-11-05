@@ -81,3 +81,12 @@ test('placeholder check fires on template lines only: `<path>` in a sentence pas
   fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('WHEN x THE SYSTEM SHALL <observable result>.', '').replace(/^area: .*$/m, 'area: <area>'))
   assert.strictEqual(plan(d, 'lock', f).status, 2, 'frontmatter placeholders count too')
 })
+
+test('lock refuses a spec outside the repo and a missing argument', () => {
+  const d = tmpdir('plan'); gitRepo(d)
+  const outside = tmpdir('plan'); const f = fresh(outside, 'far')
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 2); assert.match(r.stderr, /outside/)
+  assert.match(fs.readFileSync(f, 'utf8'), /status: draft/, 'nothing was written')
+  assert.strictEqual(plan(d, 'lock').status, 2)
+})

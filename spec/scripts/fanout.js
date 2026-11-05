@@ -114,13 +114,12 @@ function derivePlan(ctx) {
 // ---- DISPATCH ---------------------------------------------------------------------------------
 
 // The Agent tool takes no working directory, so the lane's prompt points run.js at its worktree.
-const REBASE = 'a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git rebase --continue`, run the test command until green, then stop'
+// The prompt is the bare /spec:run: the lane's driver prints any rebase instruction itself.
 function agentLine(root, config, lane) {
   const seat = config.seats.orchestrator || {}
   const model = seat.model || 'opus'
-  const tail = lane.conflicts ? ` — ${REBASE}` : ''
   return `Agent({ subagent_type: "claude", model: "${model}", effort: "${seat.effort || 'medium'}", description: "lane ${lane.id}: ${lane.stem}", ` +
-    `prompt: ${JSON.stringify(`/spec:run ${lane.spec} --root ${shq(wtAbs(root, lane))}${tail}`)} })`
+    `prompt: ${JSON.stringify(`/spec:run ${lane.spec} --root ${shq(wtAbs(root, lane))}`)} })`
 }
 
 function dispatchBody(root, lanes, intro) {
@@ -161,8 +160,11 @@ function deriveWait(s, ctx) {
   const config = st.readConfig(ctx.root)
   const lines = ['Lanes (status · run step):', ...s.batch.map((l) => `  lane ${l.id} — ${l.stem}: ${l.status}${l.status === 'merged' ? '' : ` · ${laneRunStep(ctx.root, l)}`}`)]
   lines.push('', 'As each lane agent returns, mark it returned. A lane that stopped without writing a pending question: add --stopped "<reason>".',
-    'After a crash or /clear, re-send any lane whose agent is no longer running (/spec:run resumes where it stopped):',
-    ...s.batch.filter((l) => l.status === 'dispatched').map((l) => '  ' + agentLine(ctx.root, config, l)))
+    'After a crash or /clear: a lane at MERGE_READY or ended is marked returned; re-send any other lane whose agent is no longer running (/spec:run resumes where it stopped):',
+    ...s.batch.filter((l) => l.status === 'dispatched').map((l) => {
+      const step = laneRunStep(ctx.root, l); const q = pending.readPending(wtAbs(ctx.root, l))
+      return FINISHED.includes(step) || ENDED.includes(step) || (q && !q.answer) ? `  node ${shq(ctx.script)} --root ${shq(ctx.root)} --mark returned --lane ${l.id}` : '  ' + agentLine(ctx.root, config, l)
+    }))
   return { name: 'WAIT', body: lines.join('\n'), mark: 'returned --lane <id> [--stopped "<reason>"]', accepts: ['dismissed'] }
 }
 
@@ -246,10 +248,10 @@ function mergeLane(s, ctx, lane) {
   }
   delete lane.conflicts
   pending.consumePending(wt)
-  st.clearRun(spec)
   const doc = specDoc(spec)
   if (doc && doc.frontmatter.status !== 'done') st.writeStatus(spec, 'done')
-  git.commitAll(wt, `chore(spec): ${lane.stem} done`)
+  st.clearRun(spec)
+  git.commitAll(wt, `chore(spec): ${lane.stem} done`, { noVerify: true }) // bookkeeping only: gateAfter runs the suite next
   const m = git.mergeBack(root, lane.branch, 'ff-only')
   if (!m.merged) refuse(`fast-forward of ${config.trunk} to ${lane.branch} failed: ${m.reason}`, 1)
   return gateAfter(s, ctx, lane)

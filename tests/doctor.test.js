@@ -72,11 +72,18 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/03-busy', '.claude/worktrees/spec-03-busy'])
   fs.writeFileSync(path.join(d, '.claude/worktrees/spec-03-busy/wip.txt'), 'x')
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/04-idle', '.claude/worktrees/spec-04-idle'])
-  const f = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout).findings
-  assert.ok(f.some((x) => /in flight: specs\/20260101\/01-live\.md at BUILD — \/spec:run/.test(x)), f.join('\n'))
+  const r = runNode('scripts/doctor.js', ['--root', d, '--json']); const j = JSON.parse(r.stdout); const f = j.findings; const info = j.info
+  assert.ok(info.some((x) => /in flight: specs\/20260101\/01-live\.md at BUILD — \/spec:run/.test(x)), info.join('\n'))
   assert.ok(f.some((x) => /stale sidecar: specs\/20260101\/02-old\.run — rm -r/.test(x)))
-  assert.ok(f.some((x) => /in flight: \.claude\/worktrees\/spec-03-busy/.test(x)), 'uncommitted work is never a leftover')
+  assert.ok(info.some((x) => /in flight: \.claude\/worktrees\/spec-03-busy/.test(x)), 'uncommitted work is never a leftover')
   assert.ok(f.some((x) => /leftover worktree: \.claude\/worktrees\/spec-04-idle — git worktree remove/.test(x)))
+  fs.rmSync(path.join(d, 'specs/20260101/02-old.run'), { recursive: true }); execFileSync('git', ['-C', d, 'worktree', 'remove', '.claude/worktrees/spec-04-idle'])
+  fs.writeFileSync(path.join(d, '.gitignore'), 'specs/**/*.run/\n.claude/worktrees/\n.claude/pending-question.json\n.claude/settings.local.json\n')
+  const st = require(path.join(require('./helpers').SPEC, 'scripts/lib/state.js'))
+  st.writeFanout(d, { step: 'WAIT', batch: [{ worktree: '.claude/worktrees/spec-03-busy' }] })
+  const r2 = runNode('scripts/doctor.js', ['--root', d, '--json']); const j2 = JSON.parse(r2.stdout)
+  assert.strictEqual(r2.status, 0, 'runs in flight alone are not findings: ' + JSON.stringify(j2))
+  assert.ok(j2.info.some((x) => /fan-out at WAIT — \/spec:fanout/.test(x)) && j2.info.some((x) => /spec-03-busy.*\/spec:fanout/.test(x)))
 })
 
 test('gitignore is judged by git: a broader pattern that covers the sidecars is not missing', () => {

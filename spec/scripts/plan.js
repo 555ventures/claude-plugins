@@ -27,12 +27,15 @@ function create(root, slug) {
 function lock(root, arg, confirmed) {
   const typed = arg || ''
   const file = fs.existsSync(path.resolve(root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(root, typed) : path.resolve(process.cwd(), typed)
-  if (!fs.existsSync(file)) throw new Refusal(`no such spec: ${arg}`)
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Refusal(`no such spec: ${arg || '(none)'}`)
+  if (path.relative(root, file).startsWith('..')) throw new Refusal(`${file} is outside ${root}`)
   const s = readSpec(file)
   const missing = REQUIRED.filter((n) => !Object.keys(s.sections).some((k) => k === n || k.startsWith(n + ' ') || k.startsWith(n + '(')))
   if (missing.length) throw new Refusal(`missing sections: ${missing.join(', ')}`)
   if (s.markers) throw new Refusal(`${s.markers} [NEEDS CLARIFICATION:] marker(s) left — resolve them first`)
-  const prose = (readText(file).replace(/^```[\s\S]*?^```/gm, '').replace(/`[^`\n]*`/g, '')) // code may say `--root <path>` or <Title>Hi</Title>
+  // Code may say `--root <path>` or <Title>Hi</Title>: drop fenced blocks (line by line, so a stray fence cannot swallow prose) and inline code.
+  let fence = false
+  const prose = readText(file).split('\n').filter((l) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return false } return !fence }).join('\n').replace(/`[^`\n]*`/g, '')
   const left = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => prose.includes(t))
   if (left.length) throw new Refusal(`template placeholders left: ${left.join(' ')} — fill them in first`)
   if (s.frontmatter.architecture === true && !confirmed) throw new Refusal("architecture change — needs the user's yes; re-run with --confirmed")

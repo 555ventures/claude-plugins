@@ -241,16 +241,19 @@ test('a rebase conflict sends the lane back with the rebase in progress; resolve
   const gd = execFileSync('git', ['-C', h.wt('03-gamma'), 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim()
   assert.ok(fs.existsSync(path.join(gd, 'rebase-merge')) || fs.existsSync(path.join(gd, 'rebase-apply')), 'the rebase is left in progress in the lane worktree')
   const out = h.ok().stdout
-  assert.ok(out.includes(`/spec:run ${specPath('03-gamma')} --root ${h.wt('03-gamma')} — a rebase onto trunk is in progress in your worktree; resolve the conflicts by intent`), 'the re-dispatch prompt carries the rebase instruction')
-  assert.match(out, /run the test command until green, then stop/)
+  assert.ok(out.includes(`prompt: "/spec:run ${specPath('03-gamma')} --root ${h.wt('03-gamma')}"`), 'the re-dispatch prompt is the bare /spec:run, nothing shell-hostile')
   assert.match(out, /lane 2 conflicts: src\/a\.js/)
+  const laneOut = runNode('scripts/run.js', [specPath('03-gamma'), '--root', h.wt('03-gamma')])
+  assert.match(laneOut.stdout, /▶ MERGE_READY\n\na rebase onto trunk is in progress in this worktree: edit each conflicted file/, 'the lane driver prints the rebase instruction itself')
   h.ok('--mark', 'resent')
   assert.strictEqual(h.step(), 'WAIT')
   assert.strictEqual(h.run('--mark', 'returned', '--lane', '2').status, 2, 'a lane still mid-rebase cannot return')
   const w = h.wt('03-gamma')
   fs.writeFileSync(path.join(w, 'src/a.js'), 'alpha\ngamma\n')
-  execFileSync('git', ['-C', w, 'add', 'src/a.js'])
-  execFileSync('git', ['-C', w, '-c', 'core.editor=true', 'rebase', '--continue'])
+  const cont = runNode('scripts/run.js', [specPath('03-gamma'), '--root', w])
+  assert.match(cont.stdout, /^▶ MERGE_READY\n/, 'with no markers left the driver continues the rebase; no instruction is printed')
+  assert.ok(!/rebase onto trunk is in progress/.test(cont.stdout))
+  assert.ok(!fs.existsSync(path.join(gd, 'rebase-merge')) && !fs.existsSync(path.join(gd, 'rebase-apply')), 'the rebase is finished')
   const rebasedOnto = h.g('rev-parse', 'HEAD').trim()
   fs.writeFileSync(path.join(h.dir, 'other.txt'), 'x\n'); h.g('add', 'other.txt'); h.g('commit', '-q', '-m', 'trunk moved meanwhile')
   fs.writeFileSync(path.join(w, 'RED'), '') // the resolution broke the suite
@@ -328,10 +331,25 @@ test('WAIT prints the Agent line of every lane still out, so a crashed session c
   const h = host()
   dispatchTwo(h)
   const out = h.ok().stdout
-  assert.match(out, /re-send any lane whose agent is no longer running/)
+  assert.match(out, /re-send any other lane whose agent is no longer running/)
   assert.match(out, new RegExp(`Agent\\(\\{[^\\n]*lane 1: 01-alpha[^\\n]*/spec:run ${specPath('01-alpha').replace(/[/.]/g, '\\$&')} --root`))
   assert.match(out, /lane 2: 02-beta/)
   h.finish('01-alpha', 'src/a.js'); h.ok('--mark', 'returned', '--lane', '1')
+  h.finish('02-beta', 'src/b.js') // finished but not yet marked: a returned line, not a second agent in the same worktree
   const again = h.ok().stdout
-  assert.ok(!/lane 1: 01-alpha[^\n]*--root/.test(again) && /lane 2: 02-beta[^\n]*--root/.test(again), 'only lanes still out are re-sent')
+  assert.ok(!/lane 1: 01-alpha[^\n]*--root/.test(again) && !/lane 2: 02-beta[^\n]*--root/.test(again), 'no lane is re-sent')
+  assert.match(again, /--mark returned --lane 2/)
+})
+
+test('the bookkeeping commit after a rebase never runs the host hook, so a red resolution reaches MERGE_RED instead of wedging', () => {
+  const h = host()
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js')
+  h.finish('02-beta', 'RED', 'broken\n') // lane 2 lands a red suite
+  fs.mkdirSync(path.join(h.dir, '.git/hooks'), { recursive: true })
+  fs.writeFileSync(path.join(h.dir, '.git/hooks/pre-commit'), '#!/bin/sh\ntest ! -f RED\n', { mode: 0o755 }) // the host runs its suite on every commit
+  h.ok('--mark', 'returned', '--lane', '1')
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'MERGE_RED', 'the hook did not block the bookkeeping commit; the gate caught the red')
+  assert.match(h.ok().stdout, /MERGE_RED/)
 })

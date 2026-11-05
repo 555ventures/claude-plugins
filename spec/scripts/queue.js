@@ -57,11 +57,12 @@ function age(iso) {
 // zero-padded ref is never a row position, so a brief that was never queued is "no match".
 const briefNo = (p) => { const m = BRIEF_RE.exec(p); return m ? String(Number.parseInt(m[1], 10)) + m[1].replace(/^\d+/, '') : null }
 
-function resolve(q, ref) {
+function resolve(q, ref, root) {
   const list = pending(q)
   const hit = (xs) => (xs.length === 1 ? xs[0] : null)
   const brief = BRIEF_RE.test(ref) && list.find((i) => i.kind === 'brief' && briefNo(i.payload) === briefNo(ref))
   if (brief) return brief
+  if (/^\d+[a-z]?$/.test(ref) && briefPath(root, ref).startsWith('docs/roadmap/') && !briefPath(root, ref).includes('*')) return null // a real brief, not queued
   if (/^[1-9]\d*$/.test(ref) && list[Number(ref) - 1]) return list[Number(ref) - 1]
   return q.items.find((i) => i.id === ref) ||
     hit(list.filter((i) => i.payload === ref || path.basename(i.payload) === ref)) ||
@@ -108,7 +109,7 @@ function main(argv) {
     out(`queued ${it.id} (${it.kind}): ${arg}`, it)
   } else if (cmd === 'move') {
     const [ref, n] = [pos[1], Number(pos[2])]
-    const it = ref && resolve(q, ref)
+    const it = ref && resolve(q, ref, root)
     if (!it) return fail(`no pending item matches "${ref}"`)
     if (!(n >= 1)) return fail('move needs a 1-based position', 2)
     q.items.splice(q.items.indexOf(it), 1)
@@ -117,8 +118,8 @@ function main(argv) {
     writeQueue(root, q)
     out(`moved ${it.id} to ${n}`, it)
   } else if (cmd === 'done' || cmd === 'show') {
-    const it = resolve(q, arg)
-    if (!it && cmd === 'done' && /^0\d+[a-z]?$/.test(arg)) return out(`nothing queued for brief ${arg}`, { none: true }), 0
+    const it = resolve(q, arg, root)
+    if (!it && cmd === 'done' && BRIEF_RE.test(arg) && !/^specs\//.test(arg) && (/^0\d/.test(arg) || briefPath(root, arg).startsWith('docs/roadmap/'))) return out(`nothing queued for brief ${arg}`, { none: true }), 0
     if (!it) return fail(`no item matches "${arg}"`)
     if (cmd === 'show') return out(it.payload, it), 0
     it.done = new Date().toISOString()

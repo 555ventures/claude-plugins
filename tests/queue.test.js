@@ -119,3 +119,13 @@ test('a brief number names the brief item, not the row; 1 and 01 are the same br
   const r = q(d, 'done', '03'); assert.strictEqual(r.status, 0); assert.match(r.stdout, /nothing queued for brief 03/, 'an unqueued brief number is never row 3, and not an error either')
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run specs/20261104/01-a.md', 'row 3 is untouched')
 })
+
+test('a bare number that names a roadmap brief is that brief even unqueued and unpadded, never a row', () => {
+  const d = repo()
+  fs.writeFileSync(path.join(d, 'docs/roadmap/12-twelve.md'), '# 12 — Twelve\n')
+  for (let i = 0; i < 12; i++) q(d, 'add', `task ${i}`)
+  const r = q(d, 'done', '12')
+  assert.strictEqual(r.status, 0); assert.match(r.stdout, /nothing queued for brief 12/)
+  assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 12, 'row 12 was not closed')
+  assert.strictEqual(q(d, 'show', '3').stdout.trim(), 'task 2', 'a number that is no brief is still a row')
+})

@@ -4,7 +4,8 @@
 // MERGE (CONFLICTS) → DONE (architecture §4). The session dispatches agents; the driver gates,
 // commits and merges.
 //
-// node run.js <spec> [--in-place] [--root <dir>] [--state] [--json] [--mark <verb>]
+// node run.js <spec> [--in-place] [--fix "<symptom>"] [--root <dir>] [--state] [--json] [--mark <verb>]
+// --fix runs only as a fanout lane: the brief is the symptom, the commit is `fix(<id>): <symptom>`.
 // Marks: built · repaired · reviewed --file <json> · fixed · escalate <retry|park|amend|revert> ·
 // conflicts-resolved · waiting --on <spec> (lane) · unmet --decision <id> --why <text>.
 // Exit 0 ok · 1 error · 2 refusal.
@@ -51,6 +52,9 @@ const mainRoot = (root) => git.worktreeList(root)[0]
 const sectionText = (spec, name) => spec.sections[Object.keys(spec.sections).find((k) => k === name || k.startsWith(name + ' ')) || ''] || ''
 // v7-era specs carry ## Goal and no ## Intent; the brief's Intent falls back to it.
 const intentText = (spec) => sectionText(spec, 'Intent') || sectionText(spec, 'Goal')
+// A fix lane's brief replaces the Intent with the symptom.
+const fixBlock = (state) => ['## Fix', state.fix, 'Reproduce it, write a regression test that fails for that reason, fix the cause.', '']
+const EVIDENCE = (ctx) => `Evidence an AC asks to record (listings, renders, counts) goes in ${runFile(ctx, 'evidence.md')}; the driver appends it to the build commit.`
 const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Assumptions) are not printed here — read them in the spec file.'
 // Decisions table rows as bullets; the ADR constraints the planner wrote must reach builder and reviewer.
 // A row is a template leftover only when a cell is exactly a <placeholder>; JSX or generics in a decision stay.
@@ -72,7 +76,12 @@ function load(ctx) {
   const ignored = (p) => git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', p], ctx.root).status !== 1 // 0 ignored; 128 (e.g. a symlinked dir) is not "missing"; the repo's own ignores only
   if (!ignored(path.relative(ctx.root, st.runPath(s.abs))) || (cfgOf(ctx).worktreePerSpec !== false && !ignored('.claude/worktrees/x')))
     refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
-  return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel }
+  const fix = ctx.flags.fix
+  if (fix !== undefined) {
+    if (!pending.isFanoutLane(ctx.root)) refuse('--fix runs only as a fanout lane — use /spec:fix here')
+    if (typeof fix !== 'string' || !fix.trim()) refuse('--fix needs a symptom: --fix "<symptom>"')
+  }
+  return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel, ...(fix === undefined ? {} : { fix: fix.trim() }) }
 }
 
 // A fanout lane's marker belongs to fanout; otherwise the marker is on exactly while an agent is out.
@@ -98,7 +107,8 @@ function open(state, ctx) {
   if (status === 'draft' || spec.markers) {
     refuse(`${s.rel} is ${status === 'draft' ? 'a draft' : `carrying ${spec.markers} [NEEDS CLARIFICATION:] marker(s)`} — finish it with /spec:plan ${s.rel}, then re-run`)
   }
-  if (status === 'done') refuse(`${s.rel} is already done — nothing to run`)
+  if (state.fix && !['done', 'hardened'].includes(status)) refuse(`${s.rel} is ${status}, not done or hardened — a fix lane runs on a finished or hardened spec`)
+  if (status === 'done' && !state.fix) refuse(`${s.rel} is already done — nothing to run`)
   if (!cfg.testCommand) refuse('no testCommand in .claude/spec.config.json — run /spec:init')
   const specBranch = `spec/${s.stem}`
   const cur = git.currentBranch(ctx.root)
@@ -135,7 +145,7 @@ function open(state, ctx) {
     const dst = path.join(wt, s.rel)
     st.writeText(dst, fs.readFileSync(s.abs, 'utf8'))
     st.writeStatus(dst, 'done')
-  } else st.writeStatus(s.abs, 'implementing') // in place: COMMIT writes done into the build commit
+  } else if (!state.fix) st.writeStatus(s.abs, 'implementing') // in place: COMMIT writes done into the build commit; a fix lane writes no status
   // A worktree run never touches the main checkout's copy: its sidecar is the in-flight state.
   const mb = git.raw(['merge-base', cfg.trunk, 'HEAD'], wt)
   return go(state, 'BUILD', {
@@ -200,8 +210,12 @@ function commit(state, ctx) {
   const mb = git.raw(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt)
   if (mb.status === 0 && git.sh(['log', '--format=%s', `${mb.stdout.trim()}..HEAD`], wt).split('\n').some((l) => l.startsWith('wip(spec):'))) git.sh(['reset', '-q', '--soft', mb.stdout.trim()], wt)
   // A re-run after a crash between the commit and the save finds a clean tree: report that commit.
+  const subject = state.fix ? `fix(${specInfo(ctx).id}): ${state.fix}` : `build(${specInfo(ctx).id}): ${spec.title}`
+  // Evidence an AC asks to record goes in <run dir>/evidence.md; it rides in the commit body.
+  const evidence = st.readText(runFile(ctx, 'evidence.md'), '').replace(/\r\n/g, '\n').replace(/\s+$/, '')
+  const message = evidence.trim() ? `${subject}\n\n${evidence}` : subject
   try {
-    state.commit = git.commitAll(wt, `build(${specInfo(ctx).id}): ${spec.title}`) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
+    state.commit = git.commitAll(wt, message) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
   } catch (e) { // a commit hook rejected the build: repair it like a red gate; anything else is the user's git
     const hooks = git.raw(['rev-parse', '--git-path', 'hooks'], wt).stdout.trim()
     if (!['pre-commit', 'commit-msg'].some((h) => fs.existsSync(path.resolve(wt, hooks, h)))) refuse(`git commit failed in ${wt}: ${e.message}`, 1)
@@ -280,9 +294,9 @@ function builderBrief(state, ctx, kind) {
     `Spec: ${specPath}`,
     `Test command: ${cfg.testCommand} (run it in the worktree)`,
     '',
-    '## Intent', intentText(spec), '',
+    ...(state.fix ? fixBlock(state) : ['## Intent', intentText(spec), '']),
     '## Decisions', ...decisions(spec), '',
-    '## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '',
+    ...(state.fix ? [] : ['## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '']),
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
     OTHER_SECTIONS, '',
   ]
@@ -293,7 +307,8 @@ function builderBrief(state, ctx, kind) {
     out.push('')
   }
   out.push(kind === 'build' ? `Write failing tests first, then code, and run \`${cfg.testCommand}\` until green.` : `Run \`${cfg.testCommand}\` until green.`,
-    'Do not touch files outside the File Plan without listing them in your final summary.')
+    state.fix ? 'List every file you changed in your final summary.' : 'Do not touch files outside the File Plan without listing them in your final summary.',
+    EVIDENCE(ctx))
   return out.join('\n')
 }
 
@@ -323,10 +338,10 @@ function reviewerBrief(state, ctx) {
     `Diff (working tree vs base): ${runFile(ctx, 'diff.patch')}`,
     `Spec: ${specPath}`,
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
-    `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec).join(', ') || 'none'}`,
+    state.fix ? 'Files changed outside the File Plan: n/a (fix lane — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec).join(', ') || 'none'}`,
     "The spec's frontmatter status line changes during the run; that is bookkeeping, not a finding.",
     '',
-    '## Intent', intentText(spec), '',
+    ...(state.fix ? fixBlock(state) : ['## Intent', intentText(spec), '']),
     '## Decisions', ...decisions(spec), '',
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
     OTHER_SECTIONS,
@@ -346,11 +361,7 @@ function ask(state, ctx, question, options) {
 // trunkSha is the live trunk head the rebase is onto; a resolution that cannot keep a Decision asks, it never decides.
 const rebaseLeft = (trunkSha) => `a rebase onto trunk is in progress in this worktree: edit each conflicted file to both sides' intent (no markers left), re-run this driver — it continues the rebase onto trunk ${trunkSha}, then gates and reviews the result in this same dispatch. If a resolution cannot keep a Decision, mark \`unmet --decision <id> --why <text>\` instead of deciding.`
 
-// The line of a red tail worth reading first.
-const redLine = (tail) => {
-  const ls = (tail || '').split('\n').filter((l) => l.trim() && !/^\s*(✔|✓|ok\b|PASS\b)/.test(l))
-  return ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.find((l) => /\bfail|error|rejected/i.test(l)) || ls[0] || 'gate red'
-}
+const redLine = host.firstRedLine
 
 const ESCALATE_MARK = (state) => `escalate <${offered(state).join('|')}>`
 
@@ -440,7 +451,7 @@ function derive(state, ctx) {
 
 function endRun(state, ctx, status, outcome, extra = {}) {
   const s = specInfo(ctx)
-  st.writeStatus(s.abs, status)
+  if (!state.fix) st.writeStatus(s.abs, status) // a fix lane leaves the spec's status alone
   if (state.marked) pending.unmarkLane(wtOf(state, ctx))
   const report = render({ outcome, artifacts: s.rel, ...extra })
   return go(state, status === 'draft' ? 'AMENDED' : 'PARKED', { ended: !state.lane, report })

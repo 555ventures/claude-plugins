@@ -97,7 +97,10 @@ function main(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--json' || a === '--top') flags[a.slice(2)] = true
-    else if (a === '--root' || a === '--type' || a === '--after') flags[a.slice(2)] = argv[++i]
+    else if (a === '--type' || a === '--after') {
+      if (argv[i + 1] === undefined || argv[i + 1].startsWith('--')) { console.error(`queue: ${a} needs a value`); return 2 }
+      flags[a.slice(2)] = argv[++i]
+    } else if (a === '--root') flags.root = argv[++i]
     else pos.push(a)
   }
   const root = path.resolve(flags.root || require('./lib/git').repoRoot(process.cwd()))

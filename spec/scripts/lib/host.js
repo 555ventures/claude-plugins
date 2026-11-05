@@ -6,6 +6,7 @@
 // gate(root, config)               → {status, cached, runId, tail}; green runs cached by tree hash
 // treeSha(root)                    git tree of the working tree (tracked edits + untracked, not ignored)
 // detectTestCommand(root)          → command string or null
+// firstRedLine(tail)               the line of a red tail worth reading first
 
 const fs = require('fs')
 const path = require('path')
@@ -104,6 +105,12 @@ function gate(root, config, { timeoutMs } = {}) {
   return { status: r.status, cached: false, runId, tail: r.tail }
 }
 
+// The line of a red tail worth reading first: a failure marker, else an error word, else the first line.
+const firstRedLine = (tail) => {
+  const ls = (tail || '').split('\n').filter((l) => l.trim() && !/^\s*(✔|✓|ok\b|PASS\b)/.test(l))
+  return ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.find((l) => /\bfail|error|rejected/i.test(l)) || ls[0] || 'gate red'
+}
+
 function detectTestCommand(root) {
   const has = (f) => fs.existsSync(path.join(root, f))
   const read = (f) => { try { return fs.readFileSync(path.join(root, f), 'utf8') } catch { return '' } }
@@ -124,4 +131,4 @@ function detectTestCommand(root) {
   return null
 }
 
-module.exports = { run, gate, treeSha, cacheDir, lookup, record, keyFor, detectTestCommand, tailOf }
+module.exports = { run, gate, treeSha, cacheDir, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }

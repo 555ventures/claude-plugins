@@ -257,3 +257,15 @@ test('AC-20261105-04-11 the interface contract and architecture name type, after
   const cmd = fs.readFileSync(path.join(root, 'spec/commands/queue.md'), 'utf8')
   assert.ok(cmd.includes('--type') && cmd.includes('--after') && cmd.includes('⏳ after'))
 })
+
+test('AC-20261105-07-14 --type or --after with no value exits 2 with needs a value and adds nothing', () => {
+  const d = repo()
+  for (const flag of ['--type', '--after']) {
+    const r = runNode('scripts/queue.js', ['add', 'x', '--root', d, flag])
+    assert.strictEqual(r.status, 2, flag)
+    assert.ok(r.stderr.includes(`${flag} needs a value`), r.stderr)
+    const mid = runNode('scripts/queue.js', ['add', 'x', flag, '--root', d])
+    assert.strictEqual(mid.status, 2, flag + ' before another flag')
+  }
+  assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 0, 'nothing was added')
+})

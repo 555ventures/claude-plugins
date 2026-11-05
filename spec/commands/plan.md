@@ -15,7 +15,8 @@ prototype contract's behaviour pins become acceptance criteria.
 2. For a new spec, `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js new <slug>` writes the template
    and prints its path. Fill it in, "You asked" in the user's words, `brief: NN`, each ADR
    constraint the change touches as a Decisions row citing it, ACs as `AC-YYYYMMDD-NN-k`. A
-   spec that departs from an accepted ADR sets `architecture: true`.
+   spec that departs from an accepted ADR sets `architecture: true`. An AC that needs recorded
+   evidence (a listing, a render, a count) names `<spec>.run/evidence.md`, never the commit message.
 3. Mark gaps `[NEEDS CLARIFICATION: …]` and close them by reading code or a throwaway
    experiment. Ask the user only about real forks.
 4. If the Intent changes architecture or behaviour, set `architecture: true` and get the

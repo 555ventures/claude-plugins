@@ -17,7 +17,7 @@ This is the user-visible surface of the `spec` and `git` plugins as of `claude-p
 | `/spec:run` | `<spec path> [--in-place]` | Takes a spec from build through review to merge |
 | `/spec:fanout` | `[--pick] [<spec path>…]` | Runs several lanes from one session |
 | `/spec:fix` | `[symptom in plain words]` (bare = taken from the conversation) | Root-cause repair in the Direct lane |
-| `/spec:queue` | `[next\|list\|add\|move\|done\|show\|groom] [args…]` (bare = `next`) | Session work queue |
+| `/spec:queue` | `[next\|list\|add\|move\|done\|show] [args…]` (bare = `next`) | Session work queue |
 | `/spec:status` | `[NN] [--all]` | Dashboard |
 | `/spec:release` | `[milestone note or version tag]` (recorded, never parsed) | Staging → checks → promote to production. Only the user starts it; no `Next:` ever suggests it |
 | `/git:commit` | none | `git add -A` and commit, with two approvals |
@@ -33,8 +33,8 @@ The session runs `node {driver} …`, does exactly the one step printed, runs th
 | Driver | States printed (driver-only states in parentheses) | `--mark` verbs |
 |---|---|---|
 | build (`/spec:run`) | (PREFLIGHT) → TESTS → (RED_CHECK) → RED_FINDINGS? → RED_ATTRIBUTION? → `WAVE:<label>`… → INTEGRATION → (GATE) → REPAIR? (cap 3) → ESCALATE (terminal) \| REPLAY? (prototype owner only) → COMMIT → DONE | `tests-authored`, `red-attributed`, `wave-done --wave <l> --workers <n>`, `integrated`, `repair-applied --continued <n> --spawned <n>`, `escalate-choice <re-arm\|cold\|park\|amend>`, `committed`, `replayed`, `looked`, `incident --class <id>` (allowed at any live step, never moves state) |
-| review (`/spec:run`) | (LEGS) → STOPPED (red gate) \| SKIPS? → REVIEWER → DISPOSITIONS → FIX? (cap 2) → ESCALATE \| CLOSE → MERGE / CONFLICTS → DONE. A lane ends at MERGE_READY. Also printed: REVIEWER_FAILED, CLEAN, UNVERIFIED | `skips-extracted --file`, `reviewer-returned --file <json>`, `dispositions [--file] --waived N --rejected N --fix-dispatched N`, `fix-applied`, `repair-round`, `closed`, `merge-strategy <merge-commit\|ff-only\|squash\|rebase-ff> [--prototype delete\|keep]`, `conflicts-resolved`, `waiting --on <spec>` (lane only), `unmet --decision <id> --why <text>`, `escalate <retry\|park\|amend\|revert>` |
-| fanout | PLAN → DISPATCH → WAIT → RELAY → MERGE (MERGE_RED) → REPORT | `planned`, `picked --label <title>…`, `dispatched`, `returned --lane <id> [--stopped "<reason>"]`, `resent`, `answered --lane <id> [--label <label>]`, `resumed`, `dismissed --lane <id>`, `waiting --lane <id> --on <spec>`, `gate-repaired`, `reported` |
+| review (`/spec:run`) | (LEGS) → STOPPED (red gate) \| SKIPS? → REVIEWER → DISPOSITIONS → FIX? (cap 2) → ESCALATE \| CLOSE → MERGE / CONFLICTS → DONE. A lane ends at MERGE_READY. Also printed: REVIEWER_FAILED, CLEAN, UNVERIFIED | `skips-extracted --file`, `reviewer-returned --file <json>`, `dispositions [--file] --waived N --rejected N --fix-dispatched N`, `fix-applied`, `repair-round`, `closed`, `merge-strategy <merge-commit\|ff-only\|squash\|rebase-ff> [--prototype delete\|keep]`, `conflicts-resolved`, `waiting --on <spec>` (lane only), `unmet --decision <id> --why <text>`, `escalate <retry\|park\|amend\|revert>`. Start flag `--fix "<symptom>"` (fanout lane only, else exit 2): the brief is the symptom, no File Plan, and the commit is `fix(<id>): <symptom>`; `<spec>.run/evidence.md`, when present, is appended to the build commit body |
+| fanout | PLAN → DISPATCH → WAIT → RELAY → MERGE (MERGE_RED) → REPORT | `planned`, `picked --label <title>…`, `dispatched`, `returned --lane <id> [--stopped "<reason>"]`, `resent`, `answered --lane <id> [--label <label>]`, `resumed`, `dismissed --lane <id> [--discard]`, `waiting --lane <id> --on <spec>`, `gate-repaired`, `reported`. A queued `/spec:fix <spec> — <symptom>` item (type `fix`) is a fix lane (`fix-<stem>`, branch `fix/<stem>`, prompt `/spec:run <spec> --root <wt> --fix <symptom>`), picked after the runnable specs; a lane whose base is older than trunk is gated on the rebased tree before the fast-forward (red goes back to its own `/spec:run` at GATE); `dismissed` is accepted at DISPATCH, MERGE_RED and REPORT; a mark whose effect is already in the state prints `mark <verb> was already applied` and exits 0 |
 | genesis | DISCOVERY → BRIEF → MENUS → [FINALISTS → (RACE) → PROBE → PICK] → DECIDE → (SCAFFOLD) → SKELETON → (GATE) → GATE_RED \| [DESIGN_BRIEF → DESIGN_KIT → DESIGN_JOURNEYS → AWAITING_DESIGN_APPROVAL] → ROADMAP → HANDOFF → GROUNDED. The status file also records DEFERRED and SCAFFOLD_RED. Bracketed states run only for tournament archetypes or visual Storybook archetypes | `discovery-done`, `brief-written`, `menu-written --file <f>`, `menus-done`, `finalists-written`, `finalists-skipped`, `probe-done`, `picked`, `decided`, `skeleton-landed`, `design-brief-written`, `kit-landed`, `journeys-drawn`, `design-approved`, `roadmap-written`, `profile-written --file <f> [--refresh]` |
 | mocks | SEED → SCREENS → APPROVED | `seed-done`, `journey-drawn --journey <j>`, `journey-approved --journey <j> [--waive --reason <r>]`, `approved`. Also `round push`, `round pull`, `--reopen journey:<j>` |
 | prototype | OPEN → ROUND → APPROVED → TESTS → CONTRACTED → CLOSED | `opened`, `round-done`, `approved`, `contracted`, `tests-derived`, `closed` (accepted from any resting state). Also `serve --port <n>`, `check [--json]` |
@@ -58,7 +58,7 @@ A lane (a sub-agent) never asks the user. It writes `.claude/pending-question.js
 | `.claude/spec-runs.jsonl` (+ `.claude/spec-runs/<runId>.jsonl`) | Run ledger with plan/build/review/fix/escape/release rows. Gitignored when `ledgerCommitted:false` |
 | `.claude/settings.local.json` `env` | Walkthrough token, written by `/spec:connect`. Never in a tracked file |
 | `<git-common-dir>/spec-queue.json`, `spec-queue-done.json` | Queue and its archive (§7). Not in the checkout |
-| `<git-common-dir>/spec-fanout.json` | Fan-out state. Deleting it resets the lane set |
+| `<git-common-dir>/spec-fanout.json` | Fan-out state. Deleting it resets the lane set; with it missing and fanout lane markers open, `/spec:fanout` refuses and names the newest `spec-v7-backup/*/spec-fanout.json` to `cp` back |
 | `.claude/worktrees/spec-<stem>`, `.claude/worktrees/proto-<stem>` | Worktrees. Must be gitignored; `.worktreeinclude` lists the files copied in |
 | `.claude/genesis/` | `brief.md`, `status.json`, `conventions.json`, `stack-descriptor.json`, `init-profile.json`, `init-gen.log`, `tournament/` |
 | `docs/roadmap/00-overview.md`, `docs/roadmap/NN-slug.md` | Brief header: `Phase: · Depends on: · Primary workspaces:`, `First light:`, `Journeys:`. Sections: Result, Current state, Scope, Surfaces, Out of scope, Grounding, Open questions for planning |
@@ -79,7 +79,7 @@ All questions go through `AskUserQuestion`: at most 4 per call, recommended opti
 | plan | Real forks while drafting. Critical tier only: "This spec is critical tier because it touches <trigger>. Lock it now?" → Lock it / Keep it as a draft |
 | run/build | RED_FINDINGS on a critical tier (remove mention / rewrite red / pause). ESCALATE (re-arm / restart cold / park and queue /spec:fix / amend), unless `stops.buildEscalate` answers. REPLAY look stop: only a literal `close enough` advances. Out-of-plan files and unwritten-fallback forks |
 | run/review | STOPPED (repair round, then queue /spec:fix / abandon). DISPOSITIONS: only the user waives. ESCALATE (abandon+queue fix / waive-reject via disposer / abandon / re-plan). MERGE: strategy is derived and never asked; conflicts are asked; "The prototype has N commits that were never merged. Delete the prototype now?" |
-| fanout | RELAY: every lane question in one batch, and the dependency stop (a lane that needs another spec done first: `waiting --lane <id> --on <spec>`, or `answered`, or `dismissed`). MERGE_RED stops the queue until `gate-repaired` |
+| fanout | RELAY: every lane question in one batch, and the dependency stop (a lane that needs another spec done first: `waiting --lane <id> --on <spec>`, or `answered`, or `dismissed`). MERGE_RED stops the queue until `gate-repaired` (a flaky failure is re-run as it is). REPORT ends the turn: the user runs `/spec:fanout` again after `/clear` |
 | fix | Missing symptom. One decisions stop listing authored strings and policy choices. One waive/reject stop. At most 3 calls |
 | genesis | Discovery interview rounds with research menus. Hard-to-reverse forks. DESIGN_BRIEF. Literal `approve` at AWAITING_DESIGN_APPROVAL |
 | mocks | Asks for the idea only when `.claude/genesis/brief.md` is missing. Service mode: prints `🎨 ready for review — <link>` and ends the turn. Terminal mode: ends on `approve all, or name the ones to change` |
@@ -98,7 +98,7 @@ Every command ends with one report rendered by `report-render`. Fixed order: **b
 |---|---|
 | plan | `✅ spec hardened & locked — {path}`; `status: hardened`; commit `chore(spec): lock {YYYYMMDD/NN}` |
 | run | Spec `done`, Canonical Delta applied, close commit, branch merged into `build_base`, worktree removed (never pushed). Next = status --next |
-| fanout | Each lane lands one at a time, as it returns, with the gate green on main; a spec whose `depends_on` is not done waits. One REPORT, then the next bare run starts the next batch |
+| fanout | Each lane lands one at a time, as it returns, with the gate green on main; a spec whose `depends_on` is not done waits. One REPORT ends the turn (`N spec(s) and M fix(es) left — /clear, then /spec:fanout to continue`), and the next bare run starts the next batch. A fix item is a lane |
 | fix | `✅ fixed — {symptom}`: root cause, regression test, findings disposed, fix/escape row appended |
 | genesis | `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes, roadmap of {M} briefs`, `Chain: …`, `Next: /spec:enforce` |
 | mocks | `✅ wireframe approved — {N} journeys`, `Next: /spec:genesis` |
@@ -183,9 +183,8 @@ An item is ready without `after`; with `{brief}` when that brief's specs are all
 |---|---|
 | `next` (default) | Reconciles, then prints the paste line of the first ready item |
 | `list` | Pending items as `n  id  age  payload`; an unready row ends `  ⏳ after brief NN` or `  ⏳ after <spec stem>`; footer `— N done` |
-| `add <payload> [--top] [--type plan\|prototype\|fix\|decide] [--after <NN\|roadmap path\|spec path>]` | Refuses a duplicate payload. A prose payload is typed `plan` (a payload starting `/spec:fix `, `/spec:plan ` or `/spec:prototype ` gets that type); `--type` on a spec or brief item, or outside the four, exits 2. `--after` needs an existing `docs/roadmap/NN-*.md` or `specs/…md`, else exits 2 |
+| `add <payload> [--top] [--type plan\|prototype\|fix\|decide] [--after <NN\|roadmap path\|spec path>]` | Refuses a duplicate payload, and `--type`/`--after` with no value (`needs a value`, exit 2). A prose payload is typed `plan` (a payload starting `/spec:fix `, `/spec:plan ` or `/spec:prototype ` gets that type); `--type` on a spec or brief item, or outside the four, exits 2. `--after` needs an existing `docs/roadmap/NN-*.md` or `specs/…md`, else exits 2 |
 | `move <ref> <n>` / `done <ref>` / `show <ref>` | Reorder / tick by hand / print the full payload |
-| `groom` | Read-only buckets: duplicates, cites-done, gate-met, stale |
 
 ## 8. Shared vocabulary
 

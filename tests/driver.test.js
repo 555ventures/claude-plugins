@@ -7,7 +7,7 @@ const path = require('path')
 const { tmpdir, runNode, SPEC } = require('./helpers')
 
 // A three-step toy driver: A (mark go [--n v]) → B (auto) → C (mark finish) → END.
-function toyDriver() {
+function toyDriver({ applied } = {}) {
   const dir = tmpdir('drv')
   const file = path.join(dir, 'toy.js')
   fs.writeFileSync(file, `'use strict'
@@ -27,7 +27,8 @@ const main = makeDriver({
     finish: (s) => ({ ...s, step: 'END' }),
     bail: () => refuse('cannot bail here — run finish'),
     other: (s) => s,
-  },
+  },${applied ? `
+  applied: ${applied},` : ''}
 })
 process.exitCode = main()
 `)
@@ -71,4 +72,19 @@ test('refusals exit 2 with the remedy on stderr', () => {
   assert.match(bail.stderr, /run finish/, 'the handler\'s remedy reaches stderr')
   assert.strictEqual(d.state().step, 'C', 'a refused mark must not change state')
   assert.strictEqual(runNode(path.join(d.dir, 'toy.js'), ['--root', d.dir]).status, 2, 'a missing spec argument is a usage refusal')
+})
+
+test('AC-20261105-07-10 a mark the step refuses is a checkpoint when applied says its effect is in the state, and refused when applied says no', () => {
+  const d = toyDriver({ applied: "(verb, s) => verb === 'go' && s.step === 'C'" })
+  d.run('--mark', 'go')
+  const again = d.run('--mark', 'go')
+  assert.strictEqual(again.status, 0, again.stderr)
+  assert.match(again.stdout, /^✅ checkpoint — C → C; mark go was already applied; safe to \/clear/, again.stdout)
+  assert.strictEqual(d.state().step, 'C', 'nothing ran')
+  const other = d.run('--mark', 'other')
+  assert.strictEqual(other.status, 2, 'applied says no: today\'s refusal')
+  assert.match(other.stderr, /mark 'other' is not accepted at C/)
+  const plain = toyDriver()
+  plain.run('--mark', 'go')
+  assert.strictEqual(plain.run('--mark', 'go').status, 2, 'a driver with no hook refuses as before')
 })

@@ -10,6 +10,8 @@
 //   steps[verb](state, flags, ctx) → state (or mutate in place and return nothing)
 //   save(state, ctx)
 //   after(verb, state, ctx) → line?   optional; printed under the checkpoint (e.g. the gate result)
+//   applied(verb, state, flags, ctx) → boolean   optional; true when a mark the settled step refuses
+//     has already taken effect: the frame prints a checkpoint saying so and exits 0, running no step
 // Refusals: throw {exit: 2, message} (or call die). Exit 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
@@ -60,7 +62,7 @@ function parseArgv(argv) {
   return out
 }
 
-function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after }) {
+function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after, applied }) {
   const scriptPath = script || (require.main && require.main.filename) || name
   const MAX_AUTO = 50
 
@@ -72,13 +74,14 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
   // Run auto steps until one needs the session (or the machine ends).
   function settle(state, ctx) {
     let step = derive(state, ctx)
+    const from = step
     for (let n = 0; step.auto; n++) {
       if (n >= MAX_AUTO) refuse(`${name}: auto steps did not settle (stuck at ${step.name})`, 1)
       state = step.auto(state, ctx) || state
       save(state, ctx)
       step = derive(state, ctx)
     }
-    return { state, step }
+    return { state, step, from }
   }
 
   function render(step, ctx) {
@@ -104,8 +107,20 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const verb = a.mark
     const allowed = [...(cur.step.accepts || []), ...(cur.step.mark ? [cur.step.mark.split(/\s+/)[0]] : [])]
     if (!steps[verb]) refuse(`unknown mark '${verb}' — known: ${Object.keys(steps).join(', ') || 'none'}`)
-    if (!allowed.includes(verb)) refuse(`mark '${verb}' is not accepted at ${cur.step.name} — expected ${allowed.join(' | ') || 'no mark'}; re-run without --mark to see the step`)
-    state = steps[verb](state, a.flags, ctx) || state
+    const alreadyApplied = () => {
+      writeOut(1, `✅ checkpoint — ${cur.from.name} → ${cur.step.name}; mark ${verb} was already applied; safe to /clear and re-run /spec:${name}${ctx.arg ? ' ' + ctx.arg : ''}\n`)
+    }
+    if (!allowed.includes(verb)) {
+      if (applied && applied(verb, state, a.flags, ctx)) return alreadyApplied()
+      refuse(`mark '${verb}' is not accepted at ${cur.step.name} — expected ${allowed.join(' | ') || 'no mark'}; re-run without --mark to see the step`)
+    }
+    try {
+      state = steps[verb](state, a.flags, ctx) || state
+    } catch (e) {
+      // The step's own refusal of a mark whose effect is already in the state is not an error either.
+      if (e instanceof Refusal && applied && applied(verb, state, a.flags, ctx)) return alreadyApplied()
+      throw e
+    }
     save(state, ctx)
     const settled = settle(state, ctx)
     const next = settled.step

@@ -20,13 +20,13 @@ function specText(stem, file, { status = 'hardened', deps } = {}) {
     `## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n| \`${file}\` | CREATE | ${stem} |\n`
 }
 
-// opts: lanes, specs (stem, file pairs), deps {stem: depends_on}, status {stem: status}
+// opts: lanes, specs (stem, file pairs), deps {stem: depends_on}, status {stem: status}, testCommand
 function host(opts = {}) {
   const SPECS = opts.specs || SPEC_LIST
   const dir = tmpdir('fanout')
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(dir, '.gitignore'), '.claude/worktrees/\nspecs/**/*.run/\n')
-  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ testCommand: 'test ! -f RED', lanes: opts.lanes || 2 }))
+  fs.writeFileSync(path.join(dir, '.claude', 'spec.config.json'), JSON.stringify({ testCommand: opts.testCommand || 'test ! -f RED', lanes: opts.lanes || 2 }))
   for (const [stem, file] of SPECS) {
     fs.mkdirSync(path.join(dir, 'specs', '20261104'), { recursive: true })
     fs.writeFileSync(path.join(dir, specPath(stem)), specText(stem, file, { status: (opts.status || {})[stem], deps: (opts.deps || {})[stem] }))
@@ -94,8 +94,9 @@ test('AUTO: the first two lanes are planned, rebased onto trunk and fast-forward
   assert.ok(!fs.existsSync(h.wt('01-alpha')) && !fs.existsSync(h.wt('02-beta')), 'lane worktrees are removed')
 
   const rep = h.ok()
-  assert.match(rep.stdout, /Next: \/spec:fanout/, 'a runnable spec remains, so next is /spec:fanout')
-  h.ok('--mark', 'reported')
+  assert.match(rep.stdout, /Next: 1 spec\(s\) and 0 fix\(es\) left — \/clear, then \/spec:fanout to continue/, 'a runnable spec remains, so the turn ends with the /clear line')
+  const reported = h.ok('--mark', 'reported')
+  assert.ok(!reported.stdout.includes('Auto-picked'), 'reported prints the checkpoint and no PLAN body')
   assert.strictEqual(st.readFanout(h.dir), null, 'reported clears the fanout state')
   const again = JSON.parse(h.run('--json').stdout)
   assert.strictEqual(again.step, 'PLAN')
@@ -319,6 +320,7 @@ test('--pick prints a checkbox question; picked builds the batch from exactly th
   assert.strictEqual(bad.status, 2)
   assert.match(bad.stderr, /not runnable — status is draft/, 'the same validity checks as AUTO')
   st.writeStatus(path.join(h.dir, specPath('01-alpha')), 'hardened')
+  st.writeFanout(h.dir, { step: 'PLAN' }) // a state file exists, so the lane marker below is not a lost fan-out
   h.g('worktree', 'add', '-q', '-b', 'spec/02-beta', h.wt('02-beta'))
   pending.markLane(h.wt('02-beta'), 'fanout')
   const busy = h.run('--mark', 'picked', '--label', '02-beta')
@@ -358,11 +360,9 @@ test('WAIT prints the Agent line of every lane still out, so a crashed session c
 test('the bookkeeping commit after a rebase never runs the host hook, so a red resolution reaches MERGE_RED instead of wedging', () => {
   const h = host()
   dispatchTwo(h)
-  h.finish('01-alpha', 'src/a.js')
-  h.finish('02-beta', 'RED', 'broken\n') // lane 2 lands a red suite
+  h.finish('02-beta', 'RED', 'broken\n') // lane 2 lands a red suite on an unmoved trunk: no pre-ff gate, the trunk gate catches it
   fs.mkdirSync(path.join(h.dir, '.git/hooks'), { recursive: true })
   fs.writeFileSync(path.join(h.dir, '.git/hooks/pre-commit'), '#!/bin/sh\ntest ! -f RED\n', { mode: 0o755 }) // the host runs its suite on every commit
-  h.ok('--mark', 'returned', '--lane', '1')
   h.ok('--mark', 'returned', '--lane', '2')
   assert.strictEqual(h.step(), 'MERGE_RED', 'the hook did not block the bookkeeping commit; the gate caught the red')
   assert.match(h.ok().stdout, /MERGE_RED/)
@@ -594,7 +594,7 @@ test('AC-20261105-02-16 the interface contract lists the real fanout arguments a
   assert.ok(rows.length >= 4, 'the fanout rows are found')
   const all = rows.join('\n')
   assert.ok(rows[0].includes('`[--pick] [<spec path>…]`'), rows[0])
-  assert.ok(all.includes('`planned`, `picked --label <title>…`, `dispatched`, `returned --lane <id> [--stopped "<reason>"]`, `resent`, `answered --lane <id> [--label <label>]`, `resumed`, `dismissed --lane <id>`, `waiting --lane <id> --on <spec>`, `gate-repaired`, `reported`'))
+  assert.ok(all.includes('`planned`, `picked --label <title>…`, `dispatched`, `returned --lane <id> [--stopped "<reason>"]`, `resent`, `answered --lane <id> [--label <label>]`, `resumed`, `dismissed --lane <id> [--discard]`, `waiting --lane <id> --on <spec>`, `gate-repaired`, `reported`'))
   for (const gone of ['--batch', '--include-fixes', '--override-serial', '--ask <key', '`merged`']) assert.ok(!all.includes(gone), gone)
   assert.match(rows.find((l) => l.startsWith('| fanout | RELAY')), /dependency/, 'the ask row names the dependency stop')
   const run = doc.split('\n').filter((l) => /\(`\/spec:run`\)/.test(l)).join('\n')
@@ -628,4 +628,302 @@ test('AC-20261105-04-9 a bracketless depends_on of two specs is evaluated entry 
   st.writeStatus(path.join(h.dir, P('01-alpha')), 'done')
   const only = JSON.parse(h.ok(P('03-gamma'), '--json').stdout)
   assert.ok(only.body.includes(`${P('03-gamma')} waits — depends on ${P('02-beta')} (hardened, not done)`), only.body)
+})
+
+// ---- spec 20261105/07: a batch ends clean --------------------------------------------------------
+
+const FIX_PAYLOAD = (stem = '01-alpha', symptom = 'RED file left') => `/spec:fix ${P(stem)} — ${symptom}`
+function addFix(h, payload = FIX_PAYLOAD(), extra = {}) {
+  const q = st.readQueue(h.dir)
+  q.seq += 1
+  q.items.push({ id: 'q' + (100 + q.seq), kind: 'prompt', type: 'fix', payload, added: '2026-11-05', ...extra })
+  st.writeQueue(h.dir, q)
+  return q.items[q.items.length - 1]
+}
+const commitAll = (h, msg = 'edit') => { h.g('add', '-A'); h.g('commit', '-q', '--allow-empty', '-m', msg) }
+const mainHead = (h) => h.g('rev-parse', 'main').trim()
+
+test('AC-20261105-07-1 REPORT counts the specs and fixes left and ends the turn; reported prints no PLAN body; the next bare run plans', () => {
+  const h = host()
+  addFix(h)
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
+  h.ok('--mark', 'returned', '--lane', '1'); h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'REPORT')
+  const rep = h.ok().stdout
+  assert.ok(rep.includes('Next: 1 spec(s) and 1 fix(es) left — /clear, then /spec:fanout to continue'), rep)
+  assert.ok(!rep.includes('queue drained'))
+  const done = h.ok('--mark', 'reported').stdout
+  assert.match(done, /^✅ checkpoint — REPORT → PLAN;/, done)
+  assert.ok(!done.includes('▶ PLAN') && !done.includes('Auto-picked'), 'the turn ends at the checkpoint: no PLAN body')
+  const next = h.ok().stdout
+  assert.match(next, /^▶ PLAN/)
+  assert.ok(next.includes('lane 1: ' + P('03-gamma')), next)
+  assert.ok(next.includes(`lane 2: ${P('01-alpha')} — fix: RED file left`), next)
+})
+
+test('AC-20261105-07-1 a drained queue ends REPORT with the drained line', () => {
+  const h = host({ specs: [SPEC_LIST[0]] })
+  h.ok('--mark', 'planned'); h.ok(); h.ok('--mark', 'dispatched')
+  h.finish('01-alpha', 'src/a.js'); h.ok('--mark', 'returned', '--lane', '1')
+  assert.ok(h.ok().stdout.includes('Next: nothing needs you — queue drained'))
+})
+
+// A queue holding one fix item for a done 01-alpha (and, optionally, more specs).
+function fixHost(opts = {}) {
+  const h = host({ specs: [['01-alpha', 'src/a.js'], ...(opts.more || [])], status: { '01-alpha': 'done' }, ...opts.host })
+  const q = st.readQueue(h.dir); q.items = []; st.writeQueue(h.dir, q)
+  commitAll(h, 'alpha done')
+  addFix(h, opts.payload || FIX_PAYLOAD())
+  return h
+}
+
+test('AC-20261105-07-2 a fix item is auto-picked as a fix lane with its own worktree, branch and --fix prompt', () => {
+  const h = fixHost()
+  const plan = h.ok().stdout
+  assert.ok(plan.includes(`lane 1: ${P('01-alpha')} — fix: RED file left`), plan)
+  h.ok('--mark', 'planned')
+  const lane = st.readFanout(h.dir).batch[0]
+  assert.deepStrictEqual([lane.kind, lane.stem, lane.worktree, lane.branch, lane.spec, lane.symptom], ['fix', 'fix-01-alpha', '.claude/worktrees/fix-01-alpha', 'fix/01-alpha', P('01-alpha'), 'RED file left'])
+  const disp = h.ok().stdout
+  const wtp = path.join(h.dir, '.claude/worktrees/fix-01-alpha')
+  assert.ok(fs.existsSync(wtp) && pending.isLane(wtp), 'the driver creates and marks the fix worktree')
+  assert.strictEqual(h.g('rev-parse', '--verify', 'fix/01-alpha').trim(), mainHead(h), 'branched at trunk')
+  const prompt = JSON.parse(/prompt: ("[^\n]+") \}\)/.exec(disp)[1])
+  assert.strictEqual(prompt, `/spec:run ${P('01-alpha')} --root ${wtp} --fix 'RED file left'`)
+})
+
+test('AC-20261105-07-2 a fix item waits while its spec is in a lane, and when it names no spec on disk', () => {
+  const h = fixHost()
+  addFix(h, FIX_PAYLOAD('99-nope', 'x'))
+  // alpha live in a lane: its worktree exists and is marked
+  st.writeFanout(h.dir, { step: 'PLAN' })
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-alpha', h.wt('01-alpha'))
+  pending.markLane(h.wt('01-alpha'), 'fanout')
+  const out = JSON.parse(h.ok('--json').stdout).body
+  assert.ok(out.includes(`${FIX_PAYLOAD()} waits — its spec is in a lane`), out)
+  assert.ok(out.includes(`${FIX_PAYLOAD('99-nope', 'x')} waits — fix item names no spec on disk`), out)
+  assert.match(out, /queue drained/, 'nothing is runnable')
+  // a free-text fix item is a paste, never a lane
+  const free = fixHost({ payload: 'fix the login' })
+  assert.match(JSON.parse(free.ok('--json').stdout).body, /queue drained/)
+})
+
+test('AC-20261105-07-3 a fix lane runs through run.js --fix and lands as fix(<id>): <symptom>, ticks its item, leaves the spec and makes no done commit', () => {
+  const h = fixHost()
+  const item = st.readQueue(h.dir).items[0]
+  h.ok('--mark', 'planned'); h.ok(); h.ok('--mark', 'dispatched')
+  const w = path.join(h.dir, '.claude/worktrees/fix-01-alpha')
+  const laneRun = (...a) => runNode('scripts/run.js', [P('01-alpha'), '--root', w, ...a])
+  const first = laneRun('--fix', 'RED file left')
+  assert.strictEqual(first.status, 0, first.stderr)
+  assert.match(first.stdout, /^▶ BUILD/)
+  assert.ok(first.stdout.includes('## Fix\nRED file left') && !first.stdout.includes('## File Plan'), first.stdout)
+  fs.writeFileSync(path.join(w, 'src-fix.txt'), 'fixed\n')
+  assert.strictEqual(laneRun('--mark', 'built').status, 0)
+  const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
+  assert.match(laneRun('--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)
+  assert.strictEqual(st.readRun(path.join(w, P('01-alpha'))).step, 'MERGE_READY')
+  h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'REPORT')
+  assert.strictEqual(h.g('log', '-1', '--format=%s', 'main').trim(), 'fix(20261104/01): RED file left')
+  assert.ok(!/chore\(spec\):.*done/.test(h.g('log', '--format=%s', 'main')), 'no done commit')
+  assert.strictEqual(st.readSpec(path.join(h.dir, P('01-alpha'))).frontmatter.status, 'done', 'the spec status is unchanged')
+  assert.ok(fs.existsSync(path.join(h.dir, 'src-fix.txt')))
+  const ticked = st.readQueue(h.dir).items.find((i) => i.id === item.id)
+  assert.ok(ticked.done, 'the prompt item is ticked')
+  assert.ok(!fs.existsSync(w) && !h.g('branch', '--list', 'fix/01-alpha').trim(), 'worktree and branch are gone')
+  assert.strictEqual(h.g('status', '--porcelain', '--untracked-files=no').trim(), '')
+})
+
+// Two lanes whose files are green alone and red together.
+const COLLIDE = 'if test -f src/a.js && test -f src/b.js; then echo "FAIL: a and b collide"; exit 1; fi'
+
+test('AC-20261105-07-5 a lane that is red on top of the landed trunk is gated before the fast-forward and sent back to its own GATE; its repaired return lands', () => {
+  const h = host({ testCommand: COLLIDE })
+  commitAll(h, 'config')
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
+  h.ok('--mark', 'returned', '--lane', '1')
+  const trunk = mainHead(h)
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(mainHead(h), trunk, 'trunk did not move')
+  const lane = st.readFanout(h.dir).batch[1]
+  assert.deepStrictEqual([lane.status, lane.red], ['sent-back', 'FAIL: a and b collide'])
+  const w = h.wt('02-beta')
+  const run = st.readRun(path.join(w, P('02-beta')))
+  assert.deepStrictEqual([run.step, run.base, run.review, run.attempts], ['GATE', trunk, null, { repair: 0, fix: 0 }])
+  const redo = h.ok().stdout
+  assert.ok(redo.includes('lane 2 gate red after rebase: FAIL: a and b collide'), 're-dispatch body prints it: ' + redo)
+  assert.ok(redo.indexOf('Agent(') < redo.indexOf('lane 2 gate red after rebase'), 'under the Agent line')
+  h.ok('--mark', 'resent')
+  assert.strictEqual(h.step(), 'WAIT')
+  const laneRun = (...a) => runNode('scripts/run.js', [P('02-beta'), '--root', w, ...a])
+  assert.match(laneRun().stdout, /^▶ REPAIR/, 'the lane gates again and finds it red')
+  fs.rmSync(path.join(w, 'src/b.js')); fs.writeFileSync(path.join(w, 'src/b2.js'), 'b2\n')
+  assert.match(laneRun('--mark', 'repaired').stdout, /REPAIR → REVIEW/)
+  const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
+  assert.match(laneRun('--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'REPORT')
+  assert.ok(fs.existsSync(path.join(h.dir, 'src/b2.js')) && !fs.existsSync(path.join(h.dir, 'src/b.js')))
+  assert.strictEqual(h.g('status', '--porcelain', '--untracked-files=no').trim(), '')
+})
+
+test('AC-20261105-07-6 a lane whose base is trunk\'s head runs no gate in its worktree before the fast-forward', () => {
+  const log = path.join(tmpdir('gatelog'), 'runs.log')
+  const h = host({ testCommand: `echo "$PWD" >> ${log}; test ! -f RED` })
+  commitAll(h, 'config')
+  dispatchTwo(h)
+  h.finish('02-beta', 'src/b.js')
+  h.ok('--mark', 'returned', '--lane', '2')
+  const dirs = fs.readFileSync(log, 'utf8').trim().split('\n')
+  assert.deepStrictEqual(dirs.map((d) => fs.realpathSync(d)), [fs.realpathSync(h.dir)], 'one gate run, on trunk')
+})
+
+// A red trunk caused outside the tree: a flag file the suite reads.
+function flagHost() {
+  const flag = path.join(tmpdir('flag'), 'RED-flag')
+  const h = host({ testCommand: `if test -f ${flag}; then echo "FAIL: RED flag present"; exit 1; fi` })
+  commitAll(h, 'config')
+  return { h, flag }
+}
+
+test('AC-20261105-07-7 MERGE_RED opens with the first failing line and says a flaky re-run needs no commit; gate-repaired with no commit is accepted', () => {
+  const { h, flag } = flagHost()
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
+  fs.writeFileSync(flag, '')
+  h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'MERGE_RED')
+  const body = h.ok().stdout.split('\n')
+  assert.match(body[2], /^first failing line: .*RED/, body.join('\n'))
+  assert.ok(body.join('\n').includes('re-run as it is when the failure was a flake'))
+  assert.strictEqual(h.run('--mark', 'gate-repaired').status, 0)
+  assert.strictEqual(h.step(), 'MERGE_RED', 'still red')
+  fs.rmSync(flag)
+  h.ok('--mark', 'gate-repaired')
+  assert.strictEqual(h.step(), 'WAIT')
+  h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'REPORT')
+})
+
+test('AC-20261105-07-8 dismissed --discard removes the worktree and branch after a wip commit and prints its sha; dismissed is accepted at DISPATCH, MERGE_RED and REPORT', () => {
+  const h = host()
+  dispatchTwo(h)
+  const w = h.wt('02-beta')
+  fs.writeFileSync(path.join(w, 'loose.txt'), 'loose\n')
+  const out = h.ok('--mark', 'dismissed', '--lane', '2', '--discard').stdout
+  const sha = /discarded lane 2 — wip ([0-9a-f]{40})/.exec(out)
+  assert.ok(sha, out)
+  assert.ok(!fs.existsSync(w), 'no worktree')
+  assert.strictEqual(h.g('branch', '--list', 'spec/02-beta').trim(), '', 'no branch')
+  assert.strictEqual(h.g('show', `${sha[1]}:loose.txt`), 'loose\n', 'the wip commit holds the file')
+  h.finish('01-alpha', 'src/a.js'); h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'REPORT')
+  assert.ok(h.ok().stdout.includes(`dismissed 02-beta — worktree and branch removed (wip ${sha[1]})`))
+  // REPORT: a waiting lane dismissed there
+  const g = host()
+  dispatchTwo(g)
+  g.ok('--mark', 'waiting', '--lane', '1', '--on', P('03-gamma'))
+  g.finish('02-beta', 'src/b.js'); g.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(g.step(), 'REPORT')
+  g.ok('--mark', 'dismissed', '--lane', '1')
+  assert.strictEqual(g.step(), 'REPORT'); assert.strictEqual(st.readFanout(g.dir).batch[0].status, 'dismissed')
+  // DISPATCH: dismissed before the lanes go out
+  const d = host()
+  d.ok(); d.ok('--mark', 'planned'); assert.strictEqual(d.step(), 'DISPATCH')
+  d.ok('--mark', 'dismissed', '--lane', '1')
+  assert.ok(!d.ok().stdout.includes('lane 1 —'), 'the dismissed lane is not dispatched')
+  d.ok('--mark', 'dispatched')
+  assert.deepStrictEqual(st.readFanout(d.dir).batch.map((l) => l.status), ['dismissed', 'dispatched'])
+  // MERGE_RED
+  const { h: r, flag } = flagHost()
+  dispatchTwo(r)
+  r.finish('01-alpha', 'src/a.js'); fs.writeFileSync(flag, '')
+  r.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(r.step(), 'MERGE_RED')
+  r.ok('--mark', 'dismissed', '--lane', '2')
+  assert.strictEqual(r.step(), 'MERGE_RED'); assert.strictEqual(st.readFanout(r.dir).batch[1].status, 'dismissed')
+})
+
+test('AC-20261105-07-8 dismissing the only planned lane at DISPATCH goes straight on to REPORT', () => {
+  const h = host({ specs: [SPEC_LIST[0]] })
+  h.ok('--mark', 'planned'); h.ok()
+  h.ok('--mark', 'dismissed', '--lane', '1')
+  assert.strictEqual(h.step(), 'REPORT')
+})
+
+test('AC-20261105-07-9 a returned mark refused by a dirty main checkout lands on the re-run and reports it was already applied, exit 0', () => {
+  const h = host()
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
+  fs.appendFileSync(path.join(h.dir, '.gitignore'), '# dirty\n')
+  const bad = h.run('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(bad.status, 2); assert.match(bad.stderr, /uncommitted tracked changes/)
+  h.g('commit', '-q', '-am', 'tidy')
+  const again = h.run('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(again.status, 0, again.stderr)
+  assert.match(again.stdout, /mark returned was already applied/)
+  assert.ok(fs.existsSync(path.join(h.dir, 'src/a.js')), 'the lane landed')
+  assert.strictEqual(st.readFanout(h.dir).batch[0].status, 'merged')
+})
+
+test('AC-20261105-07-9 marks whose effect is already in the state are applied: reported at PLAN, planned at DISPATCH; a mark that did not happen is still refused', () => {
+  const h = host()
+  assert.match(h.ok('--mark', 'reported').stdout, /mark reported was already applied/)
+  h.ok('--mark', 'planned')
+  assert.match(h.ok('--mark', 'planned').stdout, /mark planned was already applied/)
+  assert.strictEqual(h.run('--mark', 'resent').status, 0, 'no lane is sent back: resent is applied')
+  assert.strictEqual(h.run('--mark', 'returned', '--lane', '1').status, 2, 'a planned lane has not returned: refused')
+})
+
+test('AC-20261105-07-11 a missing spec-fanout.json with open fanout lanes refuses and names the newest backup; without markers it plans', () => {
+  const h = host()
+  dispatchTwo(h)
+  const common = path.join(h.dir, '.git')
+  fs.rmSync(path.join(common, 'spec-fanout.json'))
+  for (const args of [[], ['--mark', 'planned'], ['--state']]) {
+    const r = h.run(...args)
+    assert.strictEqual(r.status, 2, args.join(' '))
+    assert.ok(r.stderr.includes('spec-01-alpha') && r.stderr.includes('spec-02-beta') && r.stderr.includes(path.join(common, 'spec-fanout.json')), r.stderr)
+    assert.ok(r.stderr.includes('reconstruct it, or remove the markers to abandon the lanes'), 'no backup: no cp')
+  }
+  for (const n of ['2026-11-01T10-00-00.000Z', '2026-11-02T10-00-00.000Z']) {
+    fs.mkdirSync(path.join(common, 'spec-v7-backup', n), { recursive: true })
+    fs.writeFileSync(path.join(common, 'spec-v7-backup', n, 'spec-fanout.json'), '{}')
+  }
+  const r = h.run()
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes(`cp ${path.join(common, 'spec-v7-backup', '2026-11-02T10-00-00.000Z', 'spec-fanout.json')} ${path.join(common, 'spec-fanout.json')}, then re-run`), r.stderr)
+  assert.match(host().ok().stdout, /^▶ PLAN/, 'no markers: plan as today')
+})
+
+test('AC-20261105-07-12 REPORT says what trunk holds for a dismissed lane; WAIT marks a lane whose question waits', () => {
+  const h = host()
+  dispatchTwo(h)
+  pending.writePending(h.wt('02-beta'), { lane: '2', question: 'Which shape?', options: ['flat', 'nested'] })
+  const wait = h.ok().stdout
+  assert.ok(wait.split('\n').find((l) => l.includes('lane 2 — 02-beta')).endsWith(' (question waiting — mark returned)'), wait)
+  assert.ok(!wait.split('\n').find((l) => l.includes('lane 1 — 01-alpha')).includes('question waiting'))
+  pending.consumePending(h.wt('02-beta'))
+  st.writeStatus(path.join(h.dir, P('01-alpha')), 'superseded'); commitAll(h, 'alpha superseded')
+  h.ok('--mark', 'dismissed', '--lane', '1')
+  h.finish('02-beta', 'src/b.js'); h.ok('--mark', 'returned', '--lane', '2')
+  assert.ok(h.ok().stdout.includes('dismissed 01-alpha — worktree kept at .claude/worktrees/spec-01-alpha, spec left hardened in the lane (trunk: superseded)'))
+  const g = host()
+  dispatchTwo(g)
+  g.ok('--mark', 'dismissed', '--lane', '1')
+  g.finish('02-beta', 'src/b.js'); g.ok('--mark', 'returned', '--lane', '2')
+  assert.match(g.ok().stdout, /^⚠️ dismissed 01-alpha — worktree kept at \.claude\/worktrees\/spec-01-alpha, spec left hardened in the lane$/m, 'a hardened root copy adds no trunk note')
+})
+
+test('AC-20261105-07-15 the contract names the discard flag, --fix and no groom in the queue table; fanout.md ends the turn at REPORT', () => {
+  const doc = fs.readFileSync(path.join(__dirname, '..', 'docs/v8/interface-contract.md'), 'utf8')
+  assert.ok(doc.includes('dismissed --lane <id> [--discard]') && doc.includes('--fix'))
+  const s7 = doc.slice(doc.search(/^## 7\b/m)).split(/^## (?!7\b)/m)[0]
+  assert.ok(!s7.includes('groom'), '§ 7 no longer lists groom')
+  const cmd = fs.readFileSync(path.join(__dirname, '..', 'spec/commands/fanout.md'), 'utf8')
+  const report = cmd.slice(cmd.indexOf('**REPORT**'))
+  assert.ok(report.includes('end the turn') && !cmd.includes('continue until the queue drains'))
 })

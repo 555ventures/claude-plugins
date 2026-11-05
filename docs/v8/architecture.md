@@ -296,6 +296,25 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - **`waitingOn`.** `run.js --mark waiting --on <spec>` (lane only; BUILD, REPAIR, FIX, REVIEW) writes
   `waitingOn` into the run state; fanout's `returned` then sets the lane `waiting` and PLAN holds it until
   `<spec>` is done.
+- **The turn ends at REPORT.** `reported` clears the state and the driver stops at its checkpoint; REPORT's
+  next line counts the runnable specs and fixes left and says `/clear`, then `/spec:fanout`. The next bare
+  run plans.
+- **Fix lanes.** A pending queue item of type `fix` whose payload is `/spec:fix <spec> — <symptom>` is a
+  lane (`fix-<stem>`, `.claude/worktrees/fix-<stem>`, branch `fix/<stem>`), picked after the runnable specs
+  once the spec is out of any live lane. Its prompt is `/spec:run <spec> --root <wt> --fix <symptom>`:
+  `run.js` accepts `--fix` only in a fanout lane, opens a `done` or `hardened` spec without writing status,
+  briefs the symptom instead of the Intent and File Plan, and commits `fix(<id>): <symptom>`. fanout lands
+  it like any lane, ticks the prompt item by id, flips no spec status and makes no done commit.
+- **Pre-fast-forward gate.** `mergeLane` reads `merge-base(trunk, HEAD)` before the rebase; when it differs
+  from trunk's head, the clean rebase is gated in the lane worktree before the bookkeeping commit. Red:
+  the lane is `sent-back` with `lane.red`, its run state is rewritten to `GATE` (new base, no review, fresh
+  attempts) and its own `/spec:run` repairs and reviews. MERGE_RED still means trunk itself is red.
+- **Discard, applied marks, lost state.** `dismissed --lane N --discard` commits the wip, removes the
+  worktree and branch and prints the sha. `lib/driver.js` takes an `applied` hook: a mark the step refuses
+  (or whose handler refuses) but whose effect is already in the state prints `mark <verb> was already
+  applied` and exits 0. With `spec-fanout.json` missing while fanout lane markers are open, `load` refuses
+  and names the newest `spec-v7-backup` copy to restore.
+- **Evidence.** `run.js` COMMIT appends `<spec>.run/evidence.md` to the build commit body.
 
 ### run.js notes
 

@@ -21,6 +21,9 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
   and mark `conflicts-resolved`. A lane at **MERGE_READY** with a rebase in progress edits the
   conflicted files to both sides' intent, re-runs the driver, then stops.
 
+`--fix "<symptom>"` is lane-only (fanout runs a queued `/spec:fix` item this way): the brief is the
+symptom, the commit is `fix(<id>): <symptom>`; outside a lane it refuses, use `/spec:fix`.
+
 As a lane, stop and return on `PENDING_QUESTION`. A lane never edits its spec's Decisions or any
 other spec. A build that needs another spec done first marks `waiting --on <spec>` (BUILD, REPAIR,
 FIX or REVIEW) and stops; a Decision it cannot honour is marked `unmet --decision <id> --why <text>`,

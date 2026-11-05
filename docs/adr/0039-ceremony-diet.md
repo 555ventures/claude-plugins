@@ -1,6 +1,6 @@
 # 0039. Ceremony diet: size, lanes, test lifecycle, release-time bump
 
-- Status: accepted
+- Status: accepted (D6 superseded by ADR-0040)
 - Date: 2026-11-03
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (specs/20261103/13-a-change-is-sized-by-its-files.md)
@@ -66,7 +66,8 @@ spawn a process. The expiry scanner reads the host's declared runner grammar
 (specs/20261102/01, `testCaseScanner`) so pytest/vitest hosts expire too. The optional config key
 `slowTestCommand` runs once at close and once at release, never in the build or review-legs loop.
 
-D6 **Metric before guard.** `/spec:status` gains two lines derived from the ledger — suite runs
+D6 **Metric before guard.** *Superseded by ADR-0040: the screen shows no ledger metrics.*
+`/spec:status` gains two lines derived from the ledger — suite runs
 per spec and the test:production line ratio. No blocking ratchet until core § Incident Policy's
 third-recurrence admission bar is met.
 

@@ -26,6 +26,7 @@ function synthetic() {
   w('docs/roadmap/33-x.md', '# 33'); w('docs/adr/0001-a.md', '# adr')
   w('specs/20260101/01-a.md', '---\nstatus: done\n---\n'); w('specs/20260101/01-a.deviations.md', 'dev')
   w('specs/20260101/01-a.build/build-state.json', '{}'); w('specs/20260101/01-a.review/review-state.json', '{}')
+  w('specs/system.design/notes.md', 'mine') // dotted, but no spec beside it: not a sidecar
   const g = gitRepo(d)
   g('add', '-f', '.claude/settings.local.json'); g('commit', '-q', '-m', 'track token')
   const c = path.join(d, '.git')
@@ -58,6 +59,7 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.strictEqual(g('rev-parse', 'HEAD~1').trim(), head)
   assert.strictEqual(g('status', '--porcelain').trim(), '')
   const e = (f) => fs.existsSync(path.join(d, f))
+  assert.ok(e('specs/system.design/notes.md'), 'a dotted directory with no spec beside it is left alone')
   assert.ok(g('tag', '-l', 'spec-v7-final').trim())
   const cfg = JSON.parse(fs.readFileSync(path.join(d, '.claude/spec.config.json'), 'utf8'))
   assert.deepStrictEqual(Object.keys(cfg).sort(), ['mergeStrategy', 'release', 'seats', 'testCommand', 'trunk', 'worktreePerSpec'])

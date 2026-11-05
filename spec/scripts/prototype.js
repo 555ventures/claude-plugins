@@ -194,7 +194,7 @@ const steps = {
   closed(s, _f, ctx) {
     const queued = state.readQueue(ctx.root).items.find((i) => i.payload === planItem(ctx.stem) && !i.done)
     if (queued) s.closeWarn = `${planItem(ctx.stem)} is still pending in the queue (${queued.id}) — plan it, or drop it with /spec:queue done ${queued.id}`
-    git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch })
+    git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch, force: true }) // a throwaway prototype
     s.marks.closed = now()
   },
 }

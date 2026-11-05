@@ -59,8 +59,9 @@ function go(state, step, extra = {}) {
 
 function load(ctx) {
   const s = specInfo(ctx)
-  const ig = git.raw(['check-ignore', '-q', path.relative(ctx.root, st.runPath(s.abs))], ctx.root)
-  if (ig.status !== 0) refuse(`${path.relative(ctx.root, st.runDir(s.abs))}/ is not git-ignored — add the line \`specs/**/*.run/\` to .gitignore, then re-run`)
+  const ignored = (p) => git.raw(['check-ignore', '-q', p], ctx.root).status === 0
+  if (!ignored(path.relative(ctx.root, st.runPath(s.abs))) || !ignored('.claude/worktrees/x'))
+    refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
   return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel }
 }
 
@@ -96,11 +97,19 @@ function open(state, ctx) {
     : inPlaceFlag ? '--in-place'
     : cfg.worktreePerSpec === false ? 'host policy worktreePerSpec: false'
       : cur === specBranch ? "this session already sits on the spec's branch" : null
+  // Tracked dirt would be swept into the build commit in place, or refuse the merge after the build.
+  if (!lane && git.sh(['status', '--porcelain', '--untracked-files=no'], ctx.root)) refuse(`${ctx.root} has uncommitted tracked changes — commit or stash them, then re-run`)
   let wt = ctx.root
   let fresh = lane
   if (!why) {
     const rel = path.join('.claude', 'worktrees', 'spec-' + s.stem)
     fresh = !fs.existsSync(path.join(ctx.root, rel))
+    if (!fresh && pending.isFanoutLane(path.join(ctx.root, rel))) refuse(`${rel} is a fanout lane in flight — let /spec:fanout finish it, or mark it dismissed there`)
+    // A branch left by an abandoned run: re-point it when trunk already holds it, else keep it safe.
+    if (fresh && git.branchExists(ctx.root, specBranch)) {
+      if (git.raw(['merge-base', '--is-ancestor', specBranch, cfg.trunk], ctx.root).status === 0) git.sh(['branch', '-D', specBranch], ctx.root)
+      else refuse(`branch ${specBranch} exists with commits not on ${cfg.trunk} — merge, rename or delete it, then re-run`)
+    }
     wt = git.worktreeAdd(ctx.root, rel, specBranch, cfg.trunk)
   }
   if (fresh && cfg.setupCommand) {
@@ -153,7 +162,12 @@ function commit(state, ctx) {
   if (state.inPlace && !state.lane) st.writeStatus(specIn(state, ctx), 'done')
   const wt = wtOf(state, ctx)
   // A re-run after a crash between the commit and the save finds a clean tree: report that commit.
-  state.commit = git.commitAll(wt, `build(${specInfo(ctx).id}): ${spec.title}`) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
+  try {
+    state.commit = git.commitAll(wt, `build(${specInfo(ctx).id}): ${spec.title}`) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
+  } catch (e) { // a commit hook rejected the build: repair it like a red gate
+    state.gate = { ...(state.gate || {}), status: 'red', output_tail: `git commit was rejected (a commit hook?):\n${e.message}` }
+    return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
+  }
   // A lane stops here, committed: fanout writes done, merges in queue order and cleans up.
   if (state.lane) return go(state, 'MERGE_READY', { report: render({ outcome: `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`, bullets: `commit ${state.commit || 'none (nothing changed)'}`, next: 'nothing needs you — fanout merges the lane' }) })
   return go(state, 'MERGE')
@@ -161,12 +175,12 @@ function commit(state, ctx) {
 
 function merge(state, ctx) {
   const cfg = cfgOf(ctx)
-  if (state.branch === cfg.trunk) return go(state, 'FINISH') // in place on trunk: nothing to merge
+  if (state.inPlace) return go(state, 'FINISH') // in place: on trunk nothing to merge; on a branch the user merges (PR)
   const main = mainRoot(ctx.root)
   const on = git.currentBranch(main)
   if (on !== cfg.trunk) refuse(`${main} is on ${on}, not ${cfg.trunk} — check out ${cfg.trunk} there, then re-run`)
   const title = st.readSpec(specIn(state, ctx)).title
-  const r = git.mergeBack(main, state.branch, cfg.mergeStrategy, { message: `merge(${specInfo(ctx).id}): ${title}` })
+  const r = git.mergeBack(main, state.branch, cfg.mergeStrategy, { message: `chore(spec): merge ${specInfo(ctx).id} — ${title}` })
   if (r.conflicts.length) return go(state, 'CONFLICTS', { conflicts: r.conflicts })
   if (!r.merged) refuse(`${state.branch} was not merged: ${r.reason}`)
   // Separate saved steps: a crash after the merge resumes past it, never re-merging a deleted branch.
@@ -237,7 +251,7 @@ function builderBrief(state, ctx, kind) {
     for (const f of state.review.findings.filter((x) => x.severity === 'blocking')) out.push(`- ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}${f.evidence ? ` (evidence: ${f.evidence})` : ''}`)
     out.push('')
   }
-  out.push(`Write failing tests first, then code, and run \`${cfg.testCommand}\` until green.`,
+  out.push(kind === 'build' ? `Write failing tests first, then code, and run \`${cfg.testCommand}\` until green.` : `Run \`${cfg.testCommand}\` until green.`,
     'Do not touch files outside the File Plan without listing them in your final summary.')
   return out.join('\n')
 }
@@ -286,6 +300,17 @@ function ask(state, ctx, question, options) {
     ...options.map((o) => `- ${o.label} — ${o.description}`)].join('\n')
 }
 
+// After `git reset --merge` nothing is in progress and nothing conflicted: MERGE runs again.
+const mergeAborted = (state, ctx) => {
+  const main = mainRoot(ctx.root)
+  return git.raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], main).status !== 0 && !git.conflictsIn(main).length
+    && git.raw(['diff', '--cached', '--quiet'], main).status === 0
+}
+const REBASE_LEFT = 'a rebase onto trunk is in progress in this worktree: resolve each conflict by both sides\' intent, `GIT_EDITOR=true git rebase --continue`, re-run the test command, then stop — fanout reviews the resolved diff before it lands'
+
+// The line of a red tail worth reading first.
+const redLine = (tail) => { const ls = (tail || '').split('\n').filter((l) => l.trim()); return ls.find((l) => /✖|not ok|\bfail|error|rejected/i.test(l)) || ls[0] || 'gate red' }
+
 function escalateBody(state, ctx) {
   const id = specInfo(ctx).id
   const q = state.why === 'gate' ? `${id} is still red after ${REPAIR_CAP} repairs. How should it continue?`
@@ -317,13 +342,14 @@ function derive(state, ctx) {
     case 'MERGE': return { name: 'MERGE', auto: merge }
     case 'TRUNK_GATE': return { name: 'TRUNK_GATE', auto: trunkGate }
     case 'FINISH': return { name: 'FINISH', auto: finish }
-    case 'CONFLICTS': return {
+    case 'CONFLICTS': return mergeAborted(state, ctx) ? { name: 'CONFLICTS', auto: (s) => go(s, 'MERGE') } : {
       name: 'CONFLICTS', mark: 'conflicts-resolved',
       body: ask(state, ctx, `merging ${state.branch} into ${cfgOf(ctx).trunk} conflicts in ${state.conflicts.join(', ')}. Resolve them?`, [
         { label: 'resolve', description: `resolve each file by both sides' intent in ${mainRoot(ctx.root)}, leave it uncommitted, then mark conflicts-resolved` },
-        { label: 'abort', description: 'run git merge --abort there and stop this run' },
+        { label: 'abort', description: 'run `git reset --merge` there; the next /spec:run retries the merge' },
       ]),
     }
+    case 'MERGE_READY': return { name: 'MERGE_READY', body: git.rebasing(wtOf(state, ctx)) ? REBASE_LEFT : state.report || '' }
     default: return { name: state.step, body: state.report || '' }
   }
 }
@@ -364,7 +390,7 @@ const steps = {
     if (c === 'retry') return go(state, state.why === 'review' ? 'FIX' : 'REPAIR', { attempts: { repair: 0, fix: 0 }, opus: true })
     const s = specInfo(ctx)
     if (c === 'amend') return endRun(state, ctx, 'draft', `⏸️ ${s.id} set back to draft for amending`, { next: `/spec:plan ${s.rel}` })
-    const first = state.why === 'gate' ? (state.gate.output_tail || '').split('\n').find((l) => l.trim()) || 'gate red'
+    const first = state.why === 'gate' ? redLine(state.gate.output_tail)
       : (state.review.findings.find((f) => f.severity === 'blocking') || {}).summary || 'blocking review findings'
     const payload = `/spec:fix ${s.rel} — ${first.trim()}`
     const q = st.readQueue(ctx.root)
@@ -383,8 +409,8 @@ const steps = {
     git.sh(['add', '-A', '--', ...state.conflicts], main)
     const inMerge = git.raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], main).status === 0
     const staged = git.raw(['diff', '--cached', '--quiet'], main).status !== 0
-    if (inMerge || staged) git.sh(['commit', '-q', '-m', `merge(${specInfo(ctx).id}): ${st.readSpec(specIn(state, ctx)).title}`], main)
-    else if (cfgOf(ctx).mergeStrategy !== 'squash' && git.raw(['merge-base', '--is-ancestor', state.branch, 'HEAD'], main).status !== 0) refuse(`no merge of ${state.branch} is in progress in ${main} and it is not merged (aborted?) — merge it there, then re-mark`)
+    if (inMerge || staged) git.sh(['commit', '-q', '-m', `chore(spec): merge ${specInfo(ctx).id} — ${st.readSpec(specIn(state, ctx)).title}`], main)
+    else if (git.raw(['merge-base', '--is-ancestor', state.branch, 'HEAD'], main).status !== 0) refuse(`no merge of ${state.branch} is in progress in ${main} and it is not merged (aborted?) — re-run /spec:run to merge again`)
     return go(state, 'TRUNK_GATE', { mergeSha: git.headSha(main) })
   },
 }
@@ -393,7 +419,7 @@ const steps = {
 function afterMark(verb, state) {
   const g = state.gate
   if (['built', 'repaired', 'fixed'].includes(verb) && g) {
-    if (g.status === 'red') return `gate: red — ${(g.output_tail || '').split('\n').find((l) => l.trim()) || 'no output'}`
+    if (g.status === 'red') return `gate: red — ${redLine(g.output_tail)}`
     return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}`
   }
   if (verb === 'reviewed' && state.review) {

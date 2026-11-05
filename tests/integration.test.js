@@ -19,6 +19,7 @@ test('init → plan → lock → queue → status → run --in-place → DONE', 
   assert.match(ok(node('init.js')), /questions: .*testCommand/)
   ok(node('init.js', '--set', 'testCommand=true'))
   assert.strictEqual(st.readConfig(dir).testCommand, 'true')
+  g('add', '-A'); g('commit', '-q', '-m', 'chore: spec init') // init's files must be committed before a run
 
   // plan: new writes the template; the session fills it in.
   const rel = ok(node('plan.js', 'new', 'thing')).trim()
@@ -32,6 +33,7 @@ test('init → plan → lock → queue → status → run --in-place → DONE', 
   ]
   let text = fs.readFileSync(file, 'utf8')
   for (const [a, b] of fill) { assert.ok(text.includes(a), `template holds ${a}`); text = text.replace(a, b) }
+  text = text.replace(/<[^<>\n]+>/g, 'x') // Goal, Decisions and Assumptions: lock refuses leftover placeholders
   fs.writeFileSync(file, text)
   const spec = st.readSpec(file)
   assert.deepStrictEqual(spec.intent, { asked: 'make a thing', build: ['feature.txt holding the thing'], notTouch: ['a.txt'], architecture: false })

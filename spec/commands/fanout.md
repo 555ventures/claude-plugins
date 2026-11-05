@@ -13,8 +13,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
 - **WAIT**: mark `returned --lane <id>` as each lane comes back; a PARKED or AMENDED lane is
-  dismissed by it. The last lane's mark runs the merges, so read the MERGE output there.
+  dismissed by it. The last lane's mark runs the merges; re-run the driver to read the result.
 - **RELAY**: ask every lane question in one batch, then run each printed `answered` line.
-- **MERGE**: a lane whose rebase onto trunk conflicts goes back; send its printed Agent call, mark
-  `resent`. **MERGE_RED**: repair the trunk gate, commit, mark `gate-repaired`.
+- **MERGE**: a lane whose rebase onto trunk conflicts goes back, and once resolved goes back again
+  for a review of the resolved diff; send its printed Agent call, mark `resent`. **MERGE_RED**: repair the trunk gate, commit, mark `gate-repaired`.
 - **REPORT**: mark `reported` and continue until the queue drains; never ask "continue?".

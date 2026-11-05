@@ -61,3 +61,20 @@ test('tracked settings.local.json and uncommitted migration are findings', () =>
   assert.match(f, /token file is tracked — run: git rm --cached/)
   assert.match(f, /uncommitted migration/)
 })
+
+test('a run in flight is not stale: live sidecars and dirty or marked worktrees are reported as in flight; stale ones carry a remedy', () => {
+  const d = setup({ testCommand: 'true' })
+  fs.mkdirSync(path.join(d, 'specs/20260101/01-live.run'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'specs/20260101/01-live.run/state.json'), JSON.stringify({ step: 'BUILD' }))
+  fs.mkdirSync(path.join(d, 'specs/20260101/02-old.run'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'specs/20260101/02-old.run/state.json'), JSON.stringify({ step: 'DONE', ended: true }))
+  const { execFileSync } = require('child_process')
+  execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/03-busy', '.claude/worktrees/spec-03-busy'])
+  fs.writeFileSync(path.join(d, '.claude/worktrees/spec-03-busy/wip.txt'), 'x')
+  execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/04-idle', '.claude/worktrees/spec-04-idle'])
+  const f = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout).findings
+  assert.ok(f.some((x) => /in flight: specs\/20260101\/01-live\.md at BUILD — \/spec:run/.test(x)), f.join('\n'))
+  assert.ok(f.some((x) => /stale sidecar: specs\/20260101\/02-old\.run — rm -r/.test(x)))
+  assert.ok(f.some((x) => /in flight: \.claude\/worktrees\/spec-03-busy/.test(x)), 'uncommitted work is never a leftover')
+  assert.ok(f.some((x) => /leftover worktree: \.claude\/worktrees\/spec-04-idle — git worktree remove/.test(x)))
+})

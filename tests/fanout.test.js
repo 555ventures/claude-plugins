@@ -251,6 +251,17 @@ test('a rebase conflict sends the lane back with the rebase in progress; resolve
   execFileSync('git', ['-C', w, 'add', 'src/a.js'])
   execFileSync('git', ['-C', w, '-c', 'core.editor=true', 'rebase', '--continue'])
   h.ok('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(h.step(), 'MERGE', 'a resolved rebase is not merged blind')
+  const back = st.readFanout(h.dir).batch[1]
+  assert.deepStrictEqual([back.status, back.rereviewed, back.conflicts], ['sent-back', true, undefined])
+  const run = st.readRun(path.join(w, specPath('03-gamma')))
+  assert.strictEqual(run.step, 'REVIEW', 'the lane reviews the resolved diff')
+  assert.strictEqual(run.base, h.g('rev-parse', 'HEAD').trim(), 'against the trunk it was rebased onto')
+  assert.match(fs.readFileSync(path.join(w, 'specs/20261104/03-gamma.run/diff.patch'), 'utf8'), /\+alpha\n\+gamma|\+gamma/, 'the diff shows the resolution')
+  assert.match(h.ok().stdout, /lane 2 resolved its rebase — re-review/)
+  h.ok('--mark', 'resent')
+  st.writeRun(path.join(w, specPath('03-gamma')), { ...run, step: 'MERGE_READY' }) // the lane's reviewer passed it
+  h.ok('--mark', 'returned', '--lane', '2')
   assert.strictEqual(h.step(), 'REPORT')
   assert.strictEqual(fs.readFileSync(path.join(h.dir, 'src/a.js'), 'utf8'), 'alpha\ngamma\n', 'the resolved lane landed on trunk')
   assert.ok(st.readQueue(h.dir).items[2].done && !fs.existsSync(w), 'ticked and cleaned')

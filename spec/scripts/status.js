@@ -2,7 +2,7 @@
 // status.js — the four-part status block: roadmap, next (+ parallel lanes), questions, verdict.
 const fs = require('fs')
 const path = require('path')
-const { readQueue, readSpec, readConfig, readJson } = require('./lib/state')
+const { readQueue, readSpec, readConfig, readJson, runPath } = require('./lib/state')
 const { pasteLine, pending, reconcile, briefNo } = require('./queue')
 
 const ls = (d) => { try { return fs.readdirSync(d) } catch { return [] } }
@@ -30,7 +30,7 @@ function roadmap(root, specs, q) {
     const nn = f.split('-')[0]
     const text = fs.readFileSync(path.join(root, 'docs', 'roadmap', f), 'utf8')
     const title = ((/^# +(.+)$/m.exec(text) || [])[1] || f).replace(/^\d+[a-z]?\s*[—–-]\s*/, '')
-    const mine = specs.filter((s) => briefNo(String(s.spec.frontmatter.brief)) === briefNo(nn))
+    const mine = specs.filter((s) => briefNo(String(s.spec.frontmatter.brief)) === briefNo(nn) && s.spec.frontmatter.status !== 'draft')
     const state = /^>\s*Superseded by/m.test(text) ? 'superseded'
       : !mine.length ? 'open'
         : mine.every((s) => s.spec.frontmatter.status === 'done') && !planning(nn) ? 'done' : 'implementing'
@@ -51,12 +51,17 @@ function questions(root) {
 }
 
 function build(root) {
-  const specs = allSpecs(root); const q = reconcile(root, readQueue(root)); const head = pending(q)[0]
+  const specs = allSpecs(root); const q = reconcile(root, readQueue(root))
+  // A brief whose specs exist and are not all done is being planned or built: its item is not the next paste.
+  const planned = new Set(specs.filter((s) => s.spec.frontmatter.status !== 'done').map((s) => briefNo(String(s.spec.frontmatter.brief))))
+  const head = pending(q).find((i) => !(i.kind === 'brief' && planned.has(briefNo(i.payload))))
+  // A run started by hand (never queued) is still the thing to finish first.
+  const running = specs.find((s) => s.spec.frontmatter.status !== 'done' && fs.existsSync(runPath(path.join(root, s.path))) && !pending(q).some((i) => i.payload === s.path))
   const parallel = lanes(root, q, readConfig(root).lanes)
   const qs = questions(root)
   const verdict = qs.length ? `🟡 waiting on you — ${qs.length} pending question${qs.length > 1 ? 's' : ''}`
-    : head ? `🟢 next is ready · ${pasteLine(root, head)}` : '⚪ queue empty'
-  const res = { roadmap: roadmap(root, specs, q), next: head ? pasteLine(root, head) : null, lanes: parallel, questions: qs, verdict }
+    : running ? `🟢 a run is in flight · /spec:run ${running.path}` : head ? `🟢 next is ready · ${pasteLine(root, head)}` : '⚪ queue empty'
+  const res = { roadmap: roadmap(root, specs, q), next: running ? `/spec:run ${running.path}` : head ? pasteLine(root, head) : null, lanes: parallel, questions: qs, verdict }
   return res
 }
 
@@ -65,14 +70,14 @@ function render(r) {
   const L = r.roadmap.length ? ['🗺️ Roadmap', ...r.roadmap.map((b) => `  ${icon[b.state]} ${b.brief}  ${b.title}`), ''] : []
   L.push('🎯 Next')
   L.push(r.next ? `  ${r.next}` : '  queue empty')
-  if (r.lanes.length > 1) L.push(`  ⚡ ${r.lanes.length} parallel lanes ready`, ...r.lanes.map((s) => `    /spec:run @${s}`))
+  if (r.lanes.length > 1) L.push(`  ⚡ ${r.lanes.length} parallel lanes ready — /spec:fanout`, ...r.lanes.map((s) => `    /spec:run @${s}`))
   if (r.questions.length) L.push('', '⚠️ Pending questions', ...r.questions.map((x) => `  ${x.lane || 'root'}: ${x.question}`))
   return ['```', ...L, '', r.verdict, '```'].join('\n')
 }
 
 function main(argv) {
   const ri = argv.indexOf('--root')
-  const root = path.resolve(ri >= 0 ? argv[ri + 1] : process.cwd())
+  const root = path.resolve(ri >= 0 ? argv[ri + 1] : require('./lib/git').repoRoot(process.cwd()))
   const r = build(root)
   console.log(argv.includes('--json') ? JSON.stringify(r, null, 2) : render(r))
   return 0

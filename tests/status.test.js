@@ -60,3 +60,18 @@ test('pending questions in root and worktrees turn the verdict yellow', () => {
   assert.strictEqual(r.questions.length, 1)
   assert.match(r.verdict, /^🟡/)
 })
+
+test('Next skips a brief that already has specs in progress, shows an unqueued run in flight, and names fanout', () => {
+  const d = tmpdir('status'); gitRepo(d)
+  w(d, 'docs/roadmap/01-a.md', '# 01 — A\n')
+  queue(d, 'add', 'docs/roadmap/01-a.md'); queue(d, 'add', 'do a thing')
+  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:plan docs/roadmap/01-a.md')
+  w(d, 'specs/20261104/01-x.md', spec('hardened', '01', ['a.js']))
+  assert.strictEqual(JSON.parse(run(d).stdout).next, 'do a thing', 'a planned brief is not offered for planning again')
+  w(d, 'specs/20261104/01-x.run/state.json', '{"step":"REVIEW"}')
+  assert.strictEqual(JSON.parse(run(d).stdout).next, '/spec:run specs/20261104/01-x.md', 'a run started by hand comes first')
+  fs.rmSync(path.join(d, 'specs/20261104/01-x.run'), { recursive: true })
+  w(d, 'specs/20261104/02-y.md', spec('hardened', 'n/a', ['b.js']))
+  queue(d, 'add', 'specs/20261104/01-x.md'); queue(d, 'add', 'specs/20261104/02-y.md')
+  assert.match(runNode('scripts/status.js', ['--root', d]).stdout, /2 parallel lanes ready — \/spec:fanout/)
+})

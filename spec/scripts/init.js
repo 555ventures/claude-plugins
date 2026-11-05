@@ -51,7 +51,7 @@ function detect(root) {
 }
 
 function main(argv) {
-  const opt = { root: process.cwd(), json: false, set: {} }
+  const opt = { root: git.repoRoot(process.cwd()), json: false, set: {} }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--root') opt.root = path.resolve(argv[++i])
     else if (argv[i] === '--json') opt.json = true
@@ -83,7 +83,7 @@ function main(argv) {
   else {
     process.stdout.write(render({
       outcome, bullets: Object.keys(cfg).map((k) => `${k}: ${typeof cfg[k] === 'string' ? cfg[k] : JSON.stringify(cfg[k])}`),
-      warns, next: questions.length ? 're-run init.js with --set testCommand=<answer>' : '/spec:doctor',
+      warns, next: questions.length ? 're-run init.js with --set testCommand=<answer>' : 'commit .claude/spec.config.json and .gitignore, then /spec:doctor',
     }))
     if (questions.length) process.stdout.write('questions: ' + JSON.stringify(questions) + '\n')
   }

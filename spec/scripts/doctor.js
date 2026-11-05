@@ -8,6 +8,7 @@ const path = require('path')
 const { readJson, configPath } = require('./lib/state')
 const { run } = require('./lib/host')
 const git = require('./lib/git')
+const pending = require('./lib/pending')
 const { IGNORE } = require('./init')
 
 function walkRuns(dir, out, depth = 0) {
@@ -46,9 +47,20 @@ function check(root) {
   try { ig = fs.readFileSync(path.join(root, '.gitignore'), 'utf8') } catch { /* none */ }
   const have = new Set(ig.split('\n').map((l) => l.trim()))
   for (const e of IGNORE) if (!have.has(e)) f.push(`gitignore: missing ${e}`)
-  for (const d of walkRuns(path.join(root, 'specs'), [])) f.push(`stale sidecar: ${path.relative(root, d)}`)
+  const ENDED = ['DONE', 'PARKED', 'AMENDED']
+  for (const d of walkRuns(path.join(root, 'specs'), [])) {
+    const run = readJson(path.join(d, 'state.json'), null); const rel = path.relative(root, d)
+    if (run && run.step && !ENDED.includes(run.step) && !run.ended) f.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — /spec:run ${rel.replace(/\.run$/, '.md')}`)
+    else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
+  }
   const wt = path.join(root, '.claude', 'worktrees')
-  try { for (const n of fs.readdirSync(wt)) f.push(`leftover worktree: .claude/worktrees/${n}`) } catch { /* none */ }
+  const live = (p) => fs.existsSync(path.join(p, '.git')) && (pending.isLane(p) || git.raw(['status', '--porcelain'], p).stdout.trim() !== '')
+  try {
+    for (const n of fs.readdirSync(wt)) {
+      const p = path.join(wt, n)
+      f.push(live(p) ? `in flight: .claude/worktrees/${n} (lane marker or uncommitted work) — leave it to its run` : `leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
+    }
+  } catch { /* none */ }
   for (const base of [root, ...(fs.existsSync(wt) ? fs.readdirSync(wt).map((n) => path.join(wt, n)) : [])]) {
     if (fs.existsSync(path.join(base, '.claude', 'pending-question.json'))) f.push(`pending question: ${path.relative(root, path.join(base, '.claude', 'pending-question.json')) || '.claude/pending-question.json'}`)
   }
@@ -64,7 +76,7 @@ function check(root) {
 
 function main(argv) {
   const i = argv.indexOf('--root')
-  const root = i >= 0 ? path.resolve(argv[i + 1]) : process.cwd()
+  const root = i >= 0 ? path.resolve(argv[i + 1]) : git.repoRoot(process.cwd())
   const { findings, version } = check(root)
   if (argv.includes('--json')) process.stdout.write(JSON.stringify({ ok: !findings.length, version, findings }) + '\n')
   else process.stdout.write(findings.length ? findings.map((x) => '- ' + x).join('\n') + `\n${findings.length} finding(s)\n` : `✅ healthy — spec ${version || ''}\n`)

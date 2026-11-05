@@ -7,11 +7,15 @@ const { tmpdir, runNode, gitRepo } = require('./helpers')
 
 const plan = (d, ...a) => runNode('scripts/plan.js', [...a, '--root', d])
 const status = (f) => /^status:\s*(\S+)/m.exec(fs.readFileSync(f, 'utf8'))[1]
-const fresh = (d, slug) => { const r = plan(d, 'new', slug); assert.strictEqual(r.status, 0, r.stderr); return path.join(d, r.stdout.trim()) }
+const raw = (d, slug) => { const r = plan(d, 'new', slug); assert.strictEqual(r.status, 0, r.stderr); return path.join(d, r.stdout.trim()) }
+// A filled-in spec: every template placeholder replaced, the way the session leaves it.
+const fresh = (d, slug) => { const f = raw(d, slug); fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/no \| yes — <what>, needs your yes/, 'no').replace(/<[^<>\n]+>/g, 'x')); return f }
 
-test('new numbers per date and creates a draft', () => {
+test('new numbers per date and creates a draft; a raw template never locks', () => {
   const d = tmpdir('plan')
-  const a = fresh(d, 'first')
+  const a = raw(d, 'first')
+  const r = plan(d, 'lock', a)
+  assert.strictEqual(r.status, 2); assert.match(r.stderr, /template placeholders left: <Title>/)
   assert.match(path.relative(d, a), /^specs\/\d{8}\/01-first\.md$/)
   assert.strictEqual(path.basename(fresh(d, 'second')), '02-second.md')
   assert.strictEqual(status(a), 'draft')
@@ -24,7 +28,7 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   const text = fs.readFileSync(f, 'utf8')
   fs.writeFileSync(f, text.replace('## Assumptions', '## Notes'))
   assert.strictEqual(plan(d, 'lock', f).status, 2)
-  fs.writeFileSync(f, text.replace('<bullets>', 'x [NEEDS CLARIFICATION: y]'))
+  fs.writeFileSync(f, text.replace('## Goal', '## Goal\n\nx [NEEDS CLARIFICATION: y]'))
   assert.strictEqual(plan(d, 'lock', f).status, 2)
   assert.strictEqual(status(f), 'draft')
   fs.writeFileSync(f, text)
@@ -32,6 +36,13 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   assert.strictEqual(r.status, 0)
   assert.match(r.stdout, /^✅ spec hardened & locked — specs\/\d{8}\/01-first\.md\nNext: \/spec:queue add specs\/\d{8}\/01-first\.md\n/)
   assert.strictEqual(status(f), 'hardened')
+})
+
+test('re-locking a queued spec points at /spec:run, not a second queue add', () => {
+  const d = tmpdir('plan'); gitRepo(d)
+  const f = fresh(d, 'again'); const rel = path.relative(d, f)
+  assert.strictEqual(runNode('scripts/queue.js', ['add', rel, '--root', d]).status, 0)
+  assert.match(plan(d, 'lock', f).stdout, new RegExp(`Next: /spec:run ${rel.replace(/[/.]/g, '\\$&')}`))
 })
 
 test('architecture: true needs --confirmed', () => {

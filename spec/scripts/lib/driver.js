@@ -43,7 +43,7 @@ function die(msg, code = 1) {
 
 // Positional args, --root, --state, --json, --mark <verb>, and every other --flag [value].
 function parseArgv(argv) {
-  const out = { pos: [], flags: {}, root: process.cwd(), state: false, json: false, mark: null }
+  const out = { pos: [], flags: {}, root: require('./git').repoRoot(process.cwd()), state: false, json: false, mark: null }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--state') out.state = true

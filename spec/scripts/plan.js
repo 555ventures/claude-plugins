@@ -3,7 +3,7 @@
 // validates it, locks it and (in a git repo) commits it on the current branch, so lanes branch with it.
 const fs = require('fs')
 const path = require('path')
-const { readSpec, writeStatus, writeText, readText } = require('./lib/state')
+const { readSpec, writeStatus, writeText, readText, readQueue } = require('./lib/state')
 const git = require('./lib/git')
 
 const REQUIRED = ['Intent', 'Goal', 'Decisions', 'File Plan', 'Acceptance Criteria', 'Assumptions']
@@ -31,6 +31,8 @@ function lock(root, arg, confirmed) {
   const missing = REQUIRED.filter((n) => !Object.keys(s.sections).some((k) => k === n || k.startsWith(n + ' ') || k.startsWith(n + '(')))
   if (missing.length) throw new Refusal(`missing sections: ${missing.join(', ')}`)
   if (s.markers) throw new Refusal(`${s.markers} [NEEDS CLARIFICATION:] marker(s) left — resolve them first`)
+  const tokens = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => s.body.includes(t))
+  if (tokens.length) throw new Refusal(`template placeholders left: ${tokens.join(' ')} — fill them in first`)
   if (s.frontmatter.architecture === true && !confirmed) throw new Refusal("architecture change — needs the user's yes; re-run with --confirmed")
   writeStatus(file, 'hardened')
   const rel = path.relative(root, file)
@@ -42,7 +44,9 @@ function lock(root, arg, confirmed) {
     git.sh(['add', '--', rel, ...docs], root)
     git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel, ...docs], root)
   }
-  return `✅ spec hardened & locked — ${rel}\nNext: /spec:queue add ${rel}`
+  let queued = false // no queue outside git
+  try { queued = readQueue(root).items.some((i) => !i.done && i.payload === rel.split(path.sep).join('/')) } catch { /* not a repo */ }
+  return `✅ spec hardened & locked — ${rel}\nNext: ${queued ? '/spec:run' : '/spec:queue add'} ${rel}`
 }
 
 function main(argv) {
@@ -52,7 +56,7 @@ function main(argv) {
     else if (argv[i] === '--root') flags.root = argv[++i]
     else pos.push(argv[i])
   }
-  const root = path.resolve(flags.root || process.cwd())
+  const root = path.resolve(flags.root || git.repoRoot(process.cwd()))
   try {
     const [cmd, arg] = pos
     if (cmd === 'new') console.log(create(root, arg))

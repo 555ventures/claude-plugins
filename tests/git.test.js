@@ -64,7 +64,7 @@ test('mergeBack reports conflicts, refuses ff on divergence, and refuses a dirty
   fs.writeFileSync(path.join(root, 'a.txt'), 'trunk\n')
   G.commitAll(root, 'trunk edit')
   const ff = G.mergeBack(root, 'spec/01-x', 'ff-only')
-  assert.ok(!ff.merged && /diverged/.test(ff.reason), 'ff-only must explain a divergence')
+  assert.ok(!ff.merged && /diverged[\s\S]*fast-forward/i.test(ff.reason), 'ff-only must explain a divergence with git\'s own words')
   const r = G.mergeBack(root, 'spec/01-x', 'merge-commit')
   assert.deepStrictEqual(r, { merged: false, conflicts: ['a.txt'] }, 'MERGE asks the user about exactly these files')
   g('merge', '--abort')

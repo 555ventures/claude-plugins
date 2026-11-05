@@ -75,7 +75,7 @@ function main(argv) {
     else if (a === '--root') flags.root = argv[++i]
     else pos.push(a)
   }
-  const root = path.resolve(flags.root || process.cwd())
+  const root = path.resolve(flags.root || require('./lib/git').repoRoot(process.cwd()))
   const cmd = pos[0] || 'next'
   let arg = pos.slice(1).join(' ')
   const q = reconcile(root, readQueue(root))

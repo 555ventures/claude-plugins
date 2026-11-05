@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# PreToolUse guard (matcher Bash): inside a lane worktree — its private git dir carries the
+# PreToolUse guard (matcher Bash). Inside a lane worktree — its private git dir carries the
 # `spec-lane-open` marker that run.js / fanout write — builder and reviewer agents may not run git
-# commit/push/merge/rebase/reset/checkout. `git rebase --continue` and `git add` stay allowed: a lane
-# sent back by fanout's MERGE resolves the rebase left in progress. The driver commits and merges; a
-# node process it spawns is not a Bash tool call, so the driver itself is never blocked.
+# commit/push/merge/rebase. Destructive verbs (reset, checkout, restore, clean, stash, switch,
+# branch, worktree) are blocked in EVERY checkout of a repo while any lane is open: an agent's shell
+# starts in the main checkout, and `git reset --hard` there would eat the user's work. `git rebase
+# --continue` and `git add` stay allowed: a lane sent back by fanout's MERGE resolves the rebase left
+# in progress. The driver commits and merges; a node process it spawns is not a Bash tool call, so
+# the driver itself is never blocked.
 # The command is tokenized in node (quotes, escapes, ; && || | ( ) $( ) and newlines), so quoted
 # paths with spaces, `cd <dir> && git …` chains, `git -C <dir>` and `bash -c "…"` are all seen.
 # Fail-open: no marker, cwd outside a repo, unparseable input, or no node all allow.
@@ -12,7 +15,7 @@ set -u
 command -v node >/dev/null 2>&1 || exit 0
 parsed="$(node -e '
 const path = require("path")
-const BLOCK = new Set(["commit", "push", "merge", "rebase", "reset", "checkout"])
+const BLOCK = new Set(["commit", "push", "merge", "rebase", "reset", "checkout", "restore", "clean", "stash", "switch", "branch", "worktree"])
 function tokens(cmd) {
   const out = []; let cur = null; let i = 0
   const push = () => { if (cur !== null) { out.push({ w: cur }); cur = null } }
@@ -74,16 +77,28 @@ try {
 [ -n "$parsed" ] || exit 0
 verb="${parsed%%$'\n'*}"
 
-gd=""
+case "$verb" in commit|push|merge|rebase) lane_only=1 ;; *) lane_only=0 ;; esac
+
+gd=""; open=""
 while IFS= read -r d; do
   [ -n "$d" ] || continue
   g="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)" || continue
   if [ -f "$g/spec-lane-open" ]; then gd="$g"; break; fi
+  if [ "$lane_only" = 0 ]; then
+    c="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || continue
+    for m in "$c"/spec-lane-open "$c"/worktrees/*/spec-lane-open; do [ -f "$m" ] && open="$m" && break; done
+  fi
 done < <(printf '%s\n' "${parsed#*$'\n'}")
-[ -n "$gd" ] || exit 0
 
-{
-  echo "BLOCKED: git $verb inside a spec lane worktree (${gd%/.git*}) — agents never run git here; /spec:run commits and merges at its own steps."
-  echo "  stale marker (no run in flight)? remove $gd/spec-lane-open"
-} >&2
-exit 2
+if [ -n "$gd" ]; then
+  {
+    echo "BLOCKED: git $verb inside a spec lane worktree (${gd%/.git*}) — agents never run git here; /spec:run commits and merges at its own steps."
+    echo "  stale marker (no run in flight)? remove $gd/spec-lane-open"
+  } >&2
+  exit 2
+fi
+if [ -n "$open" ]; then
+  echo "BLOCKED: git $verb while a spec lane is open ($open) — it can discard work in this checkout; the driver owns git until the run ends." >&2
+  exit 2
+fi
+exit 0

@@ -112,7 +112,7 @@ function plan(root) {
   if (q && q.version !== 2) { lost = convertQueue(root, q).lost; add('queue', qf, null, `${(q.items || []).length} items -> v2`) }
   // sidecars and deviations
   walk(path.join(root, 'specs'), (p, isDir) => {
-    if (isDir && SIDECAR.test(p)) { add('delete', rel(p)); return true }
+    if (isDir && SIDECAR.test(p)) { if (exists(p.replace(SIDECAR, '.md'))) add('delete', rel(p)); return true } // a dotted dir with no spec beside it is the user's
     if (!isDir && p.endsWith('.deviations.md')) add('archive', rel(p), path.posix.join(ARCH, 'deviations', path.relative(path.join(root, 'specs'), p).split(path.sep).join('/')))
     return false
   })

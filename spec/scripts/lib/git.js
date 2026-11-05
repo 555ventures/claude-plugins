@@ -27,6 +27,11 @@ const headSha = (cwd) => sh(['rev-parse', 'HEAD'], cwd)
 const branchExists = (cwd, b) => raw(['rev-parse', '-q', '--verify', 'refs/heads/' + b], cwd).status === 0
 
 const real = (p) => { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
+// The checkout's top level (specs/, docs/ and .claude/ live there), or dir itself outside a repo.
+function repoRoot(dir) {
+  const r = raw(['rev-parse', '--show-toplevel'], path.resolve(dir || process.cwd()))
+  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : path.resolve(dir || process.cwd())
+}
 
 function worktreeList(root) {
   return sh(['worktree', 'list', '--porcelain'], root).split('\n')
@@ -43,9 +48,10 @@ function worktreeAdd(root, wtPath, branch, base) {
   return abs
 }
 
-function worktreeRemove(root, wtPath, { deleteBranch } = {}) {
+// No --force by default: edits made after the lane's commit are never thrown away silently.
+function worktreeRemove(root, wtPath, { deleteBranch, force } = {}) {
   const abs = path.resolve(root, wtPath)
-  if (worktreeList(root).includes(real(abs))) sh(['worktree', 'remove', '--force', abs], root)
+  if (worktreeList(root).includes(real(abs))) sh(['worktree', 'remove', ...(force ? ['--force'] : []), abs], root)
   raw(['worktree', 'prune'], root)
   if (deleteBranch && branchExists(root, deleteBranch)) sh(['branch', '-D', deleteBranch], root)
 }
@@ -73,17 +79,19 @@ function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
   if (strategy === 'merge-commit') r = raw(['merge', '--no-ff', '--no-edit', ...(message ? ['-m', message] : []), branch], root)
   else if (strategy === 'ff-only') {
     r = raw(['merge', '--ff-only', branch], root)
-    if (r.status !== 0) return { merged: false, conflicts: [], reason: `${target} has diverged from ${branch}; use merge-commit or squash` }
+    if (r.status !== 0) return { merged: false, conflicts: [], reason: `${target} has diverged from ${branch} (${(r.stderr || r.stdout).trim()}); use merge-commit or squash` }
   } else if (strategy === 'squash') {
     r = raw(['merge', '--squash', branch], root)
     if (r.status === 0) {
       if (raw(['diff', '--cached', '--quiet'], root).status === 0) return { merged: true, conflicts: [], sha: headSha(root), empty: true }
-      r = raw(['commit', '-q', '-m', message || `merge: squash ${branch} into ${target}`], root)
+      r = raw(['commit', '-q', '-m', message || `chore(spec): squash ${branch} into ${target}`], root)
     }
   } else throw Object.assign(new Error(`unknown merge strategy '${strategy}' (merge-commit | ff-only | squash)`), { exit: 2 })
   if (r.status === 0) return { merged: true, conflicts: [], sha: headSha(root) }
   const conflicts = conflictsIn(root)
   if (conflicts.length) return { merged: false, conflicts }
+  // A merge that a hook rejected is left half-done: back out so the tree is clean for the re-run.
+  if (raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], root).status === 0) raw(['merge', '--abort'], root)
   throw new Error(`merge of ${branch} failed without conflicts: ${(r.stderr || r.stdout).trim()}`)
 }
 
@@ -118,6 +126,7 @@ const changedFiles = (base, cwd) =>
   withWorkingIndex(cwd, (env) => sh(['diff', '--cached', '--name-only', base], cwd, env)).split('\n').filter(Boolean)
 
 module.exports = {
+  repoRoot,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
   commitAll, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
 }

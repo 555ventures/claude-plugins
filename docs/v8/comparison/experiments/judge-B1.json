@@ -1,0 +1,27 @@
+{
+  "04-rate-limiting": {
+    "architecture": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "X server.js:83 sets the remaining header via res.setHeader and leaves the existing writeHead line untouched; Y server.js:73-88 threads a per-request `extra` object through every request and rewrites the final writeHead."},
+    "clean_code": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "X rate-limit.js:25-31 has one straight-line refill path (new bucket refills by 0 ms); Y rate-limit.js:26-32 adds an else branch and Y server.js:73 allocates `extra` even when no limiter exists."},
+    "test_quality": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "X tests/rate-limit.test.js:175-177 adds a t=1200000 check proving size() drops to 1 (eviction actually removes buckets), and names tests with full AC ids; Y tests/rate-limit.test.js:180 leaves a response body unconsumed and names tests AC-1..AC-9."},
+    "spec_adherence": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Both meet AC-1..AC-9 identically; X tests/rate-limit.test.js:108 ties each test to the spec's AC-20261104-04-N id, Y does not (AC-N only)."},
+    "overall": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Near-identical implementations; X's smaller touch on server.js:72-84 and the extra eviction assertion at tests/rate-limit.test.js:175-177 tip it."}
+  },
+  "05-todo-persistence": {
+    "architecture": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "X todos.js:102-107 attach() makes the store authoritative (resets to [] / 1 when the section is absent); Y todos.js:104-108 leaves prior in-memory todos in place when the file has no todos section, so a first write could persist stale state."},
+    "clean_code": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y store.js:57 isObject helper and todos.js:123-132 BAD_QUERY with three one-line guards read cleaner than X todos.js:127-131 three-clause compound if; X tests/store.test.js:186 defines a `warns` helper then duplicates the filter inline at :258."},
+    "test_quality": {"order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Y tests/store.test.js:240 asserts the exact fs call sequence [write tmp, rename tmp->file] and names tests by full AC id; X tests/store.test.js:234-236 only checks relative ordering via findIndex (though X uses mock.method and awaits server.close at :184, which Y does not at :189)."},
+    "spec_adherence": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "All ACs met by both; X todos.js:105-106 matches the Goal's 'loaded from the JSON file at startup' for an absent section, whereas Y todos.js:107 skips the load."},
+    "overall": {"order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Y is marginally more readable, but X's attach() at todos.js:102-107 avoids a latent stale-state bug and its tests restore mocks via node:test mock.method (tests/store.test.js:227-233) rather than hand-patching fs."}
+  },
+  "note": "Both specs are near-ties: the implementations share structure, naming and test shapes almost line for line. The strongest difference is in 05: X's todos.attach() unconditionally replaces in-memory state from the store (todos.js:102-107), while Y's only overwrites when a `todos` section exists (todos.js:104-108), so a store file without that section leaves whatever was in memory and would persist it on the next write; everything else (isObject/BAD_QUERY readability in Y, mock.method and awaited close in X, exact fs-call-sequence assertion in Y) is marginal. In 04 the only substantive differences are Y's `extra` header object threaded through server.js versus X's setHeader, and X's extra eviction assertion at t=1200000."
+}

@@ -1,0 +1,129 @@
+{
+  "04-rate-limiting": {
+    "architecture": {
+      "order1": "X",
+      "order2": "Y",
+      "stable": false,
+      "winner": null,
+      "confidence": 1,
+      "evidence": "Both limiters are line-for-line equivalent; X keeps the existing writeHead line untouched and mixes res.setHeader with writeHead (X.diff:83), Y threads one mutable headers object through the handler (Y.diff:67-83) \u2014 which reads cleaner on the Y-first pass and more invasive on the X-first pass."
+    },
+    "clean_code": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 1,
+      "evidence": "Y compresses the sweep and bucket-init into one-line for/if blocks (Y.diff:22,24) while X keeps them as readable blocks (X.diff:22-29); X's only wart is a stale '(amended AC; see spec Deviations)' comment in the test (X.diff:173)."
+    },
+    "test_quality": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 2,
+      "evidence": "X names every test with the full AC id and adds a second eviction step at t=1200000 proving the sweep actually removes buckets (X.diff:175-177); Y uses untraceable 'AC-1' names and leaves 429 bodies unconsumed (Y.diff:144,180)."
+    },
+    "spec_adherence": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 1,
+      "evidence": "Both meet AC-1..AC-9 identically; X additionally exercises D8 beyond the AC's single boundary case (X.diff:175-177), so it is the one that would catch a broken sweep."
+    },
+    "overall": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 1,
+      "evidence": "Near-identical implementations; X's traceable AC-id test names and extra eviction assertion (X.diff:108,175) outweigh Y's slightly tidier header plumbing (Y.diff:67)."
+    }
+  },
+  "05-todo-persistence": {
+    "architecture": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 1,
+      "evidence": "X imports todos at module top (X.diff:24) while Y does a lazy require('./todos') inside createApp (Y.diff:33); Y's store silently treats any non-ENOENT read error as a corrupt file by setting raw='' (Y.diff:69), a path D5 never specifies."
+    },
+    "clean_code": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 2,
+      "evidence": "Y adds a speculative `if (logger)` guard (Y.diff:74) and folds three validations into one compound condition (Y.diff:127-128); X keeps a named BAD_QUERY and three one-line checks (X.diff:123-132) and rethrows non-ENOENT errors at the boundary (X.diff:70)."
+    },
+    "test_quality": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 2,
+      "evidence": "X asserts the exact write-then-rename call sequence (X.diff:240) and runs each corrupt-file case as its own test (X.diff:256-267); Y weakens AC-3 to findIndex ordering (Y.diff:225-227), loops three cases inside one test (Y.diff:244-253), and its todos.test.js additions carry no AC ids (Y.diff:273,288)."
+    },
+    "spec_adherence": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 1,
+      "evidence": "Both satisfy AC-1..AC-9; X's test names map to the File Plan's AC list (X.diff:192,287,302) whereas Y's todos.test.js tests are unlabelled (Y.diff:273,288), and Y's `if (logger)` tolerates a missing logger the spec says is always passed (Y.diff:74)."
+    },
+    "overall": {
+      "order1": "X",
+      "order2": "X",
+      "stable": true,
+      "winner": "X",
+      "confidence": 2,
+      "evidence": "X is the more legible, more strictly tested implementation (X.diff:24,240); Y's awaited server.close (Y.diff:183) and mock.method use (Y.diff:218) are nicer but do not offset the inline require and the softened assertions."
+    }
+  },
+  "06-api-keys": {
+    "architecture": {
+      "order1": "Y",
+      "order2": "Y",
+      "stable": true,
+      "winner": "Y",
+      "confidence": 2,
+      "evidence": "Y requires todos/keys at module top and attaches both in createApp (Y.diff:131,140-144) and builds bootstrapGuard on requireKey (Y.diff:18); X keeps inline require('./todos')/require('./keys') inside createApp (X.diff:129-130), duplicates the guard logic (X.diff:18) and leaves router.js's header comment stale (X.diff:77)."
+    },
+    "clean_code": {
+      "order1": "Y",
+      "order2": "Y",
+      "stable": true,
+      "winner": "Y",
+      "confidence": 2,
+      "evidence": "X's store.test.js AC-5 now asserts the same file-content line twice (X.diff:394,397) and its `post(name, key)` helper encodes `name === undefined ? {} : { name }` (X.diff:162); Y's helpers are direct (`post(body, k)`, `bearer`, Y.diff:172-177) and the router comment was updated (Y.diff:82)."
+    },
+    "test_quality": {
+      "order1": "Y",
+      "order2": "Y",
+      "stable": true,
+      "winner": "Y",
+      "confidence": 3,
+      "evidence": "X rewrote spec-05's AC-5 so the unauthenticated GET /todos asserts {error:'unauthorized'} instead of [] (X.diff:395), no longer proving the empty start, and dropped the POST /todos from AC-4 (X.diff:378-382); Y mints an in-memory key in beforeEach and leaves the 05 assertions intact (Y.diff:333-339,370), labels every test with its AC id, asserts 201 inside mint (Y.diff:180), and adds 401 checks for GET/DELETE /keys (Y.diff:212-214,225-227)."
+    },
+    "spec_adherence": {
+      "order1": "Y",
+      "order2": "Y",
+      "stable": true,
+      "winner": "Y",
+      "confidence": 2,
+      "evidence": "Both implement AC-1..AC-10, but X had to change the spec-05 AC-2 fixture from `keys` to `other` (X.diff:352,358) and degraded AC-05-5's assertion (X.diff:395), while Y covers D5's guard on GET /keys and DELETE /keys/:id (Y.diff:212,225) and D3's name variants '' and 5 (Y.diff:237)."
+    },
+    "overall": {
+      "order1": "Y",
+      "order2": "Y",
+      "stable": true,
+      "winner": "Y",
+      "confidence": 3,
+      "evidence": "Y lands the breaking auth change without eroding the earlier suites (Y.diff:332-339) and with traceable, stricter tests (Y.diff:185,480); X's retrofit weakened two spec-05 tests (X.diff:378-382,394-397) and carried its inline-require smell forward (X.diff:129-130)."
+    }
+  },
+  "note": "The strongest difference was in 06-api-keys: when the auth guard broke the existing /todos tests, Y minted an in-memory key in each file's beforeEach and left the spec-05 assertions exactly as written (Y.diff:333-339), whereas X rewrote them \u2014 AC-05-5 now asserts the 401 body instead of the empty list (X.diff:395), AC-05-4 lost its POST /todos step (X.diff:378-382), the AC-05-2 fixture was renamed from `keys` to `other` (X.diff:352), and one assertion was pasted twice (X.diff:394,397). Specs 04 and 05 were near-ties on implementation (the limiters are byte-equivalent in logic); the deciding factors there were traceability (full AC ids in test names), strictness (exact call-sequence vs findIndex), and the inline require('./todos') inside createApp (05 Y.diff:33), with the one unstable call being 04's architecture, where X's minimal-touch setHeader and Y's single headers object each looked cleaner depending on which was read first."
+}

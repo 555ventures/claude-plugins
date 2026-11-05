@@ -1,54 +1,8 @@
 ---
-description: The session queue's command surface — wraps spec-queue.js's next/list/add/move/done subcommands in one script run per invocation; stores the one thing the pipeline cannot derive, the user's intended work order across briefs, ad-hoc specs, and free-text items plus their gates and done-when predicates, so /spec:status's --next stays queue-aware with zero hand reconstruction
-argument-hint: "[subcommand] [args…] — next|list|add|move|done|show|groom; bare invocation defaults to next. add takes a payload, --lane plan|prototype|fix|decide for free text, plus optional --top | --at <n>, --after-spec <path> | --after-brief NN, --when <type>:<args>, plus --origin <spec> --stage build|review|fanout|plan and --trigger <one of six>. move takes a <ref> and a pending position <n>. done takes a <ref>"
-allowed-tools: Bash(spec-paths:*), Bash(node:*), Read, Agent, AskUserQuestion
+description: Show, add to, or reorder the work queue
+argument-hint: "[next|list|add [--top]|move|done|show] [args…]"
+allowed-tools: Bash(node *)
 ---
 
-# Spec Queue: Durable Sequencing Behind `--next`
-
-One per-repository file (`spec-queue.json`, in the git common directory, never the checkout): an
-ordered to-do list of briefs, ad-hoc specs and free-text prompts. `spec-queue.js`'s header is the contract.
-
-**Intended model: any.** Run `spec-paths shared-for queue` and read what it prints. The script
-derives and writes, you render; the only judgment is `groom`'s, and agents do the checking.
-
-## Input — `$ARGUMENTS` is `<subcommand> [args…]`
-
-- `next` — reconcile+write, print the pick; the default when `$ARGUMENTS` is empty.
-- `list` — pending items only, numbered exactly as `move`/`--at` count them.
-- `add <payload…> [--lane plan|prototype|fix|decide] [--top | --at <n>] [--after-spec <path> | --after-brief NN] [--when <type>:<args>] [--origin <spec> --stage build|review|fanout|plan] [--trigger <one of six>]`
-  — refuses a brief/spec already queued. Free text needs `--lane` (`plan` spec-sized, `prototype`
-  changes screens, `fix` root-cause repair, `decide` the user's yes) and carries the subject only: the lane writes the command. Inside a lane, a bare add derives --origin from the fan-out table. Small fixes land in-session; other repos' work never queues here.
-- `move <ref> <n>` — reorder: `<n>` counts pending positions the way `list` prints them.
-- `done <ref>` — manual tick.
-- `show <ref>` — the item's full, untruncated payload plus its id, kind and gate.
-- `groom` — read-only: prints the flagged buckets (duplicates, cites-done, gate-met, stale), writes nothing.
-
-## Run
-
-One script run per invocation, everything after the subcommand forwarded verbatim (never
-reparse `<ref>`/`--when`/`--after-*`):
-
-```
-node "$(spec-paths spec-queue)" <subcommand> [args…]
-```
-
-Non-zero exit: print its stderr verbatim and stop — every exit names its own fix.
-
-## Render (Console Output Style — the script output IS the render)
-
-Print the script's stdout **verbatim** — never a table, never re-sorted — then one sentence
-naming what changed (`add`/`move`/`done`) or the top pick's place (`next`/`list`).
-
-**`groom` checks before it proposes.** Flags are suspicion, not evidence. Fan out one read-only
-`Agent {model: "haiku"}` per flagged item in one message, each given its `show` output and the repo
-root: done (name the file or spec) or live (name what is missing)? Flagged = presumed `done`;
-`keep` only with the missing piece quoted. Hard evidence ticks with `📌 Auto-picked done — <evidence> (veto anytime)`;
-ask only `keep`/ambiguous items (`AskUserQuestion`, ≤ 4/call); never tick without a yes. No agent, no proposal.
-
-## Rules
-
-- Never edit `spec-queue.json` directly — every mutation is a `spec-queue.js` subcommand.
-- Never type an --origin, --stage or --trigger value a driver did not print — the flags come from the step that queues.
-- Never hand-derive readiness, position, or the top pick — a misplaced-looking `add`/`move` is
-  reported with the script's own output, never silently corrected by a second write.
+Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/queue.js $ARGUMENTS` (bare means `next`; `add --top`
+puts the item first) and show its output.

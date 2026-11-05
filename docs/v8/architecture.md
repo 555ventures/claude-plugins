@@ -1,0 +1,317 @@
+# spec v8 — architecture (contract between builder agents)
+
+Read `design.md` first. This file fixes module boundaries, file formats and shared APIs so
+that parallel builders produce one coherent plugin. If something here is wrong, fix it here
+first, then build.
+
+## 0. Rules for every builder
+
+- Node ≥ 22, CommonJS, built-ins only. No npm dependencies.
+- Every script: `node spec/scripts/<name>.js <subcommand|flags>`; exit 0 ok, 1 error,
+  2 refusal (stderr names the remedy). `--root <dir>` on every driver; `--json` where output
+  is consumed by code.
+- One module owns each on-disk file (see §2). Nobody else parses it.
+- Size caps: driver ≤ 400 LOC, lib file ≤ 250 LOC, command md ≤ 60 lines, agent md ≤ 40
+  lines. If you are over, cut features, not line breaks.
+- Tests: `tests/<name>.test.js` with `node:test`, behavioural only (run the script on a tmp
+  tree, assert exit code / files / JSON). Never assert on prose wording. Use
+  `tests/helpers.js` (`tmpdir`, `gitRepo`, `runNode`, `runBash`, `freePort`).
+- Don't add flags, modes, policies or fallbacks that no listed step needs.
+- Prose shipped to hosts (commands, doctrine, agents, templates) is written in plain English
+  for a model that already knows how to code. State intent and the hard rules; do not
+  enumerate behaviour.
+
+## 1. Layout
+
+```
+spec/
+  .claude-plugin/plugin.json      name, version 8.0.0, description (one sentence)
+  commands/*.md                   one per command, ≤ 60 lines
+  doctrine.md                     the one page every command loads
+  agents/builder.md               sonnet, effort high
+  agents/reviewer.md              opus, effort low (fable when architecture: true)
+  templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md, proto-overlay.js
+  hooks/hooks.json
+  scripts/
+    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js
+    run.js fanout.js queue.js status.js plan.js init.js doctor.js migrate.js
+    genesis.js mocks.js prototype.js connect.js release.js red-check.js
+    state-gate.sh block-worker-git.sh block-cross-worktree-writes.sh merge-back.sh
+tests/helpers.js, tests/*.test.js
+```
+
+## 2. Files on disk and their single owner (`lib/state.js`)
+
+All paths relative to host root unless noted. `state.js` exports one `read*`/`write*` pair
+per file; writes are atomic (tmp + rename).
+
+| File | API | Notes |
+|---|---|---|
+| `.claude/spec.config.json` | `readConfig(root)` | Keys in §3. Missing file → `{}` with defaults applied. |
+| `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, title, sections, intent, filePlan, acs, markers}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. |
+| `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | `<spec>` = spec path minus `.md`. One sidecar per in-flight spec. Gitignored (`specs/**/*.run/`). Shape in §4. |
+| `<git-common-dir>/spec-queue.json` | `readQueue(root)`, `writeQueue(root, q)` | `{version: 2, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?}`. |
+| `<git-common-dir>/spec-fanout.json` | `readFanout`, `writeFanout` | `{step, batch: [{spec, worktree, branch, status, question?}], started}` |
+| `.claude/pending-question.json` | in `lib/pending.js` | Lane question relay. Doc `{lane, question, options: [{label, description?}], writtenAt, answer: {label, by, at} \| null}`. |
+| `<git-dir>/spec-lane-open` | `isLane`, `markLane`, `unmarkLane` in `lib/pending.js` | Lane marker (private git dir of the lane worktree); read by `block-worker-git.sh`. |
+| `design/prototypes/<stem>/{status,pins,contract}.json` | `readProto`, `writeProto` | Owner: prototype.js via state.js. |
+| `design/mocks/{status.json,seed.md}` | `readMocks`, `writeMocks` | |
+| `.claude/genesis/status.json` | `readGenesis`, `writeGenesis` | |
+
+`spec.config.json` keeps the v7 path so migration is a key trim, not a move.
+
+## 3. Config keys (all optional except `testCommand`)
+
+```json
+{
+  "testCommand": "npm test",              // whole suite; the gate
+  "testFileCommand": "npx vitest {file}", // optional: single-file run used by red-check
+  "setupCommand": "npm ci",               // run once in a fresh worktree
+  "trunk": "main",
+  "lanes": 4,                             // fanout parallelism
+  "seats": { "builder": {"model":"sonnet","effort":"high"},
+             "reviewer": {"model":"opus","effort":"low"},
+             "orchestrator": {"model":"opus","effort":"medium"} },
+  "worktreePerSpec": true,
+  "mergeStrategy": "merge-commit",        // or ff-only | squash
+  "walkthrough": { "baseUrl": "", "project": "", "tokenEnv": "WALKTHROUGH_TOKEN" },
+  "prototype": { "url": "http://localhost:3000", "bootCommand": "npm run dev", "overlay": "src/main.tsx" },
+  "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "" }
+}
+```
+
+## 4. Run state (`<spec>.run/state.json`) and the run driver
+
+```json
+{ "step": "BUILD", "spec": "specs/20261104/01-x.md", "worktree": ".claude/worktrees/spec-01-x",
+  "branch": "spec/01-x", "base": "<sha>", "attempts": {"build": 1, "fix": 0},
+  "gate": {"status": "red", "runId": "...", "output_tail": "..."},
+  "review": {"findings": [], "verdict": "clean|fix|escalate"}, "history": [...] }
+```
+
+`run.js` steps, in order. The session does only the printed step, replies with the printed
+`--mark`, re-runs the driver. Each accepted mark prints
+`✅ checkpoint — <prev> → <next>; safe to /clear and re-run /spec:run <spec>`.
+
+| Step | Driver does | Session does | `--mark` |
+|---|---|---|---|
+| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
+| BUILD | prints the builder brief: spec path, Intent block, File Plan, test command, "write failing tests first, then code, run `testCommand` until green" | dispatches ONE `builder` agent (seat from config; Opus on attempt 2) in the worktree | `built` |
+| GATE | runs `testCommand` in the worktree itself; green-run cache by tree hash (`lib/host.js`) | nothing | (auto) → REVIEW or REPAIR |
+| REPAIR | prints failure tail; cap 2, then ESCALATE | dispatches builder with the failure | `repaired` → GATE |
+| REVIEW | prints reviewer brief: diff vs base, spec Intent + ACs; seat = reviewer, or Fable when `architecture: true` | dispatches ONE `reviewer` agent; writes findings JSON | `reviewed --file <json>` |
+| FIX | only for `blocking` findings; cap 1, then ESCALATE | dispatches builder with findings | `fixed` → GATE |
+| ESCALATE | prints the options: retry on opus / park (queue a fix) / amend spec | asks the user (one question) | `escalate <retry\|park\|amend>` |
+| COMMIT | driver commits in the worktree (`lib/git.js`), message from the spec title | nothing | (auto) |
+| MERGE | merge-back to trunk per `mergeStrategy`, re-run gate on trunk tree (cache hit when unchanged) | conflicts only: asked | (auto) / `conflicts-resolved` |
+| DONE | `status: done`, sidecar cleared, worktree removed, prints the report | nothing | — |
+
+A lane (sub-agent run under fanout) never asks: at ESCALATE or any question it writes
+`pending-question.json`, prints `PENDING_QUESTION`, exits 0.
+
+Builder agent brief must include the Intent block verbatim and the line
+"Do not touch files outside the File Plan without listing them in your final summary."
+
+## 5. Fanout (`fanout.js`)
+
+PLAN → DISPATCH → WAIT → RELAY → MERGE → REPORT, then back to PLAN until the queue is
+empty. PLAN, bare (AUTO): the first `lanes` (default 4) runnable queue specs in queue order —
+runnable = `hardened`, its lane did not end PARKED/AMENDED, not already in a lane — File Plan
+overlap regardless; prints a 📌 Auto-picked batch line, mark `planned`. `--pick` (SELF-PICK): the
+runnable specs as checkbox questions (≤ 4 boxes × ≤ 4 questions, labels = titles), mark `picked
+--label <title>` (repeatable; same validity checks, ≤ `lanes`). DISPATCH prints one Agent
+call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec> --root
+.claude/worktrees/spec-<stem>` (absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
+run state. RELAY: all `pending-question.json` batched into one message; `answered --lane`.
+MERGE, per done lane in batch order: `git.rebaseOnto(<worktree>, trunk)` (run state still
+MERGE_READY), then status done + commit in the lane, `mergeBack` ff-only, gate on trunk
+(`MERGE_RED` → `gate-repaired` on red). A rebase conflict leaves the rebase in progress, sets the
+lane `sent-back` with its conflict files, and prints the re-dispatch Agent line (prompt plus "a
+rebase onto trunk is in progress in your worktree; resolve the conflicts by intent, `GIT_EDITOR=true git
+rebase --continue`, re-run the test command, then stop"); mark `resent`; on return it lands on the next
+pass (`returned` refuses while the rebase is in progress). `block-worker-git.sh` allows `git add`
+and `git rebase --continue` in a lane. A second conflict against the same trunk sha → lane
+`stopped`, reason "second rebase conflict", relayed at RELAY. REPORT: one report, queue items ticked `done`.
+
+## 6. Plan (`plan.js` + `templates/spec.md`)
+
+`/spec:plan` is driven by the session (Fable). The script only: numbers the spec
+(`specs/YYYYMMDD/NN-slug.md`), validates the template sections exist, counts
+`[NEEDS CLARIFICATION:` markers, and locks (`status: hardened`) when zero. The template
+adds one block at the top of the body:
+
+```
+## Intent
+- You asked: <one sentence in the user's words>
+- I will build: <3–6 bullets>
+- I will not touch: <bullets>
+- Architecture or behaviour change: no | yes — <what>, needs your yes
+```
+
+Frontmatter stays v7-compatible: `date, status (draft|hardened|implementing|done),
+area, depends_on, brief, architecture: true|false`. Sections kept: Intent, Goal, Decisions,
+File Plan, Acceptance Criteria (`AC-YYYYMMDD-NN-k`, WHEN/SHALL), Assumptions. Dropped:
+tier, Users, Contracts, UI, Data Model, Rationale, Canonical Delta, oracle/pre-green tags.
+
+## 7. Hooks (`hooks/hooks.json`)
+
+| Event | Script | Rule |
+|---|---|---|
+| UserPromptSubmit | `state-gate.sh` | `/spec:run <spec>` on a `draft` spec or one with `[NEEDS CLARIFICATION:` markers → exit 2 with the remedy. |
+| PreToolUse Bash | `block-worker-git.sh` | inside a lane worktree, builder/reviewer agents may not run `git commit/push/merge/rebase/reset/checkout` (`git add` and `git rebase --continue` stay allowed). Marker: `<git-dir>/spec-lane-open`. |
+| PreToolUse Write\|Edit | `block-cross-worktree-writes.sh` | copy-trim from v7. |
+
+## 8. Report (`lib/report.js`)
+
+`render({outcome: '✅ …', bullets, pins, warns, blocks, artifacts, queued, next})` prints
+the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤ 60 LOC.
+
+## 9. Other drivers
+
+- `queue.js`: `next|list|add|move|done|show`. ≤ 150 LOC. Duplicate payload refused.
+- `status.js`: roadmap (✅/⬜ per brief by spec status), 🎯 Next (queue head + runnable
+  lanes), ⚠️ pending questions, verdict line. ≤ 200 LOC. `--json`.
+- `init.js`: detect test command (package.json scripts.test, pytest, go test, cargo test),
+  trunk, write config; ask only what cannot be detected (one AskUserQuestion). ≤ 150 LOC.
+- `doctor.js`: config valid, testCommand runs (exit 0 or 1, never "command not found"),
+  worktrees gitignored, pending sidecars listed. ≤ 100 LOC.
+- `red-check.js`: new test files vs base must fail on base and pass on HEAD; vacuous green
+  reported. ≤ 80 LOC. Called by GATE when `testFileCommand` exists.
+- `genesis.js`: DISCOVERY → MENUS → DECIDE → SCAFFOLD → ROADMAP → HANDOFF → GROUNDED.
+  Research menus = parallel Sonnet web agents (one per open dimension). DECIDE writes
+  `.claude/genesis/stack-descriptor.json` + ADRs. ROADMAP writes briefs + queue entries.
+  HANDOFF runs init. ≤ 400 LOC.
+- `mocks.js`: SEED → SCREENS → APPROVED, walkthrough service or terminal mode. ≤ 250 LOC.
+- `prototype.js`: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED, plus `serve`. Pins via
+  `templates/proto-overlay.js` POSTing to the serve endpoint. CONTRACTED writes
+  `contract.json` (every pin as a sentence) and queues `/spec:plan <contract>`. ≤ 400 LOC.
+- `connect.js`: copy-trim of v7 walkthrough-connect + client. ≤ 350 LOC total.
+- `release.js`: deploy → e2e → promote (asked) → report. ≤ 120 LOC.
+- `migrate.js`: v7 host → v8, see `host-footprint.md`. Idempotent, prints a plan first,
+  `--apply` writes. Archives v7-only files under `docs/archive/v7/`.
+- `enforce`: command md only; says init now writes lint/typecheck into `testCommand`.
+
+## 10. Doctrine (`spec/doctrine.md`, ≤ 1 page)
+
+Headings: What this plugin does · Files it reads · Lifecycle · Seats · How to drive a driver
+· When to ask (irreversible, architecture: yes, lane questions) · Glossary (lane, mark, pin,
+seat, checkpoint). Maintainer rules live in this repo's CLAUDE.md, not in the plugin.
+
+## 11. Foundation APIs as built (`spec/scripts/lib/`)
+
+Later builders: use these, do not re-derive them.
+
+- `state.js`: everything in §2 plus `writeConfig(root, cfg)`, `DEFAULTS`, `gitCommonDir(root)`,
+  `writeJson/writeText/readJson/readText` (atomic tmp+rename). `readConfig` merges defaults key by
+  key, objects one level deep. `intent` = `{asked, build[], notTouch[], architecture: false | true |
+  '<what>'}`; `filePlan` rows `{path, action (upper-case), summary}` found by header name;
+  `acs` = `[{id, text}]`; `markers` = count of `[NEEDS CLARIFICATION:` in the body. `readQueue` of
+  an absent file → `{version: 2, seq: 0, items: []}`; `readFanout`/`readRun`/`readGenesis` → `null`.
+  `readProto(root, stem)` → `{status, pins, contract}` (each `null` when absent); `writeProto` and
+  `writeMocks(root, {status?, seed?})` write only the keys given.
+- `driver.js`: `makeDriver({name, specArg, load, save, derive, steps, script?})` returns
+  `main(argv) → exit code` (script does `process.exitCode = main()`). `derive(state, ctx)` returns
+  `{name, body?, mark?, accepts?, auto?}`: `mark` is the verb line the session replies with
+  (`'reviewed --file <json>'`); its first word plus `accepts[]` are the verbs allowed at that step;
+  `auto(state, ctx) → state` is a driver-only step (OPEN, GATE, COMMIT, MERGE…) run, saved and
+  re-derived without the session — after a mark too, so the checkpoint names the next session step.
+  `ctx = {root, arg, json, flags, script}`. Printed block: `▶ <STEP>`, body, `▶ when done: node
+  <script> <arg> --root <root> --mark <mark>`. `--json` → `{step, body, mark}`. Refuse with
+  `refuse(msg)` (or throw `{exit: 2, message}`); stderr is `<name>: <msg>`. Also `die`, `writeOut`.
+- `host.js`: `run(cmd, {cwd, env, timeoutMs})` runs under bash, timeout → status 124, `tail` = last
+  40 lines of stdout+stderr. `gate(root, config)` → `{status, cached, runId, tail}`; throws
+  `{exit: 2}` without `testCommand`. Cache key = sha256(cmd, working-tree git tree sha); the tree
+  comes from a HEAD-seeded scratch index with `add -A`, minus `**/*.run/**` and
+  `.claude/pending-question.json`; only green runs are recorded; cache dir
+  `<git-common-dir>/spec-run-cache/` is shared by every worktree, so the trunk gate after an
+  unchanged merge is a hit. `detectTestCommand(root)` → `npm|pnpm|yarn test`, `bun run test`,
+  `pytest`, `go test ./...`, `cargo test`, or `null`.
+- `git.js`: `sh(args, cwd)` throws on non-zero. `worktreeAdd` is idempotent and attaches an
+  existing branch. `worktreeRemove(root, path, {deleteBranch})`. `commitAll` → sha or `null` when
+  clean. `mergeBack(root, branch, strategy, {message})` merges into the branch checked out at root →
+  `{merged, conflicts[], sha?, reason?}` (ff-only divergence → `merged: false` + `reason`; conflicts
+  are left in the root tree for `conflicts-resolved`); a root with tracked uncommitted changes or an
+  unknown strategy throws `{exit: 2}`. `rebaseOnto(worktree, trunk)` → `{ok, conflicts[]}`; a conflict
+  leaves the rebase in progress in the worktree (`rebasing(wt)` tells). `diff(base, cwd)` / `changedFiles(base, cwd)` compare the
+  WORKING TREE (incl. untracked) with base via a scratch index, because REVIEW runs before COMMIT.
+- `report.js`: `render(...)` per §8; empty sections omitted; a trailing `?` on `next` is stripped;
+  missing `next` → `nothing needs you — all done`. The interface contract's `✨ found` line is not in
+  the v8 API.
+- `pending.js`: `writePending(root, {lane, question, options})` → `{path, written, doc}` and never
+  overwrites a pending question; `readPending`, `answerPending(root, label)` (unknown label → exit 2),
+  `consumePending` (returns the doc), `stopLine(root)` starts with `PENDING_QUESTION`. No CLI.
+- Tests: `tests/helpers.js` exports `ROOT, SPEC, RUN_ROOT, tmpdir, gitRepo, runNode, runBash,
+  freePort`; `runNode(script)` resolves `script` against `spec/` (or takes an absolute path).
+  `npm test` = `node --test --test-timeout=45000 'tests/**/*.test.js'` (no stdout preload).
+
+### fanout.js notes
+
+Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout created and marked with
+`lib/pending.markLane`; `run.js` detects it with `lib/pending.isLane(cwd)`):
+
+- **In lane mode run.js stops at MERGE_READY after COMMIT; fanout merges.** It writes run state
+  `step: 'MERGE_READY'` (readable by fanout as `readRun(<worktree>/<spec>).step`) with the branch
+  committed, and does not merge, remove the worktree, delete the branch, clear the sidecar or write
+  `status: done` — fanout does all of that (rebase onto trunk in the lane, status done + sidecar
+  clear + commit in the lane, `mergeBack` ff-only into trunk, `gate` on root, `worktreeRemove` with the branch, queue tick).
+- OPEN in lane mode creates no second worktree: it runs in place in the lane worktree
+  (`.claude/worktrees/spec-<stem>`, branch `spec/<stem>`, both made by fanout from trunk) and still
+  runs `setupCommand`.
+- Any question or ESCALATE in lane mode: `writePending(<worktree>, {lane: <stem>, question,
+  options})`, print `stopLine`, exit 0, run state left at its step. Re-dispatched with the same
+  `/spec:run <spec>` after fanout records the answer, run.js reads `readPending(<worktree>).answer`,
+  `consumePending`s it, and continues. fanout treats a pending doc with `answer: null` as "stopped".
+- run.js must not refuse a re-run in a lane whose state is already MERGE_READY (no-op exit 0).
+
+### run.js notes
+
+- **Where things live.** State, `diff.patch` and `findings.json` sit in `<spec>.run/` next to the
+  spec under `--root` (the main checkout, or the lane worktree in a lane). `load` refuses (exit 2)
+  unless `git check-ignore` says that sidecar is ignored.
+- **In place** when `--in-place` is given, when `worktreePerSpec: false`, when the root is already on
+  `spec/<stem>`, or when `isLane(root)` (fanout lane). Each case prints a `📌 Auto-picked in place —`
+  line in the BUILD brief. Otherwise OPEN makes `.claude/worktrees/spec-<stem>` on `spec/<stem>` from
+  trunk. `setupCommand` runs in a new worktree and in a lane.
+- **Spec status.** A worktree run never writes to the main checkout: the run sidecar is the
+  in-flight state, and `status.js` shows 🔶 implementing when a spec has a sidecar or a
+  `.claude/worktrees/spec-<stem>` worktree (frontmatter only says `done`). The branch copy is
+  synced from root and set to `done` at OPEN, so the gated tree is the tree that merges and the
+  trunk gate after an unchanged merge is a cache hit; spec text edited in the branch (a FIX
+  round's AC correction) merges with it. In place, OPEN writes `implementing` in the single
+  checkout and (not a lane) COMMIT writes `done` into the build commit, so MERGE never meets a
+  dirty tree. The REVIEW brief's `Files changed outside the File Plan` lists
+  `<spec> (spec text edited)` when the spec differs from base beyond its status line.
+- **Lane mode** follows the fanout notes above. `lane` is read once at OPEN and kept in the run
+  state. A non-lane run marks its own worktree (or the root, in place) for `block-worker-git.sh`
+  only while a builder or reviewer is out (BUILD, REPAIR, FIX, REVIEW); every save syncs it. The
+  marker's content names its owner (`fanout` | `run`) and only a `fanout` marker makes a lane, so
+  a stale run marker never turns the next run into one. MERGE, TRUNK_GATE and FINISH are separate
+  saved auto steps. `reviewed` refuses a severity other than blocking/advisory and a `fix` verdict
+  with nothing blocking; any blocking finding means FIX. A fanout lane that returns PARKED or
+  AMENDED is dismissed (`ended` kept) and PLAN skips it while its worktree stays. A lane's park/amend keeps its sidecar at `PARKED`/`AMENDED`. A lane at ESCALATE with an
+  answered pending doc applies the answer as an auto step.
+- **Attempts.** `attempts = {repair, fix}`. The builder attempt is `1 + repair + fix`, plus 1 for
+  REPAIR/FIX briefs. Attempt 2 and up, or `escalate retry`, uses opus. Retry clears both counters
+  and returns to REPAIR (gate escalation) or FIX (review escalation).
+- **Extra terminal names** beyond §4: `PARKED`, `AMENDED`, and `MERGE_READY` (lane only). A
+  trunk gate that goes red after the merge still ends at DONE, with a 🚫 block and
+  `Next: /spec:fix …`. A ff-only divergence is a refusal.
+- **CLI shim.** `--mark escalate <choice>` is rewritten to `--choice <choice>` before
+  `makeDriver` parses argv. `--in-place` is taken out of argv so it never swallows the spec path.
+  `conflicts-resolved` refuses while a file the merge reported still holds `<<<<<<<`/`>>>>>>>`
+  lines, then commits the merge in the main checkout.
+
+### integration notes
+
+- The Agent tool takes no working directory: every agent runs from the main checkout. Lanes get
+  `/spec:run <spec> --root <worktree>`; builders are told to `cd <worktree> && …`.
+  `block-cross-worktree-writes.sh` allows writes from a checkout into its own `.claude/worktrees/*`;
+  `block-worker-git.sh` also checks `cd <dir>` / `git -C <dir>` targets for the lane marker.
+- `plan.js lock` commits the spec (`chore(spec): lock YYYYMMDD/NN`) so lane worktrees branch with it.
+- `lib/driver.js`: when a mark settles on a terminal step (no mark), its body is printed after the
+  checkpoint (the run sidecar is already cleared, so a re-run would refuse).
+- `queue.js` reconciles: a spec item whose spec is `done` counts as done (written on the next
+  write); `run.js` DONE also ticks it and sets Next to the queue head. The REVIEW brief lists
+  `Files changed outside the File Plan`.
+- Removed as unused by any prose: fanout `--batch`, queue `--at`, status `--all`, plan `check`/`--date`,
+  pending.js CLI, prototype `check`, mocks `reply`, walkthrough `reply`/`mark`, the `scratch-worktree` sink.

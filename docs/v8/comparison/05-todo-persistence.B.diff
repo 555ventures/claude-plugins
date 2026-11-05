@@ -1,0 +1,305 @@
+diff --git a/src/logger.js b/src/logger.js
+index c981bfc..9b47dee 100644
+--- a/src/logger.js
++++ b/src/logger.js
+@@ -5,6 +5,9 @@ function createLogger(sink = console.log) {
+     log(method, path, status, ms) {
+       sink(`${method} ${path} ${status} ${ms}ms`)
+     },
++    warn(message) {
++      sink('WARN ' + message)
++    },
+   }
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index 4117dfe..4ab3e3c 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -3,6 +3,8 @@ const http = require('node:http')
+ const router = require('./router')
+ const { createLogger } = require('./logger')
+ const { createRateLimiter } = require('./rate-limit')
++const { createStore } = require('./store')
++const todos = require('./todos')
+ 
+ function readBody(req) {
+   return new Promise((resolve) => {
+@@ -14,7 +16,8 @@ function readBody(req) {
+   })
+ }
+ 
+-function createApp({ logger = createLogger(), rateLimit } = {}) {
++function createApp({ logger = createLogger(), rateLimit, store } = {}) {
++  if (store) todos.attach(createStore({ file: store.file, logger }))
+   const limiter = rateLimit ? createRateLimiter(rateLimit) : null
+   return http.createServer(async (req, res) => {
+     const start = process.hrtime.bigint()
+@@ -35,7 +38,7 @@ function createApp({ logger = createLogger(), rateLimit } = {}) {
+     req.body = await readBody(req)
+     const out = handler ? handler(req) : { status: 404, body: { error: 'not found' } }
+     const payload = out.body === null ? undefined : JSON.stringify(out.body)
+-    res.writeHead(out.status, { 'content-type': 'application/json' })
++    res.writeHead(out.status, { 'content-type': 'application/json', ...out.headers })
+     res.end(payload)
+   })
+ }
+diff --git a/src/store.js b/src/store.js
+new file mode 100644
+index 0000000..071a926
+--- /dev/null
++++ b/src/store.js
+@@ -0,0 +1,36 @@
++'use strict'
++const fs = require('node:fs')
++const path = require('node:path')
++
++const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
++
++function validTodos(t) {
++  return isObject(t) && Array.isArray(t.items) && Number.isInteger(t.nextId) && t.nextId > 0
++}
++
++function createStore({ file = 'data/todos.json', logger } = {}) {
++  const abs = path.resolve(process.cwd(), file)
++  let doc = {}
++
++  let raw
++  try { raw = fs.readFileSync(abs, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
++  if (raw !== undefined) {
++    let parsed
++    try { parsed = JSON.parse(raw) } catch { parsed = undefined }
++    if (isObject(parsed) && (parsed.todos === undefined || validTodos(parsed.todos))) doc = parsed
++    else logger.warn(`store: corrupt file ${abs}, starting empty`)
++  }
++
++  return {
++    file: abs,
++    read: (section) => doc[section],
++    write(section, value) {
++      doc[section] = value
++      fs.mkdirSync(path.dirname(abs), { recursive: true })
++      fs.writeFileSync(abs + '.tmp', JSON.stringify(doc, null, 2))
++      fs.renameSync(abs + '.tmp', abs)
++    },
++  }
++}
++
++module.exports = { createStore }
+diff --git a/src/todos.js b/src/todos.js
+index 378f58a..d45b38c 100644
+--- a/src/todos.js
++++ b/src/todos.js
+@@ -2,7 +2,18 @@
+ let todos = []
+ let nextId = 1
+ 
+-function reset() { todos = []; nextId = 1 }
++let store = null
++
++function reset() { todos = []; nextId = 1; store = null }
++
++function attach(s) {
++  store = s
++  const saved = s.read('todos')
++  todos = saved ? saved.items : []
++  nextId = saved ? saved.nextId : 1
++}
++
++const persist = () => { if (store) store.write('todos', { nextId, items: todos }) }
+ 
+ const notFound = () => ({ status: 404, body: { error: 'not found' } })
+ const find = (req) => todos.find((t) => t.id === Number(req.params.id))
+@@ -12,10 +23,24 @@ function create(req) {
+   if (typeof title !== 'string' || !title) return { status: 400, body: { error: 'title required' } }
+   const todo = { id: nextId++, title, done: false }
+   todos.push(todo)
++  persist()
+   return { status: 201, body: todo }
+ }
+ 
+-function list() { return { status: 200, body: todos } }
++const bad = () => ({ status: 400, body: { error: 'invalid query' } })
++
++function list(req) {
++  const q = new URL(req.url, 'http://localhost').searchParams
++  const done = q.get('done')
++  const limit = q.get('limit')
++  const offset = q.get('offset')
++  if (done !== null && done !== 'true' && done !== 'false') return bad()
++  if ((limit !== null && !/^\d+$/.test(limit)) || (offset !== null && !/^\d+$/.test(offset))) return bad()
++  const items = done === null ? todos : todos.filter((t) => t.done === (done === 'true'))
++  const start = offset === null ? 0 : Number(offset)
++  const page = items.slice(start, limit === null ? undefined : start + Number(limit))
++  return { status: 200, headers: { 'x-total-count': String(items.length) }, body: page }
++}
+ 
+ function update(req) {
+   const todo = find(req)
+@@ -23,6 +48,7 @@ function update(req) {
+   const b = req.body || {}
+   if (typeof b.title === 'string') todo.title = b.title
+   if (typeof b.done === 'boolean') todo.done = b.done
++  persist()
+   return { status: 200, body: todo }
+ }
+ 
+@@ -30,7 +56,8 @@ function remove(req) {
+   const todo = find(req)
+   if (!todo) return notFound()
+   todos.splice(todos.indexOf(todo), 1)
++  persist()
+   return { status: 204, body: null }
+ }
+ 
+-module.exports = { create, list, update, remove, reset }
++module.exports = { create, list, update, remove, reset, attach }
+diff --git a/tests/store.test.js b/tests/store.test.js
+new file mode 100644
+index 0000000..0ddcb37
+--- /dev/null
++++ b/tests/store.test.js
+@@ -0,0 +1,100 @@
++'use strict'
++const { test, beforeEach, afterEach, mock } = require('node:test')
++const assert = require('node:assert')
++const fs = require('node:fs')
++const os = require('node:os')
++const path = require('node:path')
++const { createApp } = require('../src/server')
++const { createLogger } = require('../src/logger')
++const { createStore } = require('../src/store')
++const todos = require('../src/todos')
++
++let dir
++beforeEach(() => { todos.reset(); dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-test-')) })
++afterEach(() => { mock.restoreAll(); fs.rmSync(dir, { recursive: true, force: true }) })
++
++async function withApp(file, fn) {
++  const lines = []
++  const server = createApp({ store: { file }, logger: createLogger((l) => lines.push(l)) })
++  await new Promise((r) => server.listen(0, r))
++  try { await fn(`http://localhost:${server.address().port}`, lines) } finally { await new Promise((r) => server.close(r)) }
++}
++const post = (title) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }) })
++
++test('AC-1: POST writes the todos section to the file', async () => {
++  const file = path.join(dir, 'todos.json')
++  await withApp(file, async (base) => {
++    assert.strictEqual((await fetch(`${base}/todos`, post('a'))).status, 201)
++    assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { todos: { nextId: 2, items: [{ id: 1, title: 'a', done: false }] } })
++  })
++})
++
++test('AC-2: todos survive a restart and other sections are preserved', async () => {
++  const file = path.join(dir, 'todos.json')
++  await withApp(file, async (base) => { await fetch(`${base}/todos`, post('a')) })
++  todos.reset()
++  await withApp(file, async (base) => {
++    assert.deepStrictEqual(await (await fetch(`${base}/todos`)).json(), [{ id: 1, title: 'a', done: false }])
++    assert.strictEqual((await (await fetch(`${base}/todos`, post('b'))).json()).id, 2)
++  })
++  const seeded = path.join(dir, 'seeded.json')
++  fs.writeFileSync(seeded, JSON.stringify({ keys: { x: 1 }, todos: { nextId: 1, items: [] } }))
++  todos.reset()
++  await withApp(seeded, async (base) => { await fetch(`${base}/todos`, post('c')) })
++  assert.deepStrictEqual(JSON.parse(fs.readFileSync(seeded, 'utf8')).keys, { x: 1 })
++})
++
++test('AC-2: PATCH and DELETE write through; 404 and 400 do not', async () => {
++  const file = path.join(dir, 'todos.json')
++  await withApp(file, async (base) => {
++    await fetch(`${base}/todos`, post('a'))
++    await fetch(`${base}/todos/1`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: '{"done":true}' })
++    assert.strictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).todos.items[0].done, true)
++    const spy = mock.method(fs, 'writeFileSync')
++    await fetch(`${base}/todos/99`, { method: 'DELETE' })
++    await fetch(`${base}/todos`, post(''))
++    assert.strictEqual(spy.mock.callCount(), 0)
++    await fetch(`${base}/todos/1`, { method: 'DELETE' })
++    assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).todos.items, [])
++  })
++})
++
++test('AC-3: write goes to <file>.tmp then renames, leaving no tmp file', async () => {
++  const file = path.join(dir, 'todos.json')
++  const order = []
++  const w = fs.writeFileSync
++  const r = fs.renameSync
++  mock.method(fs, 'writeFileSync', (...a) => { order.push(['write', a[0]]); return w(...a) })
++  mock.method(fs, 'renameSync', (...a) => { order.push(['rename', a[0], a[1]]); return r(...a) })
++  await withApp(file, async (base) => { await fetch(`${base}/todos`, post('a')) })
++  assert.deepStrictEqual(order, [['write', `${file}.tmp`], ['rename', `${file}.tmp`, file]])
++  assert.deepStrictEqual(fs.readdirSync(dir), ['todos.json'])
++})
++
++test('AC-4: a missing file starts empty, warns nothing, and is created on first write', async () => {
++  const file = path.join(dir, 'a', 'b', 'todos.json')
++  await withApp(file, async (base, lines) => {
++    assert.deepStrictEqual(await (await fetch(`${base}/todos`)).json(), [])
++    assert.ok(!lines.some((l) => l.startsWith('WARN')))
++    assert.strictEqual(fs.existsSync(file), false)
++    await fetch(`${base}/todos`, post('a'))
++    assert.strictEqual(fs.existsSync(file), true)
++  })
++})
++
++for (const content of ['{not json', '[]', '{"todos":{"nextId":"x","items":[]}}']) {
++  test(`AC-5: corrupt file ${content} starts empty with one warning`, async () => {
++    const file = path.join(dir, 'todos.json')
++    fs.writeFileSync(file, content)
++    await withApp(file, async (base, lines) => {
++      assert.deepStrictEqual(await (await fetch(`${base}/todos`)).json(), [])
++      assert.deepStrictEqual(lines.filter((l) => l.startsWith('WARN')), [`WARN store: corrupt file ${path.resolve(file)}, starting empty`])
++    })
++    assert.strictEqual(fs.readFileSync(file, 'utf8'), content)
++  })
++}
++
++test('AC-9: default file is data/todos.json under cwd', () => {
++  const store = createStore({ logger: createLogger(() => {}) })
++  assert.strictEqual(store.file, path.resolve(process.cwd(), 'data/todos.json'))
++})
+diff --git a/tests/todos.test.js b/tests/todos.test.js
+index 27676ca..f249b55 100644
+--- a/tests/todos.test.js
++++ b/tests/todos.test.js
+@@ -77,3 +77,38 @@ test('malformed percent-encoded id is 404 and the server keeps serving', async (
+     assert.strictEqual((await fetch(`${base}/todos`)).status, 200)
+   })
+ })
++
++async function seed(base) {
++  for (const t of ['a', 'b', 'c']) await fetch(`${base}/todos`, json('POST', { title: t }))
++  await fetch(`${base}/todos/3`, json('PATCH', { done: true }))
++}
++
++test('GET /todos filters by done, paginates, and reports X-Total-Count', async () => {
++  await withServer(async (base) => {
++    await seed(base)
++    let res = await fetch(`${base}/todos?done=false&limit=1&offset=1`)
++    assert.deepStrictEqual(await res.json(), [{ id: 2, title: 'b', done: false }])
++    assert.strictEqual(res.headers.get('x-total-count'), '2')
++    res = await fetch(`${base}/todos?done=true`)
++    assert.deepStrictEqual(await res.json(), [{ id: 3, title: 'c', done: true }])
++    assert.strictEqual(res.headers.get('x-total-count'), '1')
++    res = await fetch(`${base}/todos?offset=5`)
++    assert.deepStrictEqual(await res.json(), [])
++    assert.strictEqual(res.headers.get('x-total-count'), '3')
++  })
++})
++
++test('GET /todos rejects invalid query and accepts limit=0', async () => {
++  await withServer(async (base) => {
++    await seed(base)
++    for (const q of ['done=yes', 'limit=-1', 'limit=abc', 'offset=1.5']) {
++      const res = await fetch(`${base}/todos?${q}`)
++      assert.strictEqual(res.status, 400, q)
++      assert.deepStrictEqual(await res.json(), { error: 'invalid query' })
++    }
++    const res = await fetch(`${base}/todos?limit=0`)
++    assert.strictEqual(res.status, 200)
++    assert.deepStrictEqual(await res.json(), [])
++    assert.strictEqual(res.headers.get('x-total-count'), '3')
++  })
++})

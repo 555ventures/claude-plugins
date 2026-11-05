@@ -3,58 +3,21 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/spec-state-gate.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/genesis-state-gate.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/spec-session-stamp.sh"
-          }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/state-gate.sh\"" }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/scripts/question-style-gate.js",
-            "statusMessage": "Checking question is answerable cold"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/block-cross-worktree-writes.sh",
-            "statusMessage": "Checking worktree isolation"
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/block-worker-git.sh",
-            "statusMessage": "Checking worker git ban"
-          }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/block-worker-git.sh\"" }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/block-cross-worktree-writes.sh\"" }
         ]
       }
     ]

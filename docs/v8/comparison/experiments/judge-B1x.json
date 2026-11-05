@@ -1,0 +1,25 @@
+{
+  "06-api-keys": {
+    "architecture": {
+      "order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 1,
+      "evidence": "Both implement D1-D8 identically in shape (keys.js records+attach/persist, auth.js authenticate/requireKey/bootstrapGuard, router guard run after req.params, server attaches one store to todos and keys). Delta: Y's keys.attach treats the store as source of truth (missing/invalid section -> items=[] nextId=1); X's attach keeps whatever is already in memory when the section is absent, which is a latent stale-state carry-over between attaches and is what X's store tests silently rely on. Y's authenticate regex (\\S+) matches D4's 'one space and a non-empty key' more literally than X's (.+). X updated the router.js header comment to mention guard; Y left it stale. Net: Y by a small margin."
+    },
+    "clean_code": {
+      "order1": "Y", "order2": "Y", "stable": true, "winner": "Y", "confidence": 2,
+      "evidence": "X's findByKey = items.find(k => k.hash === sha256(key)) recomputes the sha256 once per stored key on every authenticated request; Y hashes once. Y's attach is a straight-line ok ? saved : default; X's is a conditional overwrite with implicit keep-old semantics. Y awaits server.close in keys.test withServer; X fires it. X names a factory function UNAUTHORIZED in constant case. Minor: Y did not update the router.js comment."
+    },
+    "test_quality": {
+      "order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 2,
+      "evidence": "Every AC has a test in both, both deterministic. X's new tests are stronger: mint() asserts 201 (fail-fast), AC-4 covers {}, {name:''}, {name:5} -> 400 and DELETE /keys/1 without a key -> 401, AC-7 asserts the reopened key gets id 2. Y's mint() does not check status, AC-4 only tests {}, AC-7 only checks 201. More importantly Y weakens pre-existing spec-05 assertions: store AC-1 now does `delete doc.keys` before deep-equal, AC-4's 'created on first write' is now satisfied by the key mint rather than the todo POST, and the corrupt-file 'file unchanged' check was moved before any request. X leaves every spec-05 assertion intact by minting the key in memory before the store attaches (and says so in a comment)."
+    },
+    "spec_adherence": {
+      "order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Both satisfy AC-1..AC-10 and all D1-D8 behaviourally; both had to touch tests/rate-limit.test.js and tests/store.test.js, which the File Plan omits (equal deviation). X's keys.test names carry the spec's full AC-20261104-06-N ids; Y abbreviates to AC-N (bases differ in convention, so weighed lightly). X preserves the spec-05 test contracts verbatim (the 'reuses'/'CONTINUE TO' spirit), whereas Y rewrote three spec-05 tests' meaning. Y's \\S+ is the more literal D4 reading. Close; X on the strength of leaving prior specs' observable guarantees untouched."
+    },
+    "overall": {
+      "order1": "X", "order2": "X", "stable": true, "winner": "X", "confidence": 1,
+      "evidence": "Source-side Y is marginally cleaner (single hash, store-as-truth attach, awaited close). Test-side X is clearly stronger and far less invasive: its store.test diff is header-only, while Y adds await mint(base) to every store test and relaxes three assertions. As the next maintainer the wider blast radius and the `delete doc.keys` smell in Y outweigh X's per-item hashing, which is a one-line fix. Both are acceptable; neither has a correctness bug under the spec."
+    }
+  },
+  "note": "Diffs are from different base commits (server.js index 8c838c1 vs fb0f116; prior test files use different AC naming conventions), so naming-style differences were discounted. Both diffs are complete, pass all locked Decisions, and differ only in small code hygiene choices and in how much they disturb spec-05's existing tests. Order1 (X then Y) and order2 (Y then X) agreed on every criterion; overall and spec_adherence are low-confidence calls."
+}

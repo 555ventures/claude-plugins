@@ -1,0 +1,360 @@
+diff --git a/src/auth.js b/src/auth.js
+new file mode 100644
+index 0000000..801f03d
+--- /dev/null
++++ b/src/auth.js
+@@ -0,0 +1,14 @@
++'use strict'
++const keys = require('./keys')
++
++const unauthorized = () => ({ status: 401, body: { error: 'unauthorized' } })
++
++function authenticate(req) {
++  const m = /^bearer ([^ ].*)$/i.exec(req.headers.authorization || '')
++  return m ? keys.findByHash(keys.hashOf(m[1])) : null
++}
++
++const requireKey = (req) => (authenticate(req) ? null : unauthorized())
++const bootstrapGuard = (req) => (keys.count() === 0 || authenticate(req) ? null : unauthorized())
++
++module.exports = { authenticate, requireKey, bootstrapGuard }
+diff --git a/src/keys.js b/src/keys.js
+new file mode 100644
+index 0000000..a57f667
+--- /dev/null
++++ b/src/keys.js
+@@ -0,0 +1,46 @@
++'use strict'
++const crypto = require('node:crypto')
++
++let keys = []
++let nextId = 1
++let store = null
++
++const hashOf = (key) => crypto.createHash('sha256').update(key).digest('hex')
++
++function reset() { keys = []; nextId = 1; store = null }
++
++function attach(s) {
++  store = s
++  const saved = s.read('keys')
++  keys = saved ? saved.items : []
++  nextId = saved ? saved.nextId : 1
++}
++
++const persist = () => { if (store) store.write('keys', { nextId, items: keys }) }
++
++function create(req) {
++  const name = req.body && req.body.name
++  if (typeof name !== 'string' || !name) return { status: 400, body: { error: 'name required' } }
++  const key = 'tk_' + crypto.randomBytes(16).toString('hex')
++  const record = { id: nextId++, name, hash: hashOf(key) }
++  keys.push(record)
++  persist()
++  return { status: 201, body: { id: record.id, name, key } }
++}
++
++function list() {
++  return { status: 200, body: keys.map(({ id, name }) => ({ id, name })) }
++}
++
++function remove(req) {
++  const i = keys.findIndex((k) => k.id === Number(req.params.id))
++  if (i < 0) return { status: 404, body: { error: 'not found' } }
++  keys.splice(i, 1)
++  persist()
++  return { status: 204, body: null }
++}
++
++const findByHash = (hash) => keys.find((k) => k.hash === hash) || null
++const count = () => keys.length
++
++module.exports = { create, list, remove, attach, reset, hashOf, findByHash, count }
+diff --git a/src/router.js b/src/router.js
+index df81fbd..6b44b24 100644
+--- a/src/router.js
++++ b/src/router.js
+@@ -1,8 +1,8 @@
+ 'use strict'
+-// Minimal route table: entries of { method, path, handler }. `:name` segments capture into req.params.
++// Minimal route table: entries of { method, path, handler, guard }. `:name` segments capture into req.params.
+ const routes = []
+ 
+-function add(method, path, handler) { routes.push({ method, path, handler }) }
++function add(method, path, handler, guard) { routes.push({ method, path, handler, guard }) }
+ 
+ function params(pattern, path) {
+   const p = pattern.split('/')
+@@ -21,18 +21,23 @@ function match(method, path) {
+   for (const r of routes) {
+     if (r.method !== method) continue
+     const p = params(r.path, path)
+-    if (p) return (req) => { req.params = p; return r.handler(req) }
++    if (p) return (req) => { req.params = p; return (r.guard && r.guard(req)) || r.handler(req) }
+   }
+   return null
+ }
+ 
+ const todos = require('./todos')
++const keys = require('./keys')
++const { requireKey, bootstrapGuard } = require('./auth')
+ 
+ add('GET', '/', () => ({ status: 200, body: { ok: true } }))
+ add('GET', '/health', require('./health').handler)
+-add('POST', '/todos', todos.create)
+-add('GET', '/todos', todos.list)
+-add('PATCH', '/todos/:id', todos.update)
+-add('DELETE', '/todos/:id', todos.remove)
++add('POST', '/keys', keys.create, bootstrapGuard)
++add('GET', '/keys', keys.list, requireKey)
++add('DELETE', '/keys/:id', keys.remove, requireKey)
++add('POST', '/todos', todos.create, requireKey)
++add('GET', '/todos', todos.list, requireKey)
++add('PATCH', '/todos/:id', todos.update, requireKey)
++add('DELETE', '/todos/:id', todos.remove, requireKey)
+ 
+ module.exports = { add, match, routes }
+diff --git a/src/server.js b/src/server.js
+index 4ab3e3c..1c877fc 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -5,6 +5,7 @@ const { createLogger } = require('./logger')
+ const { createRateLimiter } = require('./rate-limit')
+ const { createStore } = require('./store')
+ const todos = require('./todos')
++const keys = require('./keys')
+ 
+ function readBody(req) {
+   return new Promise((resolve) => {
+@@ -17,7 +18,11 @@ function readBody(req) {
+ }
+ 
+ function createApp({ logger = createLogger(), rateLimit, store } = {}) {
+-  if (store) todos.attach(createStore({ file: store.file, logger }))
++  if (store) {
++    const s = createStore({ file: store.file, logger })
++    todos.attach(s)
++    keys.attach(s)
++  }
+   const limiter = rateLimit ? createRateLimiter(rateLimit) : null
+   return http.createServer(async (req, res) => {
+     const start = process.hrtime.bigint()
+diff --git a/tests/keys.test.js b/tests/keys.test.js
+new file mode 100644
+index 0000000..d5862df
+--- /dev/null
++++ b/tests/keys.test.js
+@@ -0,0 +1,121 @@
++'use strict'
++const { test, beforeEach, afterEach } = require('node:test')
++const assert = require('node:assert')
++const crypto = require('node:crypto')
++const fs = require('node:fs')
++const os = require('node:os')
++const path = require('node:path')
++const { createApp } = require('../src/server')
++const todos = require('../src/todos')
++const keys = require('../src/keys')
++
++let dir
++beforeEach(() => { todos.reset(); keys.reset(); dir = fs.mkdtempSync(path.join(os.tmpdir(), 'keys-test-')) })
++afterEach(() => fs.rmSync(dir, { recursive: true, force: true }))
++
++async function withServer(fn, opts) {
++  const server = createApp(opts)
++  await new Promise((r) => server.listen(0, r))
++  try { await fn(`http://localhost:${server.address().port}`) } finally { await new Promise((r) => server.close(r)) }
++}
++const send = (method, body, key) => ({
++  method,
++  headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
++  body: body === undefined ? undefined : JSON.stringify(body),
++})
++const mint = async (base, name, key) => (await fetch(`${base}/keys`, send('POST', { name }, key))).json()
++const UNAUTH = { error: 'unauthorized' }
++
++test('AC-1: first key is created without credentials', async () => {
++  await withServer(async (base) => {
++    const res = await fetch(`${base}/keys`, send('POST', { name: 'ci' }))
++    assert.strictEqual(res.status, 201)
++    const body = await res.json()
++    assert.strictEqual(body.id, 1)
++    assert.strictEqual(body.name, 'ci')
++    assert.match(body.key, /^tk_[0-9a-f]{32}$/)
++  })
++})
++
++test('AC-2: second key needs a valid key', async () => {
++  await withServer(async (base) => {
++    const first = await mint(base, 'ci')
++    const res = await fetch(`${base}/keys`, send('POST', { name: 'b' }))
++    assert.strictEqual(res.status, 401)
++    assert.deepStrictEqual(await res.json(), UNAUTH)
++    const ok = await fetch(`${base}/keys`, send('POST', { name: 'b' }, first.key))
++    assert.strictEqual(ok.status, 201)
++    assert.strictEqual((await ok.json()).id, 2)
++  })
++})
++
++test('AC-3: GET /keys lists id and name only', async () => {
++  await withServer(async (base) => {
++    const first = await mint(base, 'ci')
++    await mint(base, 'b', first.key)
++    const res = await fetch(`${base}/keys`, send('GET', undefined, first.key))
++    assert.strictEqual(res.status, 200)
++    assert.deepStrictEqual(await res.json(), [{ id: 1, name: 'ci' }, { id: 2, name: 'b' }])
++    assert.strictEqual((await fetch(`${base}/keys`)).status, 401)
++  })
++})
++
++test('AC-4: DELETE revokes, unknown id is 404, empty name is 400', async () => {
++  await withServer(async (base) => {
++    const k1 = await mint(base, 'ci')
++    const k2 = await mint(base, 'b', k1.key)
++    const del = await fetch(`${base}/keys/1`, send('DELETE', undefined, k2.key))
++    assert.strictEqual(del.status, 204)
++    assert.strictEqual(await del.text(), '')
++    assert.strictEqual((await fetch(`${base}/todos`, send('GET', undefined, k1.key))).status, 401)
++    const nf = await fetch(`${base}/keys/99`, send('DELETE', undefined, k2.key))
++    assert.strictEqual(nf.status, 404)
++    assert.deepStrictEqual(await nf.json(), { error: 'not found' })
++    const bad = await fetch(`${base}/keys`, send('POST', {}, k2.key))
++    assert.strictEqual(bad.status, 400)
++    assert.deepStrictEqual(await bad.json(), { error: 'name required' })
++  })
++})
++
++test('AC-5: scheme is case-insensitive; wrong, malformed or missing credentials are 401', async () => {
++  await withServer(async (base) => {
++    const { key } = await mint(base, 'ci')
++    const get = (headers) => fetch(`${base}/todos`, { headers })
++    assert.strictEqual((await get({ authorization: `bearer ${key}` })).status, 200)
++    for (const headers of [
++      { authorization: 'Bearer tk_00000000000000000000000000000000' },
++      { authorization: 'Basic Y2k6eA==' },
++      { authorization: 'Bearer' },
++      {},
++    ]) {
++      const res = await get(headers)
++      assert.strictEqual(res.status, 401, JSON.stringify(headers))
++      assert.deepStrictEqual(await res.json(), UNAUTH)
++    }
++  })
++})
++
++test('AC-7: deleting the last key reopens POST /keys', async () => {
++  await withServer(async (base) => {
++    const { key } = await mint(base, 'ci')
++    assert.strictEqual((await fetch(`${base}/keys/1`, send('DELETE', undefined, key))).status, 204)
++    const res = await fetch(`${base}/keys`, send('POST', { name: 'new' }))
++    assert.strictEqual(res.status, 201)
++  })
++})
++
++test('AC-9: keys persist as hashes in the store file, never the raw key', async () => {
++  const file = path.join(dir, 'todos.json')
++  let key
++  await withServer(async (base) => { key = (await mint(base, 'ci')).key }, { store: { file } })
++  const text = fs.readFileSync(file, 'utf8')
++  assert.deepStrictEqual(JSON.parse(text).keys, {
++    nextId: 2,
++    items: [{ id: 1, name: 'ci', hash: crypto.createHash('sha256').update(key).digest('hex') }],
++  })
++  assert.ok(!text.includes(key))
++  todos.reset(); keys.reset()
++  await withServer(async (base) => {
++    assert.strictEqual((await fetch(`${base}/todos`, send('GET', undefined, key))).status, 200)
++  }, { store: { file } })
++})
+diff --git a/tests/rate-limit.test.js b/tests/rate-limit.test.js
+index 29003ca..04e14e5 100644
+--- a/tests/rate-limit.test.js
++++ b/tests/rate-limit.test.js
+@@ -1,8 +1,13 @@
+ 'use strict'
+-const { test } = require('node:test')
++const { test, beforeEach } = require('node:test')
+ const assert = require('node:assert')
+ const { createApp } = require('../src/server')
+ const { createRateLimiter } = require('../src/rate-limit')
++const keys = require('../src/keys')
++
++let key
++beforeEach(() => { keys.reset(); key = keys.create({ body: { name: 'test' } }).body.key })
++const fetch = (url, init = {}) => globalThis.fetch(url, { ...init, headers: { authorization: `Bearer ${key}`, ...init.headers } })
+ 
+ async function withServer(opts, fn) {
+   const server = createApp(opts)
+diff --git a/tests/store.test.js b/tests/store.test.js
+index 0ddcb37..873e9c6 100644
+--- a/tests/store.test.js
++++ b/tests/store.test.js
+@@ -8,14 +8,20 @@ const { createApp } = require('../src/server')
+ const { createLogger } = require('../src/logger')
+ const { createStore } = require('../src/store')
+ const todos = require('../src/todos')
++const keys = require('../src/keys')
+ 
+ let dir
+-beforeEach(() => { todos.reset(); dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-test-')) })
++beforeEach(() => { todos.reset(); keys.reset(); dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-test-')) })
+ afterEach(() => { mock.restoreAll(); fs.rmSync(dir, { recursive: true, force: true }) })
+ 
++let key
++const fetch = (url, init = {}) => globalThis.fetch(url, { ...init, headers: { authorization: `Bearer ${key}`, ...init.headers } })
++
+ async function withApp(file, fn) {
+   const lines = []
+   const server = createApp({ store: { file }, logger: createLogger((l) => lines.push(l)) })
++  keys.attach({ read: () => undefined, write() {} }) // in-memory keys: the file under test stays todos-only
++  key = keys.create({ body: { name: 'test' } }).body.key
+   await new Promise((r) => server.listen(0, r))
+   try { await fn(`http://localhost:${server.address().port}`, lines) } finally { await new Promise((r) => server.close(r)) }
+ }
+diff --git a/tests/todos.test.js b/tests/todos.test.js
+index f249b55..2bea43a 100644
+--- a/tests/todos.test.js
++++ b/tests/todos.test.js
+@@ -3,8 +3,17 @@ const { test, beforeEach } = require('node:test')
+ const assert = require('node:assert')
+ const { createApp } = require('../src/server')
+ const todos = require('../src/todos')
++const keys = require('../src/keys')
+ 
+-beforeEach(() => todos.reset())
++let key
++beforeEach(() => {
++  todos.reset()
++  keys.reset()
++  key = keys.create({ body: { name: 'test' } }).body.key
++})
++
++// every request in this file carries the minted key unless it sets its own header
++const fetch = (url, init = {}) => globalThis.fetch(url, { ...init, headers: { authorization: `Bearer ${key}`, ...init.headers } })
+ 
+ async function withServer(fn) {
+   const server = createApp()
+@@ -112,3 +121,23 @@ test('GET /todos rejects invalid query and accepts limit=0', async () => {
+     assert.strictEqual(res.headers.get('x-total-count'), '3')
+   })
+ })
++
++test('AC-6: every /todos route is 401 without a key and the data is untouched', async () => {
++  await withServer(async (base) => {
++    await fetch(`${base}/todos`, json('POST', { title: 'a' }))
++    const bare = (url, init) => globalThis.fetch(url, init)
++    const calls = [
++      [`${base}/todos`, json('POST', { title: 'b' })],
++      [`${base}/todos`],
++      [`${base}/todos/1`, json('PATCH', { done: true })],
++      [`${base}/todos/1`, { method: 'DELETE' }],
++      [`${base}/todos/999`, json('PATCH', { done: true })],
++    ]
++    for (const [url, init] of calls) {
++      const res = await bare(url, init)
++      assert.strictEqual(res.status, 401, url)
++      assert.deepStrictEqual(await res.json(), { error: 'unauthorized' })
++    }
++    assert.deepStrictEqual(await (await fetch(`${base}/todos`)).json(), [{ id: 1, title: 'a', done: false }])
++  })
++})

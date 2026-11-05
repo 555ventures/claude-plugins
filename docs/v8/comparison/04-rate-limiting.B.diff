@@ -1,0 +1,89 @@
+diff --git a/src/rate-limit.js b/src/rate-limit.js
+new file mode 100644
+index 0000000..c96858a
+--- /dev/null
++++ b/src/rate-limit.js
+@@ -0,0 +1,38 @@
++'use strict'
++
++const IDLE_MS = 600000
++
++function createRateLimiter({ capacity, refillPerSec, now = Date.now } = {}) {
++  if (!Number.isInteger(capacity) || capacity <= 0) {
++    throw new TypeError('rateLimit.capacity must be a positive integer')
++  }
++  if (typeof refillPerSec !== 'number' || !(refillPerSec > 0) || !Number.isFinite(refillPerSec)) {
++    throw new TypeError('rateLimit.refillPerSec must be a positive number')
++  }
++  const buckets = new Map()
++
++  function take(ip) {
++    const t = now()
++    for (const [key, b] of buckets) {
++      if (t - b.last >= IDLE_MS) buckets.delete(key)
++    }
++    let b = buckets.get(ip)
++    if (!b) {
++      b = { tokens: capacity, last: t }
++      buckets.set(ip, b)
++    } else {
++      b.tokens = Math.min(capacity, b.tokens + ((t - b.last) / 1000) * refillPerSec)
++      b.last = t
++    }
++    if (b.tokens >= 1) {
++      b.tokens -= 1
++      return { allowed: true, remaining: Math.floor(b.tokens) }
++    }
++    const retryAfter = Math.max(1, Math.ceil((1 - b.tokens) / refillPerSec))
++    return { allowed: false, remaining: 0, retryAfter }
++  }
++
++  return { take, size: () => buckets.size }
++}
++
++module.exports = { createRateLimiter }
+diff --git a/src/server.js b/src/server.js
+index 506081e..7e9d5d3 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -2,6 +2,7 @@
+ const http = require('node:http')
+ const router = require('./router')
+ const { createLogger } = require('./logger')
++const { createRateLimiter } = require('./rate-limit')
+ 
+ function readBody(req) {
+   return new Promise((resolve) => {
+@@ -13,18 +14,30 @@ function readBody(req) {
+   })
+ }
+ 
+-function createApp({ logger = createLogger() } = {}) {
++function createApp({ logger = createLogger(), rateLimit } = {}) {
++  const limiter = rateLimit ? createRateLimiter(rateLimit) : null
+   return http.createServer(async (req, res) => {
+     const start = process.hrtime.bigint()
+     const path = new URL(req.url, 'http://localhost').pathname
+     res.on('finish', () => {
+       logger.log(req.method, path, res.statusCode, Math.round(Number(process.hrtime.bigint() - start) / 1e6))
+     })
++    const headers = { 'content-type': 'application/json' }
++    if (limiter && path !== '/health') {
++      const taken = limiter.take(req.socket.remoteAddress || 'unknown')
++      headers['x-ratelimit-remaining'] = String(taken.remaining)
++      if (!taken.allowed) {
++        headers['retry-after'] = String(taken.retryAfter)
++        res.writeHead(429, headers)
++        res.end(JSON.stringify({ error: 'rate limited', retryAfter: taken.retryAfter }))
++        return
++      }
++    }
+     const handler = router.match(req.method, path)
+     req.body = await readBody(req)
+     const out = handler ? handler(req) : { status: 404, body: { error: 'not found' } }
+     const payload = out.body === null ? undefined : JSON.stringify(out.body)
+-    res.writeHead(out.status, { 'content-type': 'application/json' })
++    res.writeHead(out.status, headers)
+     res.end(payload)
+   })
+ }

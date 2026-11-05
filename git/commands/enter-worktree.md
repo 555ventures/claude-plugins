@@ -1,114 +1,42 @@
 ---
-description: Enter (or re-enter) the isolated worktree for a spec — derived from the spec doc path, idempotent
+description: Enter (or re-enter) the isolated worktree for a spec, derived from the spec path; idempotent
 argument-hint: <spec path>
 ---
 
-# Enter Spec Worktree
+# Enter a spec's worktree
 
-This is the **manual repair surface** for a worktree `/spec:run`'s own Step 0 could not open, or
-for re-entering one by hand — it is no longer a documented pre-step, since `/spec:run` opens the
-worktree itself before anything else runs. It is the **single owner** of the worktree's front
-half: it captures the originating branch, creates + enters + verifies the worktree, runs host
-setup, and writes `build_base` to the spec frontmatter. The spec stages own none of this — the
-build stage just builds in whatever cwd it is in, and the review stage reads `build_base` to
-merge back.
+`/spec:run` opens its own worktree. Use this to repair one by hand or to re-enter one from a
+fresh process. Running it twice is safe.
 
-This command shells into the spec plugin's `merge-back.sh` and writes spec frontmatter, so the
-spec plugin must be installed.
+**Paths.** From the spec at `$ARGUMENTS` with basename `<stem>.md`: the branch is
+`spec/<stem>`, the root is `git rev-parse --path-format=absolute --git-common-dir` without
+its trailing `/.git`, and the worktree is `<root>/.claude/worktrees/spec-<stem>`.
 
-## Input
+**Already inside.** If `git rev-parse --show-toplevel` equals the worktree, report
+`✅ worktree re-entered at <path>` and stop.
 
-`$ARGUMENTS` — path to the spec doc.
+**Re-enter.** If `git worktree list --porcelain` lists the path and the directory exists,
+call `EnterWorktree` with that path, then confirm that `git rev-parse --show-toplevel` equals
+it. It was set up at creation, so don't run setup again or touch `build_base`. Report
+re-entered.
 
-## Steps
+**Create.**
 
-1. **Derive paths.** Run `spec-paths merge-back` and keep its output as `{mergeBack}` (the
-   `merge-back.sh` path; its `create` subcommand builds the worktree). Derive:
-   - `{source} = "$({mergeBack} branch-for $ARGUMENTS)"` — `branch-for` is the sole owner of
-     the `spec/<stem>` branch rule (e.g. `specs/20260810/07-per-sha-ci-legs.md` →
-     `spec/07-per-sha-ci-legs`); the build stage disowns all worktree mechanics and has no
-     branch rule of its own.
-   - `{name} = {source}` with `/`→`-` (e.g. `spec/checkout` → `spec-checkout`) — the exact
-     rule `{mergeBack} create` applies.
-   - `{root} =` the last stdout line of `{mergeBack} root` (the project root / main worktree).
-   - `{worktree} = {root}/.claude/worktrees/{name}`.
+1. Record the origin branch with `git rev-parse --abbrev-ref HEAD` before anything moves.
+2. Refuse unless `git check-ignore -q .claude/worktrees/` succeeds.
+3. If `refs/heads/spec/<stem>` exists, attach it with `git worktree add <path> spec/<stem>`.
+   Otherwise run `git worktree add -b spec/<stem> <path> HEAD`.
+4. Copy each path listed in `.worktreeinclude` into the worktree, then run the config's
+   `setupCommand` there. If either step fails, show stderr and report
+   `🚫 worktree creation failed`. Don't fall back to working in place.
+5. Call `EnterWorktree` with the path and confirm the toplevel. If it doesn't match, echo the
+   tool result and `git worktree list`, report
+   `🚫 worktree entry did not take — still on the root branch`, and stop. Don't retry in a
+   loop.
+6. On a fresh create (not an attach), write `build_base: <origin>` into the spec frontmatter,
+   unless its `status` is already `implementing` or `done`. In that case say which pin won.
 
-2. **Re-enter path (idempotent).**
-   - **Already inside (short-circuit).** If `git rev-parse --show-toplevel` (Bash) already
-     equals `{worktree}`, the session is in it: report as **re-entered** and stop.
-     No `EnterWorktree` call, no setup, no `build_base` write — `/clear` and `/compact`
-     keep cwd, so this is the common resume.
-   - If `{worktree}` appears in `git worktree list --porcelain` **and the directory exists**, it
-     is already provisioned (a listed entry whose directory is gone falls through to step 3):
-     - `EnterWorktree {path: {worktree}}`.
-     - VERIFY: `git rev-parse --show-toplevel` (Bash) equals `{worktree}`. If not, echo the
-       `EnterWorktree` result and `git worktree list` so the cause is visible, then report as
-       **entry verification failed** (see ## Report) and stop.
-     - Do **not** run setup and do **not** touch `build_base` — both were done at create time.
-       Report as **re-entered** (see ## Report).
+End with one report: `✅ worktree created at <path>` (or `attached at` for an attach), with
+Next `nothing needs you — ready, continue whatever stage you were running`.
 
-3. **Create path.** Else you are still on the originating branch — provision it:
-   - **Capture the origin first, before any entry:** `{origin} = git rev-parse --abbrev-ref HEAD`
-     (Bash). Once a worktree is entered, `HEAD` is the build branch and the origin stops being
-     recoverable from the session.
-   - **Create:** `{mergeBack} create --source {source} --spec $ARGUMENTS`, adding `--attach` when
-     `git rev-parse --verify -q refs/heads/{source}` succeeds (a parked build: branch kept,
-     worktree directory gone). It branches from the current HEAD (= origin), or re-attaches the
-     existing branch, and does the `git worktree add`, the `.worktreeinclude` copy and the host's
-     `setupCommand` — never substitute a bare `git worktree add`, which skips all of that, and
-     never run setup by hand. Capture its **last stdout line** as `{worktree}`
-     (the absolute path). Non-zero exit (branch/path exists, unborn HEAD, run from a worktree,
-     `.claude/worktrees/` not gitignored, spec not committed, host setup failed — see
-     `merge-back.sh`) → show the user its stderr, then
-     report as **create failed** (see ## Report) and stop. Do **not** fall back to in-place; the
-     user asked for isolation.
-   - **Enter:** `EnterWorktree {path: {worktree}}`.
-   - **VERIFY entry — the hard gate:** `git rev-parse --show-toplevel` (Bash) equals
-     `{worktree}` → entered. It does **not** → the session is still on the root branch: write
-     nothing further, echo the `EnterWorktree` result verbatim plus `git worktree list` (entry
-     into a registered `{path:}` is deterministic — a failure is structural, not transient;
-     surface it, do not loop-retry), then report as **entry verification failed** (see
-     ## Report) and stop.
-   - **Write `build_base` — but never over a pin:** write `build_base: {origin}` into the spec
-     frontmatter. This is the sole writer of that field; a fresh create is the only time it runs (never on
-     `--attach`).
-     **Skip the write entirely** when the spec already carries a `diff_base:` line, or when its
-     `status:` is past `hardened` (`implementing` or `done`) — both mean a build has already
-     pinned the true pre-image, and `{origin}` is a moving ref that will name the wrong tree the
-     moment those commits land on it: writing over a pin turns the judged diff range empty and
-     every diff-scoped leg silently reports green (specs/20260901/01-build-driver.md).
-     When skipped, say so in the report and name the pin that won. `spec-review-driver.js` prefers
-     the pin and refuses an empty range regardless — that is the deterministic backstop; this is
-     the ordering guard that keeps the two writers from racing in the first place.
-   - Report as **created** (see ## Report); on `--attach` its text reads `worktree attached at
-     {worktree}`.
-
-## Report
-
-report contract: spec core.md § Console Output Style — rendered via `spec-paths report-render`
-
-Assemble a slots object and run `node "$(spec-paths report-render)" --slots <file>` (write the
-JSON to the scratch dir first), printing its output verbatim:
-
-- **Re-entered**: `outcome: {anchor:'✅', text:'worktree re-entered at {worktree}'}`,
-  `next: {kind:'none', reason:'already provisioned, continue whatever stage you were running'}`.
-- **Created**: `outcome: {anchor:'✅', text:'worktree created at {worktree}'}`,
-  `next: {kind:'none', reason:'ready, continue whatever stage you were running'}`.
-- **Entry verification failed**: `outcome: {anchor:'🚫', text:'worktree entry did not take —
-  still on the root branch'}`, `next: {kind:'command', text:'inspect the EnterWorktree result
-  and git worktree list printed above, then retry this command'}`.
-- **Create failed**: `outcome: {anchor:'🚫', text:'worktree creation failed'}`,
-  `next: {kind:'command', text:'resolve the error printed above and retry this command'}`.
-
-```report
-✅ **worktree created at /Users/jj/project/.claude/worktrees/spec-checkout**
-Next: nothing needs you — ready, continue whatever stage you were running
-```
-
-## Notes
-
-- **Fresh process?** Re-run this command before resuming any stage in a new process — it is
-  idempotent (re-enter path) and restores cwd to the worktree. `/clear` and `/compact` keep
-  cwd, so the common case needs nothing.
-- **Don't rename the spec file after entry** — the slug → worktree path mapping would change and
-  re-entry cannot find this worktree.
+Don't rename the spec after entering. The worktree path comes from its name.

@@ -1,0 +1,179 @@
+diff --git a/src/logger.js b/src/logger.js
+index c981bfc..9b47dee 100644
+--- a/src/logger.js
++++ b/src/logger.js
+@@ -5,6 +5,9 @@ function createLogger(sink = console.log) {
+     log(method, path, status, ms) {
+       sink(`${method} ${path} ${status} ${ms}ms`)
+     },
++    warn(message) {
++      sink('WARN ' + message)
++    },
+   }
+ }
+ 
+diff --git a/src/server.js b/src/server.js
+index 7e9d5d3..ce6b93f 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -3,6 +3,8 @@ const http = require('node:http')
+ const router = require('./router')
+ const { createLogger } = require('./logger')
+ const { createRateLimiter } = require('./rate-limit')
++const { createStore } = require('./store')
++const todos = require('./todos')
+ 
+ function readBody(req) {
+   return new Promise((resolve) => {
+@@ -14,7 +16,8 @@ function readBody(req) {
+   })
+ }
+ 
+-function createApp({ logger = createLogger(), rateLimit } = {}) {
++function createApp({ logger = createLogger(), rateLimit, store } = {}) {
++  if (store) todos.attach(createStore({ file: store.file, logger }))
+   const limiter = rateLimit ? createRateLimiter(rateLimit) : null
+   return http.createServer(async (req, res) => {
+     const start = process.hrtime.bigint()
+@@ -37,7 +40,7 @@ function createApp({ logger = createLogger(), rateLimit } = {}) {
+     req.body = await readBody(req)
+     const out = handler ? handler(req) : { status: 404, body: { error: 'not found' } }
+     const payload = out.body === null ? undefined : JSON.stringify(out.body)
+-    res.writeHead(out.status, headers)
++    res.writeHead(out.status, { ...headers, ...out.headers })
+     res.end(payload)
+   })
+ }
+diff --git a/src/store.js b/src/store.js
+new file mode 100644
+index 0000000..f57a2fd
+--- /dev/null
++++ b/src/store.js
+@@ -0,0 +1,38 @@
++'use strict'
++const fs = require('node:fs')
++const path = require('node:path')
++
++const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v)
++
++function validDoc(doc) {
++  if (!isObject(doc)) return false
++  const t = doc.todos
++  if (t === undefined) return true
++  return isObject(t) && Array.isArray(t.items) && Number.isInteger(t.nextId) && t.nextId > 0
++}
++
++function createStore({ file = 'data/todos.json', logger } = {}) {
++  const abs = path.resolve(process.cwd(), file)
++  let doc = {}
++  let raw = null
++  try { raw = fs.readFileSync(abs, 'utf8') } catch (e) { if (e.code !== 'ENOENT') raw = '' }
++  if (raw !== null) {
++    let parsed
++    try { parsed = JSON.parse(raw) } catch { parsed = undefined }
++    if (validDoc(parsed)) doc = parsed
++    else logger.warn(`store: corrupt file ${abs}, starting empty`)
++  }
++
++  return {
++    file: abs,
++    read(section) { return doc[section] },
++    write(section, value) {
++      doc = { ...doc, [section]: value }
++      fs.mkdirSync(path.dirname(abs), { recursive: true })
++      fs.writeFileSync(abs + '.tmp', JSON.stringify(doc, null, 2))
++      fs.renameSync(abs + '.tmp', abs)
++    },
++  }
++}
++
++module.exports = { createStore }
+diff --git a/src/todos.js b/src/todos.js
+index 378f58a..2f5860e 100644
+--- a/src/todos.js
++++ b/src/todos.js
+@@ -2,7 +2,18 @@
+ let todos = []
+ let nextId = 1
+ 
+-function reset() { todos = []; nextId = 1 }
++let store = null
++
++function reset() { todos = []; nextId = 1; store = null }
++
++function attach(s) {
++  store = s
++  const section = s.read('todos')
++  todos = section ? section.items : []
++  nextId = section ? section.nextId : 1
++}
++
++const persist = () => { if (store) store.write('todos', { nextId, items: todos }) }
+ 
+ const notFound = () => ({ status: 404, body: { error: 'not found' } })
+ const find = (req) => todos.find((t) => t.id === Number(req.params.id))
+@@ -12,10 +23,31 @@ function create(req) {
+   if (typeof title !== 'string' || !title) return { status: 400, body: { error: 'title required' } }
+   const todo = { id: nextId++, title, done: false }
+   todos.push(todo)
++  persist()
+   return { status: 201, body: todo }
+ }
+ 
+-function list() { return { status: 200, body: todos } }
++const INT = /^\d+$/
++
++function list(req) {
++  const q = new URL(req.url || '/', 'http://localhost').searchParams
++  const done = q.get('done')
++  const limit = q.get('limit')
++  const offset = q.get('offset')
++  if ((done !== null && done !== 'true' && done !== 'false') ||
++      (limit !== null && !INT.test(limit)) ||
++      (offset !== null && !INT.test(offset))) {
++    return { status: 400, body: { error: 'invalid query' } }
++  }
++  const filtered = done === null ? todos : todos.filter((t) => t.done === (done === 'true'))
++  const start = offset === null ? 0 : Number(offset)
++  const end = limit === null ? undefined : start + Number(limit)
++  return {
++    status: 200,
++    body: filtered.slice(start, end),
++    headers: { 'x-total-count': String(filtered.length) },
++  }
++}
+ 
+ function update(req) {
+   const todo = find(req)
+@@ -23,6 +55,7 @@ function update(req) {
+   const b = req.body || {}
+   if (typeof b.title === 'string') todo.title = b.title
+   if (typeof b.done === 'boolean') todo.done = b.done
++  persist()
+   return { status: 200, body: todo }
+ }
+ 
+@@ -30,7 +63,8 @@ function remove(req) {
+   const todo = find(req)
+   if (!todo) return notFound()
+   todos.splice(todos.indexOf(todo), 1)
++  persist()
+   return { status: 204, body: null }
+ }
+ 
+-module.exports = { create, list, update, remove, reset }
++module.exports = { create, list, update, remove, reset, attach }
+diff --git a/tests/todos.test.js b/tests/todos.test.js
+index 27676ca..a91d4d3 100644
+--- a/tests/todos.test.js
++++ b/tests/todos.test.js
+@@ -77,3 +77,9 @@ test('malformed percent-encoded id is 404 and the server keeps serving', async (
+     assert.strictEqual((await fetch(`${base}/todos`)).status, 200)
+   })
+ })
++
++async function seedThree(base) {
++  for (const title of ['a', 'b', 'c']) await fetch(`${base}/todos`, json('POST', { title }))
++  await fetch(`${base}/todos/3`, json('PATCH', { done: true }))
++}
++

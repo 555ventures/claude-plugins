@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: implementing
+status: done
 area: fanout
 depends_on: []
 brief: 34

@@ -31,8 +31,9 @@ function lock(root, arg, confirmed) {
   const missing = REQUIRED.filter((n) => !Object.keys(s.sections).some((k) => k === n || k.startsWith(n + ' ') || k.startsWith(n + '(')))
   if (missing.length) throw new Refusal(`missing sections: ${missing.join(', ')}`)
   if (s.markers) throw new Refusal(`${s.markers} [NEEDS CLARIFICATION:] marker(s) left — resolve them first`)
-  const tokens = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => s.body.includes(t))
-  if (tokens.length) throw new Refusal(`template placeholders left: ${tokens.join(' ')} — fill them in first`)
+  const prose = s.body.replace(/`[^`\n]*`/g, '') // inline code may say `--root <path>`
+  const left = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => prose.includes(t))
+  if (left.length) throw new Refusal(`template placeholders left: ${left.join(' ')} — fill them in first`)
   if (s.frontmatter.architecture === true && !confirmed) throw new Refusal("architecture change — needs the user's yes; re-run with --confirmed")
   writeStatus(file, 'hardened')
   const rel = path.relative(root, file)

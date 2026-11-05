@@ -24,8 +24,8 @@ prototype contract's behaviour pins become acceptance criteria.
    `accepted`, set any superseded ADR's Status to `superseded by ADR-NNNN`, and cite it in
    Decisions. Behaviour changes get no ADR.
 5. `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js lock <path>` (add `--confirmed` after that yes)
-   refuses while gaps remain, then locks, commits and prints Next: `/spec:queue add <path>`; run it.
+   refuses while gaps or `<placeholders>` remain, then locks, commits and prints Next; run it.
 
 A brief may become several specs; use `depends_on` when one must land first. When the brief
 is fully planned run `/spec:queue done <NN>`; a brief folded into another gets
-`> Superseded by NN` under its title. Report Next: `/spec:run <path>`.
+`> Superseded by NN` under its title. Report Next.

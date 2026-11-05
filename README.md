@@ -10,8 +10,8 @@ A Claude Code plugin marketplace with three plugins:
 
 You fill the queue and plan each feature with the strong model. Then the plugin builds it.
 One builder writes the spec test-first in its own git worktree, and your own test command
-decides green. One fresh reviewer reads the diff against the spec's Intent block, and green
-merges. A typical spec goes from queued to merged in minutes. Nothing that changes
+decides green. One fresh reviewer reads the diff against the spec's Intent, Decisions and criteria, and
+green merges. A typical spec goes from queued to merged in minutes. Nothing that changes
 architecture or behaviour, and nothing irreversible, happens without your yes. Everything
 else is decided for you and printed as `📌 Auto-picked … (veto anytime)`. State lives in
 small files, so any run survives a crash or a `/clear` and resumes where it stopped.
@@ -31,10 +31,10 @@ Needs `git` and Node 22 or newer.
 
 A spec moves `draft → hardened → implementing → done`. `/spec:plan` writes and locks it.
 `/spec:run`, or `/spec:fanout` for several at once, builds, reviews and merges it. A hook
-refuses to run a draft.
+refuses to run a draft, and blocks destructive git in every checkout while a lane is open.
 
 ```
-/spec:init                                                   # existing repo, once
+/spec:init                                                   # existing repo, once; commit its files
 /spec:plan "let signed-in users export invoices as CSV"      # → specs/20261104/01-invoice-export.md
 /spec:run  specs/20261104/01-invoice-export.md               # hardened → done
 ```

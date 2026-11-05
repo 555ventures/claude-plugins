@@ -53,15 +53,23 @@ function questions(root) {
 function build(root) {
   const specs = allSpecs(root); const q = reconcile(root, readQueue(root))
   // A brief whose specs exist and are not all done is being planned or built: its item is not the next paste.
-  const planned = new Set(specs.filter((s) => s.spec.frontmatter.status !== 'done').map((s) => briefNo(String(s.spec.frontmatter.brief))))
-  const head = pending(q).find((i) => !(i.kind === 'brief' && planned.has(briefNo(i.payload))))
-  // A run started by hand (never queued) is still the thing to finish first.
-  const running = specs.find((s) => s.spec.frontmatter.status !== 'done' && fs.existsSync(runPath(path.join(root, s.path))) && !pending(q).some((i) => i.payload === s.path))
+  const open = (nn) => specs.filter((s) => s.spec.frontmatter.status !== 'done' && briefNo(String(s.spec.frontmatter.brief)) === briefNo(nn))
+  const queued = (p) => pending(q).some((i) => i.payload === p)
+  let head = null; let paste = null
+  for (const i of pending(q)) {
+    const mine = i.kind === 'brief' ? open(i.payload) : []
+    if (!mine.length) { head = i; paste = pasteLine(root, i); break }
+    const draft = mine.find((s) => s.spec.frontmatter.status === 'draft'); const loose = mine.find((s) => s.spec.frontmatter.status === 'hardened' && !queued(s.path))
+    if (draft) { head = i; paste = `/spec:plan ${draft.path}`; break }
+    if (loose) { head = i; paste = `/spec:queue add ${loose.path}`; break }
+  }
+  // A run in flight, queued or started by hand, is the thing to finish first.
+  const running = specs.find((s) => s.spec.frontmatter.status !== 'done' && fs.existsSync(runPath(path.join(root, s.path))))
   const parallel = lanes(root, q, readConfig(root).lanes)
   const qs = questions(root)
   const verdict = qs.length ? `🟡 waiting on you — ${qs.length} pending question${qs.length > 1 ? 's' : ''}`
-    : running ? `🟢 a run is in flight · /spec:run ${running.path}` : head ? `🟢 next is ready · ${pasteLine(root, head)}` : '⚪ queue empty'
-  const res = { roadmap: roadmap(root, specs, q), next: running ? `/spec:run ${running.path}` : head ? pasteLine(root, head) : null, lanes: parallel, questions: qs, verdict }
+    : running ? `🟢 a run is in flight · /spec:run ${running.path}` : head ? `🟢 next is ready · ${paste}` : '⚪ queue empty'
+  const res = { roadmap: roadmap(root, specs, q), next: running ? `/spec:run ${running.path}` : paste, lanes: parallel, questions: qs, verdict }
   return res
 }
 

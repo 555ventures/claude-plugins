@@ -37,7 +37,7 @@ function tokens(cmd) {
   return out
 }
 // Walks simple commands in order; cd moves the directory later -C / cd targets resolve against.
-function scan(cmd, dir, dirs, verbs, depth) {
+function scan(cmd, dir, dirs, verbs, depth, cwd = dir) {
   let words = []
   const flush = () => {
     let w = words; words = []
@@ -51,15 +51,23 @@ function scan(cmd, dir, dirs, verbs, depth) {
       let d = dir
       for (let k = 1; k < w.length; k++) {
         const a = w[k]
-        if (a === "-C" && w[k + 1] !== undefined) { d = path.resolve(d, w[++k]); dirs.push(d) }
+        if (a === "-C" && w[k + 1] !== undefined) { d = path.resolve(d, w[++k]) }
         else if (a === "-c" || a === "--git-dir" || a === "--work-tree" || a === "--namespace") k++
         else if (a.startsWith("-")) continue
-        else { verbs.push(a === "rebase" && w[k + 1] === "--continue" ? "rebase --continue" : a); break }
+        else {
+          // Read-only or additive forms are harmless in the main checkout (still blocked inside a lane).
+          const rest = w.slice(k + 1); const sub = rest.find((x) => !x.startsWith("-")) || ""
+          const harmless = (a === "branch" && !rest.some((x) => /^-[a-zA-Z]*[dDmMfc]/.test(x)) && (!sub || rest.some((x) => /^(--list|-l|-v|-vv|-a|-r|--show-current)$/.test(x))))
+            || (a === "worktree" && /^(list|prune)$/.test(sub)) || (a === "stash" && /^(list|show)$/.test(sub))
+          if (a === "rebase" && rest[0] === "--continue") break
+          verbs.push({ v: a, harmless, d: require("fs").existsSync(d) ? d : cwd })
+          break
+        }
       }
     } else if (["bash", "sh", "zsh", "dash"].includes(prog) && depth < 3) {
       const k = w.findIndex((x, n) => n > 0 && /^-[a-z]*c[a-z]*$/.test(x))
-      if (k > 0 && w[k + 1] !== undefined) dir = scan(w[k + 1], dir, dirs, verbs, depth + 1)
-    } else if (prog === "eval" && depth < 3) dir = scan(w.slice(1).join(" "), dir, dirs, verbs, depth + 1)
+      if (k > 0 && w[k + 1] !== undefined) dir = scan(w[k + 1], dir, dirs, verbs, depth + 1, cwd)
+    } else if (prog === "eval" && depth < 3) dir = scan(w.slice(1).join(" "), dir, dirs, verbs, depth + 1, cwd)
   }
   for (const t of tokens(cmd)) { if (t.op) flush(); else words.push(t.w) }
   flush()
@@ -69,36 +77,42 @@ try {
   const j = JSON.parse(require("fs").readFileSync(0, "utf8"))
   const cwd = j.cwd || process.cwd()
   const cmd = String((j.tool_input || {}).command || "")
-  const dirs = [cwd], verbs = []
+  const dirs = [], verbs = []
   scan(cmd, cwd, dirs, verbs, 0)
-  const hit = verbs.find((v) => BLOCK.has(v))
-  if (hit) process.stdout.write(hit + "\n" + [...new Set(dirs)].join("\n"))
+  // A real blocked verb anywhere in the command decides; only its directories are checked.
+  const blocked = verbs.filter((x) => BLOCK.has(x.v) && !x.harmless)
+  const pick = blocked.length ? blocked : verbs.filter((x) => BLOCK.has(x.v))
+  if (pick.length) process.stdout.write(pick[0].v + (blocked.length ? "" : " (harmless)") + "\n" + [...new Set(pick.map((x) => x.d))].join("\n"))
 } catch {}' 2>/dev/null)" || exit 0
 [ -n "$parsed" ] || exit 0
 verb="${parsed%%$'\n'*}"
+harmless=0; case "$verb" in *" (harmless)") harmless=1; verb="${verb% (harmless)}" ;; esac
+case "$verb" in commit|push|merge|rebase) lane_only=1 ;; *) lane_only=$harmless ;; esac
 
-case "$verb" in commit|push|merge|rebase) lane_only=1 ;; *) lane_only=0 ;; esac
-
-gd=""; open=""
+gd=""; open=""; lane=""
 while IFS= read -r d; do
   [ -n "$d" ] || continue
   g="$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null)" || continue
-  if [ -f "$g/spec-lane-open" ]; then gd="$g"; break; fi
+  if [ -f "$g/spec-lane-open" ]; then gd="$g"; lane="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null || echo "$d")"; break; fi
   if [ "$lane_only" = 0 ]; then
-    c="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || continue
+    c="$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)" || continue
+    case "$c" in /*) ;; *) c="$d/$c" ;; esac
     for m in "$c"/spec-lane-open "$c"/worktrees/*/spec-lane-open; do [ -f "$m" ] && open="$m" && break; done
   fi
 done < <(printf '%s\n' "${parsed#*$'\n'}")
 
 if [ -n "$gd" ]; then
   {
-    echo "BLOCKED: git $verb inside a spec lane worktree (${gd%/.git*}) — agents never run git here; /spec:run commits and merges at its own steps."
+    echo "BLOCKED: git $verb inside a spec lane worktree ($lane) — agents never run git here; /spec:run commits and merges at its own steps."
     echo "  stale marker (no run in flight)? remove $gd/spec-lane-open"
   } >&2
   exit 2
 fi
 if [ -n "$open" ]; then
-  echo "BLOCKED: git $verb while a spec lane is open ($open) — it can discard work in this checkout; the driver owns git until the run ends." >&2
+  {
+    echo "BLOCKED: git $verb while a spec lane is open ($open) — it can discard work in this checkout; the driver owns git until the run ends."
+    echo "  stale marker (no run in flight)? rm $open"
+  } >&2
   exit 2
 fi
 exit 0

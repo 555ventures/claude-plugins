@@ -31,7 +31,8 @@ let inPlaceFlag = false
 // ---- paths ---------------------------------------------------------------------------------
 
 function specInfo(ctx) {
-  const abs = path.resolve(ctx.root, ctx.arg.replace(/^@/, ''))
+  const typed = ctx.arg.replace(/^@/, '') // under root first (a lane's shell sits in the main checkout); else as typed from the shell's directory
+  const abs = fs.existsSync(path.resolve(ctx.root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(ctx.root, typed) : path.resolve(process.cwd(), typed)
   const rel = path.relative(ctx.root, abs)
   if (rel.startsWith('..') || !fs.existsSync(abs)) refuse(`no spec at ${abs} — pass a spec path inside ${ctx.root}`)
   const m = /(\d{8})\/(\d+)-[^/]+\.md$/.exec(rel.split(path.sep).join('/'))
@@ -60,7 +61,7 @@ function go(state, step, extra = {}) {
 function load(ctx) {
   const s = specInfo(ctx)
   const ignored = (p) => git.raw(['check-ignore', '-q', p], ctx.root).status === 0
-  if (!ignored(path.relative(ctx.root, st.runPath(s.abs))) || !ignored('.claude/worktrees/x'))
+  if (!ignored(path.relative(ctx.root, st.runPath(s.abs))) || (cfgOf(ctx).worktreePerSpec !== false && !ignored('.claude/worktrees/x')))
     refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
   return st.readRun(s.abs) || { step: 'OPEN', spec: s.rel }
 }
@@ -96,7 +97,8 @@ function open(state, ctx) {
   const why = lane ? 'fanout lane — this session sits in the lane worktree'
     : inPlaceFlag ? '--in-place'
     : cfg.worktreePerSpec === false ? 'host policy worktreePerSpec: false'
-      : cur === specBranch ? "this session already sits on the spec's branch" : null
+      : cur === specBranch ? "this session already sits on the spec's branch"
+        : cur !== cfg.trunk ? `on ${cur}, not ${cfg.trunk} — the build lands here, for your PR` : null
   // Tracked dirt would be swept into the build commit in place, or refuse the merge after the build.
   if (!lane && git.sh(['status', '--porcelain', '--untracked-files=no'], ctx.root)) refuse(`${ctx.root} has uncommitted tracked changes — commit or stash them, then re-run`)
   let wt = ctx.root
@@ -164,7 +166,9 @@ function commit(state, ctx) {
   // A re-run after a crash between the commit and the save finds a clean tree: report that commit.
   try {
     state.commit = git.commitAll(wt, `build(${specInfo(ctx).id}): ${spec.title}`) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
-  } catch (e) { // a commit hook rejected the build: repair it like a red gate
+  } catch (e) { // a commit hook rejected the build: repair it like a red gate; anything else is the user's git
+    const hooks = git.raw(['rev-parse', '--git-path', 'hooks'], wt).stdout.trim()
+    if (!['pre-commit', 'commit-msg'].some((h) => fs.existsSync(path.resolve(wt, hooks, h)))) refuse(`git commit failed in ${wt}: ${e.message}`, 1)
     state.gate = { ...(state.gate || {}), status: 'red', output_tail: `git commit was rejected (a commit hook?):\n${e.message}` }
     return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   }
@@ -198,7 +202,7 @@ function finish(state, ctx) {
   const wt = wtOf(state, ctx)
   if (st.readSpec(s.abs).frontmatter.status !== 'done') st.writeStatus(s.abs, 'done')
   if (state.marked) pending.unmarkLane(wt)
-  if (!state.inPlace) git.worktreeRemove(ctx.root, wt, { deleteBranch: state.mergeSha ? state.branch : undefined })
+  const rm = state.inPlace ? { removed: true } : git.worktreeRemove(ctx.root, wt, { deleteBranch: state.mergeSha ? state.branch : undefined })
   // Tick this spec's queue item; Next is whatever the queue holds after it.
   const q = st.readQueue(ctx.root)
   const mine = queue.pending(q).filter((i) => i.kind === 'spec' && path.resolve(ctx.root, i.payload) === s.abs)
@@ -214,7 +218,8 @@ function finish(state, ctx) {
       `review ${state.review.verdict}, ${findings.length} finding(s); ${state.attempts.repair} repair(s), ${state.attempts.fix} fix round(s)`,
     ],
     pins: state.pin,
-    warns: findings.filter((f) => f.severity !== 'blocking').map((f) => `advisory: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`),
+    warns: [...(rm.removed ? [] : [`worktree kept at ${state.worktree}: ${rm.reason} — git worktree remove --force ${state.worktree}`]),
+      ...findings.filter((f) => f.severity !== 'blocking').map((f) => `advisory: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`)],
     blocks: tg && tg.status === 'red' ? `trunk gate red after the merge:\n${tg.output_tail}` : null,
     artifacts: s.rel,
     next: tg && tg.status === 'red' ? `/spec:fix trunk gate red after merging ${s.rel}` : head ? queue.pasteLine(ctx.root, head) : undefined,
@@ -245,7 +250,7 @@ function builderBrief(state, ctx, kind) {
     '## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '',
     '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
   ]
-  if (kind === 'repair') out.push('The gate is red. Repair the code (never weaken a test). Failure tail:', '```', state.gate.output_tail, '```', '')
+  if (kind === 'repair') out.push(`${/^git commit was rejected/.test(state.gate.output_tail || '') ? 'The commit hook rejected the build' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```', '')
   if (kind === 'fix') {
     out.push('The reviewer found blocking issues. Fix each one:')
     for (const f of state.review.findings.filter((x) => x.severity === 'blocking')) out.push(`- ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}${f.evidence ? ` (evidence: ${f.evidence})` : ''}`)
@@ -300,16 +305,13 @@ function ask(state, ctx, question, options) {
     ...options.map((o) => `- ${o.label} — ${o.description}`)].join('\n')
 }
 
-// After `git reset --merge` nothing is in progress and nothing conflicted: MERGE runs again.
-const mergeAborted = (state, ctx) => {
-  const main = mainRoot(ctx.root)
-  return git.raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], main).status !== 0 && !git.conflictsIn(main).length
-    && git.raw(['diff', '--cached', '--quiet'], main).status === 0
-}
 const REBASE_LEFT = 'a rebase onto trunk is in progress in this worktree: resolve each conflict by both sides\' intent, `GIT_EDITOR=true git rebase --continue`, re-run the test command, then stop — fanout reviews the resolved diff before it lands'
 
 // The line of a red tail worth reading first.
-const redLine = (tail) => { const ls = (tail || '').split('\n').filter((l) => l.trim()); return ls.find((l) => /✖|not ok|\bfail|error|rejected/i.test(l)) || ls[0] || 'gate red' }
+const redLine = (tail) => {
+  const ls = (tail || '').split('\n').filter((l) => l.trim() && !/^\s*(✔|✓|ok\b|PASS\b)/.test(l))
+  return ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.find((l) => /\bfail|error|rejected/i.test(l)) || ls[0] || 'gate red'
+}
 
 function escalateBody(state, ctx) {
   const id = specInfo(ctx).id
@@ -342,11 +344,11 @@ function derive(state, ctx) {
     case 'MERGE': return { name: 'MERGE', auto: merge }
     case 'TRUNK_GATE': return { name: 'TRUNK_GATE', auto: trunkGate }
     case 'FINISH': return { name: 'FINISH', auto: finish }
-    case 'CONFLICTS': return mergeAborted(state, ctx) ? { name: 'CONFLICTS', auto: (s) => go(s, 'MERGE') } : {
+    case 'CONFLICTS': return {
       name: 'CONFLICTS', mark: 'conflicts-resolved',
       body: ask(state, ctx, `merging ${state.branch} into ${cfgOf(ctx).trunk} conflicts in ${state.conflicts.join(', ')}. Resolve them?`, [
         { label: 'resolve', description: `resolve each file by both sides' intent in ${mainRoot(ctx.root)}, leave it uncommitted, then mark conflicts-resolved` },
-        { label: 'abort', description: 'run `git reset --merge` there; the next /spec:run retries the merge' },
+        { label: 'abort', description: 'run `git reset --merge` there; marking conflicts-resolved later retries the merge' },
       ]),
     }
     case 'MERGE_READY': return { name: 'MERGE_READY', body: git.rebasing(wtOf(state, ctx)) ? REBASE_LEFT : state.report || '' }
@@ -410,7 +412,7 @@ const steps = {
     const inMerge = git.raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], main).status === 0
     const staged = git.raw(['diff', '--cached', '--quiet'], main).status !== 0
     if (inMerge || staged) git.sh(['commit', '-q', '-m', `chore(spec): merge ${specInfo(ctx).id} — ${st.readSpec(specIn(state, ctx)).title}`], main)
-    else if (git.raw(['merge-base', '--is-ancestor', state.branch, 'HEAD'], main).status !== 0) refuse(`no merge of ${state.branch} is in progress in ${main} and it is not merged (aborted?) — re-run /spec:run to merge again`)
+    else if (git.raw(['merge-base', '--is-ancestor', state.branch, 'HEAD'], main).status !== 0) return go(state, 'MERGE') // nothing merged (aborted): merge again
     return go(state, 'TRUNK_GATE', { mergeSha: git.headSha(main) })
   },
 }
@@ -422,6 +424,7 @@ function afterMark(verb, state) {
     if (g.status === 'red') return `gate: red — ${redLine(g.output_tail)}`
     return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}`
   }
+  if (verb === 'reviewed' && state.gate && /^git commit was rejected/.test(state.gate.output_tail || '')) return `commit: rejected — ${redLine(state.gate.output_tail.split('\n').slice(1).join('\n'))}`
   if (verb === 'reviewed' && state.review) {
     const n = state.review.findings.filter((f) => f.severity === 'blocking').length
     return n ? `review: ${n} blocking → ${state.review.verdict === 'fix' ? 'FIX' : 'ESCALATE'}` : 'review: clean'

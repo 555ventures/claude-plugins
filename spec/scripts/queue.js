@@ -94,7 +94,8 @@ function main(argv) {
   } else if (cmd === 'add') {
     if (!arg) return fail('add needs a payload', 2)
     // `@specs/x.md`, `./specs/x.md` and an absolute path inside root are one spec: store it root-relative.
-    const file = path.resolve(root, arg.replace(/^@/, ''))
+    const typed = arg.replace(/^@/, '')
+    const file = fs.existsSync(path.resolve(root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(root, typed) : path.resolve(process.cwd(), typed)
     const relp = path.relative(root, file).split(path.sep).join('/')
     if (/\.md$/.test(arg) && !relp.startsWith('..') && fs.existsSync(file)) arg = relp
     if (q.items.some((i) => !i.done && i.payload === arg)) return fail(`duplicate payload already queued: ${arg}`, 2)

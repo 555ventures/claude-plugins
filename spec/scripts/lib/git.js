@@ -48,12 +48,17 @@ function worktreeAdd(root, wtPath, branch, base) {
   return abs
 }
 
-// No --force by default: edits made after the lane's commit are never thrown away silently.
+// No --force by default: untracked files or edits after the lane's commit are never thrown away
+// silently. A refusal is returned, not thrown, so the caller can finish and say the worktree stays.
 function worktreeRemove(root, wtPath, { deleteBranch, force } = {}) {
   const abs = path.resolve(root, wtPath)
-  if (worktreeList(root).includes(real(abs))) sh(['worktree', 'remove', ...(force ? ['--force'] : []), abs], root)
+  if (worktreeList(root).includes(real(abs))) {
+    const r = raw(['worktree', 'remove', ...(force ? ['--force'] : []), abs], root)
+    if (r.status !== 0) return { removed: false, reason: (r.stderr || r.stdout).trim().split('\n')[0] }
+  }
   raw(['worktree', 'prune'], root)
   if (deleteBranch && branchExists(root, deleteBranch)) sh(['branch', '-D', deleteBranch], root)
+  return { removed: true }
 }
 
 // Stages everything and commits; returns the new sha, or null when there was nothing to commit.
@@ -85,6 +90,7 @@ function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
     if (r.status === 0) {
       if (raw(['diff', '--cached', '--quiet'], root).status === 0) return { merged: true, conflicts: [], sha: headSha(root), empty: true }
       r = raw(['commit', '-q', '-m', message || `chore(spec): squash ${branch} into ${target}`], root)
+      if (r.status !== 0) raw(['reset', '-q', '--merge'], root) // a hook rejected the squash commit: back it out
     }
   } else throw Object.assign(new Error(`unknown merge strategy '${strategy}' (merge-commit | ff-only | squash)`), { exit: 2 })
   if (r.status === 0) return { merged: true, conflicts: [], sha: headSha(root) }

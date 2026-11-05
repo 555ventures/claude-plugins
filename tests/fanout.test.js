@@ -40,7 +40,8 @@ function host() {
     fs.writeFileSync(path.join(w, file), content)
     execFileSync('git', ['-C', w, 'add', '-A'])
     execFileSync('git', ['-C', w, 'commit', '-q', '-m', 'lane ' + stem])
-    st.writeRun(path.join(w, specPath(stem)), { step: 'MERGE_READY', spec: specPath(stem) })
+    const base = execFileSync('git', ['-C', w, 'merge-base', 'main', 'HEAD'], { encoding: 'utf8' }).trim()
+    st.writeRun(path.join(w, specPath(stem)), { step: 'MERGE_READY', spec: specPath(stem), lane: true, worktree: '.', branch: 'spec/' + stem, base, inPlace: false, attempts: { repair: 0, fix: 0 }, gate: null, review: null })
   }
   return { dir, g, run, ok, wt, finish, step: () => run('--state').stdout.trim() }
 }
@@ -250,21 +251,29 @@ test('a rebase conflict sends the lane back with the rebase in progress; resolve
   fs.writeFileSync(path.join(w, 'src/a.js'), 'alpha\ngamma\n')
   execFileSync('git', ['-C', w, 'add', 'src/a.js'])
   execFileSync('git', ['-C', w, '-c', 'core.editor=true', 'rebase', '--continue'])
+  const rebasedOnto = h.g('rev-parse', 'HEAD').trim()
+  fs.writeFileSync(path.join(h.dir, 'other.txt'), 'x\n'); h.g('add', 'other.txt'); h.g('commit', '-q', '-m', 'trunk moved meanwhile')
+  fs.writeFileSync(path.join(w, 'RED'), '') // the resolution broke the suite
   h.ok('--mark', 'returned', '--lane', '2')
-  assert.strictEqual(h.step(), 'MERGE', 'a resolved rebase is not merged blind')
+  assert.strictEqual(h.step(), 'WAIT', 'a resolved rebase is not merged blind, and the other lanes keep their order')
   const back = st.readFanout(h.dir).batch[1]
-  assert.deepStrictEqual([back.status, back.rereviewed, back.conflicts], ['sent-back', true, undefined])
+  assert.deepStrictEqual([back.status, back.resolving, back.conflicts], ['sent-back', undefined, undefined])
   const run = st.readRun(path.join(w, specPath('03-gamma')))
-  assert.strictEqual(run.step, 'REVIEW', 'the lane reviews the resolved diff')
-  assert.strictEqual(run.base, h.g('rev-parse', 'HEAD').trim(), 'against the trunk it was rebased onto')
-  assert.match(fs.readFileSync(path.join(w, 'specs/20261104/03-gamma.run/diff.patch'), 'utf8'), /\+alpha\n\+gamma|\+gamma/, 'the diff shows the resolution')
-  assert.match(h.ok().stdout, /lane 2 resolved its rebase — re-review/)
+  assert.deepStrictEqual([run.step, run.base], ['GATE', rebasedOnto], 'the lane re-gates against the trunk it was rebased onto, even after trunk moved')
+  assert.match(h.ok().stdout, /resolved a rebase conflict; they gate and review/)
   h.ok('--mark', 'resent')
-  st.writeRun(path.join(w, specPath('03-gamma')), { ...run, step: 'MERGE_READY' }) // the lane's reviewer passed it
+  const laneRun = (...a) => runNode('scripts/run.js', [specPath('03-gamma'), '--root', w, ...a])
+  assert.match(laneRun().stdout, /^▶ REPAIR/, 'a red resolution is repaired, never landed')
+  fs.rmSync(path.join(w, 'RED'))
+  assert.match(laneRun('--mark', 'repaired').stdout, /REPAIR → REVIEW/)
+  assert.match(fs.readFileSync(path.join(w, 'specs/20261104/03-gamma.run/diff.patch'), 'utf8'), /\+gamma/, 'the reviewer sees the resolved diff')
+  const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
+  assert.match(laneRun('--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)
   h.ok('--mark', 'returned', '--lane', '2')
   assert.strictEqual(h.step(), 'REPORT')
   assert.strictEqual(fs.readFileSync(path.join(h.dir, 'src/a.js'), 'utf8'), 'alpha\ngamma\n', 'the resolved lane landed on trunk')
   assert.ok(st.readQueue(h.dir).items[2].done && !fs.existsSync(w), 'ticked and cleaned')
+  assert.strictEqual(fs.readFileSync(path.join(h.dir, 'other.txt'), 'utf8'), 'x\n', 'the trunk commit made meanwhile survived')
 })
 
 test('a second rebase conflict against the same trunk stops the lane for the user', () => {
@@ -299,4 +308,18 @@ test('--pick prints a checkbox question; picked builds the batch from exactly th
   assert.match(busy.stderr, /already in a lane/, 'a spec already in a lane is refused')
   h.ok('--mark', 'picked', '--label', '03-gamma', '--label', '01-alpha')
   assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.spec), [specPath('03-gamma'), specPath('01-alpha')], 'exactly the picked specs, in pick order')
+})
+
+test('MERGE refuses while the main checkout is off trunk instead of fast-forwarding a stray branch', () => {
+  const h = host()
+  dispatchTwo(h)
+  h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
+  h.g('checkout', '-q', '-b', 'feat')
+  h.ok('--mark', 'returned', '--lane', '1')
+  const r = h.run('--mark', 'returned', '--lane', '2')
+  assert.strictEqual(r.status, 2); assert.match(r.stderr, /on feat, not main/)
+  assert.strictEqual(h.g('rev-parse', 'feat').trim(), h.g('rev-parse', 'main').trim(), 'nothing landed on the stray branch')
+  h.g('checkout', '-q', 'main')
+  h.ok()
+  assert.strictEqual(h.step(), 'REPORT')
 })

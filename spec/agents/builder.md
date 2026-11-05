@@ -11,8 +11,8 @@ block, Decisions, File Plan, acceptance criteria and the test command; a repair 
 blocking findings. Your shell starts outside the worktree: use absolute paths and run commands
 as `cd <worktree> && …`.
 
-Write a failing test per criterion first, then code, and run the test command until green.
-Honour every Decision. Repair the code; never weaken a test. Do not touch files outside the File Plan without listing them in your
+On a build, write a failing test per criterion first, then code. Always run the test command
+until green. Honour every Decision. Repair the code; never weaken a test. Do not touch files outside the File Plan without listing them in your
 final summary. Leave git alone: the driver commits, and a hook blocks git writes.
 
 Reply briefly: files changed, the last test result, any file outside the plan and why, and

@@ -67,3 +67,13 @@ test('lock commits new or edited ADRs and briefs with the spec; an empty docs/ad
   assert.strictEqual(g('status', '--porcelain'), '', 'spec, ADR and brief are all committed')
   assert.match(g('show', '--stat', '--format=%s', 'HEAD'), /chore\(spec\): lock[\s\S]*docs\/adr\/0002-orm\.md[\s\S]*docs\/roadmap\/03-old\.md/)
 })
+
+test('placeholder check fires on template lines only: `<path>` in a sentence passes', () => {
+  const d = tmpdir('plan')
+  const f = fresh(d, 'doc')
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('## Goal\n\nx', '## Goal\n\nRun `doctor --root <path>` and keep `Map<string, Lane>` typed.'))
+  assert.strictEqual(plan(d, 'lock', f).status, 0)
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('## Goal', '## Goal\n\nWHEN x THE SYSTEM SHALL <observable result>.'))
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 2); assert.match(r.stderr, /<observable result>/, 'a half-filled template line is still a placeholder')
+})

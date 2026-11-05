@@ -156,6 +156,8 @@ function deriveWait(s, ctx) {
   if (active.every((l) => l.status === 'done' || l.status === 'stopped')) {
     return { name: 'WAIT', auto: (x) => ({ ...x, step: active.some((l) => l.status === 'stopped') ? 'RELAY' : 'MERGE' }) }
   }
+  const back = s.batch.filter((l) => l.status === 'sent-back')
+  if (back.length) return { name: 'WAIT', body: dispatchBody(ctx.root, back, 'These lanes resolved a rebase conflict; they gate and review the resolved diff before landing:'), mark: 'resent', accepts: ['dismissed', 'returned'] }
   const lines = ['Lanes (status · run step):', ...s.batch.map((l) => `  lane ${l.id} — ${l.stem}: ${l.status} · ${laneRunStep(ctx.root, l)}`)]
   lines.push('', 'As each lane agent returns, mark it returned. A lane that stopped without writing a pending question: add --stopped "<reason>".')
   return { name: 'WAIT', body: lines.join('\n'), mark: 'returned --lane <id> [--stopped "<reason>"]', accepts: ['dismissed'] }
@@ -203,7 +205,8 @@ function finalize(s, ctx, lane) {
     if (git.raw(['diff', '--cached', '--quiet'], root).status !== 0) git.sh(['commit', '-q', '-m', `chore(spec): ${lane.stem} done`, '--', lane.spec], root)
   }
   pending.unmarkLane(wtAbs(root, lane))
-  git.worktreeRemove(root, lane.worktree, { deleteBranch: lane.branch })
+  const rm = git.worktreeRemove(root, lane.worktree, { deleteBranch: lane.branch })
+  if (!rm.removed) lane.kept = `worktree kept at ${lane.worktree}: ${rm.reason} — git worktree remove --force ${lane.worktree}`
   tickQueue(root, lane.spec)
   lane.status = 'merged'
   return s
@@ -228,12 +231,14 @@ function mergeLane(s, ctx, lane) {
   const spec = laneSpec(root, lane)
   // finalize removed the worktree and branch, then a crash beat the save: only the bookkeeping is left.
   if (!fs.existsSync(wt) && !git.branchExists(root, lane.branch)) return finalize(s, ctx, lane)
+  const on = git.currentBranch(root)
+  if (on !== config.trunk) refuse(`${root} is on ${on}, not ${config.trunk} — check out ${config.trunk} there, then re-run`)
   const r = git.rebaseOnto(wt, config.trunk)
   if (!r.ok) {
     const at = git.headSha(root)
     lane.conflicts = r.conflicts
     if (lane.conflictAt === at) { lane.status = 'stopped'; lane.reason = 'second rebase conflict'; lane.question = null }
-    else { lane.status = 'sent-back'; lane.conflictAt = at }
+    else { lane.status = 'sent-back'; lane.conflictAt = at; lane.resolving = true } // its resolution is gated and reviewed before landing
     return s
   }
   delete lane.conflicts
@@ -252,8 +257,8 @@ function deriveMerge(s, ctx) {
   if (next) return { name: 'MERGE', auto: (x) => mergeLane(x, ctx, x.batch.find((l) => l.id === next.id)) }
   const back = s.batch.filter((l) => l.status === 'sent-back')
   if (back.length) {
-    const body = dispatchBody(ctx.root, back, 'These lanes go back to their agents — a rebase conflict onto trunk (left in progress), or a resolved one whose diff gets a fresh review before it lands:')
-    return { name: 'MERGE', body: body + '\n\n' + back.map((l) => `lane ${l.id} ${l.conflicts ? `conflicts: ${l.conflicts.join(', ')}` : 'resolved its rebase — re-review'}`).join('\n'), mark: 'resent', accepts: ['dismissed'] }
+    const body = dispatchBody(ctx.root, back, 'These lanes hit a rebase conflict onto trunk and go back to their agents (the rebase is left in progress):')
+    return { name: 'MERGE', body: body + '\n\n' + back.map((l) => `lane ${l.id} conflicts: ${l.conflicts.join(', ')}`).join('\n'), mark: 'resent', accepts: ['dismissed'] }
   }
   if (s.batch.some((l) => l.status === 'stopped')) return { name: 'MERGE', auto: (x) => ({ ...x, step: 'RELAY' }) }
   return { name: 'MERGE', auto: (x) => ({ ...x, step: 'REPORT' }) }
@@ -289,6 +294,7 @@ function deriveReport(s, ctx) {
         ...(s.answered || []).map((a) => `answered lane ${a.lane} (${a.stem}): ${a.label}`),
       ],
       warns: [
+        ...merged.filter((l) => l.kept).map((l) => l.kept),
         ...parked.map((l) => `parked ${l.stem} — its lane ended ${l.ended}${l.ended === 'AMENDED' ? ' (spec set to draft in the lane; amend it with /spec:plan)' : ' (a /spec:fix item is queued)'}; worktree kept at ${l.worktree}`),
         ...dismissed.map((l) => `dismissed ${l.stem} — worktree kept at ${l.worktree}, spec back to hardened`),
       ],
@@ -352,16 +358,13 @@ const steps = {
     }
     if (git.rebasing(wt)) refuse(`lane ${lane.id} (${lane.stem}) still has a rebase in progress — re-dispatch it, or mark dismissed --lane ${lane.id}`)
     if (!FINISHED.includes(step)) refuse(`lane ${lane.id} (${lane.stem}) is at ${step}, not MERGE_READY — re-dispatch it, mark returned --lane ${lane.id} --stopped "<reason>", or mark dismissed --lane ${lane.id}`)
-    // A lane that resolved a rebase conflict carries an unreviewed diff: it reviews once more before landing.
-    const rebased = lane.conflictAt && git.raw(['merge-base', '--is-ancestor', git.headSha(ctx.root), 'HEAD'], wt).status === 0
-    if (rebased && !lane.rereviewed) {
+    // A lane back from resolving a rebase conflict carries an ungated, unreviewed diff: GATE and REVIEW
+    // run again against the trunk it was rebased onto before the lane may land. WAIT prints the re-dispatch.
+    if (lane.resolving && git.raw(['merge-base', '--is-ancestor', lane.conflictAt, 'HEAD'], wt).status === 0) {
       const spec = laneSpec(ctx.root, lane); const run = st.readRun(spec)
-      run.base = git.headSha(ctx.root); run.step = 'REVIEW'; run.review = null
-      st.writeText(path.join(st.runDir(spec), 'diff.patch'), git.diff(run.base, wt) + '\n')
-      fs.rmSync(path.join(st.runDir(spec), 'findings.json'), { force: true })
+      run.base = lane.conflictAt; run.step = 'GATE'; run.review = null; run.attempts = { repair: 0, fix: 0 }
       st.writeRun(spec, run)
-      lane.rereviewed = true; lane.status = 'sent-back'; delete lane.conflicts
-      s.step = 'MERGE' // WAIT only watches done/stopped lanes; MERGE prints the re-dispatch
+      delete lane.resolving; delete lane.conflicts; lane.status = 'sent-back'
       return
     }
     lane.status = 'done'

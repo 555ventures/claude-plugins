@@ -48,17 +48,20 @@ function check(root) {
   const have = new Set(ig.split('\n').map((l) => l.trim()))
   for (const e of IGNORE) if (!have.has(e)) f.push(`gitignore: missing ${e}`)
   const ENDED = ['DONE', 'PARKED', 'AMENDED']
+  const used = new Set() // worktrees a live run points at
   for (const d of walkRuns(path.join(root, 'specs'), [])) {
     const run = readJson(path.join(d, 'state.json'), null); const rel = path.relative(root, d)
-    if (run && run.step && !ENDED.includes(run.step) && !run.ended) f.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — /spec:run ${rel.replace(/\.run$/, '.md')}`)
-    else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
+    if (run && run.step && !ENDED.includes(run.step) && !run.ended) {
+      f.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — /spec:run ${rel.replace(/\.run$/, '.md')}`)
+      if (run.worktree) used.add(path.resolve(root, run.worktree))
+    } else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
   }
   const wt = path.join(root, '.claude', 'worktrees')
-  const live = (p) => fs.existsSync(path.join(p, '.git')) && (pending.isLane(p) || git.raw(['status', '--porcelain'], p).stdout.trim() !== '')
+  const live = (p) => used.has(p) || (fs.existsSync(path.join(p, '.git')) && (pending.isLane(p) || git.raw(['status', '--porcelain'], p).stdout.trim() !== ''))
   try {
     for (const n of fs.readdirSync(wt)) {
       const p = path.join(wt, n)
-      f.push(live(p) ? `in flight: .claude/worktrees/${n} (lane marker or uncommitted work) — leave it to its run` : `leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
+      f.push(live(p) ? `in flight: .claude/worktrees/${n} (a run in flight, a lane marker or uncommitted work) — leave it to its run` : `leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
     }
   } catch { /* none */ }
   for (const base of [root, ...(fs.existsSync(wt) ? fs.readdirSync(wt).map((n) => path.join(wt, n)) : [])]) {

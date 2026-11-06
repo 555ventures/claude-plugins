@@ -11,7 +11,9 @@
 // A spec-less fix keeps its run state under <git-common-dir>/spec-fix/<slug>.run/.
 // Marks: built · repaired · regate · reviewed --file <json> · fixed · escalate <label> (the printed options) ·
 // conflicts-resolved · waiting --on <spec> (lane) · unmet --decision <id> --why <text> |
-// unmet --assumption <id> [--why <text>].
+// unmet --assumption <id> [--why <text>] · pin-tested · looked · look-failed --why <reply>.
+// A spec with frontmatter `prototype: <stem>` goes GATE → REVIEW → PIN_TESTS → LOOK → COMMIT: the host's
+// prototype.e2eCommand runs the pin tests against the app from the spec worktree, then the user looks at it.
 // Exit 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
@@ -104,6 +106,23 @@ const selfCmd = (state, ctx) => `node ${shq(path.join(__dirname, 'run.js'))} ${s
 const EVIDENCE = (ctx) => `Evidence an AC asks to record (listings, renders, counts) goes in ${runFile(ctx, 'evidence.md')}; the driver appends it to the build commit.`
 const AS_BUILT = (ctx) => `Anything you built differently from the spec, and why, goes in ${runFile(ctx, 'as-built.md')} (one line each); the driver appends it to the spec as \`## As built\`.`
 const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
+// ---- prototype specs: the contract's sentences, the pin tests and the look ---------------------
+const E2E_HINT = 'a prototype spec needs prototype.e2eFile and prototype.e2eCommand in .claude/spec.config.json'
+const protoOf = (state) => state.prototype || null
+const contractOf = (state, ctx) => st.readProto(wtOf(state, ctx), state.prototype).contract || { pins: [] }
+const e2eFileOf = (state, ctx) => String(cfgOf(ctx).prototype.e2eFile).replace(/\{stem\}/g, state.prototype)
+const activePins = (state, ctx) => (contractOf(state, ctx).pins || []).filter((p) => p.status === 'active')
+const pinLines = (state, ctx) => {
+  const pins = activePins(state, ctx)
+  return pins.length ? pins.map((p) => `- ${p.id} (${p.kind}): ${p.sentence}`) : ['- none']
+}
+// The pictures that exist under the prototype's folder, as repo-relative paths (a reference, never a gate).
+const pictureFiles = (state, ctx) => {
+  const rel = `design/prototypes/${state.prototype}/pictures`
+  try { return fs.readdirSync(path.join(wtOf(state, ctx), rel)).sort().map((f) => `${rel}/${f}`) } catch { return [] }
+}
+const bootLine = (state, ctx) => `cd ${wtOf(state, ctx)} && ${state.appPort ? `export PORT=${state.appPort} && ` : ''}${cfgOf(ctx).prototype.bootCommand}`
+const protoLine = (state) => (state.look ? [`pin tests green · look accepted after ${state.look.rounds} round(s)`] : [])
 const hasDelta = (spec) => Object.keys(spec.sections).some((k) => k === 'Canonical Delta' || k.startsWith('Canonical Delta '))
 // Every `- A<n>:` line of the spec, verbatim: the builder and reviewer see what the plan assumed and what to do when it is false.
 const assumptionLines = (spec) => {
@@ -164,6 +183,11 @@ function open(state, ctx) {
   if (spec && state.fix && !['done', 'hardened'].includes(status)) refuse(`${s.rel} is ${status}, not done or hardened — a fix lane runs on a finished or hardened spec`)
   if (spec && status === 'done' && !state.fix) refuse(`${s.rel} is already done — nothing to run`)
   if (!cfg.testCommand) refuse('no testCommand in .claude/spec.config.json — run /spec:init')
+  const protoStem = spec && typeof spec.frontmatter.prototype === 'string' && spec.frontmatter.prototype ? spec.frontmatter.prototype : null
+  if (protoStem) {
+    if (!cfg.prototype.e2eFile || !cfg.prototype.e2eCommand) refuse(E2E_HINT)
+    if (!st.readProto(ctx.root, protoStem).contract) refuse(`no contract at design/prototypes/${protoStem}/contract.json — run /spec:prototype ${protoStem} to contract it`)
+  }
   const specBranch = `spec/${s.stem}`
   const cur = git.currentBranch(ctx.root)
   const lane = pending.isFanoutLane(ctx.root)
@@ -210,6 +234,7 @@ function open(state, ctx) {
     base: mb.status === 0 ? mb.stdout.trim() : git.headSha(wt), inPlace: !!why, lane, marked: false,
     pin: why ? `📌 Auto-picked in place — ${why}` : null,
     attempts: { repair: 0, fix: 0 }, opus: false, gate: null, review: null, ...(untracked0 ? { untracked0 } : {}),
+    ...(protoStem ? { prototype: protoStem } : {}),
   })
 }
 
@@ -277,6 +302,18 @@ function gateStep(state, ctx) {
 
 const fixAuthored = (state) => [...(state.fix.strings || []), ...(state.fix.choices || [])]
 
+// A clean review ends a plain spec at COMMIT; a prototype spec's pin tests and the look come first.
+// The app gets one port per run, allocated when the run first reaches PIN_TESTS.
+function afterReview(state, ctx) {
+  if (!protoOf(state)) return go(state, 'COMMIT')
+  if (state.appUrl == null) {
+    const a = host.allocApp(cfgOf(ctx).prototype.url)
+    state.appPort = a.appPort
+    state.appUrl = a.url
+  }
+  return go(state, 'PIN_TESTS')
+}
+
 function toReview(state, ctx) {
   st.writeText(runFile(ctx, 'diff.patch'), git.diff(state.base, wtOf(state, ctx)) + '\n')
   fs.rmSync(runFile(ctx, 'findings.json'), { force: true }) // never re-read an earlier round's findings
@@ -299,7 +336,7 @@ const loadBullet = (state) => {
 const fixBullets = (state) => [`root cause: ${state.fix.cause}`, `regression test: ${state.fix.test}`]
 const readyReport = (state, ctx) => render({
   outcome: state.fix ? `✅ fixed — ${state.fix.symptom}` : `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`,
-  bullets: [...(state.fix ? fixBullets(state) : []), `commit ${state.commit || 'none (nothing changed)'}`, ...loadBullet(state)], next: 'nothing needs you — fanout merges the lane',
+  bullets: [...(state.fix ? fixBullets(state) : []), `commit ${state.commit || 'none (nothing changed)'}`, ...protoLine(state), ...loadBullet(state)], next: 'nothing needs you — fanout merges the lane',
 })
 
 // What the build did differently from the spec, one bullet each: the builder's as-built.md, the review's
@@ -351,7 +388,7 @@ function commit(state, ctx) {
   const subject = state.fix ? `fix(${specInfo(ctx).id}): ${state.fix.symptom.replace(/\s+/g, ' ')}` : `build(${specInfo(ctx).id}): ${spec.title}`
   // Evidence an AC asks to record goes in <run dir>/evidence.md; it rides in the commit body.
   const evidence = st.readText(runFile(ctx, 'evidence.md'), '').replace(/\r\n/g, '\n').replace(/\s+$/, '')
-  const message = [subject, ...(state.fix ? [`Root cause: ${state.fix.cause}\nRegression test: ${state.fix.test}`] : []), ...(evidence.trim() ? [evidence] : [])].join('\n\n')
+  const message = [subject, ...protoLine(state), ...(state.fix ? [`Root cause: ${state.fix.cause}\nRegression test: ${state.fix.test}`] : []), ...(evidence.trim() ? [evidence] : [])].join('\n\n')
   try {
     state.commit = git.commitAll(wt, message) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
   } catch (e) { // a commit hook rejected the build: repair it like a red gate; anything else is the user's git
@@ -390,8 +427,10 @@ function finish(state, ctx) {
   if (!state.fix && st.readSpec(s.abs).frontmatter.status !== 'done') st.writeStatus(s.abs, 'done')
   if (state.marked) pending.unmarkLane(wt)
   const rm = state.inPlace ? { removed: true } : git.worktreeRemove(ctx.root, wt, { deleteBranch: state.mergeSha ? state.branch : undefined })
-  // Tick this spec's queue item; Next is whatever the queue holds after it.
+  // Tick this spec's queue item, or the fix item this run closes (only an in-place fix gets here: fanout ticks a
+  // lane's; a fix item with no words has the symptom fanout gives it); Next is whatever the queue holds after it.
   if (!state.fix) Q.tick(ctx.root, (i) => i.kind === 'spec' && path.resolve(ctx.root, i.payload) === s.abs)
+  else if (s.abs) Q.tick(ctx.root, (i) => i.type === 'fix' && i.spec && path.resolve(ctx.root, i.spec) === s.abs && (i.payload || 'repair ' + s.stem) === state.fix.symptom)
   const head = Q.open(Q.read(ctx.root))[0]
   const tg = state.trunkGate
   const findings = (state.review && state.review.findings) || []
@@ -402,6 +441,7 @@ function finish(state, ctx) {
       `commit ${state.commit || 'none (nothing changed)'}${state.mergeSha ? `, merged as ${state.mergeSha}` : ''}`,
       `gate green (run ${state.gate.runId})${tg ? `; trunk gate ${tg.status}${tg.cached ? ' (cached)' : ''}` : ''}`,
       `review ${state.review.verdict}, ${findings.length} finding(s); ${state.attempts.repair} repair(s), ${state.attempts.fix} fix round(s)`,
+      ...protoLine(state),
       ...loadBullet(state),
     ],
     pins: state.pin,
@@ -438,12 +478,19 @@ function builderBrief(state, ctx, kind) {
       ...(state.fix ? [] : ['## File Plan', ...spec.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), '']),
       '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
       '## Assumptions', ...assumptionLines(spec), '',
+      ...(protoOf(state) ? [
+        '## Pins', ...pinLines(state, ctx), '',
+        `Behaviour pins: one browser test per pin in ${e2eFileOf(state, ctx)} (create it if absent; keep the pin tests earlier specs put there), titled \`pin pN: <sentence>\`, locating by role and visible text, seeding the given precondition in production terms. They run in a separate step against the app at APP_URL, not in the test command. Never copy a selector or a line of code from proto/${state.prototype}.`, '',
+      ] : []),
       OTHER_SECTIONS, '',
     ] : []),
   ]
-  if (kind === 'repair') out.push(`${/^git commit was rejected/.test(state.gate.output_tail || '') ? 'The commit hook rejected the build' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```',
+  const redTail = state.gate ? state.gate.output_tail || '' : ''
+  if (kind === 'repair') out.push(`${/^git commit was rejected/.test(redTail) ? 'The commit hook rejected the build' : /^pin tests red:/.test(redTail) ? 'The pin tests are red' : 'The gate is red'}. Repair the code (never weaken a test). Failure tail:`, '```', state.gate.output_tail, '```',
     'A failing test the diff does not touch, a timeout, or a flake under load is not yours to fix: say so in your reply and stop; the driver re-runs the gate. Never raise a host test timeout, retry count or worker limit to pass.', '')
-  if (kind === 'fix' && state.fixFor === 'choices') {
+  if (kind === 'fix' && state.fixFor === 'look') {
+    out.push(`The user looked at the running app and said: ${state.lookReply}. Treat it as the symptom: find the cause, fix it, keep every pin test green.`, '')
+  } else if (kind === 'fix' && state.fixFor === 'choices') {
     out.push('Undo every listed string and choice back to the pre-fix behaviour; keep the fix and its test:', ...fixAuthored(state).map((x) => `- ${x}`), '',
       `Then update ${runFile(ctx, 'fix.json')} so strings and choices list only what the tree still carries.`, '')
   } else if (kind === 'fix') {
@@ -505,6 +552,11 @@ function reviewerBrief(state, ctx) {
       '## Decisions', ...decisions(spec), '',
       '## Acceptance Criteria', ...spec.acs.map((a) => `- ${a.id}: ${a.text}`), '',
       '## Assumptions', ...assumptionLines(spec), '',
+      ...(protoOf(state) ? [
+        '## Pins', ...pinLines(state, ctx), '',
+        `For each behaviour pin open its test in ${e2eFileOf(state, ctx)}: a missing test, a title without \`pin pN:\`, or an assertion that does not establish the sentence (asserts less, a selector or structure, or skips the given) is blocking.`,
+        ...(pictureFiles(state, ctx).length ? ['Pictures of the pinned routes (a reference for the look, never a gate):', ...pictureFiles(state, ctx).map((f) => `- ${f}`)] : []), '',
+      ] : []),
       OTHER_SECTIONS,
     ] : []),
   ].join('\n')
@@ -605,6 +657,29 @@ function finishRebase(state, ctx) {
   return state
 }
 
+function pinTestsBody(state, ctx) {
+  const p = cfgOf(ctx).prototype
+  return [
+    `Start the app from the spec worktree in the background; it should answer at ${state.appUrl}:`,
+    `  ${bootLine(state, ctx)}`,
+    `Then mark pin-tested: the driver runs ${p.e2eCommand.replace(/\{file\}/g, e2eFileOf(state, ctx))} against it with APP_URL=${state.appUrl}. Leave the app running — the look uses it.`,
+  ].join('\n')
+}
+
+function lookBody(state, ctx) {
+  const p = cfgOf(ctx).prototype
+  const url = p.publicUrl ? host.resolveUrl(p.publicUrl, state.appPort) : state.appUrl
+  const look = activePins(state, ctx).filter((x) => x.kind === 'look')
+  const pics = pictureFiles(state, ctx)
+  return [
+    `👀 look — ${url}`,
+    ...(look.length ? look.map((x) => `- ${x.id}: ${x.sentence}`) : ['(no look pins)']),
+    ...(pics.length ? ['Pictures:', ...pics.map((f) => `- ${path.join(wtOf(state, ctx), f)}`)] : []),
+    '',
+    `Print the url and these lines, then END YOUR TURN. A literal \`close enough\` → stop the app, then ${selfCmd(state, ctx)} --mark looked. Anything else → ${selfCmd(state, ctx)} --mark look-failed --why "<the reply verbatim>"`,
+  ].join('\n')
+}
+
 function derive(state, ctx) {
   if (rebaseGuard(state, ctx)) {
     const wt = wtOf(state, ctx)
@@ -623,6 +698,8 @@ function derive(state, ctx) {
     }
     case 'REVIEW': return { name: 'REVIEW', body: reviewerBrief(state, ctx), mark: `reviewed --file ${shq(runFile(ctx, 'findings.json'))}`, accepts: laneAsks(state) }
     case 'FIX': return { name: 'FIX', body: builderBrief(state, ctx, 'fix'), mark: 'fixed', accepts: laneAsks(state) }
+    case 'PIN_TESTS': return { name: 'PIN_TESTS', body: pinTestsBody(state, ctx), mark: 'pin-tested' }
+    case 'LOOK': return { name: 'LOOK', body: lookBody(state, ctx), mark: 'looked', accepts: ['look-failed'] }
     case 'ESCALATE': {
       // A lane re-dispatched after fanout recorded the answer continues with it.
       const doc = state.lane && pending.readPending(ctx.root)
@@ -779,7 +856,28 @@ const steps = {
     const verdict = blocking.length ? (state.attempts.fix >= FIX_CAP ? 'escalate' : 'fix') : choices.length ? 'decision' : 'clean'
     state.review = { findings: doc.findings, verdict }
     if (verdict === 'decision') return go(state, 'ESCALATE', { why: 'review-decision' })
-    return go(state, verdict === 'clean' ? 'COMMIT' : verdict === 'fix' ? 'FIX' : 'ESCALATE', { why: 'review' })
+    if (verdict === 'clean') return afterReview(state, ctx)
+    return go(state, verdict === 'fix' ? 'FIX' : 'ESCALATE', { why: 'review' })
+  },
+  // The pin tests run against the app the session started from the spec worktree; red is a repair.
+  'pin-tested'(state, flags, ctx) {
+    const p = cfgOf(ctx).prototype
+    if (!host.listening(state.appUrl)) refuse(`nothing answers at ${state.appUrl} — start the app from the spec worktree (${bootLine(state, ctx)}), then mark pin-tested`)
+    const cmd = String(p.e2eCommand).replace(/\{file\}/g, e2eFileOf(state, ctx))
+    const r = host.run(cmd, { cwd: wtOf(state, ctx), env: { APP_URL: state.appUrl }, timeoutMs: 10 * 60 * 1000 })
+    state.pinTests = { status: r.status === 0 ? 'green' : 'red', output_tail: r.tail }
+    if (r.status === 0) return go(state, 'LOOK')
+    state.gate = { ...(state.gate || {}), status: 'red', output_tail: 'pin tests red:\n' + r.tail }
+    return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
+  },
+  looked(state) {
+    state.look = { rounds: (state.lookFails || 0) + 1, accepted: true }
+    return go(state, 'COMMIT')
+  },
+  'look-failed'(state, flags) {
+    if (typeof flags.why !== 'string' || !flags.why.trim()) refuse('look-failed needs --why "<the reply verbatim>": what the user said')
+    state.lookFails = (state.lookFails || 0) + 1
+    return go(state, 'FIX', { fixFor: 'look', lookReply: flags.why.trim() }) // not counted against FIX_CAP
   },
   waiting(state, flags, ctx) {
     const on = specFileUnder(flags.on, ctx)
@@ -823,7 +921,7 @@ const steps = {
     if (c === 'keep') {
       for (const f of state.review.findings.filter((x) => x.severity === 'needs-decision')) if (state.spec) recordRuling(state, ctx, `reviewer: ${f.summary || 'a choice the spec did not make'}`, 'REVIEW')
       state.review.verdict = 'clean'
-      return go(state, 'COMMIT')
+      return afterReview(state, ctx)
     }
     if (c === 'fix') return go(state, 'FIX', { fixFor: 'decision' })
     if (c === 'widen') {
@@ -872,6 +970,7 @@ function afterMark(verb, state, ctx) {
     if (g.status === 'red') return `gate: red — ${redLine(g.output_tail)}${cost}`
     return `gate: green (${g.cached ? 'cached' : `ran ${g.ms}ms`})${state.commit ? ` · commit ${state.commit.slice(0, 7)}` : ''}${cost}`
   }
+  if (verb === 'pin-tested' && state.pinTests) return state.pinTests.status === 'green' ? 'pin tests: green' : `pin tests: red — ${redLine(state.pinTests.output_tail)}`
   if (verb === 'waiting') return `WAITING — ${state.spec || 'this fix'} waits on ${state.waitingOn}; the lane stops here and fanout re-picks it once ${state.waitingOn} is done on trunk`
   if (verb === 'unmet' && state.lane) return pending.stopLine(ctx.root)
   if (verb === 'reviewed' && state.gate && /^git commit was rejected/.test(state.gate.output_tail || '')) return `commit: rejected — ${redLine(state.gate.output_tail.split('\n').slice(1).join('\n'))}`

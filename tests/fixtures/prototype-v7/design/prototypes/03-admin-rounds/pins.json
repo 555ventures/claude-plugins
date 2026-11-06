@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "pins": [
+    { "id": "p1", "round": 1, "screen": "/admin/rounds", "state": "default", "anchor": null, "note": "One tab per product line with open counts; the default tab is the first line with anything in flight", "who": "JJ", "kind": "behaviour", "at": "2026-10-24T06:14:23.000Z" },
+    { "id": "p2", "round": 2, "screen": "/admin/rounds", "state": "empty", "anchor": "#rounds-table", "note": "With no rounds the page says there are none yet and offers to create one", "who": "JJ", "kind": "behaviour", "at": "2026-10-24T06:14:23.000Z" },
+    { "id": "p3", "round": 2, "screen": "/admin/rounds", "state": "default", "anchor": null, "note": "Row height matches the orders table", "who": "JJ", "kind": "look", "at": "2026-10-24T06:14:23.000Z" }
+  ]
+}

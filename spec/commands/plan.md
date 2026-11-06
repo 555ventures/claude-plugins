@@ -30,6 +30,10 @@ prototype contract's behaviour pins become acceptance criteria.
    Anything off the list: decide and write the Decision with its reason. A business rule the
    brief and code do not state is a `[NEEDS CLARIFICATION: …]` marker, never a guess: product
    facts are asked, never derived. Set `breaking: true` in the frontmatter for a breaking change.
+   A spec planned from a prototype contract sets `prototype: <stem>` in the frontmatter. Each
+   active behaviour pin is an AC ending `(pin pN)`; each look pin is a Decisions row
+   `LOOK: <sentence> (pin pN)`. The contract may spread over several specs, each citing the
+   stem. A pin is the user's confirmed ruling: never write it as `[asked: …]`.
 4. If the Intent changes architecture or behaviour, set `architecture: true` and get the
    user's yes. If that yes added or overturned an architecture decision, write
    `docs/adr/NNNN-slug.md` from `${CLAUDE_PLUGIN_ROOT}/templates/adr.md` with Status
@@ -41,7 +45,10 @@ prototype contract's behaviour pins become acceptance criteria.
    `[asked:]` (it names the row; ask, then fill the line). It also refuses a File Plan that lists
    another spec file, because a build may not edit one: drop the row and edit that spec on the
    trunk, committed before lock or after the merge. Otherwise it locks, commits and prints Next;
-   run it.
+   run it. For a `prototype:` spec it also reads the contract: an active behaviour pin with no
+   `(pin pN)` AC in this spec or an earlier locked one citing the same stem refuses the lock by
+   id (write the AC, or `node ${CLAUDE_PLUGIN_ROOT}/scripts/prototype.js <stem> drop pN --why …`),
+   and once every behaviour pin is covered the queued plan item closes.
 
 A brief may become several specs; use `depends_on` when one must land first. When the brief
 is fully planned run `/spec:queue done <NN>`; a brief folded into another gets

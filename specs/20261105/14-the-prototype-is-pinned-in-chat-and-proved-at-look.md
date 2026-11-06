@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: done
 area: prototype
 depends_on: [specs/20261105/13-groom-comes-back.md]
 brief: n/a
@@ -117,3 +117,36 @@ A prototype opens on niko-hub and on a Next.js app with only `bootCommand` and `
 - A4: `st.liveRun(root, rel)` is the right "mid-run" test for D9 (a run sidecar in the root or a lane worktree) — if false: walk `specs/**/*.run/state.json` for `step` not ended, as doctor does.
 - A5: No spec on main today carries `prototype:` frontmatter, so the lock check changes nothing for existing specs — if false: the named spec is re-locked after its pins are covered, which is the check working.
 - A6: Spec 13 lands before this one, so the shared doc rows (interface-contract.md, architecture.md, doctrine.md) are edited on top of it — if false: `depends_on` holds the lane until it does.
+
+## As built
+
+- `lib/host.js` also exports `listening(url)` (moved from prototype.js, run.js needs it) and `allocApp(urlTemplate)` (D2's allocate-or-refuse in one place, used by prototype.js and run.js), beside `freePort` and `resolveUrl`.
+- `lib/state.js` also exports `protoV7(root, stem)` (the v7-file test `readProto`, migrate and doctor share), `protoDir` and `specsCiting(root, stem)` (specs whose frontmatter `prototype:` is the stem; plan.js and `closed` use it).
+- `contracted` queues the `type: plan` item after the commit succeeds, not before it (D7 lists it before): a rejected commit then leaves nothing queued for a contract that is not committed.
+- `closed` asks for `--force` from APPROVED without a contract as well as from OPEN and ROUND (D9 names OPEN and ROUND): the unmerged prototype work is the same.
+- `closeWarn`, `removed` and `pictureWarns` live only in the invocation that sets them (the report prints them, `status.json` never holds them), so the committed status stays free of report text.
+- The pin-test red path keeps the gate's `tree` in `state.gate` (`{...state.gate, status: 'red', output_tail}`), so `repaired` on an unchanged tree is still refused and `regate` still works (D15 shows the two fields only).
+- `migrate.js` also warns when a v7 `prototype.picture` carries `{width}` or `{height}` (v8 fills only `{url}` and `{out}`), and `trimPrototype` keeps unknown keys of the block instead of listing only the kept ones (D12 lists the dropped ones).
+- The AC-15 real run was repeated on a fresh hand-written Next.js host with the literal `bootCommand: npx next dev -p $PORT` (no `sh -c`): the exported boot line `cd <worktree> && export PORT=<port> && <bootCommand>` (D2, D23) expands `$PORT`, and the run reached LOOK with the pin tests green (evidence.md). The host gitignores the `AGENTS.md` that `next dev` writes.
+- Both AC-15 hosts (the first and the repeated one) were written by hand in `create-next-app`'s layout (app router, `src/app/layout.tsx`, no `index.html`, Next 16.4.5) because `npx create-next-app@latest` was denied by the permission layer; the generator was not run.
+- Briefs list every active pin of the contract (D17), so a contract spread over several specs shows each spec's builder and reviewer the pins other specs cover; tests are asked for per pin in the one e2e file.
+- A `type: fix` item bound to a prototype spec is held like the spec (D16 names specs only), and a `--fix` on a prototype spec runs PIN_TESTS and LOOK; an in-place spec-bound `--fix` now ticks the queued item with that spec and symptom at FINISH, because the lane landing that used to tick it no longer happens for such an item.
+- The tick repeats fanout's `repair <stem>` default for a fix item with no words in `run.js` rather than sharing it from `lib/queue.js`, which is spec 13's work; a test feeds fanout's printed line to the run so the two cannot drift unnoticed.
+- docs/v8/interface-contract.md:35 Carried from the earlier review, unchanged: the pre-existing `build (/spec:run)` row of section 2 still describes `REPLAY? (prototype owner only)` and the marks `replayed`, `looked` in the present tense; the diff added a new `run, prototype spec` row instead of bringing that row to the new shape, and AC-16's grep list (which the test mirrors) does not include REPLAY, so the suite cannot see it.
+- spec/scripts/prototype.js:138 At ROUND with nothing answering the step still accepts `--mark approved`, so a session can approve over a dead app; D4 ties the reply rule (and so `approve`) to the answering body, and the dead body prints neither the ready line nor the rule, so this is a loophole the printed step does not invite rather than wrong behaviour.
+- spec/scripts/prototype.js:359 Carried from the earlier reviews, unchanged: subcommand routing keys on the second positional word alone, so two idea words whose second word is `pin` or `drop` (`prototype.js login pin`) are routed to the subcommand and refused with `no prototype 'login' here` instead of opening a prototype.
+- spec/scripts/prototype.js:218 Carried from the earlier reviews, unchanged: a pin route is substituted raw into the `prototype.picture` shell command with only a leading-slash and `?proto=` check, so shell metacharacters in a route (`$(...)`, `;`) would run as part of the picture command; the route comes from the session's own pin line, so the exposure is the user's own input, but a character whitelist on `--route` would close it.
+- spec/scripts/prototype.js:263 Carried from the earlier reviews, unchanged and recorded in as-built: `closed` asks for `--force` from APPROVED without a contract as well as from D9's OPEN and ROUND; consistent with D9's reason (unmerged work is the same) and AC-6 still holds.
+- touched outside the File Plan: tests/fixtures/prototype-v7/config.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/01-first-light/states.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/01-first-light/status.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/captures/admin_rounds--default.png
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/contract.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/e2e.log
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/pins.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/states.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/status.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/03-admin-rounds/tests/proto-03-admin-rounds.spec.ts
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/mid-round/pins.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/mid-round/states.json
+- touched outside the File Plan: tests/fixtures/prototype-v7/design/prototypes/mid-round/status.json

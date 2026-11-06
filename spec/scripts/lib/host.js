@@ -10,6 +10,10 @@
 // treeSha(root)                    git tree of the working tree (tracked edits + untracked, not ignored)
 // detectTestCommand(root)          → command string or null
 // firstRedLine(tail)               the line of a red tail worth reading first
+// freePort()                       a port nothing is bound to on 127.0.0.1 (bind 0, read it, close)
+// resolveUrl(url, port)            `{port}` in url replaced
+// listening(url)                   true when anything answers an HTTP request at url within 2 s
+// allocApp(url)                    {appPort, url}: a free port for a `{port}` url; a fixed url must be unanswered (else exit 2)
 
 const fs = require('fs')
 const path = require('path')
@@ -217,4 +221,35 @@ function detectTestCommand(root) {
   return null
 }
 
-module.exports = { run, gate, treeSha, cacheDir, commonDir, copyLaneFiles, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }
+// Binds port 0 in a child, reads the port it was given, closes. Sync: drivers allocate inside a step.
+function freePort() {
+  const r = spawnSync(process.execPath, ['-e',
+    "const s = require('net').createServer(); s.listen(0, '127.0.0.1', () => { process.stdout.write(String(s.address().port)); s.close() })"],
+  { encoding: 'utf8', timeout: 10000 })
+  const port = Number(r.stdout)
+  if (r.status !== 0 || !Number.isInteger(port) || port <= 0) throw new Error('host: could not find a free port')
+  return port
+}
+
+const resolveUrl = (url, port) => String(url).replace(/\{port\}/g, port == null ? '{port}' : String(port))
+
+// Any HTTP answer within 2 s counts as listening.
+const listening = (url) => spawnSync(process.execPath, ['-e',
+  'fetch(process.argv[1], { signal: AbortSignal.timeout(2000) }).then(() => process.exit(0), () => process.exit(1))', url],
+{ timeout: 5000 }).status === 0
+
+// One port per app: a url with {port} gets a free one; a fixed url keeps appPort null and must not be answered already.
+function allocApp(urlTemplate) {
+  if (/\{port\}/.test(urlTemplate)) {
+    const port = freePort()
+    return { appPort: port, url: resolveUrl(urlTemplate, port) }
+  }
+  if (listening(urlTemplate)) {
+    const e = new Error(`something already answers at ${urlTemplate} and it is not this app — stop it, or put {port} in prototype.url`)
+    e.exit = 2
+    throw e
+  }
+  return { appPort: null, url: urlTemplate }
+}
+
+module.exports = { freePort, resolveUrl, listening, allocApp, run, gate, treeSha, cacheDir, commonDir, copyLaneFiles, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }

@@ -1386,6 +1386,30 @@ test('AC-20261105-12-1 a spec-less fix item with a bare payload is a lane, whate
   assert.strictEqual(lane.symptom, 'Admin polish after 10')
 })
 
+test('AC-20261105-14-17 a hardened spec with frontmatter prototype: waits with its reason and is no lane; one without it stays a lane', () => {
+  const h = host({ lanes: 3, specs: [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js']] })
+  const f = path.join(h.dir, specPath('01-alpha'))
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('architecture: false', 'prototype: invoice-list-page\narchitecture: false'))
+  const plan = h.ok()
+  assert.ok(plan.stdout.includes(`${specPath('01-alpha')} waits — stops at LOOK for you — /spec:run it`), plan.stdout)
+  h.ok('--mark', 'planned')
+  const lanes = (st.readFanout(h.dir).batch || []).map((l) => l.spec)
+  assert.deepStrictEqual(lanes, [specPath('02-beta')])
+
+  // A fix on such a spec runs PIN_TESTS and LOOK too, so a fix item bound to it is held the same way.
+  const fx = fixHost({ more: [['02-beta', 'src/b.js']], payload: FIX_PAYLOAD('02-beta') })
+  const g = path.join(fx.dir, specPath('01-alpha'))
+  fs.writeFileSync(g, fs.readFileSync(g, 'utf8').replace('architecture: false', 'prototype: invoice-list-page\narchitecture: false'))
+  addFix(fx)
+  commitAll(fx, 'alpha came from a prototype')
+  const held = fx.ok().stdout
+  assert.ok(held.includes(`waits — stops at LOOK for you — /spec:run ${specPath('01-alpha')} --fix 'RED file left' --in-place`), held)
+  fx.ok('--mark', 'planned')
+  const picked = (st.readFanout(fx.dir).batch || []).map((l) => [l.kind, l.stem])
+  assert.deepStrictEqual(picked, [['fix', 'fix-02-beta']], 'the plain spec\'s fix item stays a lane')
+  assert.ok(!fs.existsSync(path.join(fx.dir, '.claude/worktrees/fix-01-alpha')), 'no worktree for the held fix')
+})
+
 // A queue where no lane can be picked and each kind of open item is present once.
 function stuckHost() {
   const h = host({ lanes: 4, specs: [['02-beta', 'src/b.js'], ['03-gamma', 'src/c.js']], status: { '03-gamma': 'draft' } })

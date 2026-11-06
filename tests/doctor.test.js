@@ -4,7 +4,7 @@ const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
 const { execFileSync } = require('child_process')
-const { tmpdir, gitRepo, runNode } = require('./helpers')
+const { tmpdir, gitRepo, runNode, SPEC } = require('./helpers')
 
 const setup = (cfg) => {
   const d = tmpdir('doctor')
@@ -214,4 +214,40 @@ test('AC-20261105-08-13 an untracked .env or .env.local that laneFiles does not 
   const tracked = doctorJson(d).findings
   assert.ok(!tracked.some((x) => x.includes('.env.local that')), 'a tracked file is not reported')
   assert.ok(tracked.some((x) => x.includes('root has .env that')), 'the untracked, unnamed one is')
+})
+
+// ---- spec 20261105/14: prototype worktrees and v7 records -------------------------------------------------
+
+test('AC-20261105-14-13 doctor reads prototype worktrees: in flight, leftover, v7 record', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  const rec = (stem, status) => {
+    fs.mkdirSync(path.join(d, 'design/prototypes', stem), { recursive: true })
+    fs.writeFileSync(path.join(d, 'design/prototypes', stem, 'status.json'), JSON.stringify(status))
+    fs.mkdirSync(path.join(d, '.claude/worktrees', 'proto-' + stem), { recursive: true })
+  }
+  rec('a', { stem: 'a', rounds: 1, marks: { opened: 'x' } })
+  rec('b', { stem: 'b', rounds: 1, marks: { opened: 'x', closed: 'y' } })
+  rec('c', { schemaVersion: 1, stem: 'c', rounds: [], marks: { opened: 'x' } })
+  fs.mkdirSync(path.join(d, '.claude/worktrees/proto-d'), { recursive: true }) // no record at all
+  const out = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
+  assert.ok(out.info.includes('in flight: prototype a — /spec:prototype a'), out.info.join('|'))
+  assert.ok(out.findings.includes('leftover worktree: .claude/worktrees/proto-b — git worktree remove --force .claude/worktrees/proto-b'), out.findings.join('|'))
+  assert.ok(out.findings.includes('leftover worktree: .claude/worktrees/proto-d — git worktree remove --force .claude/worktrees/proto-d'), 'an absent record is a leftover')
+  assert.ok(out.findings.includes('prototype c is a v7 record — /spec:migrate'), out.findings.join('|'))
+  assert.ok(!out.findings.some((x) => /proto-c|proto-a/.test(x)) && !out.info.some((x) => /proto-b/.test(x)))
+})
+
+test('AC-20261105-14-13 no file under spec/ carries the overlay, its endpoint or the switch', () => {
+  const hits = []
+  const banned = new RegExp(['proto-overlay', 'ser' + 've --stem', '\\?proto='].join('|'))
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (banned.test(e.name + '\n' + fs.readFileSync(p, 'utf8'))) hits.push(path.relative(SPEC, p))
+    }
+  }
+  walk(SPEC)
+  assert.deepStrictEqual(hits, [])
 })

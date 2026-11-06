@@ -170,3 +170,76 @@ test('AC-20261105-06-2 breaking: true with sign-off none refuses the lock; a fil
   assert.strictEqual(old.status, 2); assert.match(old.stderr, /missing sections: Intent/, 'no Intent section: the refusal is the one it always was, not a sign-off one')
   assert.doesNotMatch(old.stderr, /sign-off/)
 })
+
+// ---- spec 20261105/14: the lock reads the prototype contract ----------------------------------------
+
+// A spec citing the prototype `inv`: acs = the AC lines it carries.
+function protoSpec(d, slug, acs, { stem = 'inv', status: st = 'draft' } = {}) {
+  const f = raw(d, slug)
+  const n = path.basename(f).slice(0, 2)
+  const text = fs.readFileSync(f, 'utf8')
+    .replace(/^status: draft$/m, `status: ${st}\nprototype: ${stem}`)
+    .replace(/no \| yes — <what>, needs your yes/, 'no').replace(/^- Client sign-off:.*$/m, '- Client sign-off: none')
+    .replace(/^- \*\*AC-[^\n]*$/m, acs.map((a, i) => `- **AC-X-${n}-${i + 1}**: ${a}`).join('\n'))
+    .replace(/<[^<>\n]+>/g, 'x')
+  fs.writeFileSync(f, text)
+  return f
+}
+const pinRec = (id, kind, status = 'active') => ({ id, kind, route: '/invoices', note: `n ${id}`, sentence: `On /invoices: n ${id}`, round: 1, status })
+
+function protoHost(pins = [pinRec('p1', 'behaviour'), pinRec('p2', 'look'), pinRec('p3', 'behaviour')]) {
+  const d = tmpdir('plan'); const g = gitRepo(d)
+  fs.mkdirSync(path.join(d, 'design/prototypes/inv'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'design/prototypes/inv/contract.json'), JSON.stringify({ stem: 'inv', rounds: 1, pins }))
+  const q = runNode('scripts/queue.js', ['add', 'design/prototypes/inv/contract.json', '--type', 'plan', '--root', d])
+  assert.strictEqual(q.status, 0, q.stderr)
+  return { d, g }
+}
+const openItems = (d) => JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items.filter((i) => !i.done)
+
+test('AC-20261105-14-8 a behaviour pin with no (pin pN) AC refuses the lock by id; covering it locks and closes the plan item', () => {
+  const { d } = protoHost()
+  const f = protoSpec(d, 'first', ['WHEN the user deletes THE SYSTEM SHALL ask first (pin p1).'])
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('behaviour pins without an AC: p3 — write an AC ending (pin pN) for each, or node prototype.js inv drop pN --why'), r.stderr)
+  assert.ok(!r.stderr.includes('p2'), 'a look pin needs no AC')
+  assert.strictEqual(status(f), 'draft')
+  assert.strictEqual(openItems(d).length, 1)
+
+  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/(- \*\*AC-X-\d+-1\*\*:.*)/, '$1\n- **AC-X-01-2**: WHEN the user adds THE SYSTEM SHALL total live (pin p3).'))
+  const ok = plan(d, 'lock', f)
+  assert.strictEqual(ok.status, 0, ok.stderr)
+  assert.match(ok.stdout, /plan item closed — every behaviour pin has an AC/)
+  assert.strictEqual(status(f), 'hardened')
+  assert.deepStrictEqual(openItems(d), [], 'the queued plan item is ticked')
+})
+
+test('AC-20261105-14-8 a dropped pin needs no AC; an earlier hardened citing spec covers for a later one; a missing contract is refused naming the path', () => {
+  const { d } = protoHost([pinRec('p1', 'behaviour'), pinRec('p2', 'behaviour', 'dropped')])
+  const a = protoSpec(d, 'first', ['WHEN x THE SYSTEM SHALL y (pin p1).'])
+  assert.strictEqual(plan(d, 'lock', a).status, 0)
+  const b = protoSpec(d, 'second', ['WHEN x THE SYSTEM SHALL z.'])
+  const r = plan(d, 'lock', b)
+  assert.strictEqual(r.status, 0, 'the first spec (hardened) already covers every pin: ' + r.stderr)
+  assert.doesNotMatch(r.stdout + r.stderr, /without an AC/)
+
+  const c = protoSpec(d, 'third', ['WHEN x THE SYSTEM SHALL y.'], { stem: 'ghost' })
+  const m = plan(d, 'lock', c)
+  assert.strictEqual(m.status, 2)
+  assert.ok(m.stderr.includes('no contract at design/prototypes/ghost/contract.json'), m.stderr)
+  assert.strictEqual(status(c), 'draft')
+
+  const v7 = protoSpec(d, 'fourth', ['WHEN x THE SYSTEM SHALL y.'], { stem: 'old' })
+  fs.mkdirSync(path.join(d, 'design/prototypes/old'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'design/prototypes/old/contract.json'), JSON.stringify({ schemaVersion: 1, stem: 'old', pins: [] }))
+  const o = plan(d, 'lock', v7)
+  assert.strictEqual(o.status, 2)
+  assert.ok(o.stderr.includes('is a v7 file — run /spec:migrate'), o.stderr)
+})
+
+test('AC-20261105-14-8 a spec without prototype: locks as before', () => {
+  const { d } = protoHost()
+  assert.strictEqual(plan(d, 'lock', fresh(d, 'plain')).status, 0)
+  assert.strictEqual(openItems(d).length, 1, 'the contract item is untouched')
+})

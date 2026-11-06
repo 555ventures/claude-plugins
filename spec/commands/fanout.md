@@ -14,6 +14,10 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   after the runnable specs. A lane that ends `NEEDS_PLAN` queued `/spec:plan` and is reported.
   PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
+- A hardened spec with frontmatter `prototype:` is never a lane, because LOOK needs the user's free-text
+  reply and the app must outlive the agent: it waits with the reason `stops at LOOK for you — /spec:run it`.
+  A `type: fix` item bound to such a spec is held the same way, and its reason prints the in-place `/spec:run <spec> --fix` line;
+  that run closes the item when it finishes.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
 - **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane
   lands as it returns, also while another lane is sent-back or resolving a rebase (the resolver is

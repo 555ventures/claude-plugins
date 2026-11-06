@@ -10,6 +10,14 @@ Show the plan and ask the user once whether to apply it. On a yes, run
 
 It also converts the queue file to the current queue version (3); until it has run, the queue commands, `/spec:run` and `/spec:fanout` refuse with `queue file is version <n> — run /spec:migrate`.
 
+It also rewrites every v7 prototype record under `design/prototypes/<stem>/` (`status.json`,
+`pins.json`, `contract.json`) to the sentence shape and trims the `prototype` config block
+(`e2eRun` becomes `e2eCommand`; the browser hook, the test-listing command and the database hooks
+are dropped); files it does not own in those folders are listed as "left alone". Until it has run, every
+prototype command, `/spec:plan` on a `prototype:` spec and `/spec:run` refuse with
+`is a v7 file — run /spec:migrate`. A mid-round v7 prototype with uncommitted files is committed
+by the user first, so the migration commit holds only migration changes.
+
 `--apply` refuses (exit 2) on a dirty tree, naming the dirty files; clean it first. On success it
 commits the migration as `chore(spec): migrate v7 → v8` and prints the sha. Agents and skills the
 repo owns are listed as "left alone (user-owned)", and worktree entries outside the repo are only

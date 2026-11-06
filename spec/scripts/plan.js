@@ -3,7 +3,7 @@
 // validates it, locks it and (in a git repo) commits it on the current branch, so lanes branch with it.
 const fs = require('fs')
 const path = require('path')
-const { readSpec, isSpecText, writeStatus, writeText, readText, decisionRows } = require('./lib/state')
+const { readSpec, isSpecText, writeStatus, writeText, readText, decisionRows, readProto, specsCiting } = require('./lib/state')
 const Q = require('./lib/queue')
 const git = require('./lib/git')
 
@@ -26,6 +26,24 @@ function create(root, slug) {
   const file = path.join(dir, `${nn}-${slug}.md`)
   writeText(file, text)
   return path.relative(root, file)
+}
+
+// The behaviour pins of a prototype contract that no AC of this spec, or of an earlier locked spec citing the
+// same stem, ends with `(pin pN)`. Returns {stem, contract, uncovered}; null for a spec with no `prototype:`.
+const CITE = /\(pin (p\d+)\)/g
+function pinCoverage(root, file, s) {
+  const stem = s.frontmatter.prototype
+  if (typeof stem !== 'string' || !stem) return null
+  const { contract } = readProto(root, stem) // a v7 file stops here, naming /spec:migrate
+  if (!contract) throw new Refusal(`no contract at design/prototypes/${stem}/contract.json`)
+  const cited = new Set()
+  const cite = (acs) => { for (const a of acs) for (const m of a.text.matchAll(CITE)) cited.add(m[1]) }
+  cite(s.acs)
+  for (const c of specsCiting(root, stem)) {
+    if (path.resolve(root, c.rel) !== file && ['hardened', 'implementing', 'done'].includes(c.status)) cite(readSpec(path.resolve(root, c.rel)).acs)
+  }
+  const uncovered = (contract.pins || []).filter((p) => p.status === 'active' && p.kind === 'behaviour' && !cited.has(p.id)).map((p) => p.id)
+  return { stem, contract, uncovered }
 }
 
 function lock(root, arg, confirmed) {
@@ -56,6 +74,10 @@ function lock(root, arg, confirmed) {
       : hit ? `Decisions row ${hit[0]} restricts users ("${hit[1].length > 80 ? hit[1].slice(0, 77) + '...' : hit[1]}")` : null
     if (reason) throw new Refusal(`client sign-off needed: ${reason} — ask, then fill the Intent line`)
   }
+  const cover = pinCoverage(root, file, s)
+  if (cover && cover.uncovered.length) {
+    throw new Refusal(`behaviour pins without an AC: ${cover.uncovered.join(', ')} — write an AC ending (pin pN) for each, or node prototype.js ${cover.stem} drop pN --why …`)
+  }
   writeStatus(file, 'hardened')
   const rel = path.relative(root, file)
   if (git.raw(['rev-parse', '--git-dir'], root).status === 0) {
@@ -68,7 +90,13 @@ function lock(root, arg, confirmed) {
   }
   let queued = false // no queue outside git
   try { queued = Q.open(Q.read(root)).some((i) => i.payload === rel.split(path.sep).join('/')) } catch (e) { if (e.exit === 2) throw e /* an unmigrated queue stops here */ }
-  return `✅ spec hardened & locked — ${rel}\nNext: ${queued ? '/spec:run' : '/spec:queue add'} ${rel}`
+  // Every active behaviour pin has an AC: the plan item the contract queued is done.
+  let closed = false
+  if (cover && git.raw(['rev-parse', '--git-dir'], root).status === 0) {
+    const item = `design/prototypes/${cover.stem}/contract.json`
+    try { closed = Q.tick(root, (i) => i.type === 'plan' && i.payload === item) > 0 } catch (e) { if (e.exit === 2) throw e }
+  }
+  return `✅ spec hardened & locked — ${rel}${closed ? '\n📋 plan item closed — every behaviour pin has an AC' : ''}\nNext: ${queued ? '/spec:run' : '/spec:queue add'} ${rel}`
 }
 
 function main(argv) {

@@ -7,10 +7,10 @@
 const fs = require('fs')
 const path = require('path')
 const git = require('./lib/git')
-const { readJson, writeJson, configPath, gitCommonDir } = require('./lib/state')
+const { readJson, writeJson, configPath, gitCommonDir, protoV7, DEFAULTS } = require('./lib/state')
 const { parse, VERSION } = require('./lib/queue')
 const { normBrief } = require('./lib/work')
-const { detectTestCommand } = require('./lib/host')
+const { detectTestCommand, resolveUrl } = require('./lib/host')
 const { render } = require('./lib/report')
 const { ensureGitignore, IGNORE } = require('./init')
 
@@ -58,10 +58,61 @@ function trimConfig(root, cfg) {
     mergeStrategy: cfg.mergeStrategy || pol.mergeStrategy, worktreePerSpec: cfg.worktreePerSpec ?? pol.worktreePerSpec,
     setupCommand: cfg.setupCommand }
   for (const k of KEYS) if (src[k] != null) out[k] = src[k]
+  if (out.prototype && typeof out.prototype === 'object') out.prototype = trimPrototype(out.prototype, cfg.runtime)
   if (cfg.runtime && cfg.runtime.bootCommand) out.runtime = cfg.runtime
   if (cfg.capabilities && cfg.capabilities.forge) out.forge = cfg.capabilities.forge
   if (cfg.forge) out.forge = cfg.forge
   return out
+}
+
+// The v8 prototype block: overlay, e2eList, dbCreate and dbDestroy are gone, e2eRun is e2eCommand, and the
+// host's runtime boot command fills a missing bootCommand.
+function trimPrototype(proto, runtime) {
+  const { overlay, e2eList, dbCreate, dbDestroy, e2eRun, ...rest } = proto
+  const out = { ...rest }
+  if (e2eRun !== undefined && out.e2eCommand === undefined) out.e2eCommand = e2eRun
+  if (out.bootCommand === undefined && runtime && runtime.bootCommand) out.bootCommand = runtime.bootCommand
+  return out
+}
+
+// ---- prototype records (v7 → v8) -----------------------------------------------------------------
+const sentenceOf = (p) => `On ${p.route}${p.given ? `, given ${p.given}` : ''}: ${String(p.note).trim()}`
+const isV7Doc = (o) => o && typeof o === 'object' && !Array.isArray(o) && 'schemaVersion' in o
+
+// One record's three files, rewritten in place. Files the folder holds besides them are left alone.
+function migrateProto(root, rel, urlTemplate) {
+  const dir = path.resolve(root, rel)
+  const stem = path.basename(dir)
+  const file = (n) => path.join(dir, n + '.json')
+  const status = readJson(file('status'), null)
+  const pinsDoc = readJson(file('pins'), null)
+  const contract = readJson(file('contract'), null)
+  const pins = pinsDoc == null ? null : Array.isArray(pinsDoc) ? pinsDoc
+    : (pinsDoc.pins || []).map((p) => ({
+      id: p.id, kind: p.kind, route: p.screen, ...(p.state && p.state !== 'default' ? { given: p.state } : {}), note: p.note, round: p.round, status: 'active', at: p.at,
+    }))
+  const rounds = status && (Array.isArray(status.rounds) ? status.rounds.length : status.rounds) || 0
+  if (isV7Doc(status)) {
+    const input = status.input || {}
+    const port = status.appPort == null ? null : status.appPort
+    const url = port != null ? resolveUrl(urlTemplate, port) : /\{port\}/.test(urlTemplate) ? null : urlTemplate
+    const marks = {}
+    for (const m of ['opened', 'approved', 'contracted', 'closed']) if (status.marks && status.marks[m]) marks[m] = status.marks[m]
+    writeJson(file('status'), {
+      stem: status.stem || stem, brief: input.brief || null, idea: input.idea || null, branch: status.branch, worktree: status.worktree,
+      appPort: port, url, rounds, marks, handled: (pins || []).map((p) => p.id),
+    })
+  }
+  if (pins !== null && !Array.isArray(pinsDoc)) writeJson(file('pins'), pins)
+  if (isV7Doc(contract)) {
+    writeJson(file('contract'), {
+      stem: contract.stem || stem, rounds,
+      pins: (contract.pins || []).map((p) => {
+        const q = { id: p.id, kind: p.kind, route: p.screen, ...(p.state && p.state !== 'default' ? { given: p.state } : {}), note: p.note }
+        return { ...q, sentence: sentenceOf(q), round: p.round, status: 'active' }
+      }),
+    })
+  }
 }
 
 // ---- queue ----------------------------------------------------------------------------------
@@ -168,6 +219,12 @@ function plan(root) {
     }
     add('queue', qf, null, `${(q.items || []).length} items -> v${VERSION}`)
   }
+  // prototype records v8's readers would refuse
+  const protoUrl = (cfg && cfg.prototype && cfg.prototype.url) || DEFAULTS.prototype.url
+  const protoDir = path.join(root, 'design/prototypes')
+  if (exists(protoDir)) for (const e of fs.readdirSync(protoDir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    if (e.isDirectory() && protoV7(root, e.name).length) add('prototype', 'design/prototypes/' + e.name, null, `${e.name}: v7 → v8`)
+  }
   // sidecars and deviations
   walk(path.join(root, 'specs'), (p, isDir) => {
     if (isDir && SIDECAR.test(p)) { if (exists(p.replace(SIDECAR, '.md'))) add('delete', rel(p)); return true } // a dotted dir with no spec beside it is the user's
@@ -181,6 +238,9 @@ function plan(root) {
     add('archive', '.claude/rules/spec-pipeline.md', path.posix.join(ARCH, 'rules/spec-pipeline.md'))
   }
   const owned = []
+  for (const o of ops) if (o.op === 'prototype') {
+    for (const n of fs.readdirSync(path.join(root, o.path)).sort()) if (!['status.json', 'pins.json', 'contract.json'].includes(n)) owned.push(`${o.path}/${n}`)
+  }
   const agents = path.join(root, '.claude/agents')
   if (exists(agents)) for (const n of fs.readdirSync(agents)) {
     const f = path.join(agents, n)
@@ -218,7 +278,7 @@ function plan(root) {
     if (/spec-runs\.jsonl merge=union/.test(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8'))) add('gitattributes', '.gitattributes')
   } catch { /* none */ }
   // The v7 tag marks a v7 host: a version 2 queue file is v8's own, and its conversion plans no tag.
-  if (ops.some((o) => o.op !== 'gitignore' && o.op !== 'queue-fields' && !(o.op === 'queue' && q.version === 2)) && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
+  if (ops.some((o) => o.op !== 'gitignore' && o.op !== 'queue-fields' && o.op !== 'prototype' && !(o.op === 'queue' && q.version === 2)) && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
   // listed, never touched
   const listed = []
   const wt = path.join(root, '.claude/worktrees')
@@ -226,10 +286,13 @@ function plan(root) {
   const br = git.raw(['for-each-ref', '--format=%(refname:short)', 'refs/heads/worktree-agent-*', 'refs/heads/plan/*', 'refs/heads/fix/*'], root).stdout.split('\n').filter(Boolean)
   for (const b of br) listed.push('branch ' + b)
   const warns = []
+  const pc = (cfg && cfg.prototype) || {}
+  if (/PROTO_URL/.test(String(pc.e2eRun || '') + String(pc.e2eCommand || ''))) warns.push('prototype.e2eCommand reads PROTO_URL — the run sets APP_URL')
+  if (/\{(width|height)\}/.test(String(pc.picture || ''))) warns.push('prototype.picture uses {width}/{height} — v8 fills only {url} and {out}')
   if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) warns.push('.claude/settings.local.json is tracked and may hold a token — run: git rm --cached .claude/settings.local.json')
   const wts = git.worktreeList(root).slice(1).filter((w) => path.relative(fs.realpathSync(root), w).startsWith('..'))
   if (wts.length) warns.push('git worktree entries outside this repo (copied repo?) — never touched: ' + wts.join('; '))
-  return { ops, dropped, lost, listed, owned, warns, testCommand, fills, liveFanout }
+  return { ops, dropped, lost, listed, owned, warns, testCommand, fills, liveFanout, protoUrl }
 }
 
 // ---- apply ----------------------------------------------------------------------------------
@@ -283,6 +346,7 @@ function apply(root, p) {
       const body = section(text, /^## Gotchas/) + '\n' + section(text, /^## Risk Tiers/)
       fs.writeFileSync(path.resolve(root, o.to), (fm ? fm[0] + '\n' : '') + '# Spec gotchas\n\n' + body)
     } else if (o.op === 'ref') git.raw(['update-ref', '-d', o.path], root)
+    else if (o.op === 'prototype') migrateProto(root, o.path, p.protoUrl)
     else if (o.op === 'gitignore') ensureGitignore(root)
     else if (o.op === 'gitattributes') {
       const keep = fs.readFileSync(abs, 'utf8').split('\n').filter((l) => !/spec-runs\.jsonl merge=union/.test(l)).join('\n')
@@ -317,7 +381,8 @@ function main(argv) {
   const bullets = Object.entries(counts).map(([k, n]) => `${LABEL[k] || k}: ${n}`)
   if (sha) bullets.push(`commit ${sha}: chore(spec): migrate v7 → v8`)
   if (saved) bullets.push(`git-dir backup: ${saved}`)
-  if (!doApply) bullets.push(...p.ops.map((o) => `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}${o.op === 'queue-fields' ? ` (${o.note})` : ''}`))
+  if (!doApply) bullets.push(...p.ops.map((o) => (o.op === 'prototype' ? `prototype ${o.note}` : `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}${o.op === 'queue-fields' ? ` (${o.note})` : ''}`)))
+  else bullets.push(...p.ops.filter((o) => o.op === 'prototype').map((o) => `prototype ${o.note}`))
   bullets.push(...p.fills.map((f) => '  ' + f.text))
   const warns = [...p.warns, ...applyWarns]
   if (p.dropped.length) warns.push('dropped config keys: ' + p.dropped.join(', '))

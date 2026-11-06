@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "brief": null,
+  "input": { "kind": "idea", "brief": null, "idea": "invoice list page" },
+  "stem": "mid-round",
+  "branch": "proto/mid-round",
+  "worktree": ".claude/worktrees/proto-mid-round",
+  "base": "main",
+  "pinsPort": 4712,
+  "appPort": 45419,
+  "lastUpdated": "2026-11-02T07:22:54.633Z",
+  "marks": { "opened": "2026-11-02T06:50:16.586Z", "approved": null },
+  "rounds": [{ "n": 1, "startedAt": "2026-11-02T06:50:16.586Z", "endedAt": "2026-11-02T07:10:00.000Z", "pins": ["p1"] }]
+}

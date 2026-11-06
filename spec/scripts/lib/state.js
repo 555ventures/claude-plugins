@@ -43,7 +43,7 @@ const DEFAULTS = {
   worktreePerSpec: true,
   mergeStrategy: 'merge-commit',
   walkthrough: { baseUrl: '', project: '', tokenEnv: 'WALKTHROUGH_TOKEN' },
-  prototype: { url: 'http://localhost:3000', bootCommand: 'npm run dev', overlay: 'src/main.tsx' },
+  prototype: { url: 'http://localhost:{port}', bootCommand: 'npm run dev' },
   release: { deployCommand: '', stagingUrl: '', e2eCommand: '', promoteCommand: '' },
   askPaths: [], // root-relative globs: an out-of-plan edit under one stops the run with a question
 }
@@ -334,7 +334,24 @@ const writeFanout = (root, f) => writeJson(fanoutPath(root), f)
 const PROTO_FILES = ['status', 'pins', 'contract']
 const protoDir = (root, stem) => path.join(root, 'design', 'prototypes', stem)
 
+// The v7 files of a stem: status.json and contract.json carrying schemaVersion, pins.json not an array.
+function protoV7(root, stem) {
+  const d = protoDir(root, stem)
+  const status = readJson(path.join(d, 'status.json'))
+  const pins = readJson(path.join(d, 'pins.json'))
+  const contract = readJson(path.join(d, 'contract.json'))
+  const has = (o) => o && typeof o === 'object' && !Array.isArray(o) && 'schemaVersion' in o
+  return [has(status) ? 'status' : null, pins != null && !Array.isArray(pins) ? 'pins' : null, has(contract) ? 'contract' : null].filter(Boolean)
+}
+
+// Strict: a v7 file stops every reader, naming the one migration. No tolerant read.
 function readProto(root, stem) {
+  const v7 = protoV7(root, stem)
+  if (v7.length) {
+    const e = new Error(`design/prototypes/${stem}/${v7[0]}.json is a v7 file — run /spec:migrate`)
+    e.exit = 2
+    throw e
+  }
   const out = {}
   for (const f of PROTO_FILES) out[f] = readJson(path.join(protoDir(root, stem), f + '.json'))
   return out
@@ -343,6 +360,26 @@ function readProto(root, stem) {
 // Writes only the keys given ({status?, pins?, contract?}).
 function writeProto(root, stem, docs) {
   for (const f of PROTO_FILES) if (docs[f] !== undefined) writeJson(path.join(protoDir(root, stem), f + '.json'), docs[f])
+}
+
+// Every spec whose frontmatter `prototype:` is the stem: [{rel, status}], in path order. Run sidecars are not specs.
+function specsCiting(root, stem) {
+  const out = []
+  const walk = (dir) => {
+    let ents = []
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of ents.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) { if (!e.name.endsWith('.run')) walk(p) } else if (e.name.endsWith('.md')) {
+        const text = readText(p, '').replace(/\r\n/g, '\n')
+        if (!/^prototype:/m.test(text)) continue
+        const fm = parseFrontmatter(text).frontmatter
+        if (fm.prototype === stem) out.push({ rel: path.relative(root, p).split(path.sep).join('/'), status: String(fm.status || '') })
+      }
+    }
+  }
+  walk(path.join(root, 'specs'))
+  return out
 }
 
 const mocksDir = (root) => path.join(root, 'design', 'mocks')
@@ -365,5 +402,5 @@ module.exports = {
   readSpec, isSpecText, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout,
-  readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,
+  readProto, writeProto, protoV7, protoDir, specsCiting, readMocks, writeMocks, readGenesis, writeGenesis,
 }

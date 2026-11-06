@@ -7,7 +7,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { readJson, configPath, readFanout, readConfig } = require('./lib/state')
+const { readJson, configPath, readFanout, readConfig, protoV7, protoDir } = require('./lib/state')
 const { run, cacheDir } = require('./lib/host')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
@@ -123,10 +123,22 @@ function check(root, { probe = true } = {}) {
     } else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
   }
   const wt = path.join(root, '.claude', 'worktrees')
+  // Prototypes: a v7 record names the migration; a proto-<stem> worktree is in flight until its record says closed.
+  const stems = (() => { try { return fs.readdirSync(path.join(root, 'design', 'prototypes'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) } catch { return [] } })()
+  for (const stem of stems) if (protoV7(root, stem).length) f.push(`prototype ${stem} is a v7 record — /spec:migrate`)
   const live = (p) => used.has(p) || (fs.existsSync(path.join(p, '.git')) && (pending.isLane(p) || git.raw(['status', '--porcelain'], p).stdout.trim() !== ''))
   try {
     for (const n of fs.readdirSync(wt)) {
       const p = path.join(wt, n)
+      const proto = /^proto-(.+)$/.exec(n)
+      if (proto) {
+        const stem = proto[1]
+        if (protoV7(root, stem).length) continue // named above
+        const rec = readJson(path.join(protoDir(root, stem), 'status.json'), null)
+        if (rec && rec.marks && !rec.marks.closed) info.push(`in flight: prototype ${stem} — /spec:prototype ${stem}`)
+        else f.push(`leftover worktree: .claude/worktrees/${n} — git worktree remove --force .claude/worktrees/${n}`)
+        continue
+      }
       if (live(p)) info.push(`in flight: .claude/worktrees/${n} (a run in flight, a lane marker or uncommitted work) — leave it to ${fan ? '/spec:fanout' : 'its run'}`)
       else f.push(`leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
     }

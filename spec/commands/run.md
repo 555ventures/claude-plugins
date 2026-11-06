@@ -18,6 +18,13 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
 - **REVIEW**: dispatch one `spec:reviewer`, then mark `reviewed --file <findings path>`;
   a clean review runs through to DONE itself. Relay advisories in the final report; never act
   on them.
+- **PIN_TESTS** (a spec with `prototype: <stem>`, after a clean review): start the app in the
+  background with the printed boot line (`cd <worktree> && export PORT=<port> && <bootCommand>`,
+  so `bootCommand` may use `$PORT`), then mark `pin-tested`; the driver runs the host's
+  `prototype.e2eCommand` against it. Red is a REPAIR; green leaves the app running for LOOK.
+- **LOOK**: print the url and the look lines, end the turn. A literal `close enough` → stop the
+  app and mark `looked`; anything else → mark `look-failed --why "<the reply verbatim>"` (a FIX
+  round with the reply as the symptom, then the same steps again).
 - **ESCALATE**: ask the printed question and mark `escalate <label>` with the option picked
   (`keep|fix|amend` for a reviewer choice, `widen|separate|park` for a watched path, the
   planner's own labels for a false Assumption). You record the user's pick; you never choose.
@@ -27,7 +34,9 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
 
 `--fix "<symptom>"` with or without a spec: as a fanout lane (a queued `/spec:fix` item), or `--in-place`
 in the session (`/spec:fix`). The brief is the symptom and the reproduce-first recipe, the builder writes
-`fix.json`, the commit is `fix(<id>|<slug>): <symptom>`; the fix stop offers keep / revert / plan.
+`fix.json`, the commit is `fix(<id>|<slug>): <symptom>`; the fix stop offers keep / revert / plan. An
+`--in-place` fix on a spec closes the queued `type: fix` item with that spec and symptom when it finishes.
+A `--fix` on a prototype spec is in place only, and it runs PIN_TESTS and LOOK too.
 
 As a lane, stop and return on `PENDING_QUESTION`. A lane never edits its spec's Decisions or any
 other spec. A build that needs another spec done first marks `waiting --on <spec>` (BUILD, REPAIR,

@@ -1,0 +1,1 @@
+{ "routes": [{ "screen": "/invoices", "states": ["default"] }] }

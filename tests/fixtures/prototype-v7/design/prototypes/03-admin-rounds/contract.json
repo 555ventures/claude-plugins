@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "stem": "03-admin-rounds",
+  "brief": "03",
+  "idea": null,
+  "approvedAt": "2026-10-24T06:13:13.176Z",
+  "base": "main",
+  "viewport": { "width": 1280, "height": 800 },
+  "routes": [{ "screen": "/admin/rounds", "states": ["default", "empty"] }],
+  "pins": [
+    { "id": "p1", "kind": "behaviour", "screen": "/admin/rounds", "state": "default", "anchor": null, "note": "One tab per product line with open counts; the default tab is the first line with anything in flight", "round": 1 },
+    { "id": "p2", "kind": "behaviour", "screen": "/admin/rounds", "state": "empty", "anchor": "#rounds-table", "note": "With no rounds the page says there are none yet and offers to create one", "round": 2 },
+    { "id": "p3", "kind": "look", "screen": "/admin/rounds", "state": "default", "anchor": null, "note": "Row height matches the orders table", "round": 2 }
+  ],
+  "tests": ["tests/proto-03-admin-rounds.spec.ts"]
+}

@@ -30,7 +30,7 @@ spec/
   doctrine.md                     the one page every command loads
   agents/builder.md               sonnet, effort high
   agents/reviewer.md              opus, effort low (fable when architecture: true)
-  templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md, proto-overlay.js
+  templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md
   hooks/hooks.json
   scripts/
     lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js
@@ -77,7 +77,7 @@ per file; writes are atomic (tmp + rename).
   "worktreePerSpec": true,
   "mergeStrategy": "merge-commit",        // or ff-only | squash
   "walkthrough": { "baseUrl": "", "project": "", "tokenEnv": "WALKTHROUGH_TOKEN" },
-  "prototype": { "url": "http://localhost:3000", "bootCommand": "npm run dev", "overlay": "src/main.tsx" },
+  "prototype": { "url": "http://localhost:{port}", "bootCommand": "npm run dev" },
   "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "" }
 }
 ```
@@ -104,6 +104,8 @@ per file; writes are atomic (tmp + rename).
 | REVIEW | prints reviewer brief: diff vs base, spec Intent + ACs; seat = reviewer, or Fable when `architecture: true` | dispatches ONE `reviewer` agent; writes findings JSON | `reviewed --file <json>` |
 | FIX | only for `blocking` findings; cap 1, then ESCALATE; `fixed` on an unchanged tree is refused | dispatches builder with findings | `fixed` → GATE |
 | ESCALATE | prints the options: retry on opus / park (queue a fix) / amend spec | asks the user (one question) | `escalate <retry\|park\|amend>` |
+| PIN_TESTS | prototype specs only (frontmatter `prototype:`), after a clean REVIEW: allocates one app port, prints the boot line for the spec worktree; `pin-tested` runs `prototype.e2eCommand` with `{file}` = `prototype.e2eFile` and `APP_URL`; red goes to REPAIR | starts the app in the background | `pin-tested` |
+| LOOK | prototype specs only: prints `👀 look — <publicUrl or url>`, the look pins and the pictures that exist; the app keeps running from the spec worktree | prints them, ends the turn; a literal `close enough` → `looked`, anything else → `look-failed --why "<reply>"` (FIX, not counted) | `looked` / `look-failed --why <reply>` |
 | COMMIT | driver commits in the worktree (`lib/git.js`), message from the spec title | nothing | (auto) |
 | MERGE | merge-back to trunk per `mergeStrategy`, re-run gate on trunk tree (cache hit when unchanged) | conflicts only: asked | (auto) / `conflicts-resolved` |
 | DONE | `status: done`, sidecar cleared, worktree removed, prints the report | nothing | — |
@@ -192,7 +194,7 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   brief's dependency readiness. `--json` is `{briefs, specs, superseded, anomalies, next}`. No ledger
   lines, no run-in-flight or fan-out footer, no `doctor.check`.
 - `lib/next.js` (≤ 250 LOC): v7's derivation on v8's state, no CLI. `derive(root)` reads `lib/work.js`
-  (`readSpecs`, `readBriefs`, `gateWhy`) and the queue file (read-only overlay, off in a linked
+  (`readSpecs`, `readBriefs`, `gateWhy`) and the queue file (read-only view, off in a linked
   worktree; `reconcile` applied in memory) and returns entries with blockers (`depends_on`, brief
   dependencies, `after` gates), the anomaly catalogue (`decide` or `hygiene`), `laneAdmission`
   (pairwise, no cap) and `nothingNextLine`. Fanout keeps its own cap and admission.
@@ -207,9 +209,12 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   `.claude/genesis/stack-descriptor.json` + ADRs. ROADMAP writes briefs + queue entries.
   HANDOFF runs init. ≤ 400 LOC.
 - `mocks.js`: SEED → SCREENS → APPROVED, walkthrough service or terminal mode. ≤ 250 LOC.
-- `prototype.js`: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED, plus `serve`. Pins via
-  `templates/proto-overlay.js` POSTing to the serve endpoint. CONTRACTED writes
-  `contract.json` (every pin as a sentence) and queues `/spec:plan <contract>`. ≤ 400 LOC.
+- `prototype.js`: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED. OPEN makes the worktree, runs
+  `setupCommand` and allocates one free app port; the session records each ruling with
+  `prototype.js <stem> pin …` (`drop pN --why …` amends). `contracted --confirmed` needs the
+  user's yes on the printed sentences, writes `contract.json` (every pin as a sentence), commits
+  it before the mark is durable and queues `/spec:plan <contract>`. No entry file and no browser
+  hook. ≤ 400 LOC.
 - `connect.js`: copy-trim of v7 walkthrough-connect + client. ≤ 350 LOC total.
 - `release.js`: deploy → e2e → promote (asked) → report. ≤ 120 LOC.
 - `migrate.js`: v7 host → v8, see `host-footprint.md`. Idempotent, prints a plan first,

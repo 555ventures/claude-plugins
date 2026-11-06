@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "brief": "03",
+  "input": { "kind": "brief", "brief": "docs/roadmap/03-admin-rounds.md", "idea": null },
+  "stem": "03-admin-rounds",
+  "branch": "proto/03-admin-rounds",
+  "worktree": ".claude/worktrees/proto-03-admin-rounds",
+  "base": "main",
+  "pinsPort": 4711,
+  "appPort": 42439,
+  "lastUpdated": "2026-10-27T08:31:49.670Z",
+  "marks": {
+    "opened": "2026-10-23T06:53:14.660Z",
+    "approved": "2026-10-24T06:13:13.176Z",
+    "contracted": "2026-10-24T06:16:09.391Z",
+    "testsDerived": "2026-10-24T06:25:33.901Z",
+    "dbDestroyed": "2026-10-27T08:31:48.612Z",
+    "closed": "2026-10-27T08:31:49.670Z"
+  },
+  "rounds": [
+    { "n": 1, "startedAt": "2026-10-23T06:53:14.660Z", "endedAt": "2026-10-23T08:43:30.108Z", "pins": [] },
+    { "n": 2, "startedAt": "2026-10-23T08:43:30.108Z", "endedAt": "2026-10-23T08:54:15.592Z", "pins": [] }
+  ],
+  "wiring": "apps/web/app/entry.client.tsx",
+  "ledgered": "2026-10-24T06:25:33.770Z",
+  "queued": "added"
+}

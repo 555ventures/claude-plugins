@@ -50,6 +50,6 @@ prototype contract's behaviour pins become acceptance criteria.
    id (write the AC, or `node ${CLAUDE_PLUGIN_ROOT}/scripts/prototype.js <stem> drop pN --why …`),
    and once every behaviour pin is covered the queued plan item closes.
 
-A brief may become several specs; use `depends_on` when one must land first. When the brief
-is fully planned run `/spec:queue done <NN>`; a brief folded into another gets
-`> Superseded by NN` under its title. Report Next.
+A brief may become several specs; use `depends_on` when one must land first. A brief that has specs
+stands for them in the queue (ADR-0044): do not tick it, because a tick sends it to the back. A brief
+folded into another gets `> Superseded by NN` under its title. Report Next.

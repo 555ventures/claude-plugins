@@ -8,7 +8,7 @@ A Claude Code plugin marketplace with three plugins:
 
 ## spec v8
 
-You fill the queue and plan each feature with the strong model. Then the plugin builds it.
+Agents mainly fill the queue (the plugin works out unfinished briefs and open specs on every read, ADR-0044); you read it, reorder it and plan each feature with the strong model. Then the plugin builds it.
 One builder writes the spec test-first in its own git worktree, and your own test command
 decides green. One fresh reviewer reads the diff against the spec's Intent, Decisions and criteria, and
 green merges. A typical spec goes from queued to merged in minutes. Nothing that changes

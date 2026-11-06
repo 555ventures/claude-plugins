@@ -1685,15 +1685,15 @@ test('AC-20261105-14-10/11 a --fix on a prototype spec follows D14: the briefs c
   assert.ok(body.startsWith('fix(20261104/01): x') && body.includes('pin tests green · look accepted after 2 round(s)'), body)
 })
 
-// The line fanout holds a fix item with, read as the shell reads it when the user pastes it.
+// The line fanout holds a fix item with: `/spec:fix <spec> — <symptom>`, plain words, as the user pastes it.
 const heldFix = (dir, words = '') => {
   const out = ok(runNode('scripts/fanout.js', ['--root', dir]))
   const line = out.split('\n').find((l) => l.includes('waits — stops at LOOK for you') && l.includes(words))
-  const m = /stops at LOOK for you — \/spec:run (\S+) --fix (.+) --in-place$/.exec(line || '')
+  const m = /stops at LOOK for you — \/spec:fix (\S+) — (.+)$/.exec(line || '')
   assert.ok(m, out)
-  return { spec: m[1], symptom: spawnSync('sh', ['-c', `printf %s ${m[2]}`], { encoding: 'utf8' }).stdout }
+  return { spec: m[1], symptom: m[2] }
 }
-// The printed --fix line, run through PIN_TESTS and LOOK to DONE.
+// The printed /spec:fix line, driven in place as fix.md drives it, through PIN_TESTS and LOOK to DONE.
 async function heldFixToDone(t, h, symptom) {
   const fx = (...a) => h.run('--fix', symptom, '--in-place', ...a)
   ok(fx())
@@ -1720,7 +1720,7 @@ test('AC-20261105-14-17 a held fix item closes when its printed line reaches DON
   assert.ok(done.includes(`✅ fixed — ${symptom}`), done)
   assert.deepStrictEqual(openFixes(h.dir), ['another symptom', symptom], 'the sibling on this spec and the spec-less item with the same words stay')
   const after = ok(runNode('scripts/fanout.js', ['--root', h.dir]))
-  assert.ok(!after.includes(`${REL} --fix 'the "Save"`), after)
+  assert.ok(!after.includes(`${REL} — the "Save"`), after)
   assert.strictEqual(heldFix(h.dir, 'another').symptom, 'another symptom', 'the sibling is still held')
 })
 

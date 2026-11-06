@@ -59,7 +59,7 @@ readable cold in ten seconds by someone with no repo context.
 
 ## Glossary
 
-- **lane**: a fanout sub-agent running `/spec:run` on one spec in its own worktree.
+- **lane**: a fanout sub-agent running `/spec:run` on one spec, or `/spec:fix` on one fix, in its own worktree.
 - **mark**: `--mark <verb>`, telling a driver its step is done.
 - **pin**: a ruling from a prototype round, recorded as a sentence (On <route>[, given …]: <note>); behaviour pins become ACs and pin tests, look pins are checked at LOOK.
 - **seat**: a role with a model and effort.

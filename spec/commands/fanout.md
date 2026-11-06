@@ -9,14 +9,19 @@ allowed-tools: Bash(node *), Read, Agent, AskUserQuestion
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/fanout.js $ARGUMENTS`.
 
-- **Bare (AUTO)**: the driver picks the batch (📌 Auto-picked) and asks nothing; mark `planned`. A queued
+- **Bare (AUTO)**: the driver picks the batch (📌 Auto-picked) and asks nothing; mark `planned`. It takes every
+  startable hardened spec, queued or not, in queue order (the queue is the file plus the fill: ADR-0044); a queued
+  brief stands for its specs and prints nothing. A spec that must not run stays `draft`. A shared brief waits for
+  its sibling (`shared brief NN`), and a brief dependency waits and ends the batch (`brief X depends on Y`, then
+  `the batch stops before <stem>`); a queue prompt or an unplanned brief ends nothing. An unknown flag exits 2
+  (`fanout: unknown argument <flag>`). A queued
   `type: fix` item is a fix lane: bound to a spec `fix-<stem>`, spec-less `fix-<slug>`; both are picked
-  after the runnable specs. A lane that ends `NEEDS_PLAN` queued `/spec:plan` and is reported.
-  PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty.
+  after the runnable specs and their Agent calls run `/spec:fix --root <wt> …`, never `/spec:run`. A lane that ends `NEEDS_PLAN` queued `/spec:plan` and is reported.
+  PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty. A finished brief prints `specs done: /spec:queue done NN`. REPORT opens `⚠️` when a lane parked, needed a spec, was dismissed or waits.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
 - A hardened spec with frontmatter `prototype:` is never a lane, because LOOK needs the user's free-text
   reply and the app must outlive the agent: it waits with the reason `stops at LOOK for you — /spec:run it`.
-  A `type: fix` item bound to such a spec is held the same way, and its reason prints the in-place `/spec:run <spec> --fix` line;
+  A `type: fix` item bound to such a spec is held the same way, and its reason prints the in-place `/spec:fix <spec> — <symptom>` line;
   that run closes the item when it finishes.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
 - **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane

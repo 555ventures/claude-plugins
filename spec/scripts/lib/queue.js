@@ -1,8 +1,9 @@
 'use strict'
 // lib/queue.js — the one owner of the session queue: the file, its version, the item shape, the type
-// list, creation, dedupe, ticking, reconcile, the paste line and groom's duplicate, cites-done and
-// brief helpers. No CLI. Typed text is parsed once, at the door (`add`, and /spec:migrate); a reader trusts
-// what it reads. No other script touches items.
+// list, creation, dedupe, ticking, reconcile, the fill (unfinished briefs and open ad-hoc specs, worked out on
+// every read and never stored), the paste line and the brief helpers groom shares. No CLI. Typed text is parsed
+// once, at the door (`add`, and /spec:migrate); a reader trusts what it reads. No other script touches items.
+// The file holds what was placed, by a user or an agent; readers derive the rest (ADR-0044).
 //
 // File: <git-common-dir>/spec-queue.json = {version: 3, seq, items[]}.
 // Item: {id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?}
@@ -12,6 +13,7 @@
 const fs = require('fs')
 const path = require('path')
 const st = require('./state')
+const work = require('./work')
 
 const VERSION = 3
 const TYPES = ['plan', 'prototype', 'fix', 'decide']
@@ -23,9 +25,10 @@ const BOUND_RE = /^(specs\/\S+\.md)(?: — (.+))?$/
 const queuePath = (root) => path.join(st.gitCommonDir(root), 'spec-queue.json')
 const refuse = (message) => Object.assign(new Error(message), { exit: 2 })
 
+// A brief is `NN[a-z]` or `docs/roadmap/NN…-…`; `3` and `2026` are prose. Refs (`3`, `07`) are BRIEF_RE's business.
 function kindOf(payload) {
   if (/^specs\/.*\.md$/.test(payload)) return 'spec'
-  return BRIEF_RE.test(payload) ? 'brief' : 'prompt'
+  return /^\d{2}[a-z]?$/.test(payload) || /^docs\/roadmap\/\d+[a-z]?-/.test(payload) ? 'brief' : 'prompt'
 }
 
 // A brief number names the brief item first (`done 02` closes brief 02, never the 2nd row).
@@ -56,26 +59,73 @@ function read(root) {
   let q
   try { q = JSON.parse(text) } catch { throw refuse(`queue file is not valid JSON: ${queuePath(root)}`) }
   if (!q || q.version !== VERSION) throw refuse(`queue file is version ${q && q.version} — run /spec:migrate`)
+  if (!Array.isArray(q.items)) throw refuse(`queue file has no "items" list — repair or remove ${queuePath(root)}`)
   return q
 }
 
 const write = (root, q) => st.writeJson(queuePath(root), { version: VERSION, seq: q.seq, items: q.items })
 const open = (q) => q.items.filter((i) => !i.done)
+const isMain = (root) => { try { return fs.statSync(path.join(root, '.git')).isDirectory() } catch { return false } }
 
 function specStatus(root, p) {
   try { return st.readSpec(path.join(root, p)).frontmatter.status } catch { return null }
 }
 
-// A spec item whose spec is done (or superseded) and not live counts as done; the timestamp is written
-// with the next write. A brief item is never ticked here: only `done` closes it.
+// A spec item whose spec is done (or superseded), or whose file is gone, and not live counts as done; the timestamp is
+// written with the next write. A file is only missed from the main checkout: a lane may predate the spec. A brief item
+// is never ticked here: only `done` closes it.
 function reconcile(root, q) {
-  const now = new Date().toISOString()
-  for (const i of q.items) if (!i.done && i.kind === 'spec' && ['done', 'superseded'].includes(specStatus(root, i.payload)) && !st.liveRun(root, i.payload)) i.done = now
+  const now = new Date().toISOString(); const main = isMain(root)
+  for (const i of q.items) {
+    if (i.done || i.kind !== 'spec' || st.liveRun(root, i.payload)) continue
+    if ((main && !fs.existsSync(path.join(root, i.payload))) || ['done', 'superseded'].includes(specStatus(root, i.payload))) i.done = now
+  }
   return q
 }
 
+// A brief is superseded in v7 only by the bold banner; work.js also takes a plain `> Superseded by`.
+const isSupersededBriefText = (words) => /^>\s*\*\*Superseded by\b/m.test(words)
+
+// work.readBriefs rows with v7's `superseded` and `status`, so groom counts and gates a plainly bannered brief as v7 did.
+function v7Briefs(root, briefs) {
+  return briefs.map((b) => {
+    const superseded = isSupersededBriefText(fs.readFileSync(path.join(root, b.file), 'utf8'))
+    const done = b.specs.every((s) => s.status === 'done')
+    return { ...b, superseded, status: superseded && done ? 'superseded' : !b.specs.length ? 'unplanned' : done ? 'done' : 'in-flight' }
+  })
+}
+
+// The fill, in memory and never stored (ADR-0044): later duplicates of an open brief or spec drop out of the view, then every
+// unfinished brief and every open ad-hoc spec (path order) no open item holds joins the end as {id: null, kind, payload}. A done
+// row holds nothing, so a ticked unfinished brief or spec comes back last (as v7's archive had it). Main checkout only: a lane's file tree may predate the work.
+const keyOf = (i) => (i.kind === 'brief' ? 'b' + work.normBrief(i.payload) : i.kind === 'spec' ? 's' + i.payload : null)
+function fill(root, q) {
+  const seen = new Set()
+  const items = q.items.filter((i) => { const k = !i.done && keyOf(i); return !k || (!seen.has(k) && seen.add(k)) })
+  if (!isMain(root)) return { ...q, items }
+  const specs = work.readSpecs(root); const adds = []
+  for (const b of v7Briefs(root, work.readBriefs(root, specs))) {
+    if (b.status !== 'done' && !b.superseded && !seen.has('b' + b.num) && seen.add('b' + b.num)) adds.push({ id: null, kind: 'brief', payload: b.num })
+  }
+  for (const s of specs.filter((x) => !x.brief && !['done', 'superseded'].includes(x.status)).sort((a, b) => (a.path < b.path ? -1 : 1))) {
+    if (!seen.has('s' + s.path)) adds.push({ id: null, kind: 'spec', payload: s.path })
+  }
+  const ticked = new Set(q.items.filter((i) => i.done).map(keyOf))
+  return { ...q, items: [...items, ...adds.filter((i) => !ticked.has(keyOf(i))), ...adds.filter((i) => ticked.has(keyOf(i)))] }
+}
+const pending = (root) => open(fill(root, reconcile(root, read(root))))
+
+// Stores one filled item where `at` says (an index of q.items, default last): the next qN in v3's shape, no `added`. Writes q.
+function place(root, q, item, at = q.items.length) {
+  q.seq += 1
+  const stored = { id: 'q' + q.seq, kind: item.kind, payload: item.payload }
+  q.items.splice(at, 0, stored)
+  write(root, q)
+  return stored
+}
+
 // fields {payload, type?, spec?, after?, defaultType?}: payload as typed. A prompt goes through `parse`
-// (a given `spec` is taken as is); a prompt with no type takes `defaultType`. null = an open duplicate.
+// (a given `spec` is taken as is); a prompt with no type takes `defaultType`. null = an open duplicate (a brief by number).
 function add(root, fields, { top } = {}) {
   const q = reconcile(root, read(root))
   const kind = fields.type || fields.spec ? 'prompt' : kindOf(fields.payload)
@@ -84,8 +134,8 @@ function add(root, fields, { top } = {}) {
     body = fields.spec ? { type: fields.type, spec: fields.spec, payload: fields.payload } : parse(fields.payload, fields.type)
     body.type = body.type || fields.defaultType
   }
-  const dup = open(q).some((i) => i.kind === kind && i.type === body.type && i.spec === body.spec && i.payload === body.payload)
-  if (dup) return null
+  const same = (i) => i.kind === kind && i.type === body.type && i.spec === body.spec && (kind === 'brief' ? work.normBrief(i.payload) === work.normBrief(body.payload) : i.payload === body.payload)
+  if (open(q).some(same)) return null
   q.seq += 1
   const item = { id: 'q' + q.seq, kind, ...(body.type ? { type: body.type } : {}), ...(body.spec ? { spec: body.spec } : {}), payload: body.payload, added: new Date().toISOString(), ...(fields.after ? { after: fields.after } : {}) }
   const first = top ? open(q)[0] : null
@@ -107,66 +157,12 @@ function tick(root, pred) {
 // What the item says, as one line: a bound fix reads `specs/x.md — words`.
 const text = (it) => (it.spec ? it.spec + (it.payload ? ' — ' + it.payload : '') : it.payload)
 
-// Duplicate and cites-done helpers, ported from v7. They read `text(it)`: a bound fix's spec path lives in `spec`.
-// Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4.
-function promptTokens(payload) {
-  const out = new Set()
-  for (const t of String(payload || '').toLowerCase().match(/[a-z0-9]+/g) || []) if (t.length >= 4) out.add(t)
-  return out
-}
-
-// |A∩B| / |A∪B| over two Sets; 0 when both are empty.
-function jaccard(a, b) {
-  if (!a.size && !b.size) return 0
-  let inter = 0
-  for (const t of a) if (b.has(t)) inter++
-  return inter / (a.size + b.size - inter)
-}
-
-// A path-shaped payload is one whitespace-free token holding a `/`: an identity, not prose.
-const isPathPayload = (payload) => /^\S+\/\S+$/.test(String(payload || '').trim())
-const pathIdentity = (payload) => path.posix.normalize(String(payload).trim()).replace(/\/+$/, '')
-
-// Near-duplicate score of two prompt texts, or null when not comparable: path vs path is 1 when identical.
-function promptDupScore(a, b) {
-  const pa = isPathPayload(a); const pb = isPathPayload(b)
-  if (pa || pb) return pa && pb && pathIdentity(a) === pathIdentity(b) ? 1 : null
-  return jaccard(promptTokens(a), promptTokens(b))
-}
-
-// The first specs/YYYYMMDD/NN…md a prompt names whose spec is done or superseded (ctx = {specStatus(rel), specRoot}), else null.
-function citesDoneSpec(item, ctx) {
-  if (!item || item.kind !== 'prompt') return null
-  const words = text(item)
-  const hit = (rel) => { const s = ctx.specStatus(rel); return s === 'done' || s === 'superseded' }
-  for (const m of words.matchAll(/specs\/\d{8}\/\d{2}[\w.-]*\.md/g)) if (hit(m[0])) return m[0]
-  // bare `specs/YYYYMMDD/NN` -> the unique on-disk NN-*.md; ambiguous or missing -> no flag
-  for (const m of words.matchAll(/specs\/(\d{8})\/(\d{2})(?![\w.-])/g)) {
-    let names = []
-    try { names = fs.readdirSync(path.join(ctx.specRoot, 'specs', m[1])).filter((n) => n.startsWith(m[2] + '-') && n.endsWith('.md')) } catch { /* absent dir */ }
-    if (names.length === 1 && hit(`specs/${m[1]}/${names[0]}`)) return `specs/${m[1]}/${names[0]}`
-  }
-  return null
-}
-
-// A brief is superseded in v7 only by the bold banner; work.js also takes a plain `> Superseded by`.
-const isSupersededBriefText = (words) => /^>\s*\*\*Superseded by\b/m.test(words)
-
-// work.readBriefs rows with v7's `superseded` and `status`, so groom counts and gates a plainly bannered brief as v7 did.
-function v7Briefs(root, briefs) {
-  return briefs.map((b) => {
-    const superseded = isSupersededBriefText(fs.readFileSync(path.join(root, b.file), 'utf8'))
-    const done = b.specs.every((s) => s.status === 'done')
-    return { ...b, superseded, status: superseded && done ? 'superseded' : !b.specs.length ? 'unplanned' : done ? 'done' : 'in-flight' }
-  })
-}
-
-// The line the session pastes to start an item.
+// The line the session pastes to start an item: a hardened or implementing spec runs, any other plans.
 function paste(root, it) {
-  if (it.kind === 'spec') return (specStatus(root, it.payload) === 'hardened' ? '/spec:run ' : '/spec:plan ') + it.payload
+  if (it.kind === 'spec') return (['hardened', 'implementing'].includes(st.specState(root, it.payload, specStatus(root, it.payload))) ? '/spec:run ' : '/spec:plan ') + it.payload
   if (it.kind === 'brief') return '/spec:plan ' + briefPath(root, it.payload)
   if (CMD_TYPES.includes(it.type)) return `/spec:${it.type} ${text(it)}`
   return it.type === 'decide' ? '📌 decide: ' + it.payload : text(it)
 }
 
-module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, add, tick, text, paste, promptTokens, jaccard, isPathPayload, pathIdentity, promptDupScore, citesDoneSpec, isSupersededBriefText, v7Briefs }
+module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, fill, pending, place, add, tick, text, paste, isSupersededBriefText, v7Briefs, isMain }

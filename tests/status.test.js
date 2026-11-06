@@ -35,6 +35,9 @@ function v7Screen(host, ...flags) {
     .replace(/`spec-queue (done|move) /g, '`/spec:queue $1 ').replace(/`spec-queue next`/g, '`/spec:queue next`')
 }
 
+// v8's screen with the type marks and the in-progress marker taken off: what v7's screen is compared with (ADR-0044).
+const unmark = (screen) => screen.replace(/^((?:q\d+ +)?)(?:🏃|📝|🧪|🔧) /gm, '$1').replace(/ {2}🔨 in progress$/gm, '')
+
 // ---- the fixture hosts ---------------------------------------------------------------------
 
 // openBrief leaves q16 pending: brief 01 is then done but still queued, and v8 raises the decide line (brief-done-queued).
@@ -120,13 +123,13 @@ function allDoneHost(unplanned) {
 
 // ---- the oracle ----------------------------------------------------------------------------
 
-test('AC-20261105-05-1 v7\'s own script and status.js print the same bytes on the full, empty and all-done hosts', () => {
+test('AC-20261105-05-1 AC-20261105-16-15 v7\'s own script and status.js print the same bytes on the full, empty and all-done hosts, once the type marks and the marker come off', () => {
   const hosts = { full: fullHost(), empty: emptyHost(), allDone: allDoneHost(true), allDoneNoBrief: allDoneHost(false) }
   for (const [name, host] of Object.entries(hosts)) {
     for (const flags of [[], ['--all']]) {
       const mine = status(host, ...flags)
       assert.strictEqual(mine.status, 0, mine.stderr)
-      assert.strictEqual(mine.stdout, v7Screen(host, ...flags), `${name} ${flags.join(' ') || 'bare'}`)
+      assert.strictEqual(unmark(mine.stdout), v7Screen(host, ...flags), `${name} ${flags.join(' ') || 'bare'}`)
     }
   }
 })
@@ -166,14 +169,14 @@ test('AC-20261105-05-2 queued prompts print as typed qNN rows; gated ones wait u
   const d = fullHost()
   const bare = lines(status(d)); const all = lines(status(d, '--all'))
   const next = bare.slice(bare.indexOf('🎯 Next'), bare.indexOf('⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):'))
-  assert.deepStrictEqual(next.slice(0, 5), ['🎯 Next', 'q3   /spec:plan tighten the retry copy', 'q4   /spec:prototype the board drag handle', 'q5   /spec:fix digest sends twice', 'q6   📌 decide: drop the legacy export?'])
+  assert.deepStrictEqual(next.slice(0, 5), ['🎯 Next', 'q3   📝 /spec:plan tighten the retry copy', 'q4   🧪 /spec:prototype the board drag handle', 'q5   🔧 /spec:fix digest sends twice', 'q6   📌 decide: drop the legacy export?'])
   const q7 = next.find((l) => l.startsWith('q7   notifications'))
-  assert.ok(q7.endsWith('…') && [...q7].length === 100, 'an untyped payload prints verbatim, cut to 100 columns')
-  assert.ok(next.includes('q11  /spec:fix after schema') && next.includes('q14  /spec:plan after retired'), 'a met brief gate and a superseded spec gate print')
+  assert.ok(q7.endsWith('…') && [...q7].length === 100, 'an untyped payload prints verbatim with no mark, cut to 100 columns')
+  assert.ok(next.includes('q11  🔧 /spec:fix after schema') && next.includes('q14  📝 /spec:plan after retired'), 'a met brief gate and a superseded spec gate print')
   for (const gated of ['q10', 'q12', 'q13']) assert.ok(!next.some((l) => l.startsWith(gated + ' ')), `${gated} is gated`)
   assert.ok(!next.some((l) => l.startsWith('q1 ')), 'a done item prints nothing')
   const blocked = all.slice(all.indexOf('⛔ blocked:'))
-  for (const [row, why] of [['q10  /spec:plan wait for rounds', '   └─ ⏳ after brief 03'], ['q12  /spec:plan after export a', '   └─ ⏳ after 06-export-a'], ['q13  /spec:plan after a ghost', '   └─ ⏳ after 99-ghost']]) {
+  for (const [row, why] of [['q10  📝 /spec:plan wait for rounds', '   └─ ⏳ after brief 03'], ['q12  📝 /spec:plan after export a', '   └─ ⏳ after 06-export-a'], ['q13  📝 /spec:plan after a ghost', '   └─ ⏳ after 99-ghost']]) {
     assert.strictEqual(blocked[blocked.indexOf(row) + 1], why)
   }
 })
@@ -218,13 +221,13 @@ test('AC-20261105-05-5 lanes: the implementing spec first, pair prefixes only wi
   const bare = status(fullHost()).stdout
   const L = lines({ stdout: bare })
   const at = L.indexOf('⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):')
-  assert.deepStrictEqual(L.slice(at + 1, at + 4), [`/spec:run @${A}/01-boards.md`, `/spec:run @${A}/04-adhoc-a.md`, `/spec:run @${A}/05-adhoc-b.md`])
+  assert.deepStrictEqual(L.slice(at + 1, at + 4), [`🏃 /spec:run @${A}/01-boards.md  🔨 in progress`, `🏃 /spec:run @${A}/04-adhoc-a.md`, `🏃 /spec:run @${A}/05-adhoc-b.md`])
   assert.strictEqual(L[at + 6], '   └─ 🔶 04-adhoc-a.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts, src/z.ts (+2 more)', 'every table, `a + b`, `{a,b}`, `(generated)` count')
   assert.strictEqual(bare.split(`/spec:run @${A}/01-boards.md`).length, 2, 'nothing above ⚡ repeats the top pick')
   const two = small({ [`${A}/01-a.md`]: specDoc('hardened', { files: ['s.js', 'a.js'] }), [`${A}/02-b.md`]: specDoc('hardened', { files: ['s.js'] }) })
   assert.match(status(two).stdout, /⚡ 2 parallel lanes[^\n]*\n[^\n]+\n[^\n]+\n   └─ 🔶 merge-conflict risk: s\.js\n/)
   const solo = small({ [`${A}/01-a.md`]: specDoc('hardened'), [`${A}/02-b.md`]: specDoc('draft', { brief: '03' }), 'docs/roadmap/03-x.md': brief('03', 'X', 'P0', '99') })
-  assert.match(status(solo).stdout, /\/spec:run @specs\/20261104\/01-a\.md\n   └─ 🚦 solo\n/)
+  assert.match(status(solo).stdout, /🏃 \/spec:run @specs\/20261104\/01-a\.md\n   └─ 🚦 solo\n/)
   const alone = small({ [`${A}/01-a.md`]: specDoc('hardened') })
   assert.ok(!status(alone).stdout.includes('solo'))
 })
@@ -233,7 +236,7 @@ test('AC-20261105-05-6 --all: after-that reasons share lines, blocked lists spec
   const out = status(fullHost(), '--all').stdout
   assert.match(out, /🕓 after that:\n[^\n]+13-boards-two\.md\n   └─ ⛓️ shared brief 04a\n[^\n]+06-export-a\.md\n   └─ ⛓️ brief 07 depends on 04a\n[^\n]+02-views\.md\n[^\n]+14-views-two\.md\n   └─ ⛓️ brief 04b depends on 04a\n/)
   assert.ok(!out.includes('🤷'))
-  assert.match(out, /⛔ blocked:\n\/spec:plan @specs\/20261103\/01-rounds\.md\n   └─ ⏳ brief 99\n/)
+  assert.match(out, /⛔ blocked:\n📝 \/spec:plan @specs\/20261103\/01-rounds\.md\n   └─ ⏳ brief 99\n/)
   assert.match(out, /🧹 Hygiene \(7\) — \/spec:doctor\n/)
   for (const k of ['queue-orphan', 'unknown-status', 'orphan-stamp', 'unparsed-dependency', 'unknown-dependency', 'skipped-spec', 'hand-tracked-status']) assert.ok(out.includes(`   [${k}] `), k)
   assert.match(out, /\[queue-orphan\][^\n]*`\/spec:queue done 77`[^\n]*`\/spec:queue move 77 <n>`/)
@@ -244,7 +247,7 @@ test('AC-20261105-05-6 --all: after-that reasons share lines, blocked lists spec
   assert.strictEqual(broken.split('\n').filter((l) => l.startsWith('   [queue-unparseable]')).length, 1)
   assert.match(broken, /\[queue-unparseable\][^\n]*`\/spec:queue next`\)/)
   assert.ok(!/^q\d+ /m.test(broken), 'no overlay, no qNN row')
-  assert.match(broken, /🎯 Next\n⚡ 4 parallel lanes[^\n]*\n\/spec:run @specs\/20261104\/01-boards\.md\n/)
+  assert.match(broken, /🎯 Next\n⚡ 4 parallel lanes[^\n]*\n🏃 \/spec:run @specs\/20261104\/01-boards\.md  🔨 in progress\n/)
 })
 
 test('AC-20261105-05-7 decide lines: wording, the cap of three, the overflow clause', () => {
@@ -310,7 +313,7 @@ test('AC-20261105-05-10 queue positions: first occurrence, done items count, unq
   assert.deepStrictEqual(json(d).next, `/spec:run ${A}/03-x.md`, 'queued 03 first, then 02, then the unqueued 01')
   assert.match(o, /⚡ 3 parallel lanes[^\n]*\n[^\n]+03-x\.md\n[^\n]+02-b\.md\n[^\n]+01-a\.md\n/)
   const e = small(files, [{ kind: 'prompt', payload: 'hello', type: 'plan' }])
-  assert.match(status(e).stdout, /^q1 {2}\/spec:plan hello$/m)
+  assert.match(status(e).stdout, /^q1 {2}📝 \/spec:plan hello$/m)
   const wt = path.join(path.dirname(e), 'linked')
   spawnSync('git', ['-C', e, 'worktree', 'add', '-q', '-b', 'side', wt], { encoding: 'utf8' })
   const linked = status(wt).stdout
@@ -319,7 +322,7 @@ test('AC-20261105-05-10 queue positions: first occurrence, done items count, unq
 
 test('AC-20261105-05-11 the empty states and the unplanned-brief pick', () => {
   const ready = small({ 'docs/roadmap/01-a.md': brief('01', 'A', 'P0', '—'), 'docs/roadmap/02-b.md': brief('02', 'B', 'P0', '01') })
-  assert.match(status(ready).stdout, /🎯 Next\n\/spec:plan @docs\/roadmap\/01-a\.md\n/)
+  assert.match(status(ready).stdout, /🎯 Next\n📝 \/spec:plan @docs\/roadmap\/01-a\.md\n/)
   const e = status(emptyHost()).stdout
   assert.ok(e.includes('   ✨ nothing next — no specs or briefs found\n') && e.endsWith('⬜ nothing waits\n'))
   assert.ok(status(allDoneHost(true)).stdout.includes('   ✨ nothing actionable — all specs done; 1 unplanned brief(s) blocked on unmet dependencies\n'))

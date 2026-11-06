@@ -3,9 +3,9 @@
 ## What you asked
 
 A lean plugin that helps one person build products rapidly with AI. Same commands and
-workflow as v7. A spec should go from "queued" to "merged" in minutes, not 30–60. You fill
-the queue and drive `/spec:plan` yourself; the plugin picks from the queue, builds, and
-merges. You must say yes to anything that changes architecture or behaviour. Nothing
+workflow as v7. A spec should go from "queued" to "merged" in minutes, not 30–60. Agents mainly
+fill the queue and you read it and reorder it (ADR-0044); you drive `/spec:plan` yourself, and the
+plugin picks from the queue, builds, and merges. You must say yes to anything that changes architecture or behaviour. Nothing
 irreversible happens without asking. Reporting style comes from the `style` plugin.
 Genesis, mocks, prototype, connect, doctor stay, trimmed.
 

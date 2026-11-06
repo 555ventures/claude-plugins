@@ -9,42 +9,42 @@
    ⛔ 08–09       P2     superseded (2 briefs)
 
 🎯 Next
-q3   /spec:plan tighten the retry copy
-q4   /spec:prototype the board drag handle
-q5   /spec:fix digest sends twice
+q3   📝 /spec:plan tighten the retry copy
+q4   🧪 /spec:prototype the board drag handle
+q5   🔧 /spec:fix digest sends twice
 q6   📌 decide: drop the legacy export?
 q7   notifications: a removed or soft-deleted staff person has no ended suppression rule so the loo…
-q11  /spec:fix after schema
-q14  /spec:plan after retired
+q11  🔧 /spec:fix after schema
+q14  📝 /spec:plan after retired
 ⚡ 3 parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):
-/spec:run @specs/20261104/01-boards.md
-/spec:run @specs/20261104/04-adhoc-a.md
-/spec:run @specs/20261104/05-adhoc-b.md
+🏃 /spec:run @specs/20261104/01-boards.md  🔨 in progress
+🏃 /spec:run @specs/20261104/04-adhoc-a.md
+🏃 /spec:run @specs/20261104/05-adhoc-b.md
    ├─ 🔶 01-boards.md × 04-adhoc-a.md: merge-conflict risk: src/shared.ts
    ├─ 🔶 01-boards.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts
    └─ 🔶 04-adhoc-a.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts, src/z.ts (+2 more)
 
 🕓 after that:
-/spec:run @specs/20261104/13-boards-two.md
+🏃 /spec:run @specs/20261104/13-boards-two.md
    └─ ⛓️ shared brief 04a
-/spec:run @specs/20261104/06-export-a.md
+🏃 /spec:run @specs/20261104/06-export-a.md
    └─ ⛓️ brief 07 depends on 04a
-/spec:run @specs/20261104/02-views.md
-/spec:run @specs/20261104/14-views-two.md
+🏃 /spec:run @specs/20261104/02-views.md
+🏃 /spec:run @specs/20261104/14-views-two.md
    └─ ⛓️ brief 04b depends on 04a
 
 ⛔ blocked:
-/spec:plan @specs/20261103/01-rounds.md
+📝 /spec:plan @specs/20261103/01-rounds.md
    └─ ⏳ brief 99
-q10  /spec:plan wait for rounds
+q10  📝 /spec:plan wait for rounds
    └─ ⏳ after brief 03
-q12  /spec:plan after export a
+q12  📝 /spec:plan after export a
    └─ ⏳ after 06-export-a
-q13  /spec:plan after a ghost
+q13  📝 /spec:plan after a ghost
    └─ ⏳ after 99-ghost
-/spec:run @specs/20261104/08-gated.md
+🏃 /spec:run @specs/20261104/08-gated.md
    └─ ⏳ after brief 03
-/spec:run @specs/20261104/07-export-b.md
+🏃 /spec:run @specs/20261104/07-export-b.md
    ├─ ⏳ 06-export-a
    └─ ⏳ 01-rounds
 

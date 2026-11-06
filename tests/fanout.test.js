@@ -707,7 +707,7 @@ test('AC-20261105-07-2 a fix item is auto-picked as a fix lane with its own work
   assert.ok(fs.existsSync(wtp) && pending.isLane(wtp), 'the driver creates and marks the fix worktree')
   assert.strictEqual(h.g('rev-parse', '--verify', 'fix/01-alpha').trim(), mainHead(h), 'branched at trunk')
   const prompt = JSON.parse(/prompt: ("[^\n]+") \}\)/.exec(disp)[1])
-  assert.strictEqual(prompt, `/spec:run ${P('01-alpha')} --root ${wtp} --fix 'RED file left'`)
+  assert.strictEqual(prompt, `/spec:fix --root ${wtp} ${P('01-alpha')} — RED file left`)
 })
 
 test('AC-20261105-07-2 a fix item waits while its spec is in a lane, and when it names no spec on disk', () => {
@@ -1159,7 +1159,7 @@ test('AC-20261105-09-10 a spec-less /spec:fix item is auto-picked as lane fix-<s
   const disp = h.ok().stdout
   assert.ok(fs.existsSync(lessWt(h)) && pending.isLane(lessWt(h)))
   const prompt = JSON.parse(/prompt: ("[^\n]+") \}\)/.exec(disp)[1])
-  assert.strictEqual(prompt, `/spec:run --fix '${SYMPTOM}' --root ${lessWt(h)}`)
+  assert.strictEqual(prompt, `/spec:fix --root ${lessWt(h)} ${SYMPTOM}`)
 
   const o = fixHost({ more: [['02-beta', 'src/b.js']], host: { lanes: 4 } })
   Q.add(o.dir, { payload: LESS, type: 'fix' }, { top: true })
@@ -1399,13 +1399,14 @@ test('AC-20261105-14-17 a hardened spec with frontmatter prototype: waits with i
   assert.deepStrictEqual(lanes, [specPath('02-beta')])
 
   // A fix on such a spec runs PIN_TESTS and LOOK too, so a fix item bound to it is held the same way.
-  const fx = fixHost({ more: [['02-beta', 'src/b.js']], payload: FIX_PAYLOAD('02-beta') })
+  const fx = fixHost({ more: [['02-beta', 'src/b.js']], payload: FIX_PAYLOAD('02-beta'), host: { status: { '01-alpha': 'done', '02-beta': 'done' } } }) // done, so the bare run starts no spec lane beside the fix
   const g = path.join(fx.dir, specPath('01-alpha'))
   fs.writeFileSync(g, fs.readFileSync(g, 'utf8').replace('architecture: false', 'prototype: invoice-list-page\narchitecture: false'))
   addFix(fx)
   commitAll(fx, 'alpha came from a prototype')
   const held = fx.ok().stdout
-  assert.ok(held.includes(`waits — stops at LOOK for you — /spec:run ${specPath('01-alpha')} --fix 'RED file left' --in-place`), held)
+  assert.ok(held.includes(`waits — stops at LOOK for you — /spec:fix ${specPath('01-alpha')} — RED file left`), held)
+  assert.ok(!held.includes('--in-place'), held)
   fx.ok('--mark', 'planned')
   const picked = (st.readFanout(fx.dir).batch || []).map((l) => [l.kind, l.stem])
   assert.deepStrictEqual(picked, [['fix', 'fix-02-beta']], 'the plain spec\'s fix item stays a lane')
@@ -1433,7 +1434,7 @@ test('AC-20261105-12-7 PLAN with nothing runnable accounts for every open item o
   const h = stuckHost()
   const body = JSON.parse(h.ok('--json').stdout).body
   const lines = body.split('\n')
-  assert.strictEqual(lines[0], '**⏸️ nothing runnable — 7 open item(s)**', body)
+  assert.strictEqual(lines[0], '**⏸️ nothing runnable — 8 open item(s)**', body)
   assert.ok(!body.includes('drained') && !body.includes('nothing needs you'), body)
   const has = (l) => assert.ok(lines.includes(l), `${l}\n---\n${body}`)
   has(`⚠️ ${P('02-beta')} waits — after brief 03 (unplanned)`)
@@ -1443,7 +1444,8 @@ test('AC-20261105-12-7 PLAN with nothing runnable accounts for every open item o
   has('⚠️ q5 needs you — needs /spec:plan: /spec:plan sketch the billing screen')
   has('⚠️ q6 needs you — decide: 📌 decide: pick a database')
   has('⚠️ q7 needs you — plain note — paste by hand: remember the invoice footer')
-  assert.strictEqual(lines.filter((l) => l.startsWith('⚠️ ')).length, 7, 'seven open items, seven lines: the held draft has the Held line')
+  has('⚠️ — needs you — needs /spec:plan: /spec:plan docs/roadmap/03-rounds.md') // the fill adds the unplanned brief 03, which no queue item held
+  assert.strictEqual(lines.filter((l) => l.startsWith('⚠️ ')).length, 8, 'eight open items, eight lines: the held draft has the Held line')
   for (const needle of [P('02-beta'), '03-gamma', 'q4 ', 'q5 ', 'q6 ', 'q7 ', LESS_LINE]) assert.strictEqual(body.split(needle).length - 1, 1, `${needle} is named exactly once`)
   assert.ok(lines.includes('Next: /spec:plan docs/roadmap/05-boards.md'), 'next is the first item that needs you')
   assert.strictEqual(JSON.parse(h.ok('--json').stdout).mark, null)
@@ -1487,4 +1489,122 @@ test('AC-20261105-12-8 REPORT with open items left but nothing runnable ends not
   const rep = h.ok().stdout
   assert.ok(rep.includes('Next: nothing runnable — 2 open item(s) need you: /spec:queue list'), rep)
   assert.ok(!rep.includes('queue drained'), rep)
+})
+
+// ---- spec 20261105/16: the queue fills itself again ---------------------------------------------
+// The fixture host: brief 03 (hardened 01-a1, 02-a2), brief 04 (Depends on 03; hardened 03-b1), brief 05 (no spec), ad-hoc hardened
+// 04-adhoc, ad-hoc draft 05-adhoc-draft, ad-hoc hardened 06-blocked after that draft; no queue file.
+const FIX16 = 'specs/20261104'
+function bareHost({ lanes = 4 } = {}) {
+  const h = host({ specs: [], lanes })
+  fs.rmSync(path.join(h.dir, '.git/spec-queue.json'), { force: true })
+  const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(h.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(h.dir, rel), text) }
+  const brief = (nn, name, deps) => w(`docs/roadmap/${nn}-${name}.md`, `# ${nn} — ${name}\n\nPhase: P1 · Depends on: ${deps} · Primary workspaces: app\n\n## Result\n\nx\n`)
+  brief('03', 'alpha', '—'); brief('04', 'beta', '03'); brief('05', 'gamma', '—')
+  const spec = (stem, file, status, b, deps) => w(`${FIX16}/${stem}.md`, specText(stem, file, { status, deps }).replace('architecture: false', `brief: ${b || 'n/a'}\narchitecture: false`))
+  spec('01-a1', 'src/a1.js', 'hardened', '03'); spec('02-a2', 'src/a2.js', 'hardened', '03'); spec('03-b1', 'src/b1.js', 'hardened', '04')
+  spec('04-adhoc', 'src/c.js', 'hardened'); spec('05-adhoc-draft', 'src/d.js', 'draft'); spec('06-blocked', 'src/e.js', 'hardened', null, [`${FIX16}/05-adhoc-draft.md`])
+  h.g('add', '-A'); h.g('commit', '-q', '-m', 'fixture')
+  return Object.assign(h, { w, qfile: path.join(h.dir, '.git/spec-queue.json') })
+}
+const queueCli = (d, ...a) => runNode('scripts/queue.js', [...a, '--root', d])
+
+test('AC-20261105-16-5 bare fanout takes every startable spec in queue order, with the brief rules, and writes no queue file', () => {
+  const h = bareHost()
+  const check = (plan) => {
+    const lines = plan.split('\n')
+    assert.ok(plan.includes('📌 Auto-picked batch: 1 lane(s)') && plan.includes(`lane 1: ${FIX16}/01-a1.md`) && !plan.includes('lane 2:'), plan)
+    for (const l of [`${FIX16}/02-a2.md waits — shared brief 03`, `${FIX16}/03-b1.md waits — brief 04 depends on 03`, `${FIX16}/04-adhoc.md waits — the batch stops before 03-b1`,
+      `${FIX16}/06-blocked.md waits — depends on ${FIX16}/05-adhoc-draft.md (draft — it cannot land in this fan-out)`]) assert.ok(lines.includes('  ' + l), l + '\n' + plan)
+    assert.ok(lines.some((l) => l.startsWith('Held (') && l.includes('05-adhoc-draft (draft)')), plan)
+    assert.deepStrictEqual(lines.filter((l) => l.includes('needs you')), ['— needs you — needs /spec:plan: /spec:plan docs/roadmap/05-gamma.md'], 'briefs 03 and 04 stand for their specs and print nothing')
+  }
+  check(h.ok().stdout)
+  assert.ok(!fs.existsSync(h.qfile), 'no queue file is written')
+  queueCli(h.dir, 'next'); check(h.ok().stdout)
+})
+
+test('AC-20261105-16-6 an implementing sibling holds its spec and waits the rest of its brief; a plan prompt ahead ends nothing', () => {
+  const h = bareHost()
+  h.w(`${FIX16}/01-a1.run/state.json`, '{"step":"BUILD"}')
+  const body = h.ok().stdout
+  assert.ok(body.startsWith('▶ PLAN') && body.includes('⏸️ nothing runnable — 6 open item(s)'), body)
+  assert.ok(body.includes(`${FIX16}/02-a2.md waits — shared brief 03`) && /Held \(.*01-a1 \(implementing\)/.test(body), body)
+  assert.ok(!body.includes('Auto-picked'))
+  fs.rmSync(path.join(h.dir, FIX16, '01-a1.run'), { recursive: true })
+  assert.strictEqual(queueCli(h.dir, 'add', 'x', '--type', 'plan', '--top').status, 0)
+  const again = h.ok().stdout
+  assert.ok(again.includes(`lane 1: ${FIX16}/01-a1.md`) && again.includes('q1 needs you — needs /spec:plan: /spec:plan x'), again)
+})
+
+test('AC-20261105-16-7 a brief item\'s gate holds its specs, a finished brief says so, explicit paths and --pick obey the walk, an unknown status is held, nothing open is drained', () => {
+  const h = bareHost()
+  fs.writeFileSync(h.qfile, JSON.stringify({ version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-04', after: { brief: '05' } }] }))
+  const gated = h.ok().stdout
+  assert.ok(gated.includes(`${FIX16}/01-a1.md waits — after brief 05 (unplanned)`) && gated.includes(`${FIX16}/02-a2.md waits — after brief 05 (unplanned)`) && gated.includes(`lane 1: ${FIX16}/03-b1.md`), gated)
+  fs.rmSync(h.qfile)
+  const explicit = h.ok(`${FIX16}/01-a1.md`, `${FIX16}/02-a2.md`).stdout
+  assert.ok(explicit.includes(`lane 1: ${FIX16}/01-a1.md`) && explicit.includes(`${FIX16}/02-a2.md waits — shared brief 03`), explicit)
+  const pick = h.ok('--pick').stdout
+  assert.ok(pick.includes('01-a1') && !pick.includes('02-a2') && !pick.includes('03-b1') && !pick.includes('06-blocked'), pick)
+  h.w(`${FIX16}/07-wip.md`, specText('07-wip', 'src/w.js', { status: 'wip' }))
+  assert.match(h.ok().stdout, /Held \(.*07-wip \(wip\)/)
+  const fin = bareHost()
+  for (const stem of ['01-a1', '02-a2']) fin.w(`${FIX16}/${stem}.md`, specText(stem, 'src/x.js', { status: 'done' }).replace('architecture: false', 'brief: 03\narchitecture: false'))
+  for (const f of ['04-adhoc', '05-adhoc-draft', '06-blocked', '03-b1']) fs.rmSync(path.join(fin.dir, FIX16, f + '.md'))
+  for (const n of ['04-beta', '05-gamma']) fs.rmSync(path.join(fin.dir, 'docs/roadmap', n + '.md'))
+  fs.writeFileSync(fin.qfile, JSON.stringify({ version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-04' }] }))
+  const done = fin.ok().stdout
+  assert.ok(done.includes('q1 needs you — specs done: /spec:queue done 03') && done.includes('nothing runnable — 1 open item(s)'), done)
+  const drained = host({ specs: [] })
+  assert.ok(drained.ok().stdout.includes('✅ queue drained — nothing queued'))
+})
+
+test('AC-20261105-16-8 an unqueued hardened spec lands through a stub lane and ends drained; REPORT opens ⚠️ when a lane was dismissed, ✅ otherwise', () => {
+  const h = host({ specs: [['01-alpha', 'src/a.js']] })
+  const q = Q.read(h.dir); q.items = []; Q.write(h.dir, q)
+  h.ok('--mark', 'planned'); h.ok('--mark', 'dispatched')
+  h.finish('01-alpha', 'src/a.js'); h.ok('--mark', 'returned', '--lane', '1')
+  assert.ok(fs.existsSync(path.join(h.dir, 'src/a.js')), 'landed on trunk')
+  const rep = h.ok().stdout
+  assert.ok(rep.includes('✅ fanout — 1 lane(s) merged') && rep.includes('nothing needs you — queue drained'), rep)
+  const d = host({ specs: [['01-alpha', 'src/a.js']] })
+  const dq = Q.read(d.dir); dq.items = []; Q.write(d.dir, dq)
+  d.ok('--mark', 'planned'); d.ok('--mark', 'dispatched'); d.ok('--mark', 'dismissed', '--lane', '1')
+  assert.ok(d.ok().stdout.includes('⚠️ fanout — 0 lane(s) merged, 1 dismissed'), d.ok().stdout)
+})
+
+test('AC-20261105-16-9 a bare fanout refuses an argument it does not take and writes no state', () => {
+  const h = bareHost()
+  for (const argv of [['--bogus', 'x'], ['--pik']]) {
+    const r = h.run(...argv)
+    assert.strictEqual(r.status, 2, argv.join(' '))
+    assert.strictEqual(r.stderr, `fanout: unknown argument ${argv[0]}\n`)
+  }
+  assert.ok(!fs.existsSync(path.join(h.dir, '.git/spec-fanout.json')))
+})
+
+test('AC-20261105-16-11 a queued spec whose file is gone is not waited on by bare fanout', () => {
+  const h = bareHost()
+  assert.strictEqual(queueCli(h.dir, 'add', `${FIX16}/04-adhoc.md`).status, 0)
+  fs.rmSync(path.join(h.dir, FIX16, '04-adhoc.md'))
+  const plan = h.ok().stdout
+  assert.ok(!plan.includes('04-adhoc'), plan)
+  assert.ok(plan.includes(`lane 1: ${FIX16}/01-a1.md`))
+})
+
+test('AC-20261105-16-12 a ticked brief loses its gate on the fanout plan too', () => {
+  const h = bareHost()
+  fs.writeFileSync(h.qfile, JSON.stringify({ version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-04', after: { brief: '05' } }] }))
+  assert.ok(h.ok().stdout.includes('after brief 05'))
+  assert.strictEqual(queueCli(h.dir, 'done', '03').status, 0)
+  const plan = h.ok().stdout
+  assert.ok(!plan.includes('after brief 05') && !plan.includes(`${FIX16}/01-a1.md waits — after`) && plan.includes(`${FIX16}/02-a2.md`), plan)
+})
+
+test('AC-20261105-16-23 a spec lane still runs /spec:run; the commands and the contract name /spec:fix as the one fix door', () => {
+  const h = host({ specs: [['01-alpha', 'src/a.js']] })
+  h.ok('--mark', 'planned')
+  const disp = h.ok().stdout
+  assert.ok(disp.includes(`prompt: "/spec:run ${P('01-alpha')} --root `) && !disp.includes('prompt: "/spec:fix'), disp)
 })

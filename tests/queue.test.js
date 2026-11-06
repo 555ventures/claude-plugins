@@ -6,6 +6,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { tmpdir, gitRepo, runNode, SPEC, ROOT, v7Scripts, v1Queue } = require('./helpers')
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
+const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 
 function repo() {
   const d = tmpdir('queue'); gitRepo(d)
@@ -17,36 +18,47 @@ function repo() {
   return d
 }
 const q = (d, ...a) => runNode('scripts/queue.js', [...a, '--root', d])
+const w = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
+const sp = (status, brief) => `---\nstatus: ${status}\n${brief ? `brief: ${brief}\n` : ''}---\n# S\n`
+// A host with nothing open: no brief and no spec, so the fill adds nothing and a case sees only what it stores.
+const empty = () => { const d = tmpdir('queue'); gitRepo(d); return d }
+const mine = (d) => JSON.parse(q(d, 'list', '--json').stdout).items.filter((i) => i.id) // the stored rows of a host the fill also adds to
 
 test('add classifies kinds, next prints paste lines', () => {
-  const d = repo()
-  for (const p of ['specs/20261104/02-b.md', '07', 'fix the login bug']) assert.strictEqual(q(d, 'add', p).status, 0)
-  const items = JSON.parse(q(d, 'list', '--json').stdout).items
-  assert.deepStrictEqual(items.map((i) => i.kind), ['spec', 'brief', 'prompt'])
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan specs/20261104/02-b.md')
-  q(d, 'done', '1')
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan docs/roadmap/07-auth.md')
-  q(d, 'done', '07')
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan fix the login bug')
+  const d = empty(); w(d, 'docs/roadmap/07-auth.md', '# 07 — Auth\n'); w(d, 'specs/20261104/02-b.md', sp('draft'))
+  for (const p of ['specs/20261104/02-b.md', 'fix the login bug']) assert.strictEqual(q(d, 'add', p).status, 0)
+  assert.strictEqual(q(d, 'add', '07').status, 2, 'brief 07 is open work, so it is in the list already')
+  const rows = JSON.parse(q(d, 'list', '--json').stdout).items
+  assert.deepStrictEqual(rows.map((i) => i.kind), ['spec', 'prompt', 'brief'], 'stored rows first, the filled brief last')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan @specs/20261104/02-b.md', 'a spec head prints the derivation\'s top pick')
+  const e = empty()
+  q(e, 'add', 'fix the login bug')
+  assert.strictEqual(q(e, 'next').stdout.trim(), '/spec:plan fix the login bug', 'a prompt head prints its paste line alone')
+  q(e, 'done', '1')
+  assert.strictEqual(q(e, 'next').stdout.trim(), '✨ queue empty — nothing left undone')
 })
 
 test('hardened spec pastes /spec:run; empty queue is not an error', () => {
-  const d = repo()
+  const d = empty(); w(d, 'specs/20261104/01-a.md', sp('hardened'))
+  fs.rmSync(path.join(d, 'specs'), { recursive: true })
   assert.strictEqual(q(d).status, 0)
+  assert.strictEqual(q(d).stdout.trim(), '✨ queue empty — nothing left undone')
+  w(d, 'specs/20261104/01-a.md', sp('hardened'))
   q(d, 'add', 'specs/20261104/01-a.md')
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run specs/20261104/01-a.md')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run @specs/20261104/01-a.md')
 })
 
 test('duplicate payload refused with exit 2', () => {
-  const d = repo()
+  const d = empty()
   q(d, 'add', 'same thing')
   const r = q(d, 'add', 'same thing')
   assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('duplicate payload already queued'), r.stderr)
   assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 1)
 })
 
 test('add --top, move, list footer', () => {
-  const d = repo()
+  const d = empty()
   for (const p of ['one', 'two', 'three']) q(d, 'add', p)
   q(d, 'add', 'top', '--top')
   const order = () => JSON.parse(q(d, 'list', '--json').stdout).items.map((i) => i.payload)
@@ -55,21 +67,25 @@ test('add --top, move, list footer', () => {
   assert.deepStrictEqual(order(), ['three', 'top', 'one', 'two'])
   q(d, 'done', 'two')
   const out = q(d, 'list').stdout
-  assert.match(out, /^1 {2}q\d+ {2}\d+m {2}three$/m)
-  assert.match(out, /— 1 done$/m)
+  assert.match(out, /^1 {2}q\d+ {2}0d {2}📝 plan {7}three$/m)
+  assert.match(out, /^— 1 done · move: \/spec:queue move <ref> <n> · full text: \/spec:queue show <ref>$/m)
 })
 
-test('refs: id, position, basename, substring; ambiguous or unknown fails', () => {
-  const d = repo()
+test('refs: id, position, basename, substring; ambiguous or unknown exits 2 naming the remedy', () => {
+  const d = empty(); w(d, 'specs/20261104/02-b.md', sp('draft'))
   q(d, 'add', 'specs/20261104/02-b.md'); q(d, 'add', 'alpha task'); q(d, 'add', 'alpha other')
   const show = (r) => q(d, 'show', r)
-  assert.strictEqual(show('q2').stdout.trim(), 'alpha task')
-  assert.strictEqual(show('2').stdout.trim(), 'alpha task')
-  assert.strictEqual(show('02-b.md').stdout.trim(), 'specs/20261104/02-b.md')
+  assert.strictEqual(show('q2').stdout.trim(), 'q2  prompt\n\n/spec:plan alpha task')
+  assert.strictEqual(show('2').stdout.trim(), 'q2  prompt\n\n/spec:plan alpha task')
+  assert.strictEqual(show('02-b.md').stdout.trim(), 'q1  spec\n\nspec specs/20261104/02-b.md')
   assert.strictEqual(show('specs/20261104/02-b.md').status, 0)
-  assert.strictEqual(show('task').stdout.trim(), 'alpha task')
-  assert.strictEqual(show('alpha').status, 1)
-  assert.strictEqual(show('nope').status, 1)
+  assert.strictEqual(show('task').stdout.trim(), 'q2  prompt\n\n/spec:plan alpha task')
+  const amb = show('alpha')
+  assert.strictEqual(amb.status, 2)
+  assert.ok(amb.stderr.includes('"alpha" is ambiguous — matches q2, q3 — use the id instead'), amb.stderr)
+  const none = show('nope')
+  assert.strictEqual(none.status, 2)
+  assert.ok(none.stderr.includes('no item matches "nope" — run `/spec:queue list`'), none.stderr)
 })
 
 test('a spec item whose spec is done counts as done, and the next write records it', () => {
@@ -99,31 +115,30 @@ test('add stores @-prefixed, ./ and absolute spec paths root-relative, as a spec
 })
 
 test('a brief number names the brief item, not the row; 1 and 01 are the same brief', () => {
-  const d = repo()
-  fs.writeFileSync(path.join(d, 'docs/roadmap/01-x.md'), '# 01 — X\n'); fs.writeFileSync(path.join(d, 'docs/roadmap/02-y.md'), '# 02 — Y\n')
-  for (const p of ['docs/roadmap/01-x.md', 'docs/roadmap/02-y.md', '7', 'specs/20261104/01-a.md']) q(d, 'add', p)
+  const d = empty()
+  for (const n of ['01-x', '02-y', '07-auth']) { w(d, `docs/roadmap/${n}.md`, `# ${n}\n`); w(d, `specs/20261104/${n}.md`, sp('done', n.slice(0, 2))) }
+  w(d, 'specs/20261104/01-a.md', sp('hardened'))
+  for (const p of ['docs/roadmap/01-x.md', 'docs/roadmap/02-y.md', '07', 'specs/20261104/01-a.md']) q(d, 'add', p)
   q(d, 'done', '01')
-  assert.match(q(d, 'done', '02').stdout, /docs\/roadmap\/02-y\.md/, 'done 02 closes brief 02, not the 2nd row')
-  assert.match(q(d, 'done', '07').stdout, /done q3: 7/, 'padding does not matter')
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run specs/20261104/01-a.md', 'the spec was never touched')
+  assert.match(q(d, 'done', '02').stdout, /done q2: docs\/roadmap\/02-y\.md/, 'done 02 closes brief 02, not the 2nd row')
+  assert.match(q(d, 'done', '07').stdout, /done q3: 07/, 'padding does not matter')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run @specs/20261104/01-a.md', 'the spec was never touched')
   const r = q(d, 'done', '03'); assert.strictEqual(r.status, 0); assert.match(r.stdout, /nothing queued for brief 03/, 'an unqueued brief number is never row 3, and not an error either')
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run specs/20261104/01-a.md', 'row 3 is untouched')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run @specs/20261104/01-a.md', 'row 3 is untouched')
 })
 
 test('a bare number that names a roadmap brief is that brief even unqueued and unpadded, never a row', () => {
-  const d = repo()
-  fs.writeFileSync(path.join(d, 'docs/roadmap/12-twelve.md'), '# 12 — Twelve\n')
+  const d = empty()
+  w(d, 'docs/roadmap/12-twelve.md', '# 12 — Twelve\n'); w(d, 'specs/20261104/12-a.md', sp('done', '12'))
   for (let i = 0; i < 12; i++) q(d, 'add', `task ${i}`)
   const r = q(d, 'done', '12')
   assert.strictEqual(r.status, 0); assert.match(r.stdout, /nothing queued for brief 12/)
   assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 12, 'row 12 was not closed')
-  assert.strictEqual(q(d, 'show', '3').stdout.trim(), 'task 2', 'a number that is no brief is still a row')
+  assert.strictEqual(q(d, 'show', '3').stdout.trim(), 'q3  prompt\n\n/spec:plan task 2', 'a number that is no brief is still a row')
 })
 
 // ---- spec 20261105/04: items carry type and gate ----------------------------------------------
 const items = (d) => JSON.parse(q(d, 'list', '--json').stdout).items
-const w = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
-const sp = (status, brief) => `---\nstatus: ${status}\n${brief ? `brief: ${brief}\n` : ''}---\n# S\n`
 
 test('AC-20261105-04-1 a prose item stores type plan and pastes /spec:plan; a command payload keeps its type verbatim; decide and prototype paste their own lines', () => {
   const d = repo()
@@ -144,57 +159,61 @@ test('AC-20261105-04-1 a prose item stores type plan and pastes /spec:plan; a co
 })
 
 test('AC-20261105-04-2 --type on a spec or brief item, or outside the four, exits 2 and stores nothing; a type-less prompt pastes verbatim', () => {
-  const d = repo()
+  const d = empty()
   for (const args of [['specs/20261104/01-a.md', '--type', 'plan'], ['07', '--type', 'plan'], ['x', '--type', 'other']]) {
     const r = q(d, 'add', ...args)
     assert.strictEqual(r.status, 2)
     assert.ok(r.stderr.includes('--type takes plan, prototype, fix or decide, on a prompt item'), r.stderr)
   }
   assert.strictEqual(items(d).length, 0)
+  assert.ok(!fs.existsSync(path.join(d, '.git/spec-queue.json')), 'nothing was stored')
   const f = path.join(d, '.git/spec-queue.json')
   fs.writeFileSync(f, JSON.stringify({ version: 3, seq: 1, items: [{ id: 'q1', kind: 'prompt', payload: 'migrated words', added: '2026-11-01T00:00:00.000Z' }] }))
   assert.strictEqual(q(d, 'next').stdout.trim(), 'migrated words')
 })
 
 test('AC-20261105-04-3 --after stores a normalised brief or a root-relative spec, and refuses a target with no file naming it as typed', () => {
-  const d = repo()
+  const d = empty()
   w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'docs/roadmap/04B-boards.md', '# 04b\n'); w(d, 'specs/20261104/01-a.md', sp('hardened'))
   q(d, 'add', 'x', '--after', '3')
   q(d, 'add', 'y', '--after', 'docs/roadmap/04B-boards.md')
   q(d, 'add', 'z', '--after', '@specs/20261104/01-a.md')
-  assert.deepStrictEqual(items(d).map((i) => i.after), [{ brief: '03' }, { brief: '04b' }, { spec: 'specs/20261104/01-a.md' }])
+  assert.deepStrictEqual(mine(d).map((i) => i.after), [{ brief: '03' }, { brief: '04b' }, { spec: 'specs/20261104/01-a.md' }])
   for (const t of ['9', 'specs/nope.md', 'whatever']) {
     const r = q(d, 'add', 'w' + t, '--after', t)
     assert.strictEqual(r.status, 2)
     assert.ok(r.stderr.includes(`--after target not found: ${t}`), r.stderr)
   }
-  assert.strictEqual(items(d).length, 3)
+  assert.strictEqual(mine(d).length, 3)
   q(d, 'add', 'specs/20261104/01-a.md', '--after', '3') // accepted on every kind
-  assert.deepStrictEqual(items(d)[3].after, { brief: '03' })
+  assert.deepStrictEqual(mine(d)[3].after, { brief: '03' })
 })
 
 test('AC-20261105-04-4 next skips a gated head, list marks it, an all-gated queue says so, and the gate opens when the brief is done', () => {
-  const d = repo()
-  w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'specs/20261102/08-server-timeouts.md', sp('hardened'))
+  const d = empty()
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'specs/20261104/03-a.md', sp('hardened', '03')); w(d, 'specs/20261102/08-server-timeouts.md', sp('hardened'))
   q(d, 'add', 'gated', '--after', '3'); q(d, 'add', 'free')
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan free')
-  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}\d+m {2}gated {2}⏳ after brief 03$/m)
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}0d {2}📝 plan {7}gated {2}⏳ after brief 03 \(in-flight\)$/m)
   q(d, 'done', 'free')
-  const none = q(d, 'next')
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:run @specs/20261104/03-a.md', 'the gated head is skipped; the filled brief is next')
+  q(d, 'add', 'by spec', '--after', 'specs/20261102/08-server-timeouts.md')
+  assert.match(q(d, 'list').stdout, /by spec {2}⏳ after 08-server-timeouts \(hardened\)$/m)
+  w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261102/08-server-timeouts.md', sp('done'))
+  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan gated', 'the gate opens when the brief is done')
+  assert.match(q(d, 'list').stdout, /gated {2}⏳ gate met$/m)
+  assert.strictEqual(items(d)[0].after.brief, '03', 'list --json carries after as stored')
+  const g = empty(); w(g, 'specs/20261102/08-t.md', sp('hardened'))
+  q(g, 'add', 'only gated', '--after', 'specs/20261102/08-t.md')
+  fs.rmSync(path.join(g, 'specs'), { recursive: true })
+  const none = q(g, 'next')
   assert.strictEqual(none.status, 0)
   assert.strictEqual(none.stdout.trim(), 'nothing ready — 1 waiting on after gates or finished briefs')
-  assert.deepStrictEqual(JSON.parse(q(d, 'next', '--json').stdout), { empty: false, waiting: 1 })
-  q(d, 'add', 'by spec', '--after', 'specs/20261102/08-server-timeouts.md')
-  assert.match(q(d, 'list').stdout, /by spec {2}⏳ after 08-server-timeouts$/m)
-  w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('hardened', '03'))
-  assert.strictEqual(q(d, 'next').stdout.trim(), 'nothing ready — 2 waiting on after gates or finished briefs', 'a hardened live spec keeps brief 03 open')
-  w(d, 'specs/20261104/03-b.md', sp('done', '03'))
-  assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan gated')
-  assert.strictEqual(items(d)[0].after.brief, '03', 'list --json carries after as stored')
+  assert.deepStrictEqual(JSON.parse(q(g, 'next', '--json').stdout), { empty: false, waiting: 1 })
 })
 
 test('AC-20261105-04-5 a superseded spec meets a spec gate; a path with no file never does', () => {
-  const d = repo()
+  const d = empty()
   w(d, 'specs/20261104/09-old.md', sp('superseded'))
   q(d, 'add', 'after old', '--after', 'specs/20261104/09-old.md')
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan after old')
@@ -206,17 +225,17 @@ test('AC-20261105-04-5 a superseded spec meets a spec gate; a path with no file 
   assert.match(q(d, 'next').stdout, /nothing ready — 1 waiting/)
   s.items[1].after = { brief: '77' }
   fs.writeFileSync(f, JSON.stringify(s))
-  assert.match(q(d, 'list').stdout, /ghost gate {2}⏳ after brief 77/)
+  assert.match(q(d, 'list').stdout, /ghost gate {2}⏳ after brief 77 \(missing\)/)
 })
 
 test('AC-20261105-04-6 AC-20261105-10-15 a brief item is never ticked by the driver (it stays pending); a spec item ticks only with no live sidecar', () => {
-  const d = repo()
+  const d = empty()
   w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'docs/roadmap/04-boards.md', '# 04\n')
   w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('superseded', '03'))
   w(d, 'specs/20261104/04-a.md', sp('done', '04')); w(d, 'specs/20261104/04-b.md', sp('hardened', '04'))
-  q(d, 'add', '03'); q(d, 'add', '04')
+  q(d, 'add', '03') // brief 04 is in flight, so the fill lists it after the stored 03
   const l = JSON.parse(q(d, 'list', '--json').stdout)
-  assert.deepStrictEqual(l.items.map((i) => i.payload), ['03', '04'], 'brief 03 has every spec done and its item stays pending')
+  assert.deepStrictEqual(l.items.map((i) => i.payload), ['03', '04'], 'brief 03 has every spec done and its item stays pending; brief 04 is filled behind it')
   q(d, 'add', 'poke')
   assert.ok(!JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items.find((i) => i.payload === '03').done, 'no done timestamp is written on the next write either')
   w(d, 'specs/20261104/01-a.md', sp('done'))
@@ -242,7 +261,7 @@ test('AC-20261105-04-11 the interface contract and architecture name type, after
 })
 
 test('AC-20261105-07-14 --type or --after with no value exits 2 with needs a value and adds nothing', () => {
-  const d = repo()
+  const d = empty()
   for (const flag of ['--type', '--after']) {
     const r = runNode('scripts/queue.js', ['add', 'x', '--root', d, flag])
     assert.strictEqual(r.status, 2, flag)
@@ -256,7 +275,7 @@ test('AC-20261105-07-14 --type or --after with no value exits 2 with needs a val
 // ---- spec 20261105/10: a brief closes when the user says so -----------------------------------
 
 function finishedBrief() {
-  const d = repo()
+  const d = empty()
   w(d, 'docs/roadmap/03-rounds.md', '# 03\n')
   w(d, 'specs/20261104/03-a.md', sp('done', '03'))
   q(d, 'add', '03')
@@ -268,13 +287,13 @@ test('AC-20261105-10-11 a queued brief with every spec done stays pending; next 
   q(d, 'add', 'poke')
   assert.deepStrictEqual(items(d).map((i) => [i.payload, !!i.done]), [['03', false], ['poke', false]])
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:plan poke', 'a finished brief is skipped the way a gated head is')
-  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}\d+m {2}03 {2}✔ specs done — \/spec:queue done 03$/m)
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}0d {2}📝 plan {7}brief 03 \(rounds\) {2}✔ specs done — \/spec:queue done 03$/m)
   q(d, 'done', 'poke')
   const none = q(d, 'next')
   assert.strictEqual(none.stdout.trim(), 'nothing ready — 1 waiting on after gates or finished briefs')
   assert.deepStrictEqual(JSON.parse(q(d, 'next', '--json').stdout), { empty: false, waiting: 1 })
   const raw = JSON.parse(q(d, 'list', '--json').stdout).items[0]
-  assert.deepStrictEqual(Object.keys(raw).sort(), ['added', 'id', 'kind', 'payload'], '--json rows are unchanged')
+  assert.deepStrictEqual(Object.keys(raw).sort(), ['added', 'id', 'inProgress', 'kind', 'payload', 'ref', 'type'], '--json rows gain type, ref and inProgress')
   const f = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8'))
   assert.ok(!f.items.find((i) => i.payload === '03').done, 'no done timestamp on disk')
 })
@@ -283,7 +302,7 @@ test('AC-20261105-10-12 done NN ticks a finished brief; a superseded brief lists
   const d = finishedBrief()
   w(d, 'docs/roadmap/05-old.md', '# 05\n\n> **Superseded by 06**\n'); w(d, 'specs/20261104/05-a.md', sp('done', '05'))
   q(d, 'add', '05')
-  assert.match(q(d, 'list').stdout, /^2 {2}q2 {2}\d+m {2}05 {2}⛔ superseded — \/spec:queue done 05$/m)
+  assert.match(q(d, 'list').stdout, /^2 {2}q2 {2}0d {2}📝 plan {7}brief 05 \(old\) {2}⛔ superseded — \/spec:queue done 05$/m)
   assert.strictEqual(items(d).length, 2)
   assert.match(q(d, 'done', '03').stdout, /^done q1: 03/)
   assert.deepStrictEqual(items(d).map((i) => i.payload), ['05'])
@@ -319,12 +338,12 @@ test('AC-20261105-12-4 parse is the one reader of typed text', () => {
 })
 
 test('AC-20261105-12-4 a typed fix is stored bare and bound; next prints it byte-equal; list shows the spec path; spellings of one fix are one duplicate', () => {
-  const d = repo()
+  const d = empty()
   assert.strictEqual(q(d, 'add', '/spec:fix specs/20261104/01-a.md — gate red').status, 0)
   const it = stored(d).items[0]
   assert.deepStrictEqual([it.kind, it.type, it.spec, it.payload], ['prompt', 'fix', 'specs/20261104/01-a.md', 'gate red'])
   assert.strictEqual(q(d, 'next').stdout.trim(), '/spec:fix specs/20261104/01-a.md — gate red')
-  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}\d+m {2}specs\/20261104\/01-a\.md — gate red$/m)
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}0d {2}🔧 fix {8}specs\/20261104\/01-a\.md — gate red$/m)
   assert.strictEqual(q(d, 'add', '--type', 'fix', 'gate red').status, 0)
   const dup = q(d, 'add', '/spec:fix gate red')
   assert.strictEqual(dup.status, 2)
@@ -338,11 +357,11 @@ test('AC-20261105-12-4 a typed fix is stored bare and bound; next prints it byte
 })
 
 test('a bound fix resolves by its spec path, by id and by position; done ticks it', () => {
-  const d = repo()
+  const d = empty()
   q(d, 'add', '/spec:fix specs/20261104/01-a.md — gate red'); q(d, 'add', 'other')
   assert.strictEqual(q(d, 'show', 'specs/20261104/01-a.md').status, 0)
   assert.strictEqual(q(d, 'show', 'gate red').status, 0)
-  assert.strictEqual(q(d, 'show', 'q1').stdout.trim(), 'specs/20261104/01-a.md — gate red')
+  assert.strictEqual(q(d, 'show', 'q1').stdout.trim(), 'q1  prompt\n\n/spec:fix specs/20261104/01-a.md — gate red')
   assert.match(q(d, 'done', 'specs/20261104/01-a.md').stdout, /^done q1: specs\/20261104\/01-a\.md — gate red/)
   assert.deepStrictEqual(items(d).map((i) => i.id), ['q2'])
 })
@@ -416,7 +435,7 @@ test('AC-20261105-12-3 an unmigrated queue stops fanout and run with exit 2, pla
   assert.strictEqual(lock.status, 2); assert.ok(lock.stderr.includes(msg), lock.stderr)
   assert.ok(!lock.stdout.includes('Next:'), 'no Next line hides the refusal')
   const screen = runNode('scripts/status.js', ['--root', d, '--all']).stdout
-  assert.match(screen, /\[queue-unparseable\][^\n]*\/spec:migrate/)
+  assert.ok(screen.includes('⚠️ The queue file is an old version, so this screen ignores it.\n   Migrate it?  /spec:migrate\n'), screen)
   assert.strictEqual(fs.readFileSync(f, 'utf8'), text, 'nothing changed')
 })
 
@@ -626,4 +645,287 @@ test('AC-20261105-13-8 a missing spec-v7-final tag fails the groom oracle, it ne
   const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--verify', 'refs/tags/spec-v7-final'], { encoding: 'utf8' })
   assert.strictEqual(r.status, 0, 'tag spec-v7-final must exist: the oracle has no skip path')
   assert.ok(fs.existsSync(path.join(v7Scripts(), 'spec-queue.js')))
+})
+
+// ---- spec 20261105/16: the queue fills itself again ---------------------------------------------
+// v7's own spec-queue.js runs on the host's v1 twin; the fill, next, list and show must agree with it (ADR-0044).
+
+const v7q = (host, ...a) => spawnSync(process.execPath, [path.join(v7Scripts(), 'spec-queue.js'), ...a], { cwd: v1Queue(host), encoding: 'utf8' })
+const A16 = 'specs/20261104'
+const noQueueFile = (d) => !fs.existsSync(path.join(d, '.git/spec-queue.json'))
+const typeCell = /^(\d+ {2}\S+ *\s{2}\S+ *\s{2}).{12} {2}/gm // list's row head, then the 12-column type cell and its gap
+// Mine with the type cell off and v7's with its `spec ` word, command words and script name mapped: the shapes ADR-0041 §6 compares.
+const unType = (t) => t.replace(typeCell, '$1')
+const v7Map = (t) => t.replace(/^(\d+ {2}\S+ *\s{2}\S+ *\s{2})spec (specs\/)/gm, '$1$2').replace(/^(\d+ {2}\S+ *\s{2}\S+ *\s{2})(?:\/spec:(?:plan|prototype|fix) |📌 decide: )/gm, '$1').replace(/spec-queue (move|show)/g, '/spec:queue $1')
+
+// brief 03 (hardened 01-a1, 02-a2), brief 04 (Depends on 03; hardened 03-b1), brief 05 (no spec), ad-hoc hardened 04-adhoc, ad-hoc draft 05-adhoc-draft, ad-hoc hardened 06-blocked after that draft; no queue file.
+function fixtureHost() {
+  const d = empty()
+  const brief = (nn, name, deps) => w(d, `docs/roadmap/${nn}-${name}.md`, `# ${nn} — ${name}\n\nPhase: P1 · Depends on: ${deps} · Primary workspaces: app\n\n## Result\n\nx\n`)
+  brief('03', 'alpha', '—'); brief('04', 'beta', '03'); brief('05', 'gamma', '—')
+  const spec = (stem, status, b, deps) => w(d, `${A16}/${stem}.md`, `---\nstatus: ${status}\nbrief: ${b || 'n/a'}\n${deps ? `depends_on: [${deps}]\n` : ''}---\n# ${stem}\n`)
+  spec('01-a1', 'hardened', '03'); spec('02-a2', 'hardened', '03'); spec('03-b1', 'hardened', '04')
+  spec('04-adhoc', 'hardened'); spec('05-adhoc-draft', 'draft'); spec('06-blocked', 'hardened', null, `${A16}/05-adhoc-draft.md`)
+  return d
+}
+
+test('AC-20261105-16-1 next on the fixture host is the derivation\'s pick, byte-equal to v7\'s last line, and writes no queue file', () => {
+  const d = fixtureHost()
+  const first = q(d, 'next')
+  assert.strictEqual(first.stdout, `/spec:run @${A16}/01-a1.md\n`)
+  const old = v7q(d, 'next')
+  assert.strictEqual(old.status, 0, old.stderr)
+  assert.strictEqual(old.stdout.trim().split('\n').pop(), first.stdout.trim())
+  assert.ok(noQueueFile(d))
+  const second = q(d, 'next')
+  assert.strictEqual(second.stdout, first.stdout)
+  assert.ok(!second.stdout.includes('seeded') && noQueueFile(d))
+})
+
+test('AC-20261105-16-2 list before any next is v7\'s rows under the normaliser and leaves no file; move, add --top and done store only what they touch', () => {
+  const d = fixtureHost()
+  const mineOut = q(d, 'list').stdout
+  const old = v7q(d, 'list')
+  assert.strictEqual(old.status, 0, old.stderr)
+  assert.strictEqual(unType(mineOut), v7Map(old.stdout))
+  assert.ok(mineOut.includes('brief 03 (alpha)') && mineOut.includes(`${A16}/04-adhoc.md`) && /^1 {2}— {2}\? /m.test(mineOut) && noQueueFile(d))
+  const moved = q(d, 'move', '05', '1')
+  assert.strictEqual(moved.status, 0, moved.stderr)
+  assert.strictEqual(moved.stdout, 'moved q1 to 1\n')
+  assert.deepStrictEqual(Q.read(d).items, [{ id: 'q1', kind: 'brief', payload: '05' }], 'only brief 05 is stored, in v3\'s shape')
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}\? {2}📝 plan {7}brief 05 \(gamma\)$/m)
+  assert.strictEqual(q(d, 'add', '--type', 'plan', 'x', '--top').status, 0)
+  assert.strictEqual(items(d)[0].payload, 'x', 'x is first, ahead of the filled work')
+  const before = q(d, 'list').stdout.match(/— (\d+) done/)[1]
+  const done = q(d, 'done', '05')
+  assert.strictEqual(done.status, 0, done.stderr)
+  assert.ok(done.stdout.includes('⚠️ 05 is still open work, so it stays in the list'), done.stdout)
+  const after = q(d, 'list').stdout
+  assert.strictEqual(Number(after.match(/— (\d+) done/)[1]), Number(before) + 1)
+  const last = after.split('\n').filter((l) => /^\d+ {2}/.test(l)).pop()
+  assert.match(last, /^\d+ {2}— {3}\? {3}📝 plan {7}brief 05 \(gamma\)$/, 'brief 05 comes back last with no id')
+})
+
+// One host whose items carry a met gate, an unmet brief gate, an unmet spec gate, a prompt citing a done spec, a 20-day-old prompt and a long prompt.
+function flagsHost() {
+  const D1 = 'specs/20261101'
+  const d = empty()
+  w(d, 'docs/roadmap/02-schema.md', '# 02 — Schema\n'); w(d, 'docs/roadmap/04-boards.md', '# 04 — Boards\n')
+  w(d, `${D1}/01-done.md`, sp('done', '02')); w(d, `${D1}/02-open.md`, sp('hardened')); w(d, `${D1}/03-boards.md`, sp('hardened', '04'))
+  const long = 'rework the whole notification pipeline so that every channel retries with backoff and the digest never sends twice to anyone at all today'
+  const row = (payload, extra = {}) => ({ kind: 'prompt', type: 'plan', payload, added: new Date().toISOString(), ...extra })
+  const list = [row('met gate', { after: { brief: '02' } }), row('unmet brief gate', { after: { brief: '04' } }), row('unmet spec gate', { after: { spec: `${D1}/02-open.md` } }),
+    row(`polish the output of ${D1}/01-done.md`), row('ancient ungated thing', { added: new Date(Date.now() - 20 * 86400000 - 3600000).toISOString() }), row(long)]
+  Q.write(d, { version: 3, seq: list.length, items: list.map((i, n) => ({ id: 'q' + (n + 1), ...i })) })
+  return d
+}
+
+test('AC-20261105-16-3 list carries v7\'s flags whole and cuts the text with the type column counted; show prints v7\'s bytes', () => {
+  const d = flagsHost()
+  const mineRows = q(d, 'list').stdout.split('\n'); const oldRows = v7Map(v7q(d, 'list').stdout).split('\n')
+  assert.strictEqual(mineRows.length, oldRows.length)
+  mineRows.map(unType).forEach((m, i) => {
+    if (i === 5) return // the long prompt: v7 cuts at its own width, this screen cuts 14 columns earlier
+    assert.strictEqual(m, oldRows[i], `row ${i + 1}`)
+  })
+  const flags = mineRows.join('\n')
+  for (const f of ['⏳ gate met', '⏳ after brief 04 (in-flight)', '⏳ after 02-open (hardened)', '📎 cites done 01-done', '⌛ stale']) assert.ok(flags.includes(f), f)
+  const longRow = mineRows[5]; const oldLong = oldRows[5]
+  assert.ok(longRow.endsWith('…') && [...longRow].length <= 100, longRow)
+  assert.ok(oldLong.endsWith('…') && unType(longRow).length < oldLong.length && oldLong.startsWith(unType(longRow).slice(0, -1)), 'the same words, cut earlier by the type column')
+  for (const id of ['q1', 'q2', 'q3', 'q4', 'q5', 'q6']) assert.strictEqual(q(d, 'show', id).stdout, v7q(d, 'show', id).stdout, `show ${id}`)
+  assert.strictEqual(q(d, 'show', '03').stdout, v7q(d, 'show', '03').stdout.replace('03', '03'), 'a filled brief shows as v7 does')
+})
+
+test('AC-20261105-16-4 next prints the free spec of a brief whose first spec is blocked, the blocked top pick with its branches, and keeps the prompt line alone', () => {
+  const d = empty()
+  w(d, 'docs/roadmap/03-alpha.md', '# 03 — alpha\n')
+  w(d, `${A16}/01-a.md`, `---\nstatus: hardened\nbrief: 03\ndepends_on: [${A16}/05-x.md]\n---\n# a\n`); w(d, `${A16}/02-b.md`, sp('hardened', '03')); w(d, `${A16}/05-x.md`, sp('hardened'))
+  assert.strictEqual(q(d, 'next').stdout, `/spec:run @${A16}/02-b.md\n`, 'the blocked first spec is passed over')
+  assert.strictEqual(v7q(d, 'next').stdout.trim().split('\n').pop(), `/spec:run @${A16}/02-b.md`)
+  const b = empty() // two specs waiting on each other: every open spec is blocked
+  w(b, `${A16}/01-a.md`, `---\nstatus: hardened\ndepends_on: [${A16}/02-b.md]\n---\n# a\n`); w(b, `${A16}/02-b.md`, `---\nstatus: hardened\ndepends_on: [${A16}/01-a.md]\n---\n# b\n`)
+  const blocked = q(b, 'next').stdout
+  assert.strictEqual(blocked, `/spec:run @${A16}/01-a.md\n   └─ ⏳ ${A16}/02-b.md (hardened)\n`)
+  assert.strictEqual(blocked.trim(), v7q(b, 'next').stdout.trim().split('\n').slice(-2).join('\n'))
+  const im = empty()
+  w(im, `${A16}/01-a.md`, sp('hardened')); w(im, `${A16}/01-a.run/state.json`, '{"step":"BUILD"}')
+  q(im, 'add', `${A16}/01-a.md`)
+  assert.strictEqual(q(im, 'next').stdout, `/spec:run @${A16}/01-a.md\n`)
+  assert.ok(Q.paste(im, Q.read(im).items[0]).startsWith('/spec:run '))
+  const p = empty(); q(p, 'add', 'a prompt'); assert.strictEqual(q(p, 'next').stdout, '/spec:plan a prompt\n')
+})
+
+test('AC-20261105-16-9 every subcommand refuses a flag it does not take, before it reads or writes; groom takes none', () => {
+  const d = empty(); q(d, 'add', 'one')
+  const file = path.join(d, '.git/spec-queue.json'); const bytes = fs.readFileSync(file)
+  const cases = [['add', 'x', '--bogus'], ['add', 'x', '--at', '1'], ['add', 'x', '--when', 'manual'], ['add', 'x', '--lane', 'fix'], ['add', 'x', '--distinct'], ['list', '--bogus'], ['list', '--top'], ['next', '--type', 'fix'], ['done', 'q1', '--bogus'], ['move', 'q1', '1', '--bogus'], ['show', 'q1', '--bogus'], ['groom', '--json']]
+  for (const argv of cases) {
+    const flag = argv.find((a) => a.startsWith('--'))
+    const r = q(d, ...argv)
+    assert.strictEqual(r.status, 2, argv.join(' '))
+    assert.strictEqual(r.stderr, `queue: ${argv[0]}: unknown flag ${flag}\n`)
+    assert.ok(fs.readFileSync(file).equals(bytes), argv.join(' '))
+  }
+  assert.strictEqual(q(d, 'list', '--json').status, 0)
+})
+
+test('AC-20261105-16-10 add: a spec path with no file, a brief spelled any way, prose numbers, a filled ad-hoc spec and a repeated prompt', () => {
+  const d = fixtureHost()
+  const no = q(d, 'add', `${A16}/99-nope.md`)
+  assert.strictEqual(no.status, 2); assert.ok(no.stderr.includes('no such spec file'), no.stderr); assert.ok(noQueueFile(d))
+  for (const spelling of ['03', 'docs/roadmap/03-alpha.md', '@docs/roadmap/03-alpha.md']) {
+    const r = q(d, 'add', spelling)
+    assert.strictEqual(r.status, 2, spelling)
+    assert.ok(r.stderr.includes('queue: brief 03 is already queued at position 1 — /spec:queue move 03 <n> to reorder it'), r.stderr)
+  }
+  assert.ok(noQueueFile(d))
+  for (const prose of ['3', '2026']) { assert.strictEqual(q(d, 'add', prose).status, 0); assert.deepStrictEqual([Q.read(d).items.pop().type, Q.read(d).items.pop().payload], ['plan', prose]) }
+  assert.strictEqual(q(d, 'add', `${A16}/04-adhoc.md`).status, 0, 'a filled ad-hoc spec is stored where asked')
+  assert.strictEqual(Q.read(d).items.filter((i) => i.payload === `${A16}/04-adhoc.md`).length, 1)
+  const again = q(d, 'add', `${A16}/04-adhoc.md`)
+  assert.strictEqual(again.status, 2); assert.ok(again.stderr.includes('already queued at position'), again.stderr)
+  assert.strictEqual(q(d, 'add', `${A16}/05-adhoc-draft.md`, '--top').status, 0)
+  assert.strictEqual(items(d)[0].payload, `${A16}/05-adhoc-draft.md`, '--top puts it first')
+  q(d, 'add', 'same prose'); const dup = q(d, 'add', 'same prose')
+  assert.strictEqual(dup.status, 2); assert.ok(dup.stderr.includes('duplicate payload already queued'), dup.stderr)
+})
+
+test('AC-20261105-16-11 a queued spec whose file is gone is retired and skipped; a lane\'s root that lacks the spec leaves the item open', () => {
+  const d = empty()
+  w(d, `${A16}/01-a.md`, sp('hardened')); w(d, `${A16}/02-b.md`, sp('hardened'))
+  q(d, 'add', `${A16}/01-a.md`); q(d, 'add', `${A16}/02-b.md`)
+  fs.rmSync(path.join(d, `${A16}/01-a.md`))
+  assert.strictEqual(q(d, 'next').stdout, `/spec:run @${A16}/02-b.md\n`)
+  q(d, 'add', 'poke')
+  assert.ok(Q.read(d).items.find((i) => i.payload === `${A16}/01-a.md`).done, 'the next write records the retirement')
+  const main = empty(); w(main, `${A16}/01-a.md`, sp('hardened')); w(main, '.gitignore', '.claude/worktrees/\n'); w(main, 'f.txt', 'x\n')
+  spawnSync('git', ['-C', main, 'add', '-A'], { encoding: 'utf8' }); spawnSync('git', ['-C', main, 'commit', '-q', '-m', 'one'], { encoding: 'utf8' })
+  spawnSync('git', ['-C', main, 'config', 'user.email', 't@t'], { encoding: 'utf8' })
+  q(main, 'add', `${A16}/01-a.md`)
+  const wt = path.join(main, '.claude/worktrees/side')
+  spawnSync('git', ['-C', main, 'worktree', 'add', '-q', '-b', 'side', wt, 'HEAD~0'], { encoding: 'utf8' })
+  fs.rmSync(path.join(wt, A16), { recursive: true, force: true }) // a lane that branched before the spec was locked
+  assert.strictEqual(runNode('scripts/queue.js', ['add', 'from the lane', '--root', wt]).status, 0)
+  const stored = Q.read(main).items
+  assert.ok(!stored.find((i) => i.payload === `${A16}/01-a.md`).done, 'the spec item stays open')
+  assert.strictEqual(stored.length, 2)
+})
+
+test('AC-20261105-16-12 done on an in-flight brief with a gate leaves its specs ungated on the status screen; a later move orders them by the new row', () => {
+  const d = empty()
+  w(d, 'docs/roadmap/03-alpha.md', '# 03 — alpha\n'); w(d, 'docs/roadmap/05-gamma.md', '# 05 — gamma\n'); w(d, `${A16}/01-a.md`, sp('hardened', '03')); w(d, `${A16}/02-g.md`, sp('hardened', '05'))
+  Q.write(d, { version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: new Date().toISOString(), after: { brief: '05' } }] })
+  const gated = runNode('scripts/status.js', ['--root', d, '--all']).stdout
+  assert.ok(gated.includes('⏳ after brief 05'), gated)
+  assert.strictEqual(q(d, 'done', '03').status, 0)
+  const screen = runNode('scripts/status.js', ['--root', d, '--all']).stdout
+  assert.ok(!screen.includes('⏳ after brief 05'), screen)
+  assert.match(screen, /🏃 \/spec:run @specs\/20261104\/01-a\.md/)
+  assert.strictEqual(q(d, 'move', '03', '1').status, 0)
+  const rows = Q.read(d).items
+  assert.deepStrictEqual(rows.map((i) => [i.id, i.payload, !!i.done]), [['q1', '03', true], ['q2', '03', false]], 'the re-filled brief is stored as a new row; the done row stays')
+  assert.strictEqual(JSON.parse(runNode('scripts/status.js', ['--root', d, '--json']).stdout).next, `/spec:run ${A16}/01-a.md`)
+})
+
+test('AC-20261105-16-13 an old-version queue file is a decide line on the status screen, a corrupt one stays hygiene', () => {
+  const d = empty(); const file = path.join(d, '.git/spec-queue.json')
+  fs.writeFileSync(file, JSON.stringify({ version: 1, seq: 0, items: [] }))
+  const r = runNode('scripts/status.js', ['--root', d])
+  assert.strictEqual(r.status, 0)
+  assert.ok(r.stdout.includes('⚠️ The queue file is an old version, so this screen ignores it.\n   Migrate it?  /spec:migrate\n'), r.stdout)
+  const j = JSON.parse(runNode('scripts/status.js', ['--root', d, '--json']).stdout).anomalies.find((a) => a.kind === 'queue-unparseable')
+  assert.deepStrictEqual([j.audience, j.paste, j.ask], ['decide', '/spec:migrate', 'Migrate it?'])
+  fs.writeFileSync(file, '{ not json')
+  const bad = JSON.parse(runNode('scripts/status.js', ['--root', d, '--json']).stdout).anomalies.find((a) => a.kind === 'queue-unparseable')
+  assert.strictEqual(bad.audience, 'hygiene')
+})
+
+test('AC-20261105-16-14 refs resolve from the fill; a done id, a missing items list and a non-repo exit 2 and change nothing', () => {
+  const d = fixtureHost()
+  assert.strictEqual(q(d, 'show', '03').status, 0)
+  assert.match(q(d, 'show', '03').stdout, /^—  brief\n\nbrief 03 \(alpha\)\n$/)
+  const m = q(d, 'move', '05', '1'); assert.strictEqual(m.status, 0); assert.match(m.stdout, /to 1/)
+  q(d, 'add', 'alpha one'); q(d, 'add', 'alpha two')
+  const amb = q(d, 'show', 'alpha one'.slice(0, 5)); assert.strictEqual(amb.status, 2); assert.ok(/q\d+, q\d+/.test(amb.stderr), amb.stderr)
+  q(d, 'done', 'q2')
+  const file = path.join(d, '.git/spec-queue.json'); const bytes = fs.readFileSync(file)
+  for (const argv of [['done', 'q2'], ['move', 'q2', '1']]) { const r = q(d, ...argv); assert.strictEqual(r.status, 2, argv.join(' ')); assert.ok(r.stderr.includes('is already done — nothing to do'), r.stderr) }
+  assert.ok(fs.readFileSync(file).equals(bytes))
+  fs.writeFileSync(file, '{"version":3}')
+  const bad = q(d, 'list'); assert.strictEqual(bad.status, 2); assert.ok(!bad.stderr.includes('    at '), bad.stderr)
+  const out = tmpdir('nogit')
+  const r = spawnSync(process.execPath, [path.join(SPEC, 'scripts/queue.js'), 'list'], { cwd: out, encoding: 'utf8' })
+  assert.strictEqual(r.status, 2); assert.ok(r.stderr.includes('git init') && !r.stderr.includes('    at '), r.stderr)
+})
+
+test('AC-20261105-16-16 the owners stay within their line budgets', () => {
+  const lines = (f) => fs.readFileSync(path.join(SPEC, 'scripts', f), 'utf8').split('\n').length - 1
+  assert.ok(lines('queue.js') <= 200 && lines('lib/queue.js') <= 200, 'queue.js and lib/queue.js')
+  assert.ok(lines('lib/queue-rows.js') <= 250 && lines('lib/next.js') <= 250, 'queue-rows.js and next.js')
+  assert.ok(fs.existsSync(path.join(SPEC, 'scripts/lib/queue-rows.js')))
+})
+
+test('AC-20261105-16-19 AC-20261105-16-20 AC-20261105-16-21 AC-20261105-16-22 list and status carry the type, the in-progress marker and the --json fields', () => {
+  const d = empty()
+  w(d, `${A16}/01-run.md`, sp('hardened')); w(d, `${A16}/02-draft.md`, sp('draft')); w(d, 'docs/roadmap/03-alpha.md', '# 03 — alpha\n'); w(d, `${A16}/04-busy.md`, sp('hardened')); w(d, `${A16}/04-busy.run/state.json`, '{"step":"BUILD"}')
+  const fixSpec = `${A16}/09-done.md`; w(d, fixSpec, sp('done'))
+  q(d, 'add', 'plan words'); q(d, 'add', '--type', 'prototype', 'proto words'); q(d, 'add', `/spec:fix ${fixSpec} — gate red`); q(d, 'add', '--type', 'decide', 'pick one'); q(d, 'add', 'a note')
+  Q.write(d, { ...Q.read(d), items: Q.read(d).items.map((i) => (i.payload === 'a note' ? { ...i, type: undefined } : i)) })
+  const list = q(d, 'list').stdout
+  const rows = list.split('\n').filter((l) => /^\d+ {2}/.test(l))
+  assert.deepStrictEqual(rows.map((l) => l.slice(11, 23)), ['📝 plan     ', '🧪 prototype', '🔧 fix      ', '📌 decide   ', ' '.repeat(12), '📝 plan     ', '🏃 run      ', '📝 plan     ', '🏃 run      '])
+  assert.deepStrictEqual([...new Set(rows.map((l) => l.slice(25).search(/\S/)))], [0], 'the text starts in one column')
+  assert.ok(/04-busy\.md {2}🔨 in progress$/m.test(list) && list.includes('🏃 run      '), list)
+  assert.ok(!/01-run\.md.*🔨/.test(list), 'a hardened spec is no work in progress')
+  const screen = runNode('scripts/status.js', ['--root', d]).stdout
+  for (const row of ['q1  📝 /spec:plan plan words', 'q2  🧪 /spec:prototype proto words', `q3  🔧 /spec:fix ${fixSpec} — gate red`, 'q4  📌 decide: pick one', 'q5  a note']) assert.ok(screen.split('\n').includes(row), `${row}\n${screen}`)
+  assert.ok(/🏃 \/spec:run @specs\/20261104\/04-busy\.md {2}🔨 in progress/.test(screen), screen)
+  assert.ok(!/📌 📌/.test(screen))
+  const j = JSON.parse(q(d, 'list', '--json').stdout).items
+  const by = (p) => j.find((i) => i.payload === p)
+  assert.deepStrictEqual([by('plan words').ref, by('plan words').type, by('plan words').inProgress], ['q1', 'plan', false])
+  assert.deepStrictEqual([by('03').ref, by('03').type, by('03').id], ['03', 'plan', null])
+  assert.deepStrictEqual([by(`${A16}/04-busy.md`).ref, by(`${A16}/04-busy.md`).type, by(`${A16}/04-busy.md`).inProgress], [`${A16}/04-busy.md`, 'run', true])
+  for (const i of j) assert.strictEqual(q(d, 'show', i.ref).status, 0, i.ref)
+  assert.strictEqual(by('a note').type, null)
+  // a brief holding an implementing spec, and a fix item whose lane is out
+  const b = empty(); w(b, 'docs/roadmap/03-alpha.md', '# 03\n'); w(b, `${A16}/01-a.md`, sp('hardened', '03')); w(b, `${A16}/01-a.run/state.json`, '{"step":"BUILD"}')
+  assert.match(q(b, 'list').stdout, /brief 03 \(alpha\) {2}🔨 in progress$/m)
+  const f = empty(); q(f, 'add', '/spec:fix gate red')
+  const lane = (status) => st.writeFanout(f, { step: 'WAIT', batch: [{ id: '1', spec: null, stem: 'fix-x', status, kind: 'fix', item: 'q1' }] })
+  lane('dispatched'); assert.match(q(f, 'list').stdout, /gate red {2}🔨 in progress$/m)
+  assert.ok(/q1 {2}🔧 \/spec:fix gate red {2}🔨 in progress/.test(runNode('scripts/status.js', ['--root', f]).stdout))
+  lane('merged'); assert.ok(!q(f, 'list').stdout.includes('🔨'))
+})
+
+test('AC-20261105-16-15 a missing spec-v7-final tag fails the oracles of this spec, it never skips', () => {
+  const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--verify', 'refs/tags/spec-v7-final'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'tag spec-v7-final must exist: the oracles have no skip path')
+  assert.ok(fs.existsSync(path.join(v7Scripts(), 'spec-queue.js')) && fs.existsSync(path.join(v7Scripts(), 'spec-status.js')))
+})
+
+test('AC-20261105-16-17 AC-20261105-16-24 the commands, contract, architecture, canonical page and README carry the fill, the rules and the one fix door', () => {
+  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8')
+  const ic = read('docs/v8/interface-contract.md'); const s7 = ic.slice(ic.search(/^## 7\b/m)).split(/^## (?!7\b)/m)[0]; const s3 = ic.slice(ic.search(/^## 3\b/m), ic.search(/^## 4\b/m))
+  const arch = read('docs/v8/architecture.md'); const queueMd = read('spec/commands/queue.md')
+  for (const t of ['the fill', 'queue-rows.js', 'ADR-0044', 'type column', 'unknown flag', 'never edits the file']) assert.ok((s7 + queueMd).toLowerCase().includes(t.toLowerCase()), t)
+  for (const t of ['lib/queue-rows.js', 'ADR-0044', 'fill']) assert.ok(arch.includes(t), 'architecture names ' + t)
+  assert.ok(read('spec/commands/fanout.md').includes('shared brief') && read('spec/commands/fanout.md').includes('the batch stops before'))
+  assert.ok(read('docs/v8/design.md').includes('ADR-0044') && read('README.md').includes('ADR-0044'))
+  assert.ok(!s3.includes('spec-queue-done.json'))
+  for (const f of ['spec/commands/queue.md', 'spec/commands/fanout.md', 'spec/commands/plan.md', 'docs/v8/interface-contract.md', 'docs/v8/architecture.md', 'docs/v8/design.md', 'README.md', 'docs/canonical/status.md']) {
+    const t = read(f)
+    assert.ok(!t.includes('seeded queue') && !t.includes('You fill the queue') && !t.includes('When the brief\nis fully planned') && !t.includes('When the brief is fully planned'), f)
+  }
+  const hygiene = read('docs/canonical/status.md').split('\n\n').find((p) => p.startsWith('Done rows stay'))
+  assert.ok(hygiene && !hygiene.includes('--distinct') && !hygiene.includes('≥ 0.35'))
+  // /spec:fix is the one fix door
+  for (const f of ['spec/commands/run.md', 'spec/commands/fanout.md', 'docs/v8/interface-contract.md', 'docs/v8/architecture.md']) assert.ok(!/\/spec:run [^|`]*--fix(?![-\w])/.test(read(f)) && !read(f).includes('/spec:run --fix'), f)
+  assert.ok(!read('spec/commands/run.md').includes('--fix'))
+  const runRow = ic.split('\n').find((l) => l.startsWith('| `/spec:run` |'))
+  const flag = /--fix(?![-\w])/ // `--fix-dispatched` is a mark, not the start flag
+  assert.ok(runRow && !flag.test(runRow) && !flag.test(ic.split('\n').find((l) => l.startsWith('| review (`/spec:run`)'))))
+  const fix = read('spec/commands/fix.md').replace(/\s+/g, ' ')
+  for (const t of ['--root', '--in-place', '<spec> — <symptom>', 'Edit', 'commands/run.md']) assert.ok(fix.includes(t), 'fix.md names ' + t)
 })

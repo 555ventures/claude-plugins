@@ -33,7 +33,7 @@ spec/
   templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md
   hooks/hooks.json
   scripts/
-    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js
+    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js  lib/queue.js  lib/queue-rows.js
     run.js fanout.js queue.js status.js plan.js init.js doctor.js migrate.js
     genesis.js mocks.js prototype.js connect.js release.js red-check.js
     state-gate.sh block-worker-git.sh block-cross-worktree-writes.sh merge-back.sh
@@ -124,15 +124,19 @@ Builder agent brief must include the Intent block verbatim and the line
 ## 5. Fanout (`fanout.js`)
 
 PLAN → DISPATCH → WAIT → RELAY → MERGE → REPORT, then back to PLAN until the queue is
-empty. PLAN, bare (AUTO): the first `lanes` (default 4) runnable queue specs in queue order —
-runnable = `hardened`, its lane did not end PARKED/AMENDED, not already in a lane, and every
-`depends_on` entry (plus the lane's run-state `waitingOn`) done on trunk — File Plan
+empty. PLAN, bare (AUTO): the first `lanes` (default 4) runnable specs, queued or not, in the order
+`lib/next.js` derives (a queued brief's position orders its specs and the brief prints nothing unless
+it is finished; ADR-0044) —
+runnable = `hardened` (not `implementing`), its lane did not end PARKED/AMENDED, not already in a lane, every
+`depends_on` entry (plus the lane's run-state `waitingOn`) done on trunk, no unmet queue `after` gate, and not
+serial with the derivation's top pick: a shared brief waits (`shared brief NN`), and a brief dependency waits
+and ends the batch (`brief X depends on Y`, then `the batch stops before <stem>`) — File Plan
 overlap regardless; a spec with an unmet entry is printed under Waiting with the reason (`lane N this batch`,
 `draft — it cannot land in this fan-out`, or `<status>, not done`); prints a 📌 Auto-picked batch line, mark `planned`. `--pick` (SELF-PICK): the
 runnable specs as checkbox questions (≤ 4 boxes × ≤ 4 questions, labels = titles), mark `picked
 --label <title>` (repeatable; same validity checks, ≤ `lanes`). DISPATCH prints one Agent
 call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec> --root
-.claude/worktrees/spec-<stem>` (absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
+.claude/worktrees/spec-<stem>` (a fix lane: `/spec:fix --root <wt> …`, below; absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
 run state. RELAY: all `pending-question.json` batched into one message; `answered --lane`.
 Landing, per done lane: WAIT lands the first `done` lane as it returns whenever the trunk gate is not red
 (a `sent-back` lane or a lane mid-rebase does not hold it); MERGE lands whatever is left in batch
@@ -187,9 +191,9 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 
 ## 9. Other drivers
 
-- `queue.js`: `next|list|groom|add|move|done|show`, the CLI over `lib/queue.js` (the queue's one owner: file, version, item shape, `parse`, `add`, `tick`, `reconcile`, `paste`; ≤ 200 LOC; no script outside it, the CLI and `migrate.js` touches items — `tests/queue.test.js` walks `spec/scripts/`). Duplicate refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done specs, never a brief (only `done` closes one): `next` skips a finished brief, `list` tags it `✔ specs done`. `groom` is v7's read-only report (duplicates, cites done, gate met, stale), ported and proven byte-identical against `spec-v7-final`; it also counts the open briefs and ad-hoc specs nobody queued.
+- `queue.js`: `next|list|groom|add|move|done|show`, the CLI over `lib/queue.js` (the queue's one owner: file, version, item shape, `parse`, `add`, `tick`, `reconcile`, `fill`, `place`, `paste`; ≤ 200 LOC; no script outside it, the CLI and `migrate.js` touches items — `tests/queue.test.js` walks `spec/scripts/`) and `lib/queue-rows.js` (≤ 250 LOC, writes nothing: the `list`, `show` and `groom` renders, the type table and the in-progress rule). The queue a reader sees is the file plus the fill, worked out on every read and never stored (ADR-0044). Unknown flags are refused on every subcommand. `next` prints a prompt's paste line, else `lib/next.js`'s `topLines` (v7's `--next` render); `reconcile` ticks done specs and retires a spec item whose file is gone (main checkout only), never a brief (only `done` closes one): `next` skips a finished brief, `list` tags it `✔ specs done`. `list` rows are v7's columns plus a type column and a `🔨 in progress` marker, proven against `spec-v7-final` under a normaliser. `groom` is v7's read-only report (duplicates, cites done, gate met, stale), ported and proven byte-identical against `spec-v7-final`.
 - `status.js` (≤ 400 LOC): the dashboard, v7's screen drawn from `lib/next.js`. Roadmap (collapsed
-  ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔), 🎯 Next (`qNN` prompt rows, then
+  ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔), 🎯 Next (`qNN` prompt rows led by their type mark 🏃/📝/🧪/🔧 and ended by `🔨 in progress`, then
   `⚡ N parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):` with `🔶`
   overlap pairs, a lone pick with `🚦 solo`, or a blocked pick with `⏳ after …` branches), up to three `⚠️` decide lines (`skipped-brief`, `out-of-order`, `brief-done-queued`), footer
   (`🟢`/`🟠`/`⬜`, `· N more open`, `· N more to decide (--all)`, `· H hygiene findings (/spec:doctor)`);
@@ -199,10 +203,11 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   brief's dependency readiness. `--json` is `{briefs, specs, superseded, anomalies, next}`. No ledger
   lines, no run-in-flight or fan-out footer, no `doctor.check`.
 - `lib/next.js` (≤ 250 LOC): v7's derivation on v8's state, no CLI. `derive(root)` reads `lib/work.js`
-  (`readSpecs`, `readBriefs`, `gateWhy`) and the queue file (read-only view, off in a linked
-  worktree; `reconcile` applied in memory) and returns entries with blockers (`depends_on`, brief
+  (`readSpecs`, `readBriefs`, `gateWhy`) and the queue file plus the fill (read-only view, off in a linked
+  worktree; `reconcile` and `fill` applied in memory; a done row gives no position and no gate; an old-version
+  file is a decide line naming `/spec:migrate`) and returns entries with blockers (`depends_on`, brief
   dependencies, `after` gates), the anomaly catalogue (`decide` or `hygiene`), `laneAdmission`
-  (pairwise, no cap) and `nothingNextLine`. Fanout keeps its own cap and admission.
+  (pairwise, no cap) and `nothingNextLine`; `topLines(d)` is the `queue next` render and entries carry `working` (the in-progress marker). Fanout keeps its own cap and admission.
 - `init.js`: detect test command (package.json scripts.test, pytest, go test, cargo test),
   trunk, write config; lint and typecheck from real commands (package.json `lint`/`lint:ci` and
   `typecheck`/`type-check`, Makefile targets, pyproject, `ruff.toml`, `mypy.ini`) are chained in front of
@@ -254,7 +259,7 @@ Later builders: use these, do not re-derive them.
   here: `lib/queue.js` owns it (an absent file reads `{version: 3, seq: 0, items: []}`); `readFanout`/`readRun`/`readGenesis` → `null`.
   `readProto(root, stem)` → `{status, pins, contract}` (each `null` when absent); `writeProto` and
   `writeMocks(root, {status?, seed?})` write only the keys given.
-- `lib/queue.js`: the one owner of the queue (≤ 200 LOC, no CLI): `VERSION`, `TYPES`, `CMD_TYPES`, `queuePath`, `kindOf`, `briefNo`, `parse(text, type)` (the only reader of typed text), `read` (strict: version 3 or a refusal naming `/spec:migrate`), `write`, `open`, `reconcile`, `add(root, fields, {top})` (the door; dedupe), `tick(root, pred)`, `text`, `paste`, and groom's v7 helpers `promptTokens`, `jaccard`, `isPathPayload`, `pathIdentity`, `promptDupScore`, `citesDoneSpec`, `isSupersededBriefText`, `v7Briefs`. `/spec:migrate` is the only converter of older files (ADR-0042).
+- `lib/queue.js`: the one owner of the queue (≤ 200 LOC, no CLI): `VERSION`, `TYPES`, `CMD_TYPES`, `queuePath`, `kindOf`, `briefNo`, `parse(text, type)` (the only reader of typed text), `read` (strict: version 3 with an `items` list, or a refusal naming `/spec:migrate`), `write`, `open`, `reconcile`, `fill(root, q)` and `pending(root)` (the in-memory fill), `place(root, q, item, at)` (stores one filled item), `add(root, fields, {top})` (the door; dedupe), `tick(root, pred)`, `text`, `paste`, and the brief helpers `isSupersededBriefText`, `v7Briefs`; groom's v7 row helpers (`promptTokens` … `citesDoneSpec`) live in `lib/queue-rows.js`. `/spec:migrate` is the only converter of older files (ADR-0042).
 - `lib/work.js`: the one reader of specs and roadmap briefs (≤ 250 LOC, no CLI): `normBrief`, `briefOrd`, `readSpecs(root)`, `readBriefs(root, specs)` (brief status `unplanned|in-flight|done|superseded`, a brief is done when its live specs are done), `gateWhy`. `state.js` adds `liveRun`/`specState`: a run sidecar in the root or the lane worktree makes a spec `implementing`.
 - `driver.js`: `makeDriver({name, specArg, load, save, derive, steps, script?})` returns
   `main(argv) → exit code` (script does `process.exitCode = main()`). `derive(state, ctx)` returns
@@ -326,9 +331,9 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - **Fix lanes.** Every pending queue item of type `fix` is a lane, picked
   after the runnable specs (spec-bound fixes first). Bound to a `spec` (pasted `/spec:fix <spec> — <symptom>`) the
   lane is `fix-<stem>`, `.claude/worktrees/fix-<stem>`, branch `fix/<stem>`, picked once the spec is out of
-  any live lane, prompt `/spec:run <spec> --root <wt> --fix <symptom>`. Spec-less it is `fix-<slug>` (the
+  any live lane, prompt `/spec:fix --root <wt> <spec> — <symptom>`. Spec-less it is `fix-<slug>` (the
   first six words of the symptom plus six hex of its sha1), branch `fix/<slug>`, prompt
-  `/spec:run --fix <symptom> --root <wt>`, and its run state lives under `<git-common-dir>/spec-fix/<slug>.run/`
+  `/spec:fix --root <wt> <symptom>`, and its run state lives under `<git-common-dir>/spec-fix/<slug>.run/`
   (shared by every worktree, never tracked, so no gitignore line). `run.js` accepts `--fix` as a lane or
   `--in-place`, opens a `done` or `hardened` spec (or none) without writing status, briefs the symptom and the
   reproduce-first recipe instead of the Intent and File Plan, reads `fix.json` at `built` (cause, test,
@@ -417,7 +422,7 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - `plan.js lock` commits the spec (`chore(spec): lock YYYYMMDD/NN`) so lane worktrees branch with it.
 - `lib/driver.js`: when a mark settles on a terminal step (no mark), its body is printed after the
   checkpoint (the run sidecar is already cleared, so a re-run would refuse).
-- `queue.js` reconciles: a spec item whose spec is `done` counts as done (written on the next
+- `queue.js` reconciles: a spec item whose spec is `done` or whose file is gone counts as done (written on the next
   write; a brief item is never ticked by the driver — the `brief-done-queued` decide anomaly asks the user to close it); `run.js` DONE also ticks it and sets Next to the queue head. The REVIEW brief lists
   `Files changed outside the File Plan`.
 - Removed as unused by any prose: fanout `--batch` (and `--include-fixes`, `--override-serial`, `--ask`), queue `--at`, status `--all`, plan `check`/`--date`,

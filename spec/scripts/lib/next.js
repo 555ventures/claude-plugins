@@ -1,50 +1,40 @@
 'use strict'
 // lib/next.js — "where is the work": v7's derivation on v8's state. Entries and blockers, the read-only
-// queue overlay, pairwise lane admission (no cap) and the anomaly catalogue. One derivation for the
-// screen and `--json`. Reads only; the queue file is never written. No CLI.
+// queue overlay (the file plus the fill: ADR-0044), pairwise lane admission (no cap) and the anomaly catalogue.
+// One derivation for the screen, `queue next`, fanout and `--json`. Reads only; the queue file is never written. No CLI.
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const work = require('./work')
-const { paste, reconcile, VERSION } = require('./queue')
+const { paste, reconcile, fill, VERSION } = require('./queue')
+const { busy, laneOf } = require('./queue-rows')
 
 const KNOWN = ['draft', 'hardened', 'implementing', 'done']
 const RANK = { implementing: 0, hardened: 1, draft: 2 }
-const DECIDE = new Set(['skipped-brief', 'out-of-order', 'brief-done-queued'])
 const done = (s) => s === 'done'
 const landed = (s) => s === 'done' || s === 'implementing'
 
 // Directories, a trailing `(state)` and `.md` dropped: the part of a blocker a person recognises.
 const shortBlocker = (b) => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
 
-// The queue file for the overlay: off in a linked worktree, with no git, no file, or an unusable file
-// (an unparseable one, or one that is not version 3, is reported). `items` are v8's, as written.
+// The queue file for the overlay: off in a linked worktree, with no git, or an unusable file (an unparseable one, or one
+// that is not version 3, is reported; `old` marks a version the screen can be told to migrate). No file reads as no items:
+// the fill still places the work. `items` are v8's, as written.
 function overlay(root) {
   const git = (arg) => { const r = spawnSync('git', ['-C', root, 'rev-parse', arg], { encoding: 'utf8' }); return r.error || r.status !== 0 ? null : r.stdout.trim() }
   const common = git('--git-common-dir'); const dir = git('--git-dir')
   if (common === null || dir === null || path.resolve(root, common) !== path.resolve(root, dir)) return { on: false }
   const file = path.join(path.resolve(root, common), 'spec-queue.json')
-  if (!fs.existsSync(file)) return { on: false }
+  if (!fs.existsSync(file)) return { on: true, items: [] }
   let data
   try { data = JSON.parse(fs.readFileSync(file, 'utf8')) } catch (e) { return { on: false, parseError: `${file}: ${e.message}` } }
+  if (data && data.version !== VERSION) return { on: false, old: true, parseError: `${file}: version ${data.version} — run /spec:migrate` }
   if (!data || !Array.isArray(data.items)) return { on: false, parseError: `${file}: missing "items" array` }
-  if (data.version !== VERSION) return { on: false, parseError: `${file}: version ${data.version} — run /spec:migrate` }
   return { on: true, items: data.items.filter((i) => i && typeof i === 'object') }
 }
 
-// Reconcile in memory: duplicate brief and spec items keep their first occurrence, every on-disk open
-// brief with no item is appended last in roadmap order. Done items keep their index.
-function virtualQueue(root, items, briefs) {
-  const q = reconcile(root, { items })
-  const seen = new Set(); const out = []
-  for (const it of q.items) {
-    const key = it.kind === 'brief' ? 'b' + work.normBrief(it.payload) : it.kind === 'spec' ? 's' + it.payload : null
-    if (key) { if (seen.has(key)) continue; seen.add(key) }
-    out.push(it)
-  }
-  for (const b of briefs) if (b.status !== 'done' && b.status !== 'superseded' && !seen.has('b' + b.num)) out.push({ kind: 'brief', payload: b.num })
-  return out
-}
+// The queue the screen reads: the stored items reconciled and filled in memory (lib/queue.js). A done row gives no position and no gate.
+const virtualQueue = (root, items) => fill(root, reconcile(root, { items })).items.filter((i) => !i.done)
 
 function derive(root) {
   const all = work.readSpecs(root)
@@ -53,16 +43,19 @@ function derive(root) {
   const briefs = work.readBriefs(root, all)
   const byNum = new Map(briefs.map((b) => [b.num, b]))
   const anomalies = []
-  const note = (a) => anomalies.push({ ...a, audience: DECIDE.has(a.kind) ? 'decide' : 'hygiene' })
+  const note = (a) => anomalies.push({ ...a, audience: a.line ? 'decide' : 'hygiene' })
 
   // ---- queue overlay (positions, gates, prompt entries) ----
   const ov = overlay(root)
   const posBrief = new Map(); const posSpec = new Map(); const gateBrief = new Map(); const gateSpec = new Map()
   const prompts = []
-  if (ov.parseError) note({ kind: 'queue-unparseable', detail: `${ov.parseError} — the session queue overlay is disabled until this is fixed${/\/spec:migrate$/.test(ov.parseError) ? '' : ' (or the file removed and reseeded with `/spec:queue next`)'}` })
+  if (ov.parseError) {
+    note({ kind: 'queue-unparseable', detail: `${ov.parseError} — the session queue overlay is disabled until this is fixed${/\/spec:migrate$/.test(ov.parseError) ? '' : ' (or the file removed and reseeded with `/spec:queue next`)'}`,
+      ...(ov.old ? { line: 'The queue file is an old version, so this screen ignores it.', ask: 'Migrate it?', paste: '/spec:migrate' } : {}) })
+  }
   if (ov.on) {
     const cache = { briefs }
-    virtualQueue(root, ov.items, briefs).forEach((it, i) => {
+    virtualQueue(root, ov.items).forEach((it, i) => {
       const num = it.kind === 'brief' ? work.normBrief(it.payload) : null
       if (num !== null) {
         posBrief.set(num, i)
@@ -75,7 +68,7 @@ function derive(root) {
       } else if (it.kind === 'spec') posSpec.set(it.payload, i)
       const why = work.gateWhy(root, it.after, cache)
       if (it.kind === 'brief') { if (why) gateBrief.set(num, 'after ' + why) } else if (it.kind === 'spec') { if (why) gateSpec.set(it.payload, 'after ' + why) } else if (it.kind === 'prompt' && !it.done) {
-        prompts.push({ action: paste(root, it), path: null, status: 'queued', brief: null, blockers: why ? ['after ' + why] : [], rank: 0, queue: true, pos: i, id: it.id })
+        prompts.push({ action: paste(root, it), path: null, status: 'queued', brief: null, blockers: why ? ['after ' + why] : [], rank: 0, queue: true, pos: i, id: it.id, working: busy([], it.type === 'fix' ? laneOf(root, it.id) : null) })
       }
     })
   }
@@ -148,7 +141,7 @@ function derive(root) {
     }
     if (gateSpec.has(s.path)) blockers.push(gateSpec.get(s.path))
     else if (s.brief && gateBrief.has(s.brief)) blockers.push(gateBrief.get(s.brief))
-    entries.push({ action: s.status === 'draft' ? '/spec:plan' : '/spec:run', path: s.path, status: s.status, brief: s.brief, blockers, rank: RANK[s.status] })
+    entries.push({ action: s.status === 'draft' ? '/spec:plan' : '/spec:run', path: s.path, status: s.status, brief: s.brief, blockers, rank: RANK[s.status], working: busy([s.status]) })
   }
   entries.push(...prompts)
   const pos = (e) => {
@@ -212,6 +205,13 @@ function laneAdmission(entries, serial) {
   return { unblocked, blocked, lanes, laneClash, later: unblocked.slice(1).filter((e) => !lanes.includes(e)) }
 }
 
+// `queue next` for a spec or brief head: v7's `--next` render of the derivation's top pick, `<action> @<path>` and its blockers.
+function topLines(d) {
+  const top = d.entries[0]
+  if (!top) return [`✨ ${d.nothing}`]
+  return [top.path ? `${top.action} @${top.path}` : top.action, ...top.blockers.map((b, i) => `   ${i === top.blockers.length - 1 ? '└─' : '├─'} ⏳ ${b}`)]
+}
+
 function nothingNextLine(specs, briefs) {
   const unplanned = briefs.filter((b) => b.status === 'unplanned').length
   return !specs.length && !unplanned ? 'nothing next — no specs or briefs found'
@@ -219,4 +219,4 @@ function nothingNextLine(specs, briefs) {
       : 'nothing next — all specs done, no unplanned briefs'
 }
 
-module.exports = { derive, laneAdmission, nothingNextLine, shortBlocker }
+module.exports = { derive, laneAdmission, nothingNextLine, shortBlocker, topLines }

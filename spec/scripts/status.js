@@ -6,6 +6,7 @@
 const path = require('path')
 const work = require('./lib/work')
 const { derive, shortBlocker } = require('./lib/next')
+const { mark } = require('./lib/queue-rows')
 
 const USAGE = 'usage: status.js [NN] [--all] [--json] [--root <dir>]'
 const ICON = { done: '✅', 'in-flight': '🔨', unplanned: '⬜', superseded: '⛔' }
@@ -63,15 +64,18 @@ function render(d, all) {
 
   if (d.briefs.length) out.push('', '🗺️ Roadmap', ...roadmapRows(d.briefs))
 
-  // A prose queue row is one line cut to the terminal width, led by its id; a command row stays whole.
+  // A row leads with its type mark (🏃 run · 📝 plan · 🧪 prototype · 🔧 fix; a decide line carries its own 📌) and ends with
+  // 🔨 when it is being worked on. A prose queue row is one line cut to the terminal width, led by its id; the mark and
+  // the marker stay whole, and a spec row is never cut.
   const width = process.stdout.columns || 100
   const idw = Math.max(0, ...entries.filter((e) => e.queue).map((e) => e.id.length))
   const cmd = (e) => {
-    if (e.path) return `${e.action} @${e.path}`
-    const head = `${e.id.padEnd(idw)}  `
+    const tail = e.working ? '  🔨 in progress' : ''
+    if (e.path) return mark(e.action) + `${e.action} @${e.path}` + tail
+    const head = `${e.id.padEnd(idw)}  ${mark(e.action)}`
     const flat = String(e.action).replace(/\s+/g, ' ').trim()
-    const room = Math.max(20, width - head.length)
-    return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…')
+    const room = Math.max(20, width - head.length - tail.length)
+    return head + (flat.length <= room ? flat : flat.slice(0, room - 1) + '…') + tail
   }
 
   out.push('', '🎯 Next')

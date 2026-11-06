@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: implementing
 area: queue
 depends_on: [specs/20261105/14-the-prototype-is-pinned-in-chat-and-proved-at-look.md]
 brief: n/a
@@ -139,3 +139,17 @@ The fixture host for AC-1 to AC-8: brief 03 with hardened specs `01-a1`, `02-a2`
 - A5: `/spec:run @<path>` and `/spec:plan @<path>` resolve the `@` as today (`run.js:62`, and the status screen already prints that form) — if false: `next` stays with the `@` for the oracle and the driver strips it.
 - A6: Spec 15 also edits `commands/fix.md`, and may change which paragraph; D23 adds the argument and lane rules beside that text — if the lanes conflict: the rebase keeps both sides, and no `depends_on` is needed.
 - A7: `run.js <spec> --fix "x" --in-place` works outside a lane, as `commands/run.md` says today — if false: `fix.md` drops the bound form in place and passes the whole text as the symptom, as it does now.
+
+## As built
+
+- `next --json`'s `paste` carries the whole printed text (the pick and any `⏳` branch lines), not only its first line, because D5 says `--json` carries what `next` prints.
+- A fix item held on a prototype spec now prints `/spec:fix <spec> — <symptom>`, plain words with no shell quoting, so `tests/run.test.js` (spec 14, outside this File Plan) reads that line in its `heldFix` helper and its `Save` assertion.
+- A ticked unfinished brief or spec comes back after every other filled item (briefs, then ad-hoc specs, then the ticked ones), so `done 05` lists brief 05 last as AC-2 says, not only after the other briefs.
+- `fanout.js` holds a hardened spec as `implementing` only when its own checkout has a live run sidecar; a lane's worktree sidecar keeps the old "reused lane" path (`02-6`, `02-7`, `02-9` tests).
+- The status screen marks a spec row `🔨 in progress` only for a spec that is itself `implementing` (and a fix prompt with a live lane); a brief holding an `implementing` spec shows the marker on `queue list`, where the brief is a row.
+- `queue.js` exits 2 (not 1) on every refusal, and an unresolved brief number for `done` still prints `nothing queued for brief NN` (exit 0) as before.
+- Tests: `tests/fanout.test.js` AC-14-17's fix host marks its specs `done` so the bare run starts no spec lane beside the fix; AC-04-4 and others were re-set up on `empty()` hosts (A1). The goldens were regenerated with `UPDATE_GOLDENS=1`.
+- tests/fanout.test.js:1603 The case tagged AC-20261105-16-23 still asserts only the spec-lane clause; the bound (`/spec:fix --root <wt> specs/…/01-alpha.md — RED file left`) and spec-less (`/spec:fix --root <wt> <symptom>`) prompts are pinned at lines 710 and 1160 under earlier specs' cases, so the AC's first two clauses are covered without carrying its ID (carried from review 1, unchanged by the fix round).
+- spec/scripts/lib/next.js:53 The hygiene detail for a corrupt or items-less queue file still tells the user the file can be 'removed and reseeded with `/spec:queue next`', but under D3/D5 `next` writes nothing and seeds nothing; removing the file is enough on its own, so the remedy names a step that no longer does anything.
+- tests/queue.test.js:869 AC-21's 'kept whole when the text is cut' clause has no test: every in-progress row in the AC-19..22 case is short, so a regression that let a long row's cut swallow `  🔨 in progress` would pass; the code reserves the tail's width before cutting (queue-rows.js:141, status.js room = width - head - tail), so this is a coverage gap, not a defect.
+- touched outside the File Plan: tests/run.test.js

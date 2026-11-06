@@ -32,12 +32,6 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
   and mark `conflicts-resolved`. A lane at **MERGE_READY** with a rebase in progress edits the
   conflicted files to both sides' intent, re-runs the driver, then stops.
 
-`--fix "<symptom>"` with or without a spec: as a fanout lane (a queued `/spec:fix` item), or `--in-place`
-in the session (`/spec:fix`). The brief is the symptom and the reproduce-first recipe, the builder writes
-`fix.json`, the commit is `fix(<id>|<slug>): <symptom>`; the fix stop offers keep / revert / plan. An
-`--in-place` fix on a spec closes the queued `type: fix` item with that spec and symptom when it finishes.
-A `--fix` on a prototype spec is in place only, and it runs PIN_TESTS and LOOK too.
-
 As a lane, stop and return on `PENDING_QUESTION`. A lane never edits its spec's Decisions or any
 other spec. A build that needs another spec done first marks `waiting --on <spec>` (BUILD, REPAIR,
 FIX or REVIEW) and stops. When a builder replies that a Decision cannot be honoured, mark `unmet --decision <id> --why <text>`;

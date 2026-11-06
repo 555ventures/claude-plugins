@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-11-05
 - Amends: ADR-0041 §1 (the item shape)
+- Amended by: docs/adr/0044-the-file-holds-what-was-placed.md (the file holds what was placed; readers derive the rest)
 - Deciders: JJ + session (specs/20261105/12-the-queue-item-has-one-owner.md)
 
 ## Context

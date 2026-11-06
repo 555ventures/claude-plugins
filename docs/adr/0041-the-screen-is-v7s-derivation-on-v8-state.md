@@ -4,6 +4,7 @@
 - Date: 2026-11-05
 - Amended by: specs/20261105/10-a-batch-tells-the-truth.md D6 (§2: a brief item closes only by `/spec:queue done`)
 - Amended by: docs/adr/0042-the-queue-item-has-one-owner.md (§1: the item shape, queue file version 3, `lib/queue.js` as the only owner)
+- Amended by: docs/adr/0044-the-file-holds-what-was-placed.md (§1: the file holds what was placed; §6: the proof compares after the type marks are removed)
 
 ## Context
 

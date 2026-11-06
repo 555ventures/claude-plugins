@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: implementing
+status: done
 area: run
 depends_on: [specs/20261105/14-the-prototype-is-pinned-in-chat-and-proved-at-look.md]
 brief: n/a

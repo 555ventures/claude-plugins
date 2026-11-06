@@ -1,0 +1,15 @@
+{
+  "testCommand": "true",
+  "trunk": "main",
+  "prototype": {
+    "url": "http://127.0.0.1:{port}",
+    "overlay": "apps/web/app/proto-overlay.js",
+    "e2eFile": "apps/web/e2e/proto-{stem}.spec.ts",
+    "e2eList": "apps/web/node_modules/.bin/playwright test --config apps/web/playwright.config.ts --list {file}",
+    "e2eRun": "E2E_PORT=\"${PROTO_URL##*:}\" apps/web/node_modules/.bin/playwright test --config apps/web/playwright.config.ts --project=contract --no-deps {file}",
+    "picture": "apps/web/node_modules/.bin/playwright screenshot --full-page \"{url}\" \"{out}\"",
+    "dbCreate": "docker exec db psql -c \"create database $PROTO_BRANCH\"",
+    "dbDestroy": "docker exec db psql -c \"drop database $PROTO_BRANCH\""
+  },
+  "runtime": { "bootCommand": "pnpm --filter web dev --port $PORT" }
+}

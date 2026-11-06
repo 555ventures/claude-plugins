@@ -9,7 +9,7 @@
   behaviour lane; a brief's `Lane:` is advisory; a `proto/*` branch is the third kind at commit
   time), clause (h) replaced (no gate, no structural capture, no export, no deletion at approve),
   and the line "Discovery prototypes before a seed exists stay outside the pipeline" withdrawn.
-- Amended by: —
+- Amended by: ADR-0043
 
 ## Context
 

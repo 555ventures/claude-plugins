@@ -408,3 +408,84 @@ test('AC-20261105-12-9 every stored shape, migrated, is one shape to status and 
     }
   }
 })
+
+// ---- spec 20261105/14: v7 prototype records and the prototype config block --------------------------------
+
+const FIX = path.join(__dirname, 'fixtures/prototype-v7')
+function protoHostV7() {
+  const d = tmpdir('mig')
+  fs.cpSync(path.join(FIX, 'design'), path.join(d, 'design'), { recursive: true })
+  fs.mkdirSync(path.join(d, '.claude'))
+  fs.copyFileSync(path.join(FIX, 'config.json'), path.join(d, '.claude/spec.config.json'))
+  const g = gitRepo(d)
+  return { d, g }
+}
+const rj = (d, rel) => JSON.parse(fs.readFileSync(path.join(d, rel), 'utf8'))
+
+test('AC-20261105-14-12 one prototype op per v7 record; apply rewrites status, pins, contract and the config block; a second apply plans nothing', () => {
+  const { d, g } = protoHostV7()
+  const p = mig(d)
+  const protos = p.ops.filter((o) => o.op === 'prototype').map((o) => o.note)
+  assert.deepStrictEqual(protos, ['01-first-light: v7 → v8', '03-admin-rounds: v7 → v8', 'mid-round: v7 → v8'])
+  assert.ok(p.ops.some((o) => o.op === 'config'))
+  for (const left of ['states.json', 'captures', 'tests', 'e2e.log']) assert.ok(p.owned.includes(`design/prototypes/03-admin-rounds/${left}`), left)
+  assert.ok(p.warns.includes('prototype.e2eCommand reads PROTO_URL — the run sets APP_URL'), p.warns.join('|'))
+  const before = g('status', '--porcelain')
+  assert.strictEqual(before, '', 'planning changes nothing')
+  const text = runNode('scripts/migrate.js', ['--root', d])
+  assert.match(text.stdout, /prototype 03-admin-rounds: v7 → v8/)
+
+  mig(d, '--apply')
+  const P = 'design/prototypes/03-admin-rounds'
+  assert.deepStrictEqual(rj(d, P + '/status.json'), {
+    stem: '03-admin-rounds', brief: 'docs/roadmap/03-admin-rounds.md', idea: null, branch: 'proto/03-admin-rounds', worktree: '.claude/worktrees/proto-03-admin-rounds',
+    appPort: 42439, url: 'http://127.0.0.1:42439', rounds: 2,
+    marks: { opened: '2026-10-23T06:53:14.660Z', approved: '2026-10-24T06:13:13.176Z', contracted: '2026-10-24T06:16:09.391Z', closed: '2026-10-27T08:31:49.670Z' },
+    handled: ['p1', 'p2', 'p3'],
+  })
+  const pins = rj(d, P + '/pins.json')
+  assert.ok(Array.isArray(pins))
+  assert.deepStrictEqual(pins[0], { id: 'p1', kind: 'behaviour', route: '/admin/rounds', note: 'One tab per product line with open counts; the default tab is the first line with anything in flight', round: 1, status: 'active', at: '2026-10-24T06:14:23.000Z' })
+  assert.strictEqual(pins[1].given, 'empty')
+  assert.strictEqual(pins[1].route, '/admin/rounds')
+  assert.doesNotMatch(JSON.stringify(pins), /screen|anchor|"who"/)
+  const c = rj(d, P + '/contract.json')
+  assert.deepStrictEqual(Object.keys(c), ['stem', 'rounds', 'pins'])
+  assert.strictEqual(c.rounds, 2)
+  assert.deepStrictEqual(c.pins[1], { id: 'p2', kind: 'behaviour', route: '/admin/rounds', given: 'empty', note: 'With no rounds the page says there are none yet and offers to create one', sentence: 'On /admin/rounds, given empty: With no rounds the page says there are none yet and offers to create one', round: 2, status: 'active' })
+  assert.strictEqual(c.pins[0].sentence, 'On /admin/rounds: One tab per product line with open counts; the default tab is the first line with anything in flight')
+  const mid = rj(d, 'design/prototypes/mid-round/status.json')
+  assert.deepStrictEqual(mid.marks, { opened: '2026-11-02T06:50:16.586Z' })
+  assert.strictEqual(mid.idea, 'invoice list page')
+  assert.strictEqual(mid.brief, null)
+  assert.strictEqual(mid.rounds, 1)
+  assert.deepStrictEqual(rj(d, 'design/prototypes/01-first-light/status.json').marks, { opened: '2026-10-07T06:50:16.586Z', closed: '2026-10-07T07:22:54.633Z' })
+  assert.ok(!fs.existsSync(path.join(d, 'design/prototypes/01-first-light/pins.json')), 'no pins file is invented')
+  for (const left of ['states.json', 'e2e.log', 'captures/admin_rounds--default.png', 'tests/proto-03-admin-rounds.spec.ts']) {
+    assert.strictEqual(fs.readFileSync(path.join(d, P, left)).toString(), fs.readFileSync(path.join(FIX, 'design/prototypes/03-admin-rounds', left)).toString(), left + ' untouched')
+  }
+  const cfg = rj(d, '.claude/spec.config.json')
+  const old = rj(FIX, 'config.json').prototype
+  assert.strictEqual(cfg.prototype.e2eCommand, old.e2eRun)
+  assert.strictEqual(cfg.prototype.bootCommand, 'pnpm --filter web dev --port $PORT')
+  assert.deepStrictEqual(['url', 'picture', 'e2eFile'].map((k) => cfg.prototype[k]), [old.url, old.picture, old.e2eFile])
+  for (const k of ['overlay', 'e2eList', 'e2eRun', 'dbCreate', 'dbDestroy']) assert.ok(!(k in cfg.prototype), k)
+  assert.strictEqual(g('status', '--porcelain'), '', 'the migration commit holds it all')
+
+  const again = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(again.status, 0)
+  assert.match(again.stdout, /✅ nothing to migrate/)
+  const proto = (stem) => runNode('scripts/prototype.js', [stem, '--state', '--root', d])
+  assert.strictEqual(proto('03-admin-rounds').stdout.trim(), 'CLOSED')
+  assert.strictEqual(proto('01-first-light').stdout.trim(), 'CLOSED')
+  assert.strictEqual(proto('mid-round').stdout.trim(), 'ROUND')
+})
+
+test('AC-20261105-14-12 a v8 host with a v7 record only plans the prototype op; the v7 tag is not made for it', () => {
+  const { d } = protoHostV7()
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', prototype: { url: 'http://localhost:{port}', bootCommand: 'npm run dev' } }))
+  execFileSync('git', ['-C', d, 'commit', '-qam', 'v8 config'])
+  const p = mig(d)
+  assert.ok(p.ops.some((o) => o.op === 'prototype'))
+  assert.ok(!p.ops.some((o) => o.op === 'tag' || o.op === 'config'))
+})

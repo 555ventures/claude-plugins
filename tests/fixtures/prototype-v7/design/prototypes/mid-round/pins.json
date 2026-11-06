@@ -1,0 +1,1 @@
+{ "schemaVersion": 1, "pins": [ { "id": "p1", "round": 1, "screen": "/invoices", "state": "default", "anchor": null, "note": "Delete asks for confirmation", "who": "JJ", "kind": "behaviour", "at": "2026-11-02T07:00:00.000Z" } ] }

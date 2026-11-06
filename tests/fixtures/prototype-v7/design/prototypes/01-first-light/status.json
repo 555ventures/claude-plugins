@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "brief": "01",
+  "input": { "kind": "brief", "brief": "docs/roadmap/01-first-light.md", "idea": null },
+  "stem": "01-first-light",
+  "branch": "proto/01-first-light",
+  "worktree": ".claude/worktrees/proto-01-first-light",
+  "base": "main",
+  "pinsPort": 4711,
+  "appPort": 45420,
+  "marks": { "opened": "2026-10-07T06:50:16.586Z", "approved": null, "dbDestroyed": "2026-10-07T07:22:54.224Z", "closed": "2026-10-07T07:22:54.633Z" },
+  "rounds": []
+}

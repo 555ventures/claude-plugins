@@ -1469,3 +1469,229 @@ test('a spec-less fix has no Decisions to be unmet; its regate line names the sy
   assert.match(repair, /^▶ REPAIR/)
   assert.ok(repair.includes(`--fix '${SYMPTOM}' --root`) && !repair.includes(' null '), repair)
 })
+
+// ---- spec 20261105/14: a prototype spec goes REVIEW → PIN_TESTS → LOOK → COMMIT -------------------------
+
+const PROTO_CFG = { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js', e2eFile: 'e2e/pins-{stem}.spec.js', e2eCommand: 'node e2e-stub.js {file}', publicUrl: 'http://box.tail:{port}' }
+// The stub e2eCommand: the app must answer at APP_URL; a PINRED file in the cwd makes it red.
+const E2E_STUB = `const fs = require('fs')
+fetch(process.env.APP_URL).then(() => {
+  console.log('e2e file=' + process.argv[2] + ' APP_URL=' + process.env.APP_URL)
+  if (fs.existsSync('PINRED')) { console.error('FAIL pin p1: Delete asks first'); process.exit(1) }
+}, (e) => { console.error('app did not answer: ' + e.message); process.exit(1) })
+`
+const PINS = [
+  { id: 'p1', kind: 'behaviour', route: '/invoices', given: 'an unpaid invoice', note: 'Delete asks for confirmation', sentence: 'On /invoices, given an unpaid invoice: Delete asks for confirmation', round: 1, status: 'active' },
+  { id: 'p2', kind: 'look', route: '/invoices', note: 'Bigger title', sentence: 'On /invoices: Bigger title', round: 1, status: 'active' },
+  { id: 'p3', kind: 'behaviour', route: '/old', note: 'Gone', sentence: 'On /old: Gone', round: 1, status: 'dropped', why: 'changed' },
+]
+
+function protoFixture({ cfgProto = PROTO_CFG, status = 'hardened' } = {}) {
+  const doc = SPEC_DOC.replace('status: hardened', `status: ${status}`).replace('depends_on: []', 'depends_on: []\nprototype: inv')
+    .replace('feature.txt exists.\n', 'feature.txt exists.\n').replace(/- \*\*AC-20261104-01-1\*\*.*/, '- **AC-20261104-01-1**: WHEN the user deletes THE SYSTEM SHALL ask first (pin p1).')
+  return fixture({
+    cfg: { prototype: cfgProto },
+    files: {
+      [REL]: doc,
+      'e2e-stub.js': E2E_STUB,
+      'design/prototypes/inv/contract.json': JSON.stringify({ stem: 'inv', rounds: 1, pins: PINS }),
+      'design/prototypes/inv/pictures/invoices.png': 'PNG',
+    },
+  })
+}
+
+const listen = (t, port) => new Promise((resolve) => {
+  const c = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('app')).listen(${port}, '127.0.0.1', () => console.log('up'))`], { stdio: ['ignore', 'pipe', 'inherit'] })
+  t.after(() => c.kill('SIGKILL'))
+  c.stdout.once('data', () => resolve(c))
+})
+
+test('AC-20261105-14-9 a prototype spec needs e2eFile and e2eCommand to open; with them both briefs carry the pins', () => {
+  const bare = protoFixture({ cfgProto: { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js' } })
+  const r = bare.run()
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('prototype.e2eFile') && r.stderr.includes('prototype.e2eCommand'), r.stderr)
+  assert.ok(!fs.existsSync(bare.wt), 'no worktree')
+
+  const h = protoFixture()
+  const build = ok(h.run())
+  assert.match(build, /^▶ BUILD\n/)
+  const pins = '## Pins\n- p1 (behaviour): On /invoices, given an unpaid invoice: Delete asks for confirmation\n- p2 (look): On /invoices: Bigger title\n'
+  assert.ok(build.includes(pins), build)
+  assert.ok(!build.includes('p3'), 'a dropped pin is not listed')
+  assert.ok(build.includes('e2e/pins-inv.spec.js') && build.includes('`pin pN: <sentence>`') && build.includes('role and visible text') && build.includes('APP_URL'), build)
+  assert.ok(build.includes('Never copy a selector or a line of code from proto/inv'))
+  assert.ok(build.indexOf('## Assumptions') < build.indexOf('## Pins'), 'after the Assumptions')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  const review = ok(h.run())
+  assert.match(review, /^▶ REVIEW/)
+  assert.ok(review.includes(pins), 'the reviewer sees the same list')
+  assert.ok(/open its test in e2e\/pins-inv\.spec\.js: .*pin pN:.*is blocking/.test(review), review)
+  assert.ok(review.includes('design/prototypes/inv/pictures/invoices.png'), 'the picture paths that exist')
+})
+
+test('AC-20261105-14-10/11 REVIEW → PIN_TESTS (one port) → red is a repair → LOOK → look-failed is a FIX → looked commits', async (t) => {
+  const h = protoFixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  const cp = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(cp, /REVIEW → PIN_TESTS;/)
+  const s1 = h.state()
+  assert.strictEqual(s1.step, 'PIN_TESTS')
+  assert.ok(Number.isInteger(s1.appPort) && s1.appUrl === `http://127.0.0.1:${s1.appPort}`)
+  const body = ok(h.run())
+  assert.ok(body.includes(`cd ${h.wt} && export PORT=${s1.appPort} && node app.js`) && body.includes(`should answer at http://127.0.0.1:${s1.appPort}`), body)
+  assert.ok(!body.includes('APP_URL=APP_URL'))
+  const nope = h.run('--mark', 'pin-tested')
+  assert.strictEqual(nope.status, 2)
+  assert.ok(nope.stderr.includes(`nothing answers at http://127.0.0.1:${s1.appPort}`), nope.stderr)
+
+  await listen(t, s1.appPort)
+  fs.writeFileSync(path.join(h.wt, 'PINRED'), '')
+  const red = ok(h.run('--mark', 'pin-tested'))
+  assert.match(red, /PIN_TESTS → REPAIR;/)
+  assert.match(red, /pin tests: red/)
+  const repair = ok(h.run())
+  assert.ok(repair.includes('The pin tests are red') && repair.includes('FAIL pin p1: Delete asks first'), repair)
+  assert.ok(repair.includes('pin tests red:\ne2e file=e2e/pins-inv.spec.js') || repair.includes(`APP_URL=http://127.0.0.1:${s1.appPort}`), repair)
+  assert.strictEqual(h.state().attempts.repair, 0)
+  fs.rmSync(path.join(h.wt, 'PINRED')); bump(h.wt)
+  ok(h.run('--mark', 'repaired'))
+  assert.strictEqual(h.state().attempts.repair, 1, 'a red pin run counts as a repair')
+  assert.strictEqual(h.state().step, 'REVIEW')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.strictEqual(h.state().appPort, s1.appPort, 'one port for the run')
+
+  const green = ok(h.run('--mark', 'pin-tested'))
+  assert.match(green, /PIN_TESTS → LOOK;/)
+  assert.match(green, /pin tests: green/)
+  const pt = h.state().pinTests
+  assert.strictEqual(pt.status, 'green')
+  assert.ok(pt.output_tail.includes(`file=e2e/pins-inv.spec.js APP_URL=http://127.0.0.1:${s1.appPort}`), pt.output_tail)
+
+  const look = ok(h.run())
+  assert.match(look, /^▶ LOOK/)
+  assert.ok(look.includes(`👀 look — http://box.tail:${s1.appPort}`), look)
+  assert.ok(look.includes('- p2: On /invoices: Bigger title') && !look.includes('Delete asks'), 'only look pins')
+  assert.ok(look.includes('design/prototypes/inv/pictures/invoices.png'))
+  assert.ok(look.includes('`close enough`') && look.includes('END YOUR TURN'))
+  assert.strictEqual(h.run('--mark', 'look-failed').status, 2, 'the reply is the symptom: --why is required')
+  const fx = ok(h.run('--mark', 'look-failed', '--why', 'the title is still small'))
+  assert.match(fx, /LOOK → FIX;/)
+  assert.strictEqual(h.state().attempts.fix, 0, 'not counted against FIX_CAP')
+  const fixBrief = ok(h.run())
+  assert.ok(fixBrief.includes('The user looked at the running app and said: the title is still small. Treat it as the symptom: find the cause, fix it, keep every pin test green.'), fixBrief)
+  bump(h.wt)
+  assert.match(ok(h.run('--mark', 'fixed')), /FIX → REVIEW;/)
+  assert.strictEqual(h.state().attempts.fix, 0)
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(ok(h.run('--mark', 'pin-tested')), /PIN_TESTS → LOOK;/)
+
+  const done = ok(h.run('--mark', 'looked'))
+  assert.match(done, /LOOK → DONE;/)
+  assert.ok(done.includes('- pin tests green · look accepted after 2 round(s)'), done)
+  assert.ok(h.g('log', '-1', '--format=%B', 'main^2').includes('pin tests green · look accepted after 2 round(s)') || h.g('log', '--format=%B', 'main').includes('pin tests green · look accepted after 2 round(s)'), 'the commit body carries the line')
+  assert.strictEqual(h.status(), 'done')
+  assert.strictEqual(h.g('status', '--porcelain'), '')
+})
+
+test('AC-20261105-14-10/11 a --fix on a prototype spec follows D14: the briefs carry the pins, and REVIEW → PIN_TESTS → LOOK → look-failed is a FIX → looked commits', async (t) => {
+  const bare = protoFixture({ status: 'done', cfgProto: { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js' } })
+  const r = bare.run('--fix', 'x', '--in-place')
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('prototype.e2eFile') && r.stderr.includes('prototype.e2eCommand'), r.stderr)
+
+  const h = protoFixture({ status: 'done' })
+  const fx = (...a) => h.run('--fix', 'x', '--in-place', ...a)
+  const pins = '## Pins\n- p1 (behaviour): On /invoices, given an unpaid invoice: Delete asks for confirmation\n- p2 (look): On /invoices: Bigger title\n'
+  const build = ok(fx())
+  assert.match(build, /^(📌[^\n]*\n)?▶ BUILD\n/)
+  assert.ok(build.includes('## Fix\nx') && build.includes(pins), build)
+  assert.strictEqual(h.state().prototype, 'inv')
+  fs.writeFileSync(path.join(h.dir, 'feature.txt'), 'thing\n')
+  st.writeJson(path.join(h.dir, 'specs/20261104/01-thing.run/fix.json'), { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null })
+  ok(fx('--mark', 'built'))
+  const review = ok(fx())
+  assert.ok(review.includes(pins) && /open its test in e2e\/pins-inv\.spec\.js: .*is blocking/.test(review), review)
+
+  assert.match(ok(fx('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → PIN_TESTS;/)
+  const port = h.state().appPort
+  assert.ok(Number.isInteger(port) && h.state().appUrl === `http://127.0.0.1:${port}`)
+  await listen(t, port)
+  assert.match(ok(fx('--mark', 'pin-tested')), /PIN_TESTS → LOOK;/)
+  assert.strictEqual(h.state().pinTests.status, 'green')
+
+  ok(fx('--mark', 'look-failed', '--why', 'the title is still small'))
+  assert.strictEqual(h.state().step, 'FIX')
+  assert.ok(ok(fx()).includes('The user looked at the running app and said: the title is still small'))
+  bump(h.dir)
+  ok(fx('--mark', 'fixed'))
+  assert.strictEqual(h.state().attempts.fix, 0, 'not counted against FIX_CAP')
+  ok(fx('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(ok(fx('--mark', 'pin-tested')), /PIN_TESTS → LOOK;/)
+
+  const done = ok(fx('--mark', 'looked'))
+  assert.match(done, /LOOK → DONE;/)
+  assert.ok(done.includes('✅ fixed — x') && done.includes('- pin tests green · look accepted after 2 round(s)'), done)
+  const body = h.g('log', '-1', '--format=%B')
+  assert.ok(body.startsWith('fix(20261104/01): x') && body.includes('pin tests green · look accepted after 2 round(s)'), body)
+})
+
+// The line fanout holds a fix item with, read as the shell reads it when the user pastes it.
+const heldFix = (dir, words = '') => {
+  const out = ok(runNode('scripts/fanout.js', ['--root', dir]))
+  const line = out.split('\n').find((l) => l.includes('waits — stops at LOOK for you') && l.includes(words))
+  const m = /stops at LOOK for you — \/spec:run (\S+) --fix (.+) --in-place$/.exec(line || '')
+  assert.ok(m, out)
+  return { spec: m[1], symptom: spawnSync('sh', ['-c', `printf %s ${m[2]}`], { encoding: 'utf8' }).stdout }
+}
+// The printed --fix line, run through PIN_TESTS and LOOK to DONE.
+async function heldFixToDone(t, h, symptom) {
+  const fx = (...a) => h.run('--fix', symptom, '--in-place', ...a)
+  ok(fx())
+  fs.writeFileSync(path.join(h.dir, 'feature.txt'), 'thing\n')
+  st.writeJson(path.join(h.dir, 'specs/20261104/01-thing.run/fix.json'), { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null })
+  ok(fx('--mark', 'built'))
+  ok(fx('--mark', 'reviewed', '--file', h.findings([])))
+  await listen(t, h.state().appPort)
+  ok(fx('--mark', 'pin-tested'))
+  return ok(fx('--mark', 'looked'))
+}
+const openFixes = (dir) => Q.open(Q.read(dir)).filter((i) => i.type === 'fix').map((i) => i.payload)
+
+test('AC-20261105-14-17 a held fix item closes when its printed line reaches DONE, and only that one: fanout stops holding it', async (t) => {
+  const symptom = `the "Save" button doesn't stick`
+  const h = protoFixture({ status: 'done' })
+  Q.add(h.dir, { type: 'fix', spec: REL, payload: symptom })
+  Q.add(h.dir, { type: 'fix', spec: REL, payload: 'another symptom' })
+  Q.add(h.dir, { type: 'fix', payload: symptom })
+  const held = heldFix(h.dir, 'Save')
+  assert.deepStrictEqual(held, { spec: REL, symptom }, 'the printed line pastes as the item says')
+
+  const done = await heldFixToDone(t, h, held.symptom)
+  assert.ok(done.includes(`✅ fixed — ${symptom}`), done)
+  assert.deepStrictEqual(openFixes(h.dir), ['another symptom', symptom], 'the sibling on this spec and the spec-less item with the same words stay')
+  const after = ok(runNode('scripts/fanout.js', ['--root', h.dir]))
+  assert.ok(!after.includes(`${REL} --fix 'the "Save"`), after)
+  assert.strictEqual(heldFix(h.dir, 'another').symptom, 'another symptom', 'the sibling is still held')
+})
+
+test('AC-20261105-14-17 a held fix item with no words closes on the symptom fanout printed for it', async (t) => {
+  const h = protoFixture({ status: 'done' })
+  Q.add(h.dir, { type: 'fix', spec: REL, payload: '' })
+  const held = heldFix(h.dir)
+  assert.strictEqual(held.symptom, 'repair 01-thing')
+  await heldFixToDone(t, h, held.symptom)
+  assert.deepStrictEqual(openFixes(h.dir), [])
+})
+
+test('AC-20261105-14-10 a spec without prototype: goes REVIEW → DONE with no port allocated', () => {
+  const h = fixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  assert.strictEqual(h.state().appPort, undefined)
+  assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → DONE;/)
+})

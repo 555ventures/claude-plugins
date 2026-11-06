@@ -96,6 +96,8 @@ function eligible(root, opts = {}) {
     if (!doc) { waited.push({ spec, why: 'spec file not found' }); continue }
     const status = doc.frontmatter.status || 'missing'
     if (status !== 'hardened') { (EXPLICIT.length ? waited : held).push({ spec, why: `status is ${status}, not hardened` }); continue }
+    // A prototype spec stops at LOOK for the user's free-text reply and the app must outlive the agent: never a lane.
+    if (doc.frontmatter.prototype) { waited.push({ spec, why: 'stops at LOOK for you — /spec:run it' }); continue }
     // A lane that parked or amended keeps its worktree and sidecar; re-running it would only
     // print the same ending, so it waits until the user removes that worktree.
     const wt = path.join(root, '.claude', 'worktrees', 'spec-' + stemOf(spec))
@@ -127,6 +129,8 @@ function eligible(root, opts = {}) {
     if (!doc) { wait('fix item names no spec on disk'); continue }
     const status = doc.frontmatter.status || 'missing'
     if (!['done', 'hardened'].includes(status)) { wait(`its spec is ${status}, not done or hardened`); continue }
+    // A fix on a prototype spec runs PIN_TESTS and LOOK too, so it is no lane either.
+    if (doc.frontmatter.prototype) { wait(`stops at LOOK for you — /spec:run ${spec} --fix ${shq(symptom)} --in-place`); continue }
     if (pending.isLane(specWt(root, spec)) || ok.some((o) => !o.fix && o.spec === spec)) { wait('its spec is in a lane'); continue }
     const wt = fixWt(root, spec)
     const run = st.readRun(path.join(wt, spec)) || {}

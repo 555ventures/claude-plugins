@@ -129,7 +129,7 @@ test('gate: a full gateCommand beats a thin testCommand and is not prefixed with
   const GATE = 'pnpm typegen && pnpm typecheck && pnpm lint && pnpm test'
   const v7 = { testCommand: 'pnpm exec vitest run', gateCommand: GATE, typecheckCommand: 'scripts/typecheck-file.sh', trunk: 'main' }
   assert.strictEqual(trimConfig('/nonexistent', v7).testCommand, GATE)
-  assert.strictEqual(trimConfig('/nonexistent', { testCommand: 'npm test', gateCommand: 'g {testFiles}', typecheckCommand: 'tsc' }).testCommand, 'tsc && npm test', 'a templated gateCommand still falls back to testCommand with typecheck prepended')
+  assert.strictEqual(trimConfig('/nonexistent', { testCommand: 'npm test', gateCommand: 'g {testFiles}', typecheckCommand: 'tsc' }).testCommand, 'g', 'a templated gateCommand keeps its gate, placeholders removed, with no typecheck prefix')
   const d = tmpdir('mig-gate')
   fs.mkdirSync(path.join(d, '.claude'), { recursive: true })
   fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify(v7))
@@ -565,4 +565,77 @@ test('AC-20261105-14-12 a v8 host with a v7 record only plans the prototype op; 
   const p = mig(d)
   assert.ok(p.ops.some((o) => o.op === 'prototype'))
   assert.ok(!p.ops.some((o) => o.op === 'tag' || o.op === 'config'))
+})
+
+// ---- spec 20261105/17: what migrate keeps -----------------------------------------------------------------
+
+test('AC-20261105-17-4 a templated v7 gate keeps its whole gate; a shell ${VAR} is not a placeholder; a placeholder-only gate falls back', () => {
+  const { trimConfig } = require('../spec/scripts/migrate')
+  const t = (c) => trimConfig('/nonexistent', c)
+  assert.strictEqual(t({ gateCommand: 'bash scripts/spec-gate.sh {scopeDirs}', testCommand: 'npm test', typecheckCommand: 'tsc' }).testCommand, 'bash scripts/spec-gate.sh')
+  assert.strictEqual(t({ gateCommand: 'a && node --test {testDirs}', testCommand: 'npm test', typecheckCommand: 'tsc' }).testCommand, 'a && node --test')
+  assert.strictEqual(t({ gateCommand: 'g {testFiles}', testCommand: 'npm test', typecheckCommand: 'tsc' }).testCommand, 'g')
+  assert.strictEqual(t({ gateCommand: 'FOO=${BAR} a && b', testCommand: 'npm test' }).testCommand, 'FOO=${BAR} a && b')
+  assert.strictEqual(t({ gateCommand: '{testFiles}', testCommand: 'npm test', typecheckCommand: 'tsc' }).testCommand, 'tsc && npm test')
+  assert.strictEqual(t({ gateCommand: '  {scopeDirs} ', testCommand: 'npm test' }).testCommand, 'npm test')
+})
+
+test('AC-20261105-17-5 enforcement.json is archived and enforcementManifest dropped; nothing in doctor.js reads the manifest; the footprint says ARCHIVE', () => {
+  const { d } = synthetic()
+  const cfgFile = path.join(d, '.claude/spec.config.json')
+  fs.writeFileSync(cfgFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfgFile, 'utf8')), enforcementManifest: '.claude/rules/enforcement.json' }))
+  execFileSync('git', ['-C', d, 'commit', '-qam', 'manifest'])
+  mig(d, '--apply')
+  assert.ok(fs.existsSync(path.join(d, 'docs/archive/v7/rules/enforcement.json')))
+  assert.ok(!fs.existsSync(path.join(d, '.claude/rules/enforcement.json')))
+  assert.ok(!('enforcementManifest' in JSON.parse(fs.readFileSync(cfgFile, 'utf8'))))
+  assert.ok(!/enforcementManifest/.test(fs.readFileSync(path.join(__dirname, '../spec/scripts/doctor.js'), 'utf8')))
+  const row = fs.readFileSync(path.join(__dirname, '../docs/v8/host-footprint.md'), 'utf8').split('\n').filter((l) => /enforcement\.json/.test(l) && l.startsWith('|'))
+  assert.ok(row.length && row.every((l) => /ARCHIVE/.test(l) && !/KEEP/.test(l)), row.join('\n'))
+})
+
+test('AC-20261105-17-6 v8\'s own keys survive a trim; a v7-only mergeStrategy is dropped, squash is kept', () => {
+  const { trimConfig } = require('../spec/scripts/migrate')
+  const own = { laneFiles: ['.env'], gateConcurrency: 1, askPaths: ['a'], doctorProbeMs: 5000 }
+  const out = trimConfig('/nonexistent', { testCommand: 't', ...own })
+  for (const [k, v] of Object.entries(own)) assert.deepStrictEqual(out[k], v, k)
+  for (const v of ['derived', 'rebase-ff']) {
+    assert.ok(!('mergeStrategy' in trimConfig('/nonexistent', { testCommand: 't', policy: { mergeStrategy: v } })), v)
+    assert.ok(!('mergeStrategy' in trimConfig('/nonexistent', { testCommand: 't', mergeStrategy: v })), v)
+  }
+  for (const v of ['squash', 'ff-only', 'merge-commit']) assert.strictEqual(trimConfig('/nonexistent', { testCommand: 't', policy: { mergeStrategy: v } }).mergeStrategy, v)
+  // a second --apply on a v8 host that holds them plans nothing
+  const d = tmpdir('mig-own')
+  fs.mkdirSync(path.join(d, '.claude'), { recursive: true })
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 't', ...own }))
+  fs.writeFileSync(path.join(d, '.gitignore'), 'specs/**/*.run/\n.claude/worktrees/\n.claude/pending-question.json\n.claude/settings.local.json\n')
+  gitRepo(d)
+  assert.deepStrictEqual(mig(d).ops, [])
+})
+
+test('AC-20261105-17-7 capabilities.testCountPattern lands in release.testCountPattern, verbatim; none adds no release key; a second apply has nothing to do', () => {
+  const { trimConfig } = require('../spec/scripts/migrate')
+  const t = (c) => trimConfig('/nonexistent', { testCommand: 't', ...c })
+  assert.deepStrictEqual(t({ capabilities: { testCountPattern: 'none' } }).release, { testCountPattern: 'none' })
+  assert.deepStrictEqual(t({ capabilities: { testCountPattern: '# pass (\\d+)' }, release: { deployCommand: 'd' } }).release, { deployCommand: 'd', testCountPattern: '# pass (\\d+)' })
+  assert.ok(!('release' in t({ capabilities: { forge: 'github' } })))
+  assert.ok(!('capabilities' in t({ capabilities: { testCountPattern: 'none' } })))
+  const { d } = synthetic()
+  const cfgFile = path.join(d, '.claude/spec.config.json')
+  fs.writeFileSync(cfgFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfgFile, 'utf8')), capabilities: { testCountPattern: 'none' } }))
+  execFileSync('git', ['-C', d, 'commit', '-qam', 'pattern'])
+  const first = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(first.status, 0, first.stderr)
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).release, { deployCommand: 'd', testCountPattern: 'none' })
+  assert.match(runNode('scripts/migrate.js', ['--root', d, '--apply']).stdout, /✅ nothing to migrate/)
+})
+
+test('AC-20261105-17-11 migrate on a config with laneFiles writes no .worktreeinclude', () => {
+  const { d } = synthetic()
+  const cfgFile = path.join(d, '.claude/spec.config.json')
+  fs.writeFileSync(cfgFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfgFile, 'utf8')), laneFiles: ['.env'] }))
+  execFileSync('git', ['-C', d, 'commit', '-qam', 'lanefiles'])
+  mig(d, '--apply')
+  assert.ok(!fs.existsSync(path.join(d, '.worktreeinclude')))
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).laneFiles, ['.env'])
 })

@@ -10,7 +10,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { readJson, writeJson, configPath } = require('./lib/state')
+const { writeJson, configPath } = require('./lib/state')
 const wt = require('./lib/walkthrough')
 const SETTINGS = '.claude/settings.local.json'
 const TOKEN_ENV = 'WALKTHROUGH_TOKEN'
@@ -48,27 +48,51 @@ const jsonLine = (out, want) => lines(out).map((l) => { try { return JSON.parse(
 const fail = (r, what) => stop('tool-failed', lines(r.stderr).pop() || `${what} exited ${r.status}`, 'run npx walkthrough-cli whoami to see what is wrong, then /spec:connect again')
 const git = (root, ...a) => spawnSync('git', ['-C', root, ...a], { encoding: 'utf8' })
 
-// Makes sure git ignores the token file (appends to .gitignore when it does not); warns when tracked.
-function guardTokenFile(root) {
-  if (git(root, 'ls-files', '--error-unmatch', SETTINGS).status === 0) {
-    process.stderr.write(`warning: ${SETTINGS} is tracked by git, so the token would be committed — run: git rm --cached ${SETTINGS}\n`)
-    return
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+// A JSON file that must hold an object: null when it is absent, a refusal when it exists and is anything
+// else. Overwriting a file this script could not read would destroy it.
+function readStrict(root, rel, code, ok = isObj) {
+  let text
+  try { text = fs.readFileSync(path.join(root, rel), 'utf8') } catch (e) {
+    if (e.code === 'ENOENT') return null
+    text = null
   }
-  if (git(root, 'check-ignore', '-q', SETTINGS).status === 0) return
-  fs.appendFileSync(path.join(root, '.gitignore'), (fs.existsSync(path.join(root, '.gitignore')) && !fs.readFileSync(path.join(root, '.gitignore'), 'utf8').endsWith('\n') ? '\n' : '') + SETTINGS + '\n')
+  let v
+  try { v = JSON.parse(text) } catch { v = undefined }
+  if (!ok(v)) throw stop(code, `${rel} is not a JSON object${code === 'bad-settings' ? ' with an env object' : ''}`, `repair or delete ${rel}, then run /spec:connect again`, 2)
+  return v
 }
 
-function storeToken(root, tokenEnv, token) {
+// The token file must be git-ignored before a token lands in it: ignored, go on; tracked, refuse; otherwise
+// append the ignore line and, inside a repository, ask git again.
+function guardTokenFile(root) {
+  const notIgnored = () => stop('not-ignored', `${SETTINGS} is not ignored by git, so a token stored there could be committed`,
+    `make git ignore ${SETTINGS} (a .gitignore deeper in the tree may un-ignore it), then run /spec:connect again`, 2)
+  const first = git(root, 'check-ignore', '-q', SETTINGS)
+  if (first.error) throw notIgnored()
+  if (first.status === 0) return
+  if (git(root, 'ls-files', '--error-unmatch', SETTINGS).status === 0) {
+    throw stop('not-ignored', `${SETTINGS} is tracked by git, so a token stored there would be committed`, `run git rm --cached ${SETTINGS}, then run /spec:connect again`, 2)
+  }
+  const file = path.join(root, '.gitignore')
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+  fs.writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + SETTINGS + '\n')
+  if (first.status === 128) return // not a repository: nothing to ask
+  const again = git(root, 'check-ignore', '-q', SETTINGS)
+  if (again.error || again.status !== 0) throw notIgnored()
+}
+
+function storeToken(root, cur, tokenEnv, token) {
   const file = path.join(root, SETTINGS)
-  const cur = readJson(file, {})
-  writeJson(file, { ...cur, env: { ...(cur.env || {}), [tokenEnv]: token } })
+  writeJson(file, { ...(cur || {}), env: { ...((cur && cur.env) || {}), [tokenEnv]: token } })
   fs.chmodSync(file, 0o600)
 }
 
 async function main(argv) {
   const f = parse(argv)
   const root = path.resolve(f.root || process.cwd())
-  const cfg = readJson(configPath(root), {})
+  const cfg = readStrict(root, '.claude/spec.config.json', 'bad-config') || {}
   const have = cfg.walkthrough && cfg.walkthrough.baseUrl ? cfg.walkthrough : null
   const tokenEnv = have ? have.tokenEnv || TOKEN_ENV : TOKEN_ENV
   const id = have ? have.project : f.project || path.basename(root).replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '')
@@ -98,6 +122,7 @@ async function main(argv) {
   }
 
   guardTokenFile(root)
+  const settings = readStrict(root, SETTINGS, 'bad-settings', (v) => isObj(v) && (v.env === undefined || isObj(v.env)))
   const made = cli(['new', f.name || id, '--id', id, '--json'], root, baseUrl, tokenEnv)
   let note = ' (new project)'
   if (made.status !== 0) {
@@ -109,7 +134,7 @@ async function main(argv) {
   if (team) throw stop('not-team', team, `ask someone on the team to run npx walkthrough-cli invite <your email> --team --project ${id}`)
   const got = t.status === 0 && jsonLine(t.stdout, (v) => v.token)
   if (!got) throw fail(t, 'walkthrough-cli token')
-  storeToken(root, tokenEnv, got.token)
+  storeToken(root, settings, tokenEnv, got.token)
   await wt.probe(wt.contextFromBlock(root, process.env, block))
   return done(note)
 }

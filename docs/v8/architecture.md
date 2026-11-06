@@ -70,7 +70,7 @@ per file; writes are atomic (tmp + rename).
   "trunk": "main",
   "lanes": 4,                             // fanout parallelism
   "gateConcurrency": 2,                   // gates running at once on the host (min 1), all worktrees
-  "laneFiles": [".env"],                  // default []: untracked root files copied into each fresh lane worktree before setupCommand
+  "laneFiles": [".env"],                  // default []: untracked root files copied into each fresh lane worktree before setupCommand, beside the .worktreeinclude matches
   "seats": { "builder": {"model":"sonnet","effort":"high"},
              "reviewer": {"model":"opus","effort":"low"},
              "orchestrator": {"model":"opus","effort":"medium"} },
@@ -78,7 +78,7 @@ per file; writes are atomic (tmp + rename).
   "mergeStrategy": "merge-commit",        // or ff-only | squash
   "walkthrough": { "baseUrl": "", "project": "", "tokenEnv": "WALKTHROUGH_TOKEN" },
   "prototype": { "url": "http://localhost:{port}" },   // bootCommand has no default: the plugin assumes no language
-  "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "" }
+  "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "", "testCountPattern": "" }  // testCountPattern optional
 }
 ```
 
@@ -97,7 +97,7 @@ per file; writes are atomic (tmp + rename).
 
 | Step | Driver does | Session does | `--mark` |
 |---|---|---|---|
-| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), copies `laneFiles`, runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
+| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), copies `laneFiles` and the `.worktreeinclude` matches (`lib/host.js` `worktreeIncluded`, v7's selection), runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
 | BUILD | prints the builder brief: spec path, Intent block, File Plan, test command, "write failing tests first, then code, run `testCommand` until green" | dispatches ONE `builder` agent (seat from config; Opus on attempt 2) in the worktree | `built` |
 | GATE | runs `testCommand` in the worktree itself; green-run cache by tree hash (`lib/host.js`); takes a slot in `<git common dir>/spec-gate.lock/` (at most `gateConcurrency` gates at once, pid files, dead pids cleaned); a red whose failing test files are all outside the diff is re-run once before a repair is counted (`gate.reruns`) | nothing | (auto) → REVIEW or REPAIR |
 | REPAIR | prints failure tail; cap 2, then ESCALATE; `repaired` on an unchanged tree and unchanged builder run files is refused | dispatches builder with the failure | `repaired` → GATE; `regate` → GATE (same tree, no repair counted, once per tree) |
@@ -199,9 +199,13 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   dependencies, `after` gates), the anomaly catalogue (`decide` or `hygiene`), `laneAdmission`
   (pairwise, no cap) and `nothingNextLine`. Fanout keeps its own cap and admission.
 - `init.js`: detect test command (package.json scripts.test, pytest, go test, cargo test),
-  trunk, write config; ask only what cannot be detected (one AskUserQuestion). ≤ 150 LOC.
-- `doctor.js`: config valid, testCommand runs (exit 0 or 1, never "command not found"),
-  worktrees gitignored, pending sidecars listed. ≤ 100 LOC.
+  trunk, write config; lint and typecheck from real commands (package.json `lint`/`lint:ci` and
+  `typecheck`/`type-check`, Makefile targets, pyproject, `ruff.toml`, `mypy.ini`) are chained in front of
+  `testCommand` unless it already runs them, on a hand answer and on a re-run too; ask only what cannot be
+  detected (one AskUserQuestion). `gate verified` only when `testCommand` exits 0. ≤ 150 LOC.
+- `doctor.js`: config valid, testCommand runs green (exit 0), worktrees gitignored (a missing entry names
+  `/spec:migrate` or `/spec:init`), pending sidecars listed, roadmap hygiene (the anomalies `status` counts, from
+  `lib/next.js`). `.env` files lanes would not see are findings unless `laneFiles` or `.worktreeinclude` names them.
 - `red-check.js`: new test files vs base must fail on base and pass on HEAD; vacuous green
   reported. ≤ 80 LOC. Called by GATE when `testFileCommand` exists.
 - `genesis.js`: DISCOVERY → MENUS → DECIDE → SCAFFOLD → ROADMAP → HANDOFF → GROUNDED.
@@ -219,7 +223,7 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 - `release.js`: deploy → e2e → promote (asked) → report. ≤ 120 LOC.
 - `migrate.js`: v7 host → v8, see `host-footprint.md`. Idempotent, prints a plan first,
   `--apply` writes. Archives v7-only files under `docs/archive/v7/`.
-- `enforce`: command md only; says init now writes lint/typecheck into `testCommand`.
+- `enforce`: retired; command md only. Says init writes lint/typecheck into `testCommand`.
 
 ## 10. Doctrine (`spec/doctrine.md`, ≤ 1 page)
 

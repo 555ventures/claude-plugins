@@ -18,6 +18,12 @@ prototype command, `/spec:plan` on a `prototype:` spec and `/spec:run` refuse wi
 `is a v7 file — run /spec:migrate`. A mid-round v7 prototype with uncommitted files is committed
 by the user first, so the migration commit holds only migration changes.
 
+It keeps a v7 `gateCommand` as `testCommand` with its `{testDirs}`, `{scopeDirs}` and `{testFiles}`
+removed (v8 does not scope), keeps v8's own keys (`laneFiles`, `gateConcurrency`, `askPaths`,
+`doctorProbeMs`), drops a `mergeStrategy` v8 cannot run (`derived`, `rebase-ff`), and writes v7's
+`capabilities.testCountPattern` to `release.testCountPattern`. It does not turn `laneFiles` into a
+`.worktreeinclude`.
+
 `--apply` refuses (exit 2) on a dirty tree, naming the dirty files; clean it first. On success it
 commits the migration as `chore(spec): migrate v7 → v8` and prints the sha. Agents and skills the
 repo owns are listed as "left alone (user-owned)", and worktree entries outside the repo are only

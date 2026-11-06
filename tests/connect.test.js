@@ -92,3 +92,87 @@ test('a bad flag is a usage refusal', () => {
   const r = connect(host('x'), ['--bogus', '1'])
   assert.strictEqual(r.status, 2)
 })
+
+// ---- spec 20261105/17: the refusals ------------------------------------------------------------------------
+
+const put = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text) }
+const gitIn = (root, ...a) => require('node:child_process').execFileSync('git', ['-C', root, ...a], { encoding: 'utf8' })
+const DEAD = ['--base-url', 'http://127.0.0.1:9']
+const settingsFile = (root) => path.join(root, '.claude/settings.local.json')
+
+test('AC-20261105-17-12 a tracked token file, listed or not, is refused with git rm --cached; nothing is called, stored or created', () => {
+  for (const listed of [false, true]) {
+    const root = host('acme-shop')
+    put(root, '.claude/settings.local.json', JSON.stringify({ other: 1 }))
+    if (listed) put(root, '.gitignore', '.claude/settings.local.json\n')
+    gitIn(root, 'add', '-f', '-A'); gitIn(root, 'commit', '-q', '-m', 'tracked')
+    const npx = fakeNpx('unused')
+    const r = connect(root, DEAD, npx)
+    assert.strictEqual(r.status, 2, r.stderr)
+    assert.match(r.stderr, /not-ignored/)
+    assert.match(r.stderr, /git rm --cached/)
+    assert.deepStrictEqual(npx.verbs(), [])
+    assert.strictEqual(fs.readFileSync(settingsFile(root), 'utf8'), JSON.stringify({ other: 1 }), 'no token stored')
+    assert.ok(!fs.existsSync(path.join(root, '.claude/spec.config.json')))
+  }
+})
+
+test('AC-20261105-17-12 a token file git still does not ignore after the appended line is refused', () => {
+  const root = host('acme-shop')
+  put(root, '.claude/.gitignore', '!settings.local.json\n') // a deeper rule wins over the root line
+  const npx = fakeNpx('unused')
+  const r = connect(root, DEAD, npx)
+  assert.strictEqual(r.status, 2, r.stderr)
+  assert.match(r.stderr, /not-ignored/)
+  assert.deepStrictEqual(npx.verbs(), [])
+  assert.ok(!fs.existsSync(settingsFile(root)), 'no token stored')
+})
+
+test('AC-20261105-17-12 a stored token that already proves connects with no guard, even on a tracked file', async (t) => {
+  const stub = await startStub(t, { 'GET /v1': [HELLO], 'GET /v1/projects/acme-shop/approvals': [APPROVALS] })
+  const root = host('acme-shop')
+  put(root, '.claude/spec.config.json', JSON.stringify({ walkthrough: { baseUrl: stub.url, project: 'acme-shop', tokenEnv: 'WALKTHROUGH_TOKEN' } }))
+  put(root, '.claude/settings.local.json', JSON.stringify({ env: { WALKTHROUGH_TOKEN: MINTED } }))
+  gitIn(root, 'add', '-f', '-A'); gitIn(root, 'commit', '-q', '-m', 'tracked')
+  const r = connect(root, [], fakeNpx('unused'))
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /\(already connected\)/)
+})
+
+test('AC-20261105-17-13 a spec.config.json that is broken or not an object is refused and left byte-identical; absent still connects', async (t) => {
+  for (const text of ['{"walkthrough": ', '[1,2]', '"x"']) {
+    const root = host('acme-shop')
+    put(root, '.claude/spec.config.json', text)
+    const npx = fakeNpx('unused')
+    const r = connect(root, DEAD, npx)
+    assert.strictEqual(r.status, 2, r.stderr)
+    assert.match(r.stderr, /bad-config/)
+    assert.deepStrictEqual(npx.verbs(), [])
+    assert.strictEqual(fs.readFileSync(path.join(root, '.claude/spec.config.json'), 'utf8'), text)
+  }
+  const stub = await startStub(t, { 'GET /v1': [HELLO], 'GET /v1/projects/acme-shop/approvals': [APPROVALS] })
+  const r = connect(host('acme-shop'), ['--base-url', stub.url], fakeNpx('unused'))
+  assert.strictEqual(r.status, 0, r.stderr)
+})
+
+test('AC-20261105-17-14 a settings.local.json that is broken, an array or has a non-object env is refused untouched; other keys stay beside the token', async (t) => {
+  for (const text of ['{"env": ', '[]', '{"env": "x"}', '{"env": []}']) {
+    const root = host('acme-shop')
+    put(root, '.gitignore', '.claude/settings.local.json\n')
+    put(root, '.claude/settings.local.json', text)
+    const npx = fakeNpx('unused')
+    const r = connect(root, DEAD, npx)
+    assert.strictEqual(r.status, 2, r.stderr)
+    assert.match(r.stderr, /bad-settings/)
+    assert.deepStrictEqual(npx.verbs(), [], 'no project is created before the refusal')
+    assert.strictEqual(fs.readFileSync(settingsFile(root), 'utf8'), text)
+  }
+  const stub = await startStub(t, { 'GET /v1': [HELLO], 'GET /v1/projects/acme-shop/approvals': [APPROVALS] })
+  const root = host('acme-shop')
+  put(root, '.claude/settings.local.json', JSON.stringify({ permissions: { allow: ['x'] }, env: { KEEP: '1' } }))
+  put(root, '.gitignore', '.claude/settings.local.json\n')
+  const r = connect(root, ['--base-url', stub.url], fakeNpx(stub.url))
+  assert.strictEqual(r.status, 0, r.stderr)
+  const kept = JSON.parse(fs.readFileSync(settingsFile(root), 'utf8'))
+  assert.deepStrictEqual(kept, { permissions: { allow: ['x'] }, env: { KEEP: '1', WALKTHROUGH_TOKEN: MINTED } })
+})

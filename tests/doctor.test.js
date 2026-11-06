@@ -251,3 +251,57 @@ test('AC-20261105-14-13 no file under spec/ carries the overlay, its endpoint or
   walk(SPEC)
   assert.deepStrictEqual(hits, [])
 })
+
+// ---- spec 20261105/17: roadmap hygiene, the .gitignore remedy, .worktreeinclude -------------------------------
+
+const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
+const put = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
+const briefDoc = (nn, title) => `# ${nn} — ${title}\n\nPhase: P1 · Depends on: — · Primary workspaces: app\n\n## Result\n\nx\n`
+const specDoc = (stat, brief) => `---\nstatus: ${stat}\nbrief: ${brief}\n---\n# S\n\n## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n| x.js | MODIFY | x |\n`
+
+test('AC-20261105-17-8 doctor reports status\'s hygiene anomalies as roadmap findings and the decide ones as info lines', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  put(d, 'docs/roadmap/03-rounds.md', briefDoc('03', 'Rounds'))
+  put(d, 'specs/20261104/01-rounds.md', specDoc('done', '03'))
+  put(d, 'specs/20261104/02-stamp.md', specDoc('hardened', '77')) // orphan-stamp: hygiene
+  put(d, 'specs/20261104/03-weird.md', specDoc('weird', 'n/a')) // unknown-status: hygiene
+  Q.write(d, { version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-01T00:00:00.000Z' }] }) // brief 03 done but queued: decide
+  const st = JSON.parse(runNode('scripts/status.js', ['--root', d, '--json']).stdout).anomalies
+  const hygiene = st.filter((a) => a.audience === 'hygiene')
+  const decide = st.filter((a) => a.audience === 'decide')
+  assert.ok(hygiene.length >= 2 && decide.length === 1, JSON.stringify(st))
+  const r = runNode('scripts/doctor.js', ['--root', d, '--json'])
+  assert.strictEqual(r.status, 1)
+  const j = JSON.parse(r.stdout)
+  assert.deepStrictEqual(j.findings.filter((x) => x.startsWith('roadmap: [')), hygiene.map((a) => `roadmap: [${a.kind}] ${a.detail}`))
+  assert.deepStrictEqual(j.info.filter((x) => x.startsWith('roadmap: [')), decide.map((a) => `roadmap: [${a.kind}] ${a.detail}`))
+  assert.ok(!j.findings.some((x) => x.includes('brief-done-queued')), 'a decide anomaly adds no finding')
+  const clean = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', clean])
+  assert.deepStrictEqual(JSON.parse(runNode('scripts/doctor.js', ['--root', clean, '--json']).stdout).findings, [], 'no roadmap, no roadmap finding')
+})
+
+test('AC-20261105-17-9 a missing .gitignore entry names its remedy: migrate on a migrated host, init otherwise', () => {
+  const missing = (cfg) => JSON.parse(runNode('scripts/doctor.js', ['--root', setup(cfg), '--json']).stdout).findings.filter((x) => x.startsWith('gitignore: missing '))
+  const v7 = missing({ testCommand: 'true', generatedBy: 'spec@7' })
+  const fresh = missing({ testCommand: 'true' })
+  assert.ok(v7.length >= 1, 'the seeded repo lacks at least one entry')
+  assert.strictEqual(fresh.length, v7.length)
+  for (const x of v7) assert.match(x, / — run \/spec:migrate$/)
+  for (const x of fresh) assert.match(x, / — run \/spec:init$/)
+  assert.deepStrictEqual(require(path.join(SPEC, 'scripts/init.js')).IGNORE, ['specs/**/*.run/', '.claude/worktrees/', '.claude/pending-question.json', '.claude/settings.local.json'])
+})
+
+test('AC-20261105-17-11 a .env that .worktreeinclude matches is named for lanes: no laneFiles finding', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  fs.writeFileSync(path.join(d, '.env'), 'K=1\n')
+  fs.writeFileSync(path.join(d, '.env.local'), 'K=2\n')
+  fs.appendFileSync(path.join(d, '.gitignore'), '.env\n.env.local\n')
+  fs.writeFileSync(path.join(d, '.worktreeinclude'), '.env\n')
+  execFileSync('git', ['-C', d, 'add', '-A']); execFileSync('git', ['-C', d, 'commit', '-q', '-m', 'ignore env'])
+  const f = doctorJson(d).findings
+  assert.ok(!f.some((x) => x.includes('root has .env that')), f.join('\n'))
+  assert.ok(f.some((x) => x.includes('root has .env.local that')), 'the unmatched sibling is still reported')
+})

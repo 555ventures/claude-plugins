@@ -8,7 +8,8 @@ const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readJson, configPath, readFanout, readConfig, protoV7, protoDir } = require('./lib/state')
-const { run, cacheDir } = require('./lib/host')
+const { run, cacheDir, worktreeIncluded } = require('./lib/host')
+const { derive } = require('./lib/next')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
 const { IGNORE } = require('./init')
@@ -103,14 +104,16 @@ function check(root, { probe = true } = {}) {
     else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.pop() || ''}`) }
   }
   if (cfg && typeof cfg === 'object') {
-    const named = Array.isArray(cfg.laneFiles) ? cfg.laneFiles : []
+    const named = [...(Array.isArray(cfg.laneFiles) ? cfg.laneFiles : []), ...worktreeIncluded(root)]
     for (const env of ['.env', '.env.local']) {
       if (fs.existsSync(path.join(root, env)) && git.raw(['ls-files', '--error-unmatch', '--', env], root).status !== 0 && !named.includes(env)) {
         f.push(`laneFiles: the root has ${env} that lanes will not see — add "laneFiles": ["${env}"] to .claude/spec.config.json`)
       }
     }
   }
-  for (const e of IGNORE) if (git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e}`)
+  for (const e of IGNORE) if (git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e} — run ${cfg && cfg.generatedBy ? '/spec:migrate' : '/spec:init'}`)
+  // The roadmap derivation status prints: hygiene anomalies are findings, decide ones are the user's call.
+  for (const a of derive(root).anomalies) (a.audience === 'hygiene' ? f : info).push(`roadmap: [${a.kind}] ${a.detail}`)
   const ENDED = ['DONE', 'PARKED', 'AMENDED']
   const used = new Set() // worktrees a live run points at
   const fan = readFanout(root)

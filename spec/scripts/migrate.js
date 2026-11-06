@@ -15,7 +15,9 @@ const { render } = require('./lib/report')
 const { ensureGitignore, IGNORE } = require('./init')
 
 const ARCH = 'docs/archive/v7'
-const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design']
+const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design',
+  'laneFiles', 'gateConcurrency', 'askPaths', 'doctorProbeMs'] // the last four are v8's own keys: a re-run on a v8 host keeps them
+const MERGE = ['merge-commit', 'ff-only', 'squash'] // v7's `derived` and `rebase-ff` have no v8 meaning: git.mergeBack throws on them
 const V7_CONFIG = ['generatedBy', 'contractHash', 'policy', 'gateCommand'] // config keys only v7 wrote: trimConfig drops them, so they mark a host not yet migrated
 const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-runs.stopped.jsonl', '.claude/spec-session.json',
   '.claude/spec-preimage', '.claude/spec-manifest.json', '.claude/release-manifest.json', '.claude/rules/enforcement.json',
@@ -47,16 +49,22 @@ function trimConfig(root, cfg) {
   if (seat(models.workers) && !seats.builder) seats.builder = seat(models.workers)
   if (seat(models.reviewer) && !seats.reviewer) seats.reviewer = seat(models.reviewer)
   // v8's testCommand is the whole gate. A v7 gateCommand without {placeholders} already is one
-  // (typecheck, lint, build, tests); a thin testCommand beside it would silently drop those. A
-  // v7 typecheckCommand is often per-file (needs an argument), so it is prepended only to a plain
-  // test command, never to a chosen gate.
-  const gate = cfg.gateCommand && !/\{\w+\}/.test(cfg.gateCommand) ? cfg.gateCommand : null
+  // (typecheck, lint, build, tests); a thin testCommand beside it would silently drop those. v7
+  // appended {testDirs} / {scopeDirs} / {testFiles} to the gate as paths, so removing them leaves the
+  // unscoped gate. A v7 typecheckCommand is often per-file (needs an argument), so it is prepended
+  // only to a plain test command, never to a chosen gate.
+  const gate = typeof cfg.gateCommand === 'string' ? cfg.gateCommand.replace(/\s*\{(testDirs|scopeDirs|testFiles)\}/g, '').trim() || null : null
   let test = gate || cfg.testCommand || detectTestCommand(root)
   const post = cfg.postGateCommand
   if (test && post && post !== '{testCommand}' && !test.includes(post)) test = `${test} && ${post}`
   if (!gate && test && cfg.typecheckCommand && !test.includes(cfg.typecheckCommand)) test = `${cfg.typecheckCommand} && ${test}`
+  // v7 kept the release test-count pattern under capabilities; v8 reads it under release (optional).
+  const tcp = cfg.capabilities && cfg.capabilities.testCountPattern
+  const rel = cfg.release && typeof cfg.release === 'object' && !Array.isArray(cfg.release) ? cfg.release : {}
+  const merge = [cfg.mergeStrategy, pol.mergeStrategy].find((m) => MERGE.includes(m))
   const src = { ...cfg, testCommand: test, seats: Object.keys(seats).length ? seats : undefined,
-    mergeStrategy: cfg.mergeStrategy || pol.mergeStrategy, worktreePerSpec: cfg.worktreePerSpec ?? pol.worktreePerSpec,
+    release: tcp != null ? { ...rel, testCountPattern: tcp } : cfg.release,
+    mergeStrategy: merge, worktreePerSpec: cfg.worktreePerSpec ?? pol.worktreePerSpec,
     setupCommand: cfg.setupCommand }
   for (const k of KEYS) if (src[k] != null) out[k] = src[k]
   if (out.prototype && typeof out.prototype === 'object') out.prototype = trimPrototype(out.prototype, cfg.runtime)

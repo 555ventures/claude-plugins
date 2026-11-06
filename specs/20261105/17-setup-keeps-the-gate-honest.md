@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: implementing
 area: setup
 depends_on: [specs/20261105/14-the-prototype-is-pinned-in-chat-and-proved-at-look.md]
 brief: n/a
@@ -111,3 +111,19 @@ On a real host, `init` says the gate is good only when it exited 0. Migrating a 
 - A3: Spec 14 lands first and its `prototype` entries in `KEYS` and `migrate.js`, `doctor.js`, `host.js`, `tests/migrate.test.js`, `tests/doctor.test.js`, interface-contract.md and architecture.md are merged before this build. — if false: rebase on it, the rows do not collide by line.
 - A4: Spec 15 keeps `release.testCountPattern` optional, and its A3 stops saying migrate needs no step. — if false: D8 still carries the key, and spec 15's reader decides what an absent key does.
 - A5: Spec 16's reference to "spec 17's D13" means doctor's hygiene list, so D13 keeps that number. — if false: fix that reference when 16 locks.
+
+## As built
+
+- `tests/init.test.js` also holds the AC-15 doc-grep test (the File Plan names no separate docs test file); it reads interface-contract.md, host-footprint.md and the command files.
+- The "tag missing fails" half of AC-10 is the shared `v7Scripts()` helper in `tests/helpers.js` (it runs `git archive spec-v7-final` and throws when the tag is absent, no skip path); the host test calls it and adds a source pin that the helper keeps that shape. `helpers.js` is unchanged.
+- D5/D7: `trimConfig` takes the first VALID `mergeStrategy` of `cfg.mergeStrategy` then `policy.mergeStrategy`, so a v7 `derived` beside a valid policy value keeps the valid one instead of dropping both.
+- D4: `init.js` exports a `chain(root, testCommand, checks)` beside `detect`, used by the one chaining path; `covered()` splits the command on whitespace and shell operators (`; & | ( )`) for its tokens and reads package.json scripts and files one level deep.
+- D12: the settings-file guard keeps `check-ignore` first (v7 order); a deeper `.claude/.gitignore` rule that un-ignores the file is the "unignored after the appended line" case, and its remedy text says to make git ignore the file rather than to add a line (the line was already appended). `guardTokenFile` still appends the line before that refusal, as v7 did.
+- AC-16: the spec says this repo tracks the token file; main stopped tracking it in 88a6d6ee, so the evidence clone adds the file as 88a6d6ee~1 held it. `cmp` of the two `.env` files was refused by a harness deny rule on `.env`; evidence shows size equality plus the unit test.
+- D14: the interface-contract §1 `/spec:init` row now lists `[--set key=value]…` (the real flag) instead of `[notes about the repo]`; the contract's `/spec:connect` row is unchanged.
+- spec/scripts/init.js:45 The Makefile target regex also matches a variable assignment, so a Makefile with `lint := foo` gets a `make lint` check that is not a real target, against D3's 'real commands only'.
+- spec/scripts/init.js:79 Chaining with && in front of a hand answer holding || lets a failed lint pass the gate. This follows D4's join literally, so the code matches the Decision, but the outcome works against the spec's honest-gate aim.
+- spec/scripts/lib/host.js:200 worktreeIncluded matches v7's selection, but a matched nested git repo is listed as `vendored/`. copyLaneFiles then skips it with a misleading `laneFiles: skipped vendored/ (missing)` line, where v7's tar step would be given that directory.
+- spec/scripts/migrate.js:214 `same` compares JSON strings, so a v8 host holding the newly kept keys in a different order gets one config op that only reorders them. It settles after one apply.
+- spec/scripts/connect.js:124 D12 says each refusal writes nothing, but on a repo where the token file is unignored and malformed, guardTokenFile appends to .gitignore before the bad-settings refusal. D12(c) also fixes that order, so the spec pulls both ways, and the test pre-lists the line so this path is not exercised.
+- specs/20261105/17-setup-keeps-the-gate-honest.run/evidence.md:43 AC-16 asks for the worktree .env byte for byte, but the evidence shows only equal size and the stub's content, because cmp was refused. The copy itself is proven byte for byte only on a fixture in tests/host.test.js.

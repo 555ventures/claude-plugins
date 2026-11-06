@@ -24,7 +24,7 @@ Verdicts:
 | `generatedBy` | state-gate, doctor | `"spec@7.268.0"` | DROP (no version stamp) |
 | `contractHash` | state-gate (drift warn), doctor | `"4561fc4fc5a6"` | DROP |
 | `trunk` | review driver, merge-back, fanout | `"main"` | CONVERT → `config.trunk` |
-| `gateCommand` (`{testDirs}`/`{scopeDirs}`/`{testFiles}`) | build driver, review-legs | `node --test … {testFiles}` | CONVERT → `config.testCommand` (the v8 gate is the host test command). Keep the scoped form only if v8 scopes. |
+| `gateCommand` (`{testDirs}`/`{scopeDirs}`/`{testFiles}`) | build driver, review-legs | `node --test … {testFiles}` | CONVERT → `config.testCommand` (the v8 gate is the host test command). v8 does not scope: `{testDirs}`, `{scopeDirs}` and `{testFiles}` (appended paths in v7) are removed, `\s*` included, and what is left is the gate. A gate that was only a placeholder falls back to `testCommand`. |
 | `testCommand` (optional `{file}`) | review-legs, red-check, at-risk, release | `node --test … --test-reporter=spec` | CONVERT → `config.testCommand` |
 | `postGateCommand` | build driver | `"{testCommand}"` | DROP. If set, fold it into testCommand with `&&`. |
 | `setupCommand` | init, worktree setup | `"npm install"` | CONVERT → `config.setupCommand` (lane worktree bootstrap) |
@@ -38,14 +38,14 @@ Verdicts:
 | `layerGroups`, `agentMap`, `routing` | build driver (waves), init | `agentMap.tests:"plugin-tests"` | DROP (one builder per spec) |
 | `pipelineRules` | host-config `readPipelineRules`, plan, review | `.claude/rules/spec-pipeline.md` | DROP (see 1.2) |
 | `runtime` `{bootCommand,readyCheck,seedCommand,…}` or `{inert}` | smoke.sh, prototype, release | `{"inert":"marketplace of CLI plugins…"}` | CONVERT → `config.runtime` only if boot/ready are present. Drop `inert`. |
-| `capabilities` `{forge,failCountPattern,skipReportPattern,testCountPattern,ciPoll}` | ci-query, review-legs, release | `forge:"github"`, `testCountPattern:"ℹ tests (\\d+)"` | CONVERT `forge` → `config.forge`. Drop the rest. |
+| `capabilities` `{forge,failCountPattern,skipReportPattern,testCountPattern,ciPoll}` | ci-query, review-legs, release | `forge:"github"`, `testCountPattern:"ℹ tests (\\d+)"` | CONVERT `forge` → `config.forge`. CONVERT `testCountPattern` → `config.release.testCountPattern` verbatim (`none` too; optional there). Drop the rest. |
 | `policy` (`worktreePerSpec`, `directLaneToMain`, `mergeStrategy`, `testExpiry`, `closeSuite`, `ledgerCommitted`, `reviewService`, `models.{workers,reviewer,disposer,lanes}`, `riskTiers`, `stops.*`, `fanout.{selfSurfaces,overlapExempt}`) | `host-config.js` POLICY_DEFAULTS / `policy()`, pending-question `stopPolicy` | `{"closeSuite":"always"}` | CONVERT `models.*` → `config.seats` only if they differ from the v8 defaults. Fold `mergeStrategy` into the merge choice. Drop everything else. |
 | `design` `{kit,tokens,rules,app}` | mocks, enforce, genesis | absent | CONVERT as-is → `config.design` (mocks and prototype keep it) |
 | `prototype` `{url,bootCommand,overlay,e2eFile,e2eList,e2eRun,picture,dbCreate,dbDestroy}` | prototype-driver, build REPLAY | absent | KEEP the block verbatim → `config.prototype` |
 | `walkthrough` `{baseUrl,project,tokenEnv}` | mocks-driver, walkthrough.js | absent | KEEP verbatim → `config.walkthrough` |
 | `pictures` `{command,dir,widths}` | pictures.js | absent | KEEP verbatim only if the v8 prototype uses it. Otherwise DROP. |
-| `release` `{deployCommand,stagingUrl,e2eCommand,promoteCommand,rollbackCommand,productionUrl,healthPath,migrationsCheck}` | release-legs | absent | KEEP verbatim → `config.release` |
-| `enforcementManifest`, `rulesEnforcementHash` | doctor, enforce | `.claude/rules/enforcement.json`, `f333e8050707` | KEEP the path. DROP the hash. |
+| `release` `{deployCommand,stagingUrl,e2eCommand,promoteCommand,rollbackCommand,productionUrl,healthPath,migrationsCheck}` | release-legs | absent | KEEP verbatim → `config.release`; `testCountPattern?` (optional) is added from v7's `capabilities.testCountPattern` |
+| `enforcementManifest`, `rulesEnforcementHash` | doctor, enforce | `.claude/rules/enforcement.json`, `f333e8050707` | ARCHIVE the file with the key. DROP the hash. Nothing in v8 reads or writes the manifest. |
 | `genesisStackDescriptor` | init | absent | DROP the key. Leave the descriptor file (§4). |
 | `driftScript`, `base`, `typecheckCommand`, `pipelineOwnedPaths` | doctor, review-legs (`config.typecheckCommand` 4 reads) | absent | DROP. Fold typecheck into testCommand if it is set. |
 
@@ -57,7 +57,7 @@ Verdicts:
 |---|---|---|---|---|
 | `.claude/rules/spec-pipeline.md` | `init-gen.js generate`, from profile fields under the `grounding-contract.md` § Required pipeline-rules sections | plan, build, review (Read explicitly); ambient load via `paths: ["specs/**", ".claude/**"]` | Seven required `##` sections: Risk Tiers · Planning · Build · Worker Rules · Test Rules · Review Checks · Gotchas (evidence-cited). The plugin's own copy is 598 lines. | ARCHIVE, then DELETE. Before deleting, migrate extracts `## Gotchas` and the `## Risk Tiers` bullets into an `architecture:`-trigger hint in config, or a short host `CLAUDE.md` note. This is host knowledge, not doctrine. |
 | `.claude/rules/conventions/<kind>.md` | init-gen | ambient (`paths:` globs) | Per-layer convention bullets | KEEP. These are ordinary Claude Code rules and still useful. |
-| `.claude/rules/enforcement.json` (+ baseline files at `entries[].baseline.path`) | `/spec:enforce` | doctor, gate wiring | One entry per `<ws>:<stack>:<category>` | KEEP. The enforcers live in the host gate. |
+| `.claude/rules/enforcement.json` (+ baseline files at `entries[].baseline.path`) | `/spec:enforce` | doctor, gate wiring | One entry per `<ws>:<stack>:<category>` | ARCHIVE → `docs/archive/v7/rules/enforcement.json`. `/spec:enforce` is retired, so nothing writes it. |
 | `.claude/rules/design.md` | genesis / design brief | mocks, enforce | Intent→pattern and naming tables | KEEP |
 | `.claude/agents/<name>.md` | init-gen (persona + byte-identical Worker Contract block + tests addendum) | build driver via `agentMap`. Frontmatter is `model: sonnet`, `permissionMode: acceptEdits`, `memory: project`. | Plugin examples: `gate-scripts.md`, `doctrine-author.md`, `plugin-tests.md` | DELETE only files whose body carries the `## Worker Contract (spec pipeline)` block (generated). Leave any others. |
 | `.claude/agent-memory/<agent>/*.md` | the agents (`memory: project`); `memory-sweep.js` prunes | the agents | 48 tracked files, 224K here | LEAVE. Archive if the agent was deleted. |
@@ -69,7 +69,7 @@ Verdicts:
 | `.claude/spec-preimage/` | nothing in v7. Retired, last seen in `4817a9d2` (v7 stage 2). A `.gitignore` line remains. | none | — | DELETE if present. Drop the ignore line. |
 | `.claude/release-manifest.json` | `release-legs.js:165` | release | Per-release check manifest | ARCHIVE |
 | `scripts/spec-patterns.sh` (path from `patternsScript`) | init-gen (harness) | build driver | Host pattern sweep | LEAVE. Report it as orphaned. |
-| `.gitignore` lines | init-gen `IGNORE_ENTRIES` (`init-gen.js:120`) | git | `.claude/worktrees/`, `specs/**/*.review/`, `specs/**/*.build/`, `.claude/spec-session.json`. When `ledgerCommitted:false`, also `.claude/spec-runs.jsonl` and `.claude/spec-runs/`. Also seen: `.claude/spec-preimage/`, `.claude/spec-runs.stopped.jsonl`. | CONVERT. Keep `.claude/worktrees/`, add `.claude/spec/runs/`, remove the rest. |
+| `.gitignore` lines | init-gen `IGNORE_ENTRIES` (`init-gen.js:120`) | git | `.claude/worktrees/`, `specs/**/*.review/`, `specs/**/*.build/`, `.claude/spec-session.json`. When `ledgerCommitted:false`, also `.claude/spec-runs.jsonl` and `.claude/spec-runs/`. Also seen: `.claude/spec-preimage/`, `.claude/spec-runs.stopped.jsonl`. | CONVERT. v8's list is `specs/**/*.run/`, `.claude/worktrees/`, `.claude/pending-question.json`, `.claude/settings.local.json`; migrate adds what is missing and leaves v7's old lines in place (stripping `.review/` would un-ignore an orphan dir into the migration commit). Doctor names `/spec:migrate` (config has `generatedBy`) or `/spec:init` for a missing entry. |
 | `.gitattributes` | init-gen `ensureGitattributes` | git | `.claude/spec-runs.jsonl merge=union` | DELETE the line |
 
 ---
@@ -207,7 +207,7 @@ Related run records:
 2. Tag `spec-v7-final`.
 3. Write `.claude/spec/config.json` (§1.1). Convert the queue (§2.4) and the pending questions.
 4. For each pending spec, map its status (§2.1). If it has a sidecar or a `spec/*` branch, write `.claude/spec/runs/<id>.json`.
-5. Archive the ledger, run records and queue-done file. Delete the sidecars, session stamp, run cache, git-dir markers, refs, manifest, generated agents and pipeline rules (after extracting Gotchas and Risk Tiers).
+5. Archive the ledger, run records, enforcement manifest and queue-done file. Delete the sidecars, session stamp, run cache, git-dir markers, refs, manifest, generated agents and pipeline rules (after extracting Gotchas and Risk Tiers).
 6. Rewrite the `.gitignore` and `.gitattributes` lines.
-7. Leave ADRs, roadmap, canonical docs, conventions rules, enforcement, skills, settings, design/ and prototypes untouched.
+7. Leave ADRs, roadmap, canonical docs, conventions rules, skills, settings, design/ and prototypes untouched.
 8. Print a report: every dropped non-default key, every unmerged branch or worktree, and every queue item that lost a predicate.

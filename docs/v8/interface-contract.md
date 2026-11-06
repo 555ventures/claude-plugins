@@ -6,9 +6,9 @@ This is the user-visible surface of the `spec` and `git` plugins as of `claude-p
 
 | Command | Arguments / flags | Purpose |
 |---|---|---|
-| `/spec:init` | `[notes about the repo]` | Bootstraps the grounding layer, then runs `/spec:enforce` |
-| `/spec:doctor` | `[focus area] [--fix]` | Checks for drift. `--fix` applies cited patches, each one approved |
-| `/spec:enforce` | `[category or rule-doc path]` | Turns rules into deterministic checks wired into the gate |
+| `/spec:init` | `[--set key=value]…` | Detects the trunk, `testCommand` (lint and typecheck chained in front) and `setupCommand`, writes `.claude/spec.config.json` and the `.gitignore` entries, runs the gate once |
+| `/spec:doctor` | `[--fix]` | Health check of the host: config, the gate, `.gitignore`, sidecars, worktrees, roadmap hygiene. Names a remedy per finding |
+| `/spec:enforce` | none | Retired: the command is kept as a name only. Lint and typecheck reach `testCommand` through `/spec:init` |
 | `/spec:connect` | `[--project <id>] [--name <text>] [--base-url <url>]` | Links the project to the hosted review service |
 | `/spec:genesis` | `<project idea — what, for whom>` | Greenfield only. Goes from idea to grounded repo |
 | `/spec:mocks` | none | Wireframe design stage |
@@ -51,11 +51,11 @@ A lane (a sub-agent) never asks the user. It writes `.claude/pending-question.js
 | `specs/YYYYMMDD/NN-slug.md` | Spec doc (§6) |
 | `<spec>.build/`, `<spec>.review/` | Sidecar directories for driver state, next to the spec |
 | `<spec>.deviations.md` | Bullets-only deviations. Folded into Gotchas at CLOSE; `closed` refuses while the file exists |
-| `.claude/spec.config.json` | Config. Required keys: `generatedBy`, `contractHash`, `gateCommand` (with `{testDirs}`/`{scopeDirs}`/`{testFiles}` placeholders), `testCommand` (`{file}` optional), `setupCommand`, `patternsScript`, `layerGroups`, `agentMap` (must include `tests` and `default`), `pipelineRules`, `runtime` (`bootCommand` etc.). Optional: `askPaths` (root-relative globs; an out-of-plan edit under one stops the run with a `scope` question, every other out-of-plan file widens and is reported; default none), `postGateCommand`, `slowTestCommand`, `testEnv`, `testNameFilter`, `trunk`, `testCaseScanner`, `fileShapes`, `orchestratorOnly`, `gateConcurrency` (default 2), `laneFiles` (default `[]`), `typecheckCommand`, `driftScript`, `routing`, `design {kit,tokens,rules,app?}`, `release {deployCommand,stagingUrl,e2eCommand,promoteCommand?,rollbackCommand?,productionUrl?,healthPath?,migrationsCheck?}`, `prototype {url, bootCommand, publicUrl?, picture?, e2eFile?, e2eCommand?}` (`url` and `publicUrl` take `{port}`; `e2eFile` takes `{stem}`; `e2eCommand` takes `{file}` and runs with `APP_URL`), `walkthrough {baseUrl,project,tokenEnv}`, `pictures {command,dir,widths?}`, `capabilities {forge,failCountPattern,skipReportPattern,testCountPattern,ciPoll}`, `policy` (below), `enforcementManifest`, `rulesEnforcementHash`, `genesisStackDescriptor` |
-| `policy` block | `worktreePerSpec` (true), `directLaneToMain` (true), `mergeStrategy` (derived\|merge-commit\|ff-only\|squash\|rebase-ff), `testExpiry` (classify\|off), `closeSuite` (auto\|always), `ledgerCommitted` (true), `reviewService` (terminal\|hosted), `models.{workers,reviewer,disposer}.{model,effort}`, `riskTiers[]`, `stops.{repairRound: repair\|ask, buildEscalate: derived\|ask, reviewEscalate: queue\|ask, redFindings: remove-mention\|ask, prototypeClose: delete\|keep\|ask, rejectWithEvidence: accept\|ask}`, `fanout.{selfSurfaces[],overlapExempt[]}`. A missing key falls back to its default, key by key |
+| `.claude/spec.config.json` | Config (keys in architecture §3). `testCommand` is required, the whole gate. Optional: `testFileCommand`, `setupCommand`, `trunk`, `lanes`, `gateConcurrency` (default 2), `laneFiles` (default `[]`; untracked root files copied into each fresh lane worktree, with the `.worktreeinclude` matches), `seats`, `worktreePerSpec`, `mergeStrategy` (`merge-commit`\|`ff-only`\|`squash`), `askPaths`, `doctorProbeMs`, `walkthrough {baseUrl,project,tokenEnv}`, `prototype {url, bootCommand, publicUrl?, picture?, e2eFile?, e2eCommand?}` (`url` and `publicUrl` take `{port}`; `e2eFile` takes `{stem}`; `e2eCommand` takes `{file}` and runs with `APP_URL`), `release {deployCommand,stagingUrl,e2eCommand,promoteCommand?,rollbackCommand?,productionUrl?,healthPath?,migrationsCheck?,testCountPattern?}` (`testCountPattern` optional; `/spec:migrate` fills it from v7's `capabilities.testCountPattern`), `design`, `forge` |
+| `policy` block | v7 only. `/spec:migrate` folds `mergeStrategy` and `worktreePerSpec` and the model seats into the v8 keys and drops the block |
 | `.claude/rules/spec-pipeline.md` | `paths:`-scoped to `specs/**`, `.claude/**`. Seven sections: Risk Tiers · Planning · Build · Worker Rules · Test Rules · Review Checks · Gotchas |
-| `.claude/rules/conventions/*.md`, `.claude/agents/*.md`, `.claude/skills/{run,spec-verify}/SKILL.md`, `scripts/spec-patterns.sh`, `.claude/settings.json` `permissions`, `.claude/spec-manifest.json` | Written by init |
-| `.claude/rules/enforcement.json` | Written by enforce. Entry ids `<workspace>:<stack>:<category>[/<layer>]` |
+| `.claude/rules/conventions/*.md` | Repo-owned. Read by the host's own tests and lint messages; `/spec:init` writes nothing under `.claude/rules/` |
+| `.claude/rules/enforcement.json` | v7 only. `/spec:migrate` archives it to `docs/archive/v7/rules/`; nothing reads it |
 | `.claude/spec-runs.jsonl` (+ `.claude/spec-runs/<runId>.jsonl`) | Run ledger with plan/build/review/fix/escape/release rows. Gitignored when `ledgerCommitted:false` |
 | `.claude/settings.local.json` `env` | Walkthrough token, written by `/spec:connect`. Never in a tracked file |
 | `<git-common-dir>/spec-queue.json`, `spec-queue-done.json` | Queue (version 3, owned by `lib/queue.js`) and its archive (§7). Not in the checkout |
@@ -76,7 +76,7 @@ All questions go through `AskUserQuestion`: at most 4 per call, recommended opti
 
 | Command | Asks / ends the turn |
 |---|---|
-| init | Interview (only what the code can't answer). Substrate question. testCommand vacuous-pass and at-risk disclosures. Slow-tier question. Policy round 1 (Worktrees, Direct lane, Merge shape, Test expiry). Policy round 2 (Run history, Review service, Model mix, High-risk areas — multi-select). Write confirm (`Stop here` → nothing written). A dismissed policy round keeps its defaults |
+| init | One question, only when no test command is detected: `What single command runs your whole test suite?` (answered with `--set testCommand=<cmd>`) |
 | plan | Real forks while drafting. Critical tier only: "This spec is critical tier because it touches <trigger>. Lock it now?" → Lock it / Keep it as a draft |
 | run/build | RED_FINDINGS on a critical tier (remove mention / rewrite red / pause). ESCALATE (re-arm / restart cold / park and queue /spec:fix / amend), unless `stops.buildEscalate` answers. LOOK (prototype specs): only a literal `close enough` advances; any other reply is a FIX round with the reply as the symptom. Out-of-plan files and unwritten-fallback forks |
 | run/review | STOPPED (repair round, then queue /spec:fix / abandon). DISPOSITIONS: only the user waives. ESCALATE (abandon+queue fix / waive-reject via disposer / abandon / re-plan). MERGE: strategy is derived and never asked; conflicts are asked; "The prototype has N commits that were never merged. Delete the prototype now?" |
@@ -87,7 +87,7 @@ All questions go through `AskUserQuestion`: at most 4 per call, recommended opti
 | prototype | The OPEN, ROUND and APPROVED (with a picture) bodies, and the run's PIN_TESTS body, print the boot line `cd <worktree> && export PORT=<port> && <bootCommand>`, so a `$PORT` in `bootCommand` expands; with a fixed `prototype.url` (no `{port}`) the line is `cd <worktree> && <bootCommand>`. `prototype.bootCommand` has no default: when it is unset OPEN makes no worktree and asks the user once for the app's start command (the session sets `prototype.bootCommand` in `.claude/spec.config.json` and re-runs), and every boot line (`prototype.js`, `run.js`) refuses, naming `prototype.bootCommand`, rather than print `undefined`. Each ROUND prints `🎨 ready for pins — <url>` and ends the turn, only when the app answers. A literal `approve` → approved; any other reply is a ruling the session pins. APPROVED prints every active sentence by route and waits for the user's yes before `contracted --confirmed` |
 | queue groom | Asks only about `keep`/ambiguous items. Clear evidence of done is ticked with a 📌 |
 | release | Phase 0 grounding fields. Promote to production? Rollback question. Seed-data question |
-| doctor `--fix`, enforce | Per-patch approval batches. Enforcer choice. `Confirm before writing: {N} files will be…`. Rules are proposed, never auto-authored |
+| doctor `--fix` | Per-patch approval batches |
 | git:commit | Approval 1 (gather), approval 2 (commit). Secrets hit: "Keep them out of this commit?". Defect class for the escape row |
 | git:merge | Source branch when ambiguous. Dirty tree: commit / stash / abort. Non-trivial conflicts. A `proto/*` source is refused |
 
@@ -118,10 +118,10 @@ Every command ends with one report rendered by `report-render`. Fixed order: **b
 | run | Spec `done`, Canonical Delta applied, close commit, branch merged into `build_base`, worktree removed (never pushed). Next = status --next |
 | fanout | Each lane lands one at a time, as it returns, with the gate green on main; a spec whose `depends_on` is not done waits. One REPORT ends the turn (`N spec(s) and M fix(es) left — /clear, then /spec:fanout to continue`), and the next bare run starts the next batch. A fix item is a lane; a spec with frontmatter `prototype:`, and a fix item bound to one, is held for `/spec:run` (`stops at LOOK for you — /spec:run it`) |
 | fix | `✅ fixed — {symptom}`: root cause, regression test, findings disposed, fix/escape row appended |
-| genesis | `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes, roadmap of {M} briefs`, `Chain: …`, `Next: /spec:enforce` |
+| genesis | `✅ architected + grounded — scaffold green, {N} ADRs, {P} convention probes, roadmap of {M} briefs`, `Chain: …`, `Next: /spec:plan` |
 | mocks | `✅ wireframe approved — {N} journeys`, `Next: /spec:genesis` |
 | prototype | `✅ contract written`: `contract.json` committed on main (`committed on trunk`), `/spec:plan <contract>` queued. `--mark closed` removes the worktree and branch, reports a failed removal, and commits its status |
-| init | `initialized — {N} files, gate verified, stamped` |
+| init | `✅ initialized — config written, gate verified` (exit 0 of `testCommand`); any other exit prints `config written — gate not verified` and a `testCommand exited N` warning; no detected command prints `config written — answers needed` |
 | git:commit | `✅ committed — {subject} ({N} files)`; Next `/git:merge — land it on {base}` on a `spec/*` branch |
 | git:merge | `✅ merged {source} into {target}` |
 | git:enter-worktree | `✅ worktree created at …` / `re-entered at …` / `attached at …`; writes `build_base` unless pinned |

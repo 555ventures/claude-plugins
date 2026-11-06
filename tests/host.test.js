@@ -161,3 +161,61 @@ test('gateConcurrency defaults to 2 when absent and to 1 when 0 or negative', as
     }
   } finally { fs.rmSync(holder, { force: true }); sleeper.kill() }
 })
+
+// ---- spec 20261105/17: .worktreeinclude --------------------------------------------------------------------
+
+const { v7Scripts } = require('./helpers')
+
+// A host with the manifest, and one file of every kind the selection tells apart.
+function includeHost() {
+  const root = tmpdir('wti')
+  const g = gitRepo(root)
+  const w = (f, c = 'x\n') => { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), c) }
+  w('.worktreeinclude', '.env\n.env.*\n!.env.example\ninfra/db/.env\n')
+  w('.gitignore', '/.env\n.env.*\ninfra/db/.env\n.claude/worktrees/\n')
+  w('.env', 'ROOT=1\n'); w('.env.local', 'LOCAL=1\n'); w('.env.example', 'EX=1\n') // selected, selected, negated
+  w('infra/db/.env', 'DB=1\n') // gitignored by its own line: selected
+  w('apps/web/.env', 'WEB=1\n') // matched by `.env`, not gitignored: never selected
+  w('.env.shared', 'T=1\n') // matched and gitignored, but tracked
+  w('.claude/worktrees/x/.env', 'LIVE=1\n') // matched, ignored, under live worktrees
+  g('add', '-A'); g('add', '-f', '.env.shared'); g('commit', '-q', '-m', 'fixture')
+  return { root, g }
+}
+
+test('AC-20261105-17-10 worktreeIncluded selects exactly what v7 worktree-include.sh from spec-v7-final copies', () => {
+  const { root } = includeHost()
+  const dest = tmpdir('wti-dest')
+  const r = spawnSync('bash', [path.join(v7Scripts(), 'worktree-include.sh'), '--root', root, '--dest', dest], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stderr)
+  const walk = (d, base = d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name), base) : [path.relative(base, path.join(d, e.name))]))
+  const oracle = walk(dest).sort()
+  assert.deepStrictEqual(oracle, ['.env', '.env.local', 'infra/db/.env'], 'the oracle itself selects what the fixture says')
+  assert.deepStrictEqual(H.worktreeIncluded(root).slice().sort(), oracle)
+  assert.deepStrictEqual(H.worktreeIncluded(tmpdir('wti-none')), [], 'no manifest, no files')
+  const bare = tmpdir('wti-bare'); gitRepo(bare)
+  assert.deepStrictEqual(H.worktreeIncluded(bare), [], 'a git host without a manifest selects nothing')
+})
+
+test('AC-20261105-17-10 the oracle fails when the v7 tag is missing: v7Scripts reads the tag and has no skip path', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'helpers.js'), 'utf8')
+  assert.match(src, /git['"], \['-C', ROOT, 'archive', 'spec-v7-final'/, 'v7Scripts extracts from the tag, throwing when it is absent')
+  assert.doesNotMatch(src.slice(src.indexOf('function v7Scripts'), src.indexOf('function v1Queue')), /skip/i)
+})
+
+test('AC-20261105-17-11 copyLaneFiles copies the union of laneFiles and the manifest matches byte for byte; skip lines stay; no manifest behaves as before', () => {
+  const { root, g } = includeHost()
+  fs.writeFileSync(path.join(root, 'notes.txt'), Buffer.from([0, 1, 2, 255, 10])) // untracked, not gitignored: laneFiles only
+  fs.writeFileSync(path.join(root, 'tracked.txt'), 't\n'); g('add', 'tracked.txt'); g('commit', '-q', '-m', 't')
+  const wt = tmpdir('wti-wt')
+  const code = `require(${JSON.stringify(HOST_JS)}).copyLaneFiles(${JSON.stringify(root)}, ${JSON.stringify(wt)}, ['notes.txt', '.env', 'tracked.txt', 'gone.txt'])`
+  const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stderr, 'laneFiles: skipped tracked.txt (tracked)\nlaneFiles: skipped gone.txt (missing)\n')
+  for (const f of ['.env', '.env.local', 'infra/db/.env', 'notes.txt']) assert.ok(fs.readFileSync(path.join(wt, f)).equals(fs.readFileSync(path.join(root, f))), f)
+  for (const f of ['.env.example', 'apps/web/.env', '.env.shared', 'tracked.txt', '.claude/worktrees/x/.env']) assert.ok(!fs.existsSync(path.join(wt, f)), f + ' is not copied')
+  // no manifest: only the listed files
+  fs.rmSync(path.join(root, '.worktreeinclude'))
+  const wt2 = tmpdir('wti-wt2')
+  H.copyLaneFiles(root, wt2, ['notes.txt'])
+  assert.deepStrictEqual(fs.readdirSync(wt2), ['notes.txt'])
+})

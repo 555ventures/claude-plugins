@@ -6,7 +6,8 @@
 // gate(root, config)               → {status, cached, runId, tail, tree, failing, lockWaitMs}; green runs
 //                                    cached by tree hash; at most config.gateConcurrency gates run at once
 //                                    on the host (pid files under <git common dir>/spec-gate.lock/)
-// copyLaneFiles(main, wt, files)   copies untracked root files into a fresh worktree
+// copyLaneFiles(main, wt, files)   copies untracked root files, and the .worktreeinclude matches, into a fresh worktree
+// worktreeIncluded(root)           the gitignored files .worktreeinclude selects (v7's rule); [] with no manifest
 // treeSha(root)                    git tree of the working tree (tracked edits + untracked, not ignored)
 // detectTestCommand(root)          → command string or null
 // firstRedLine(tail)               the line of a red tail worth reading first
@@ -178,10 +179,25 @@ function gate(root, config, { timeoutMs } = {}) {
   } finally { slot.release() }
 }
 
-// Each named file that exists in the main checkout and is untracked is copied into the same path in
-// the worktree. A tracked or missing entry is skipped with a stderr line.
+// The files .worktreeinclude selects, a port of v7's worktree-include.sh: untracked files its patterns
+// match (git's own exclude grammar, `!` negation included), minus .claude/worktrees/, that git also
+// ignores. No manifest gives [].
+function worktreeIncluded(root) {
+  if (!fs.existsSync(path.join(root, '.worktreeinclude'))) return []
+  const ls = git(root, ['ls-files', '-z', '-oi', '--exclude-from=.worktreeinclude'])
+  if (ls.status !== 0) return []
+  const cand = ls.stdout.split('\0').filter((f) => f && !f.startsWith('.claude/worktrees/'))
+  if (!cand.length) return []
+  const r = spawnSync('git', ['-C', root, 'check-ignore', '-z', '--stdin'], { encoding: 'utf8', input: cand.join('\0') + '\0', maxBuffer: 64 * 1024 * 1024 })
+  return r.status === 0 ? r.stdout.split('\0').filter(Boolean) : []
+}
+
+// The union of the named files and the .worktreeinclude matches that exist in the main checkout and are
+// untracked is copied into the same path in the worktree. A tracked or missing named entry is skipped
+// with a stderr line.
 function copyLaneFiles(main, wt, files) {
-  for (const p of Array.isArray(files) ? files : []) {
+  const named = Array.isArray(files) ? files : []
+  for (const p of [...named, ...worktreeIncluded(main).filter((f) => !named.includes(f))]) {
     const src = path.resolve(main, p)
     const rel = path.relative(main, src)
     let why = null
@@ -252,4 +268,4 @@ function allocApp(urlTemplate) {
   return { appPort: null, url: urlTemplate }
 }
 
-module.exports = { freePort, resolveUrl, listening, allocApp, run, gate, treeSha, cacheDir, commonDir, copyLaneFiles, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }
+module.exports = { freePort, resolveUrl, listening, allocApp, run, gate, treeSha, cacheDir, commonDir, copyLaneFiles, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }

@@ -233,7 +233,7 @@ const decisionsText = (text, rulings) => {
 function specEdits(state, ctx) {
   const wt = wtOf(state, ctx)
   const own = state.spec ? state.spec.split(path.sep).join('/') : null
-  const files = git.changedFiles(state.base, wt).filter((f) => /^specs\/.+\.md$/.test(f) && f !== own)
+  const files = git.changedFiles(state.base, wt).filter((f) => st.isSpecText(f) && f !== own)
   if (!own) return files
   const was = git.raw(['show', `${state.base}:${own}`], wt)
   const now = st.readText(specIn(state, ctx), null)

@@ -254,6 +254,9 @@ function decisionRows(text) {
     .filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !c.some((x) => /^<[^>]+>$/.test(x)))
 }
 
+// Spec text: what a build may not change in any spec but its own (run.js `specEdits`), so plan.js will not lock a plan that needs it.
+const isSpecText = (f) => /^specs\/.+\.md$/.test(f)
+
 function readSpec(specPath) {
   const text = fs.readFileSync(specPath, 'utf8').replace(/\r\n/g, '\n')
   const { frontmatter, body } = parseFrontmatter(text)
@@ -359,7 +362,7 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 module.exports = {
   writeText, writeJson, readJson, readText,
   DEFAULTS, readConfig, writeConfig, configPath,
-  readSpec, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
+  readSpec, isSpecText, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout,
   readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,

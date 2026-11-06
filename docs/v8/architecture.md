@@ -148,7 +148,8 @@ driver at DISPATCH (`lane.reused`, `lane.rebased` / `lane.conflicts`); its run s
 
 `/spec:plan` is driven by the session (Fable). The script only: numbers the spec
 (`specs/YYYYMMDD/NN-slug.md`), validates the template sections exist, counts
-`[NEEDS CLARIFICATION:` markers, and locks (`status: hardened`) when zero. The template
+`[NEEDS CLARIFICATION:` markers, refuses a File Plan that lists another spec file (a build may never edit
+one, see `specEdits`), and locks (`status: hardened`) when clean. The template
 adds one block at the top of the body:
 
 ```

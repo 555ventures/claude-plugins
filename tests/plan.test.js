@@ -38,6 +38,30 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   assert.strictEqual(status(f), 'hardened')
 })
 
+test('lock refuses a File Plan that lists another spec file; its own spec, non-spec paths and prose pass', () => {
+  const d = tmpdir('plan')
+  const f = fresh(d, 'first')
+  const text = fs.readFileSync(f, 'utf8')
+  const own = path.relative(d, f)
+  const planned = (...rows) => text.replace('## File Plan', ['## File Plan', '', '| Path | Action | Summary |', '|---|---|---|', ...rows.map((r) => `| ${r} | MODIFY | x |`), ''].join('\n'))
+  for (const [row, named] of [
+    ['specs/20260101/01-old.md', 'specs/20260101/01-old.md'],
+    ['`specs/20260101/01-old.md`', 'specs/20260101/01-old.md'],
+    ['./specs/20260101/01-old.md', 'specs/20260101/01-old.md'],
+    ['src/a.js, specs/20260101/02-older.md', 'specs/20260101/02-older.md'],
+  ]) {
+    fs.writeFileSync(f, planned(row))
+    const r = plan(d, 'lock', f)
+    assert.strictEqual(r.status, 2, row)
+    assert.ok(r.stderr.includes(`File Plan lists other spec files: ${named} —`), r.stderr)
+    assert.strictEqual(status(f), 'draft')
+  }
+  fs.writeFileSync(f, planned(own, 'specs/README.txt', 'docs/specs/guide.md') + '\n## After merge\n\nEdit specs/20260101/01-old.md on the trunk.\n')
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(status(f), 'hardened')
+})
+
 test('re-locking a queued spec points at /spec:run, not a second queue add', () => {
   const d = tmpdir('plan'); gitRepo(d)
   const f = fresh(d, 'again'); const rel = path.relative(d, f)

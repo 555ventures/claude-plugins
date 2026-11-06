@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-05
+- Amended by: specs/20261105/10-a-batch-tells-the-truth.md D6 (§2: a brief item closes only by `/spec:queue done`)
 
 ## Context
 
@@ -34,9 +35,10 @@ being built in a lane worktree counting as implementing.
    gate; fanout's PLAN waits an item whose gate is unmet.
 2. Brief state is v7's rule and lives in one lib (`spec/scripts/lib/work.js`): no spec →
    `unplanned`; every live spec done → `done` (no queue tick needed); else `in-flight`; a
-   `Superseded by` banner with nothing in flight → `superseded`. The queue's `reconcile` ticks a
-   brief item once its brief is done. specs/20261105/01 D2's "and the brief's queue item ticked"
-   is retired.
+   `Superseded by` banner with nothing in flight → `superseded`. The queue's `reconcile` never
+   ticks a brief item: a finished brief's item stays pending until the user runs
+   `/spec:queue done NN` (specs/20261105/10 D6). specs/20261105/01 D2's "and the brief's queue
+   item ticked" is retired.
 3. A spec's state is its frontmatter, except `implementing` while a live run sidecar exists for
    it in the root or in `.claude/worktrees/spec-<stem>/`. The worktree's own frontmatter is never
    read.

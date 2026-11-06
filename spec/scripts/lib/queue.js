@@ -1,7 +1,8 @@
 'use strict'
 // lib/queue.js — the one owner of the session queue: the file, its version, the item shape, the type
-// list, creation, dedupe, ticking, reconcile and the paste line. No CLI. Typed text is parsed once, at
-// the door (`add`, and /spec:migrate); a reader trusts what it reads. No other script touches items.
+// list, creation, dedupe, ticking, reconcile, the paste line and groom's duplicate, cites-done and
+// brief helpers. No CLI. Typed text is parsed once, at the door (`add`, and /spec:migrate); a reader trusts
+// what it reads. No other script touches items.
 //
 // File: <git-common-dir>/spec-queue.json = {version: 3, seq, items[]}.
 // Item: {id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?}
@@ -106,6 +107,60 @@ function tick(root, pred) {
 // What the item says, as one line: a bound fix reads `specs/x.md — words`.
 const text = (it) => (it.spec ? it.spec + (it.payload ? ' — ' + it.payload : '') : it.payload)
 
+// Duplicate and cites-done helpers, ported from v7. They read `text(it)`: a bound fix's spec path lives in `spec`.
+// Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4.
+function promptTokens(payload) {
+  const out = new Set()
+  for (const t of String(payload || '').toLowerCase().match(/[a-z0-9]+/g) || []) if (t.length >= 4) out.add(t)
+  return out
+}
+
+// |A∩B| / |A∪B| over two Sets; 0 when both are empty.
+function jaccard(a, b) {
+  if (!a.size && !b.size) return 0
+  let inter = 0
+  for (const t of a) if (b.has(t)) inter++
+  return inter / (a.size + b.size - inter)
+}
+
+// A path-shaped payload is one whitespace-free token holding a `/`: an identity, not prose.
+const isPathPayload = (payload) => /^\S+\/\S+$/.test(String(payload || '').trim())
+const pathIdentity = (payload) => path.posix.normalize(String(payload).trim()).replace(/\/+$/, '')
+
+// Near-duplicate score of two prompt texts, or null when not comparable: path vs path is 1 when identical.
+function promptDupScore(a, b) {
+  const pa = isPathPayload(a); const pb = isPathPayload(b)
+  if (pa || pb) return pa && pb && pathIdentity(a) === pathIdentity(b) ? 1 : null
+  return jaccard(promptTokens(a), promptTokens(b))
+}
+
+// The first specs/YYYYMMDD/NN…md a prompt names whose spec is done or superseded (ctx = {specStatus(rel), specRoot}), else null.
+function citesDoneSpec(item, ctx) {
+  if (!item || item.kind !== 'prompt') return null
+  const words = text(item)
+  const hit = (rel) => { const s = ctx.specStatus(rel); return s === 'done' || s === 'superseded' }
+  for (const m of words.matchAll(/specs\/\d{8}\/\d{2}[\w.-]*\.md/g)) if (hit(m[0])) return m[0]
+  // bare `specs/YYYYMMDD/NN` -> the unique on-disk NN-*.md; ambiguous or missing -> no flag
+  for (const m of words.matchAll(/specs\/(\d{8})\/(\d{2})(?![\w.-])/g)) {
+    let names = []
+    try { names = fs.readdirSync(path.join(ctx.specRoot, 'specs', m[1])).filter((n) => n.startsWith(m[2] + '-') && n.endsWith('.md')) } catch { /* absent dir */ }
+    if (names.length === 1 && hit(`specs/${m[1]}/${names[0]}`)) return `specs/${m[1]}/${names[0]}`
+  }
+  return null
+}
+
+// A brief is superseded in v7 only by the bold banner; work.js also takes a plain `> Superseded by`.
+const isSupersededBriefText = (words) => /^>\s*\*\*Superseded by\b/m.test(words)
+
+// work.readBriefs rows with v7's `superseded` and `status`, so groom counts and gates a plainly bannered brief as v7 did.
+function v7Briefs(root, briefs) {
+  return briefs.map((b) => {
+    const superseded = isSupersededBriefText(fs.readFileSync(path.join(root, b.file), 'utf8'))
+    const done = b.specs.every((s) => s.status === 'done')
+    return { ...b, superseded, status: superseded && done ? 'superseded' : !b.specs.length ? 'unplanned' : done ? 'done' : 'in-flight' }
+  })
+}
+
 // The line the session pastes to start an item.
 function paste(root, it) {
   if (it.kind === 'spec') return (specStatus(root, it.payload) === 'hardened' ? '/spec:run ' : '/spec:plan ') + it.payload
@@ -114,4 +169,4 @@ function paste(root, it) {
   return it.type === 'decide' ? '📌 decide: ' + it.payload : text(it)
 }
 
-module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, add, tick, text, paste }
+module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, add, tick, text, paste, promptTokens, jaccard, isPathPayload, pathIdentity, promptDupScore, citesDoneSpec, isSupersededBriefText, v7Briefs }

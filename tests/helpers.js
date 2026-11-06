@@ -124,6 +124,7 @@ function v7Scripts() {
 // specs read the state v8 derives (a live sidecar stamps `implementing`), so v7 can run on it.
 function v1Queue(root) {
   const { normBrief } = require(path.join(SPEC, 'scripts/lib/work.js'))
+  const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
   const st = require(path.join(SPEC, 'scripts/lib/state.js'))
   const twin = root + '-v1'
   fs.rmSync(twin, { recursive: true, force: true })
@@ -132,7 +133,7 @@ function v1Queue(root) {
   if (q) {
     const items = q.items.map((i) => {
       const base = { id: i.id, kind: i.kind }
-      const body = i.kind === 'brief' ? { brief: normBrief(i.payload) } : i.kind === 'spec' ? { spec: i.payload } : { payload: i.payload, lane: i.type }
+      const body = i.kind === 'brief' ? { brief: normBrief(i.payload) } : i.kind === 'spec' ? { spec: i.payload } : { payload: Q.text(i), lane: i.type }
       return { ...base, ...body, ...(i.after ? { after: i.after } : {}), ...(i.done ? { ticked: true } : {}), added: i.added }
     })
     st.writeJson(path.join(st.gitCommonDir(twin), 'spec-queue.json'), { version: 1, seq: q.seq, items })

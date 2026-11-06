@@ -23,6 +23,7 @@ scripts write state: `<spec>.run/`, the queue and fanout files in the git common
 | orchestrator (run, fanout) | opus | medium |
 | builder | sonnet; opus from the second attempt | high |
 | reviewer | opus | low |
+| queue groom checks | haiku | low |
 
 Config `seats` overrides these. Dispatch with the model the driver prints. Installed, agents
 are namespaced: `spec:builder`, `spec:reviewer`.

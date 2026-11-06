@@ -384,3 +384,43 @@ test('AC-16: the docs carry the new shape and none of the old', () => {
   }
   for (const gone of ['overlay', 'ser' + 've', 'e2eList', 'states.json', 'tests-derived']) assert.ok(!text.toLowerCase().includes(gone.toLowerCase()), gone)
 })
+
+// ---- prototype.bootCommand has no default: the plugin assumes no language ---------------------------
+
+test('no bootCommand: the shipped defaults carry none, and OPEN asks for the start command instead of printing a boot line', () => {
+  const { DEFAULTS } = require(path.join(SPEC, 'scripts/lib/state.js'))
+  assert.ok(!('bootCommand' in DEFAULTS.prototype), 'DEFAULTS.prototype.bootCommand must not exist')
+
+  const h = host()
+  const cfgFile = path.join(h.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
+  delete cfg.prototype.bootCommand
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
+  const r = drive(h.root, ['invoice', 'list', 'page'])
+  const all = r.stdout + r.stderr
+  assert.ok(!/undefined|npm|node/i.test(all.replace(/prototype\.js/g, '')), all)
+  assert.ok(all.includes('AskUserQuestion') && all.includes('prototype.bootCommand') && all.includes('.claude/spec.config.json') && all.includes('re-run'), all)
+  assert.ok(!all.includes('cd .claude/worktrees'), 'no boot line is printed')
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees')), 'no worktree is made before the command is known')
+
+  // the session sets it and re-runs: OPEN proceeds with that command
+  cfg.prototype.bootCommand = 'make serve'
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
+  const out = ok(drive(h.root, ['invoice', 'list', 'page']))
+  assert.ok(out.includes('cd .claude/worktrees/proto-invoice-list-page && export PORT=') && out.includes('&& make serve'), out)
+})
+
+test('a boot line refuses (never prints undefined) once the host has dropped bootCommand', async (t) => {
+  const h = host()
+  ok(drive(h.root, ['invoice', 'list', 'page'])) // OPEN with a command
+  const cfgFile = path.join(h.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
+  const app = await startApp(t, statusOf(h.root).appPort)
+  ok(mark(h.root, STEM, 'opened'))
+  await app.stop()
+  delete cfg.prototype.bootCommand
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
+  const r = drive(h.root, [STEM]) // ROUND, nothing answering: the boot line would print
+  assert.strictEqual(r.status, 2, r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('prototype.bootCommand') && !(r.stdout + r.stderr).includes('undefined'), r.stdout + r.stderr)
+})

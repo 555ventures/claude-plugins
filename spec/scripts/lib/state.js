@@ -43,7 +43,7 @@ const DEFAULTS = {
   worktreePerSpec: true,
   mergeStrategy: 'merge-commit',
   walkthrough: { baseUrl: '', project: '', tokenEnv: 'WALKTHROUGH_TOKEN' },
-  prototype: { url: 'http://localhost:{port}', bootCommand: 'npm run dev' },
+  prototype: { url: 'http://localhost:{port}' }, // bootCommand has no default: the plugin assumes no language
   release: { deployCommand: '', stagingUrl: '', e2eCommand: '', promoteCommand: '' },
   askPaths: [], // root-relative globs: an out-of-plan edit under one stops the run with a question
 }
@@ -62,6 +62,8 @@ function merge(def, over) {
 const configPath = (root) => path.join(root, '.claude', 'spec.config.json')
 const readConfig = (root) => merge(DEFAULTS, readJson(configPath(root), {}))
 const writeConfig = (root, cfg) => writeJson(configPath(root), cfg)
+// The host's own command that starts its app, or null when unset or blank — never defaulted.
+const bootCommandOf = (cfg) => { const c = cfg && cfg.prototype && cfg.prototype.bootCommand; return typeof c === 'string' && c.trim() ? c.trim() : null }
 
 // ---- spec documents -----------------------------------------------------------------------
 
@@ -398,7 +400,7 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 
 module.exports = {
   writeText, writeJson, readJson, readText,
-  DEFAULTS, readConfig, writeConfig, configPath,
+  DEFAULTS, readConfig, writeConfig, configPath, bootCommandOf,
   readSpec, isSpecText, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout,

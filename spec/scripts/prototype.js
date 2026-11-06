@@ -99,7 +99,12 @@ function setup(s, ctx) {
 const docs = (ctx) => state.readProto(ctx.root, ctx.stem)
 const pinsOf = (ctx) => docs(ctx).pins || []
 const active = (pins) => pins.filter((p) => p.status === 'active')
-const bootLine = (s, ctx) => `cd ${s.worktree} && ${s.appPort ? `export PORT=${s.appPort} && ` : ''}${ctx.config.prototype.bootCommand}`
+const NO_BOOT = 'no prototype.bootCommand in .claude/spec.config.json — set it to the command that starts this app (it should serve on $PORT), then re-run'
+const bootLine = (s, ctx) => {
+  const cmd = state.bootCommandOf(ctx.config)
+  if (!cmd) refuse(NO_BOOT)
+  return `cd ${s.worktree} && ${s.appPort ? `export PORT=${s.appPort} && ` : ''}${cmd}`
+}
 const pinLine = (ctx) => `node ${shq(ctx.script)} ${shq(ctx.stem)} pin --kind behaviour|look --route </route> [--given "<precondition in words>"] --note "<note>" --root ${shq(ctx.root)}`
 const markCmd = (ctx, mark) => `node ${shq(ctx.script)} ${shq(ctx.stem)} --root ${shq(ctx.root)} --mark ${mark}`
 const pinBullet = (p) => `- ${p.id} (${p.kind}): ${sentenceOf(p)}`
@@ -122,6 +127,16 @@ function derive(s, ctx) {
   const cmd = (mark) => markCmd(ctx, mark)
   switch (phase(s)) {
     case 'OPEN':
+      if (!state.bootCommandOf(ctx.config)) {
+        return {
+          name: 'OPEN', accepts: ['closed'],
+          body: [
+            'The app\'s start command is not set yet.',
+            'Ask the user once (AskUserQuestion, free text): "What command starts your app? It should serve on the port in $PORT."',
+            'Set their answer as prototype.bootCommand in .claude/spec.config.json, then re-run this command.',
+          ].join('\n'),
+        }
+      }
       if (!s.ready) return { name: 'OPEN', auto: setup }
       return {
         name: 'OPEN', mark: 'opened', accepts: ['closed'],

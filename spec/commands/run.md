@@ -20,7 +20,7 @@ checkout the driver works in (a lane's worktree under fanout); run it as printed
   on them.
 - **PIN_TESTS** (a spec with `prototype: <stem>`, after a clean review): start the app in the
   background with the printed boot line (`cd <worktree> && export PORT=<port> && <bootCommand>`,
-  so `bootCommand` may use `$PORT`), then mark `pin-tested`; the driver runs the host's
+  so `bootCommand` may use `$PORT`; with none set the driver refuses, naming `prototype.bootCommand`), then mark `pin-tested`; the driver runs the host's
   `prototype.e2eCommand` against it. Red is a REPAIR; green leaves the app running for LOOK.
 - **LOOK**: print the url and the look lines, end the turn. A literal `close enough` → stop the
   app and mark `looked`; anything else → mark `look-failed --why "<the reply verbatim>"` (a FIX

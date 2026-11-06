@@ -77,7 +77,7 @@ per file; writes are atomic (tmp + rename).
   "worktreePerSpec": true,
   "mergeStrategy": "merge-commit",        // or ff-only | squash
   "walkthrough": { "baseUrl": "", "project": "", "tokenEnv": "WALKTHROUGH_TOKEN" },
-  "prototype": { "url": "http://localhost:{port}", "bootCommand": "npm run dev" },
+  "prototype": { "url": "http://localhost:{port}" },   // bootCommand has no default: the plugin assumes no language
   "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "" }
 }
 ```

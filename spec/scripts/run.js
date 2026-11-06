@@ -121,7 +121,11 @@ const pictureFiles = (state, ctx) => {
   const rel = `design/prototypes/${state.prototype}/pictures`
   try { return fs.readdirSync(path.join(wtOf(state, ctx), rel)).sort().map((f) => `${rel}/${f}`) } catch { return [] }
 }
-const bootLine = (state, ctx) => `cd ${wtOf(state, ctx)} && ${state.appPort ? `export PORT=${state.appPort} && ` : ''}${cfgOf(ctx).prototype.bootCommand}`
+const bootLine = (state, ctx) => {
+  const cmd = st.bootCommandOf(cfgOf(ctx))
+  if (!cmd) refuse('no prototype.bootCommand in .claude/spec.config.json — set it to the command that starts this app (it should serve on $PORT), then re-run')
+  return `cd ${wtOf(state, ctx)} && ${state.appPort ? `export PORT=${state.appPort} && ` : ''}${cmd}`
+}
 const protoLine = (state) => (state.look ? [`pin tests green · look accepted after ${state.look.rounds} round(s)`] : [])
 const hasDelta = (spec) => Object.keys(spec.sections).some((k) => k === 'Canonical Delta' || k.startsWith('Canonical Delta '))
 // Every `- A<n>:` line of the spec, verbatim: the builder and reviewer see what the plan assumed and what to do when it is false.

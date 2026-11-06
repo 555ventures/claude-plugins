@@ -1695,3 +1695,21 @@ test('AC-20261105-14-10 a spec without prototype: goes REVIEW → DONE with no p
   assert.strictEqual(h.state().appPort, undefined)
   assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → DONE;/)
 })
+
+test('no bootCommand: the PIN_TESTS boot line refuses, naming prototype.bootCommand, and never prints undefined', () => {
+  const h = protoFixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.strictEqual(h.state().step, 'PIN_TESTS')
+  const cfgFile = path.join(h.dir, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
+  delete cfg.prototype.bootCommand
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
+  for (const args of [[], ['--mark', 'pin-tested']]) {
+    const r = h.run(...args)
+    assert.strictEqual(r.status, 2, r.stdout + r.stderr)
+    assert.ok(r.stderr.includes('prototype.bootCommand') && !(r.stdout + r.stderr).includes('undefined'), r.stdout + r.stderr)
+  }
+})

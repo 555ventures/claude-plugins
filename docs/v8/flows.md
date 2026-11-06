@@ -263,7 +263,7 @@ trim marks to `seed-done`, `approved`, with per-journey approval derived from th
 `/spec:prototype <idea in words | docs/roadmap/NN-*.md | existing stem>`. Driver classifies the argument in
 order: brief path (stem = basename), existing stem (`design/prototypes/<stem>/status.json`), else words (stem =
 slug of the text, <=48 chars; `📌 Auto-picked stem …`; veto with `--stem <name>` before `--mark opened`). Needs a
-`prototype` block in `.claude/spec.config.json`: `url` (with `{port}`), optional `bootCommand`, `overlay` (path
+`prototype` block in `.claude/spec.config.json`: `url` (with `{port}`), `bootCommand` (no default: when unset, OPEN asks the user once for the app's start command and records it here), `overlay` (path
 the overlay is written to), `e2eFile` (`{stem}`), `e2eList` / `e2eRun` (`{file}`), `picture` (`{url} {out}
 {width} {height}`), optional `dbCreate`/`dbDestroy`. Absent block: refusal pointing at `/spec:doctor`. Model Sonnet.
 

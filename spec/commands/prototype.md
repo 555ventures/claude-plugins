@@ -8,8 +8,11 @@ effort: high
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/prototype.js $ARGUMENTS`. The prototype lives on
 `proto/<stem>`, never merged; only `design/prototypes/<stem>/` on trunk carries forward.
-Needs `prototype.url` (with `{port}`) and `bootCommand` in `.claude/spec.config.json`; nothing
-else about the host's entry is assumed.
+Needs `prototype.url` (with `{port}`) and `prototype.bootCommand` in `.claude/spec.config.json`;
+nothing else about the host's entry is assumed, and `bootCommand` has no default. When it is unset,
+OPEN makes no worktree and prints a question: ask the user once (AskUserQuestion, free text) for the
+command that starts their app, set it as `prototype.bootCommand`, then re-run. A boot line is never
+printed without it.
 
 - **OPEN**: the driver makes the worktree, runs `setupCommand` and allocates one free port. Start
   the app in the background with the printed boot line (`cd <worktree> && export PORT=<port> && <bootCommand>`,

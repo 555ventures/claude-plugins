@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # PreToolUse guard (matcher Bash). Inside a lane worktree — its private git dir carries the
-# `spec-lane-open` marker that run.js / fanout write — builder and reviewer agents may not run git
-# commit/push/merge/rebase. Destructive verbs (reset, checkout, restore, clean, stash, switch,
-# branch, worktree) are blocked in EVERY checkout of a repo while any lane is open: an agent's shell
-# starts in the main checkout, and `git reset --hard` there would eat the user's work. `git rebase
-# --continue` and `git add` stay allowed: a lane sent back by fanout's MERGE resolves the rebase left
-# in progress. The driver commits and merges; a node process it spawns is not a Bash tool call, so
+# `spec-lane-open` marker that run.js / fanout write — builder and reviewer agents run only git's
+# read-only verbs (v7's ALLOW: status diff log show rev-parse ls-files ls-tree blame grep describe
+# cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help), `git add` and
+# `git rebase --continue`; every other verb is blocked. Destructive verbs (reset, checkout, restore,
+# clean, stash, switch, branch, worktree) are also blocked in EVERY checkout of a repo while any lane
+# is open: an agent's shell starts in the main checkout, and `git reset --hard` there would eat the
+# user's work; anything else (a fetch) is free there. `git rebase --continue` and `git add` stay
+# allowed in a lane: a lane sent back by fanout's MERGE resolves the rebase left in progress. The driver commits and merges; a node process it spawns is not a Bash tool call, so
 # the driver itself is never blocked.
 # The command is tokenized in node (quotes, escapes, ; && || | ( ) $( ) and newlines), so quoted
 # paths with spaces, `cd <dir> && git …` chains, `git -C <dir>` and `bash -c "…"` are all seen.
@@ -15,7 +17,7 @@ set -u
 command -v node >/dev/null 2>&1 || exit 0
 parsed="$(node -e '
 const path = require("path")
-const BLOCK = new Set(["commit", "push", "merge", "rebase", "reset", "checkout", "restore", "clean", "stash", "switch", "branch", "worktree"])
+const ALLOW = new Set("status diff log show rev-parse ls-files ls-tree blame grep describe cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help add".split(" "))
 function tokens(cmd) {
   const out = []; let cur = null; let i = 0
   const push = () => { if (cur !== null) { out.push({ w: cur }); cur = null } }
@@ -84,13 +86,13 @@ try {
   const cmd = String((j.tool_input || {}).command || "")
   const dirs = [], verbs = []
   scan(cmd, cwd, dirs, verbs, 0)
-  // One record per blocked verb; bash judges each in its own directory, so no verb covers for another.
-  const recs = verbs.filter((x) => BLOCK.has(x.v)).map((x) => `${x.v}\t${x.harmless ? 1 : 0}\t${x.d}`)
+  // One record per verb outside the allowlist; bash judges each in its own directory, so no verb covers for another.
+  const recs = verbs.filter((x) => !ALLOW.has(x.v)).map((x) => `${x.v}\t${x.harmless ? 1 : 0}\t${x.d}`)
   if (recs.length) process.stdout.write(recs.join("\n"))
 } catch {}' 2>/dev/null)" || exit 0
 [ -n "$parsed" ] || exit 0
-# Each record: verb<TAB>harmless<TAB>dir. commit/push/merge/rebase are blocked only inside a lane;
-# a harmless listing is never blocked outside one; everything else is blocked in any checkout of a
+# Each record: verb<TAB>harmless<TAB>dir, for a verb outside the allowlist. Inside a lane every such verb
+# is blocked; outside one only the destructive verbs, and a harmless listing never; in any checkout of a
 # repo while one of its lanes is open.
 while IFS=$'\t' read -r verb harmless d; do
   [ -n "$verb" ] && [ -n "$d" ] || continue
@@ -103,7 +105,7 @@ while IFS=$'\t' read -r verb harmless d; do
     } >&2
     exit 2
   fi
-  case "$verb" in commit|push|merge|rebase) continue ;; esac
+  case "$verb" in reset|checkout|restore|clean|stash|switch|branch|worktree) ;; *) continue ;; esac
   [ "$harmless" = 1 ] && continue
   c="$(git -C "$d" rev-parse --git-common-dir 2>/dev/null)" || continue
   case "$c" in /*) ;; *) c="$d/$c" ;; esac

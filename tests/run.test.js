@@ -283,6 +283,7 @@ test('lane mode: PENDING_QUESTION at ESCALATE, resume after the answer, stop at 
 test('merge conflicts stop at CONFLICTS until the markers are gone', () => {
   const h = fixture()
   ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n') // a real build writes its planned file
   fs.writeFileSync(path.join(h.wt, 'a.txt'), 'branch\n')
   ok(h.run('--mark', 'built'))
   fs.writeFileSync(path.join(h.dir, 'a.txt'), 'trunk\n')
@@ -363,6 +364,7 @@ test('reviewer findings: malformed or ambiguous files are refused; any blocking 
 test('conflicts-resolved commits the merge without sweeping untracked files of the main checkout', () => {
   const h = fixture()
   ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n') // a real build writes its planned file
   fs.writeFileSync(path.join(h.wt, 'a.txt'), 'branch\n')
   ok(h.run('--mark', 'built'))
   fs.writeFileSync(path.join(h.dir, 'a.txt'), 'trunk\n')
@@ -476,6 +478,7 @@ test('--in-place on a feature branch finishes on that branch and never merges in
 test('an aborted squash merge is retried on the next run instead of finishing without the code', () => {
   const h = fixture({ cfg: { mergeStrategy: 'squash' } })
   ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n') // a real build writes its planned file
   fs.writeFileSync(path.join(h.wt, 'a.txt'), 'branch\n')
   ok(h.run('--mark', 'built'))
   fs.writeFileSync(path.join(h.dir, 'a.txt'), 'trunk\n')
@@ -1755,4 +1758,269 @@ test('no bootCommand: the PIN_TESTS boot line refuses, naming prototype.bootComm
     assert.strictEqual(r.status, 2, r.stdout + r.stderr)
     assert.ok(r.stderr.includes('prototype.bootCommand') && !(r.stdout + r.stderr).includes('undefined'), r.stdout + r.stderr)
   }
+})
+
+// ---- spec 20261105/15: the gates prove what they claim ---------------------------------------------
+
+const AKIA = 'AK' + 'IA' + 'ABCDEFGHIJKLMNOP' // built at run time: this file holds no literal secret
+const withoutStatus = SPEC_DOC.replace('status: hardened\n', '')
+const committed = (h) => h.g('show', '--name-only', '--format=', 'HEAD').split('\n').filter(Boolean).sort()
+const reviewedClean = (h, ...a) => ok(h.run('--mark', 'reviewed', '--file', h.findings([]), ...a))
+
+test('AC-20261105-15-1 a superseded, bogus or missing status exits 2 naming it and hardened or implementing, creating no worktree or branch; hardened and implementing reach BUILD', () => {
+  for (const [status, files, named] of [['superseded', {}, 'superseded'], ['bogus', {}, 'bogus'], ['hardened', { [REL]: withoutStatus }, '<missing>']]) {
+    const h = fixture({ status, files })
+    const r = h.run()
+    assert.strictEqual(r.status, 2, r.stderr + r.stdout)
+    assert.ok(r.stderr.includes(named) && r.stderr.includes('hardened or implementing'), r.stderr)
+    assert.ok(!fs.existsSync(h.wt), `${named}: no worktree`)
+    assert.strictEqual(h.g('branch', '--list', 'spec/01-thing').trim(), '', `${named}: no branch`)
+    assert.strictEqual(h.state(), null)
+  }
+  for (const status of ['hardened', 'implementing']) assert.match(ok(fixture({ status }).run()), /^▶ BUILD\n/, status)
+})
+
+test('AC-20261105-15-2 a failed setupCommand removes the worktree and branch it just made; the re-run runs setup again before BUILD', () => {
+  const dir = tmpdir('setup')
+  const log = path.join(dir, 'setup.log')
+  const flag = path.join(dir, 'ok.flag')
+  const h = fixture({ cfg: { setupCommand: `echo ran >> ${log}; test -f ${flag}` } })
+  const r = h.run()
+  assert.strictEqual(r.status, 1, r.stderr)
+  assert.match(r.stderr, /setupCommand failed/)
+  assert.ok(!fs.existsSync(h.wt), 'the worktree is gone')
+  assert.strictEqual(h.g('branch', '--list', 'spec/01-thing').trim(), '', 'the branch is gone')
+  assert.strictEqual(h.g('worktree', 'list').trim().split('\n').length, 1)
+  fs.writeFileSync(flag, '')
+  assert.match(ok(h.run()), /^▶ BUILD\n/)
+  assert.strictEqual(fs.readFileSync(log, 'utf8').trim().split('\n').length, 2, 'setup ran again on the re-run')
+})
+
+const PLAN_SPEC = SPEC_DOC.replace(/\| feature\.txt \| CREATE \| the thing \|/, [
+  '| feature.txt | CREATE | the thing |', '| a.txt | MODIFY | edit |', '| old.txt | DELETE | gone |',
+  '| src/**/*.js | CREATE | sources |', '| tmp/*.log | DELETE | logs |'].join('\n'))
+
+test('AC-20261105-15-3 a build that changed only its own status goes to REPAIR naming nothing changed; a spec-less fix too', () => {
+  const h = fixture()
+  ok(h.run())
+  const out = ok(h.run('--mark', 'built'))
+  assert.strictEqual(h.state().step, 'REPAIR')
+  assert.match(h.state().gate.output_tail, /^build: nothing changed since [0-9a-f]{40}$/)
+  assert.match(out, /gate: red — build: nothing changed/)
+  const f = specless(fixture())
+  ok(f.fx()); f.fix(CAUSE)
+  ok(f.fx('--mark', 'built'))
+  assert.strictEqual(f.state().step, 'REPAIR')
+  assert.match(f.state().gate.output_tail, /nothing changed/)
+})
+
+test('AC-20261105-15-3 a File Plan row that is not true on disk goes to REPAIR naming each row; past REPAIR_CAP it escalates with why gate, never REVIEW', () => {
+  const h = fixture({ files: { [REL]: PLAN_SPEC, 'old.txt': 'o\n', 'tmp/x.log': 'l\n' } })
+  ok(h.run())
+  bump(h.wt)
+  ok(h.run('--mark', 'built'))
+  assert.strictEqual(h.state().step, 'REPAIR')
+  assert.deepStrictEqual(h.state().gate.output_tail.split('\n'), [
+    'file plan: CREATE feature.txt is not true on disk', 'file plan: DELETE old.txt is not true on disk',
+    'file plan: CREATE src/**/*.js is not true on disk', 'file plan: DELETE tmp/*.log is not true on disk'])
+  assert.match(ok(h.run()), /file plan: DELETE old\.txt is not true on disk/, 'the repair brief carries the tail')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  bump(h.wt); ok(h.run('--mark', 'repaired'))
+  assert.strictEqual(h.state().step, 'REPAIR', 'still three rows short')
+  assert.strictEqual(h.state().gate.output_tail.split('\n').length, 3)
+  bump(h.wt); ok(h.run('--mark', 'repaired'))
+  assert.deepStrictEqual([h.state().step, h.state().why], ['ESCALATE', 'gate'], 'past REPAIR_CAP')
+  const ok2 = fixture({ files: { [REL]: PLAN_SPEC, 'old.txt': 'o\n', 'tmp/x.log': 'l\n' } })
+  ok(ok2.run())
+  fs.writeFileSync(path.join(ok2.wt, 'feature.txt'), 'thing\n')
+  fs.rmSync(path.join(ok2.wt, 'old.txt')); fs.rmSync(path.join(ok2.wt, 'tmp/x.log'))
+  fs.mkdirSync(path.join(ok2.wt, 'src/deep'), { recursive: true }); fs.writeFileSync(path.join(ok2.wt, 'src/deep/x.js'), 'x\n')
+  ok(ok2.run('--mark', 'built'))
+  assert.strictEqual(ok2.state().step, 'REVIEW', 'every row true: CREATE, MODIFY, DELETE and both globs')
+})
+
+const porcelain = (h, root) => h.g('-C', root, 'status', '--porcelain', '--untracked-files=all').split('\n').filter(Boolean).sort()
+const gitDirOf = (h, root) => h.g('-C', root, 'rev-parse', '--absolute-git-dir').trim()
+
+test('AC-20261105-15-6 a planned untracked file is intent-to-add while the host command runs, a file outside the plan stays untracked, and the merge goes through with the file in the commit', () => {
+  const lsLog = path.join(tmpdir('ls'), 'ls.log')
+  const h = fixture({ cfg: { testCommand: `node check.js && git ls-files > ${lsLog}` } })
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.wt, 'stray.txt'), 'stray\n')
+  ok(h.run('--mark', 'built'))
+  const listed = fs.readFileSync(lsLog, 'utf8').split('\n')
+  assert.ok(listed.includes('feature.txt') && !listed.includes('stray.txt'), `the gate saw ${listed}`)
+  assert.deepStrictEqual(porcelain(h, h.wt).filter((l) => !l.includes(REL)), [' A feature.txt', '?? stray.txt'], 'feature.txt is an intent-to-add entry, stray.txt untracked')
+  assert.strictEqual(h.g('status', '--porcelain'), '', 'the main checkout is untouched')
+  reviewedClean(h)
+  assert.strictEqual(h.status(), 'done', 'no dirty refusal at the merge')
+  assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n', 'the planned file is in the commit')
+})
+
+test('AC-20261105-15-6 a planned file .gitignore hides is warned once and the gate still runs; a failing git call exits 2 without running the gate', () => {
+  const hidden = fixture({ files: { '.gitignore': '.claude/worktrees/\nspecs/**/*.run/\nfeature.txt\n' } })
+  ok(hidden.run())
+  fs.writeFileSync(path.join(hidden.wt, 'feature.txt'), 'thing\n')
+  bump(hidden.wt)
+  const r = hidden.run('--mark', 'built')
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(r.stderr.split('\n').filter((l) => l.startsWith('⚠️')).length, 1, r.stderr)
+  assert.ok(r.stderr.includes('feature.txt'), r.stderr)
+  assert.strictEqual(hidden.state().step, 'REVIEW', 'the gate ran')
+
+  const h = fixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(gitDirOf(h, h.wt), 'index.lock'), '')
+  const runs = h.runs()
+  const f = h.run('--mark', 'built')
+  assert.strictEqual(f.status, 2, f.stderr)
+  assert.match(f.stderr, /git add -N failed/)
+  assert.strictEqual(h.runs(), runs, 'the gate did not run')
+})
+
+test('AC-20261105-15-6 a fix gate adds no intent-to-add entry', () => {
+  const h = fixture()
+  const f = specless(h)
+  f.built()
+  assert.strictEqual(f.state().step, 'REVIEW')
+  assert.deepStrictEqual(porcelain(h, f.root).filter((l) => l.includes('feature.txt')), ['?? feature.txt'], 'still untracked: no entry')
+})
+
+test('AC-20261105-15-7 an in-place spec run commits its File Plan paths and the spec, leaves notes.txt untracked and warns; a widened path is committed; a worktree run commits the whole tree', () => {
+  const h = fixture({ cfg: { askPaths: ['docs/**'] } })
+  ok(h.run('--in-place'))
+  fs.writeFileSync(path.join(h.dir, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.dir, 'notes.txt'), 'mine\n')
+  fs.mkdirSync(path.join(h.dir, 'docs'))
+  fs.writeFileSync(path.join(h.dir, 'docs/extra.md'), 'widened\n')
+  ok(h.run('--mark', 'built'))
+  assert.deepStrictEqual([h.state().step, h.state().why], ['ESCALATE', 'scope'])
+  ok(h.run('--mark', 'escalate', 'widen'))
+  const done = reviewedClean(h)
+  assert.match(done, /left uncommitted: notes\.txt/)
+  assert.deepStrictEqual(committed(h), ['docs/extra.md', 'feature.txt', REL], 'the plan, the widened path and the spec')
+  assert.strictEqual(h.g('status', '--porcelain').trim(), '?? notes.txt')
+
+  const w = fixture()
+  ok(w.run())
+  fs.writeFileSync(path.join(w.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(w.wt, 'notes.txt'), 'in the tree\n')
+  ok(w.run('--mark', 'built'))
+  reviewedClean(w)
+  assert.strictEqual(w.g('show', 'main:notes.txt'), 'in the tree\n', 'a worktree run holds only the build, so the whole tree is committed')
+})
+
+test('AC-20261105-15-8 run.js --fix --in-place with an untracked notes.txt reaches BUILD; the fix commits only its own files, leaves notes.txt and warns', () => {
+  const h = fixture()
+  fs.writeFileSync(path.join(h.dir, 'notes.txt'), 'mine\n')
+  const f = specless(h)
+  f.built()
+  assert.strictEqual(f.state().step, 'REVIEW')
+  const done = ok(f.fx('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(done, /left uncommitted: notes\.txt/)
+  assert.deepStrictEqual(committed(h), ['feature.txt'])
+  assert.strictEqual(h.g('status', '--porcelain').trim(), '?? notes.txt')
+})
+
+// A hook that rejects the first commit only (the flag file it removes), to send COMMIT back through REPAIR.
+const rejectOnce = (h) => {
+  const flag = path.join(tmpdir('hook'), 'reject')
+  fs.writeFileSync(flag, '')
+  fs.mkdirSync(path.join(h.dir, '.git/hooks'), { recursive: true })
+  fs.writeFileSync(path.join(h.dir, '.git/hooks/pre-commit'), `#!/bin/sh\nif [ -f ${flag} ]; then rm ${flag}; echo rejected >&2; exit 1; fi\n`, { mode: 0o755 })
+}
+
+test('AC-20261105-15-9 a spec run with a secret stops at ESCALATE secrets naming every hit, exclude first; exclude commits without it, keeps it on disk and warns; a repair that adds a new hit is asked again', () => {
+  const h = fixture()
+  ok(h.run())
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.wt, '.env'), 'K=1\n')
+  fs.writeFileSync(path.join(h.wt, 'conf.js'), `module.exports = '${AKIA}'\n`)
+  ok(h.run('--mark', 'built'))
+  const head = h.g('rev-parse', 'main').trim()
+  rejectOnce(h)
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.deepStrictEqual([h.state().step, h.state().why], ['ESCALATE', 'secrets'])
+  const q = ok(h.run())
+  assert.match(q, /These files look like secrets\. Keep them out of this commit\?/)
+  assert.ok(q.includes('.env') && q.includes('conf.js:1') && q.includes('content:AKIA'), q)
+  assert.ok(q.indexOf('- exclude') > 0 && q.indexOf('- exclude') < q.indexOf('- stage'), 'exclude first')
+  assert.match(q, /--mark escalate <exclude\|stage>/)
+  assert.strictEqual(h.g('rev-parse', 'main').trim(), head, 'nothing was committed')
+  // exclude: the commit hook rejects once, the repair adds a new secret file, which is asked again
+  const out = ok(h.run('--mark', 'escalate', 'exclude'))
+  assert.strictEqual(h.state().step, 'REPAIR', out)
+  fs.writeFileSync(path.join(h.wt, 'creds.js'), `module.exports = '${AKIA}'\n`)
+  bump(h.wt)
+  ok(h.run('--mark', 'repaired'))
+  reviewedClean(h)
+  assert.deepStrictEqual([h.state().step, h.state().why], ['ESCALATE', 'secrets'], 'a new hit is asked again')
+  const again = ok(h.run())
+  assert.ok(again.includes('creds.js') && !again.includes('.env (') && !again.includes('conf.js'), 'only the new hit is named')
+  const fin = ok(h.run('--mark', 'escalate', 'stage'))
+  assert.match(fin, /kept out of this commit: \.env, conf\.js/)
+  assert.match(fin, /staged on your say-so: creds\.js/)
+  const files = h.g('ls-tree', '-r', '--name-only', 'main').split('\n')
+  assert.ok(files.includes('creds.js') && files.includes('feature.txt') && !files.includes('.env') && !files.includes('conf.js'))
+  assert.ok(fs.existsSync(path.join(h.wt, '.env')), 'an excluded file stays on disk')
+})
+
+test('AC-20261105-15-9 a fix with a secret stops, and after exclude commits without it and names it', () => {
+  const h = fixture()
+  const f = specless(h)
+  f.built()
+  fs.writeFileSync(path.join(h.dir, '.env'), 'K=1\n')
+  ok(f.fx('--mark', 'reviewed', '--file', h.findings([])))
+  assert.deepStrictEqual([f.state().step, f.state().why], ['ESCALATE', 'secrets'])
+  assert.ok(ok(f.fx()).includes('.env'))
+  const done = ok(f.fx('--mark', 'escalate', 'exclude'))
+  assert.match(done, /kept out of this commit: \.env/)
+  assert.deepStrictEqual(committed(h), ['feature.txt'])
+  assert.strictEqual(h.g('status', '--porcelain').trim(), '?? .env')
+})
+
+test('AC-20261105-15-9 in a lane the secrets stop is a pending question of kind decision; a wip commit holding the hit still stops at COMMIT; the answer resumes', () => {
+  const h = fixture()
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main')
+  pending.markLane(h.wt)
+  ok(h.runIn(h.wt))
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.wt, '.env'), 'K=1\n')
+  ok(h.runIn(h.wt, '--mark', 'built'))
+  require(path.join(SPEC, 'scripts/lib/git.js')).commitWip(h.wt, 'wip(spec): lane stopped') // fanout's safety net holds the secret
+  ok(h.runIn(h.wt, '--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(ok(h.runIn(h.wt)), /PENDING_QUESTION/)
+  const doc = pending.readPending(h.wt)
+  assert.strictEqual(doc.kind, 'decision')
+  assert.deepStrictEqual(doc.options.map((o) => o.label), ['exclude', 'stage'])
+  assert.ok(doc.question.includes('.env') && doc.question.includes('look like secrets'))
+  assert.strictEqual(h.state(h.wt).step, 'ESCALATE')
+  pending.answerPending(h.wt, 'exclude')
+  const resumed = ok(h.runIn(h.wt))
+  assert.match(resumed, /MERGE_READY|merge-ready/)
+  assert.strictEqual(h.state(h.wt).step, 'MERGE_READY')
+  assert.match(h.state(h.wt).report, /kept out of this commit: \.env/)
+  assert.ok(!h.g('ls-tree', '-r', '--name-only', 'spec/01-thing').split('\n').includes('.env'))
+  assert.ok(h.g('ls-tree', '-r', '--name-only', 'spec/01-thing').split('\n').includes('feature.txt'))
+})
+
+test('AC-20261105-15-11 doctrine, release.md and reviewer.md carry the dismissal and reviewer rules', () => {
+  const read = (f) => fs.readFileSync(path.join(SPEC, f), 'utf8').replace(/\s+/g, ' ')
+  assert.match(read('doctrine.md'), /dismissed AskUserQuestion stops the run/)
+  assert.match(read('doctrine.md'), /spec-release\.json/)
+  assert.match(read('commands/release.md'), /dismissed question promotes nothing/)
+  const reviewer = read('agents/reviewer.md')
+  assert.match(reviewer, /new test that passes on the base is `blocking`, unless it covers a `SHALL CONTINUE TO` criterion/)
+  assert.match(reviewer, /deletes the test behind a `SHALL CONTINUE TO` criterion is `blocking`, even when the criterion belongs to an earlier spec/)
+})
+
+test('AC-20261105-15-18 architecture.md names red-check as reviewer information, the allowlist, spec-release.json and the release keys', () => {
+  const doc = fs.readFileSync(path.join(SPEC, '../docs/v8/architecture.md'), 'utf8').replace(/\s+/g, ' ')
+  assert.match(doc, /It is information, never a block: GATE runs it once per tree after a GREEN gate/)
+  assert.match(doc, /REVIEW brief prints its line/)
+  assert.match(doc, /v7's read-only allowlist \(`status diff log show/)
+  assert.match(doc, /`<git-common-dir>\/spec-release\.json`/)
+  for (const k of ['testCountPattern', 'productionUrl', 'healthPath', 'migrationsCheck']) assert.ok(doc.includes(`"${k}"`), k)
 })

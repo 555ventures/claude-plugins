@@ -12,7 +12,8 @@ against the spec's Intent, Decisions and criteria, and merges. New projects star
 
 Config is `.claude/spec.config.json`; specs are `specs/YYYYMMDD/NN-slug.md`; briefs, ADRs and
 design live in `docs/roadmap/`, `docs/adr/`, `design/`. You edit specs, briefs and ADRs. Only
-scripts write state: `<spec>.run/`, the queue and fanout files in the git common dir, and
+scripts write state: `<spec>.run/`, the queue, fanout and release (`spec-release.json`, the
+green staging run `/spec:release` promotes from) files in the git common dir, and
 `.claude/pending-question.json`.
 
 ## Seats
@@ -48,6 +49,9 @@ every lane question verbatim in one AskUserQuestion per RELAY. The orchestrator 
 the user; only `📌 Auto-picked` lines are unrelayed. A lane never edits a spec, and only the user
 waives a Decision (`amend`): an unmet Decision or false Assumption is a question (`unmet`).
 `/spec:fix` asks once, after green, when it authored strings or choices (keep / revert / plan); a fix that needs an architecture or behaviour change is sent to `/spec:plan`, never asked.
+`/spec:run` and `/spec:fix` also ask, once, before a secret-looking file reaches a commit
+(exclude / stage). A dismissed AskUserQuestion stops the run: the answer is never invented, and
+a dismissed promote question promotes nothing.
 Otherwise decide and print `📌 Auto-picked <choice> — <reason> (veto anytime)`.
 
 Question style: plain words, every option carrying its consequence, the recommended option first,

@@ -52,6 +52,7 @@ per file; writes are atomic (tmp + rename).
 | `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | `<spec>` = spec path minus `.md`. One sidecar per in-flight spec. Gitignored (`specs/**/*.run/`). Shape in §4. |
 | `<git-common-dir>/spec-queue.json` | `lib/queue.js`: `read(root)`, `write(root, q)`, `add`, `tick`, `reconcile`, `paste` — the only owner; `state.js` holds no queue code | `{version: 3, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?}` (`type` plan\|prototype\|fix\|decide, prompt only, the only carrier of the command; `spec?` only on `type: fix`, the bound spec; `payload` bare text; `after` `{brief: "NN"}` or `{spec: "specs/…md"}`). Strict read: another version is refused, naming `/spec:migrate`. |
 | `<git-common-dir>/spec-fanout.json` | `readFanout`, `writeFanout` | `{step, batch: [{spec, worktree, branch, status, question?}], started}` |
+| `<git-common-dir>/spec-release.json` | `readRelease`, `writeRelease` (`null` clears) | `{sha, note}`: the green staging run `/spec:release` promotes from. `release.js` is its only caller; every staging run clears it first, `--promote` needs `sha` = HEAD and clears it before it runs. |
 | `.claude/pending-question.json` | in `lib/pending.js` | Lane question relay. Doc `{lane, question, options: [{label, description?}], writtenAt, answer: {label, by, at} \| null}`. |
 | `<git-dir>/spec-lane-open` | `isLane`, `markLane`, `unmarkLane` in `lib/pending.js` | Lane marker (private git dir of the lane worktree); read by `block-worker-git.sh`. |
 | `design/prototypes/<stem>/{status,pins,contract}.json` | `readProto`, `writeProto` | Owner: prototype.js via state.js. |
@@ -78,7 +79,11 @@ per file; writes are atomic (tmp + rename).
   "mergeStrategy": "merge-commit",        // or ff-only | squash
   "walkthrough": { "baseUrl": "", "project": "", "tokenEnv": "WALKTHROUGH_TOKEN" },
   "prototype": { "url": "http://localhost:{port}" },   // bootCommand has no default: the plugin assumes no language
-  "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "", "testCountPattern": "" }  // testCountPattern optional
+  "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "",
+               "productionUrl": "",      // --promote needs it: production must answer after the promote
+               "healthPath": "",         // appended to stagingUrl and productionUrl for the ready check
+               "testCountPattern": "",   // optional, one capture group; set: an e2e that counts 0 or matches nothing stops
+               "migrationsCheck": "" }   // optional command run after ready; `none` or absent: nothing runs
 }
 ```
 
@@ -97,16 +102,16 @@ per file; writes are atomic (tmp + rename).
 
 | Step | Driver does | Session does | `--mark` |
 |---|---|---|---|
-| OPEN | creates worktree+branch from trunk (or in place with `--in-place`), copies `laneFiles` and the `.worktreeinclude` matches (`lib/host.js` `worktreeIncluded`, v7's selection), runs setupCommand, writes state; the main checkout's spec is not touched | nothing | (auto) |
+| OPEN | admits only `hardened` or `implementing`; creates worktree+branch from trunk (or in place with `--in-place`), copies `laneFiles` and the `.worktreeinclude` matches (`lib/host.js` `worktreeIncluded`, v7's selection), runs setupCommand (a failure removes the worktree it made), writes state; the main checkout's spec is not touched | nothing | (auto) |
 | BUILD | prints the builder brief: spec path, Intent block, File Plan, test command, "write failing tests first, then code, run `testCommand` until green" | dispatches ONE `builder` agent (seat from config; Opus on attempt 2) in the worktree | `built` |
-| GATE | runs `testCommand` in the worktree itself; green-run cache by tree hash (`lib/host.js`); takes a slot in `<git common dir>/spec-gate.lock/` (at most `gateConcurrency` gates at once, pid files, dead pids cleaned); a red whose failing test files are all outside the diff is re-run once before a repair is counted (`gate.reruns`) | nothing | (auto) → REVIEW or REPAIR |
+| GATE | marks the File Plan's untracked files intent-to-add (spec runs, ADR-0015); runs `testCommand` in the worktree itself; after a green gate a build that changed nothing, or a File Plan row not true on disk, goes to REPAIR; runs red-check once per tree (information for the reviewer); green-run cache by tree hash (`lib/host.js`); takes a slot in `<git common dir>/spec-gate.lock/` (at most `gateConcurrency` gates at once, pid files, dead pids cleaned); a red whose failing test files are all outside the diff is re-run once before a repair is counted (`gate.reruns`) | nothing | (auto) → REVIEW or REPAIR |
 | REPAIR | prints failure tail; cap 2, then ESCALATE; `repaired` on an unchanged tree and unchanged builder run files is refused | dispatches builder with the failure | `repaired` → GATE; `regate` → GATE (same tree, no repair counted, once per tree) |
 | REVIEW | prints reviewer brief: diff vs base, spec Intent + ACs; seat = reviewer, or Fable when `architecture: true` | dispatches ONE `reviewer` agent; writes findings JSON | `reviewed --file <json>` |
 | FIX | only for `blocking` findings; cap 1, then ESCALATE; `fixed` on an unchanged tree and unchanged builder run files (`evidence.md`, `fix.json`, `as-built.md`) is refused; a fix that changes only those files is a round and its gate is a cache hit | dispatches builder with findings | `fixed` → GATE |
 | ESCALATE | prints the options: retry on opus / park (queue a fix) / amend spec | asks the user (one question) | `escalate <retry\|park\|amend>` |
 | PIN_TESTS | prototype specs only (frontmatter `prototype:`), after a clean REVIEW: allocates one app port, prints the boot line for the spec worktree; `pin-tested` runs `prototype.e2eCommand` with `{file}` = `prototype.e2eFile` and `APP_URL`; red goes to REPAIR | starts the app in the background | `pin-tested` |
 | LOOK | prototype specs only: prints `👀 look — <publicUrl or url>`, the look pins and the pictures that exist; the app keeps running from the spec worktree | prints them, ends the turn; a literal `close enough` → `looked`, anything else → `look-failed --why "<reply>"` (FIX, not counted) | `looked` / `look-failed --why <reply>` |
-| COMMIT | driver commits in the worktree (`lib/git.js`), message from the spec title | nothing | (auto) |
+| COMMIT | driver commits in the worktree (`lib/git.js`), message from the spec title; an in-place run commits only its File Plan, widened paths and the spec, a fix only what it touched (`left uncommitted: <paths>` is warned); the one door runs the secrets scan and a hit stops at ESCALATE (`exclude` / `stage`) | the secrets question only | (auto) / `escalate <exclude\|stage>` |
 | MERGE | merge-back to trunk per `mergeStrategy`, re-run gate on trunk tree (cache hit when unchanged) | conflicts only: asked | (auto) / `conflicts-resolved` |
 | DONE | `status: done`, sidecar cleared, worktree removed, prints the report | nothing | — |
 
@@ -172,7 +177,7 @@ tier, Users, Contracts, UI, Data Model, Rationale, Canonical Delta, oracle/pre-g
 | Event | Script | Rule |
 |---|---|---|
 | UserPromptSubmit | `state-gate.sh` | `/spec:run <spec>` on a `draft` spec or one with `[NEEDS CLARIFICATION:` markers → exit 2 with the remedy. |
-| PreToolUse Bash | `block-worker-git.sh` | inside a lane worktree, builder/reviewer agents may not run `git commit/push/merge/rebase/reset/checkout` (`git add` and `git rebase --continue` stay allowed). Marker: `<git-dir>/spec-lane-open`. |
+| PreToolUse Bash | `block-worker-git.sh` | inside a lane worktree, builder/reviewer agents run only v7's read-only allowlist (`status diff log show rev-parse ls-files ls-tree blame grep describe cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help`), `git add` and `git rebase --continue`; every other verb exits 2. In any checkout of the repo while a lane is open, `reset checkout restore clean stash switch branch worktree` stay blocked (harmless list forms pass); a `git fetch` there is free. Marker: `<git-dir>/spec-lane-open`. |
 | PreToolUse Write\|Edit | `block-cross-worktree-writes.sh` | copy-trim from v7. |
 
 ## 8. Report (`lib/report.js`)
@@ -206,8 +211,11 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 - `doctor.js`: config valid, testCommand runs green (exit 0), worktrees gitignored (a missing entry names
   `/spec:migrate` or `/spec:init`), pending sidecars listed, roadmap hygiene (the anomalies `status` counts, from
   `lib/next.js`). `.env` files lanes would not see are findings unless `laneFiles` or `.worktreeinclude` names them.
-- `red-check.js`: new test files vs base must fail on base and pass on HEAD; vacuous green
-  reported. ≤ 80 LOC. Called by GATE when `testFileCommand` exists.
+- `red-check.js`: test files ADDED since base (named `*.test.*`, `*.spec.*`, `*_test.*`, `*_spec.*` or
+  `test_*`) must fail on base and pass on HEAD; a vacuous green is reported. It is information, never a
+  block: GATE runs it once per tree after a GREEN gate when `testFileCommand` exists, and the REVIEW brief
+  prints its line (`state.redCheck`); a new test that passes without the production change is a blocking
+  reviewer finding unless it covers a `SHALL CONTINUE TO` criterion. ≤ 80 LOC.
 - `genesis.js`: DISCOVERY → MENUS → DECIDE → SCAFFOLD → ROADMAP → HANDOFF → GROUNDED.
   Research menus = parallel Sonnet web agents (one per open dimension). DECIDE writes
   `.claude/genesis/stack-descriptor.json` + ADRs. ROADMAP writes briefs + queue entries.
@@ -220,7 +228,10 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   it before the mark is durable and queues `/spec:plan <contract>`. No entry file and no browser
   hook. ≤ 400 LOC.
 - `connect.js`: copy-trim of v7 walkthrough-connect + client. ≤ 350 LOC total.
-- `release.js`: deploy → e2e → promote (asked) → report. ≤ 120 LOC.
+- `release.js`: deploy → ready (curl `stagingUrl`+`healthPath`, 3 tries) → `migrationsCheck` → e2e
+  (`BASE_URL`, `STAGING_URL`, `RELEASE_NOTE`; `testCountPattern` set: a count of 0 stops) → green run
+  recorded in `spec-release.json` → promote (asked; only on a record whose sha is HEAD) → production
+  ready check → report. Argv is read up to `--`; the note after it is never a flag. ≤ 130 LOC.
 - `migrate.js`: v7 host → v8, see `host-footprint.md`. Idempotent, prints a plan first,
   `--apply` writes. Archives v7-only files under `docs/archive/v7/`.
 - `enforce`: retired; command md only. Says init writes lint/typecheck into `testCommand`.

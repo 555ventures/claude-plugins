@@ -173,6 +173,21 @@ test('fanout lives in the git common dir, shared by every worktree', () => {
   assert.strictEqual(S.readFanout(wt).step, 'PLAN', 'fanout state must be shared across worktrees')
 })
 
+test('AC-20261105-15-16 the release record lives in the git common dir: written, read from any worktree, cleared by null', () => {
+  const root = tmpdir('rel')
+  const g = gitRepo(root)
+  const wt = path.join(root, '.claude', 'worktrees', 'lane')
+  g('worktree', 'add', '-q', '-b', 'lane', wt)
+  assert.strictEqual(S.readRelease(root), null, 'no green staging run, no record')
+  S.writeRelease(root, { sha: 'abc', note: 'v1' })
+  assert.deepStrictEqual(S.readRelease(wt), { sha: 'abc', note: 'v1' })
+  assert.ok(fs.existsSync(path.join(root, '.git', 'spec-release.json')))
+  S.writeRelease(root, null)
+  assert.strictEqual(S.readRelease(root), null)
+  assert.ok(!fs.existsSync(path.join(root, '.git', 'spec-release.json')))
+  S.writeRelease(root, null) // clearing nothing is fine
+})
+
 test('proto, mocks and genesis files round-trip at their §2 paths', () => {
   const root = tmpdir('design')
   S.writeProto(root, 'cart', { status: { round: 1 }, pins: [] })

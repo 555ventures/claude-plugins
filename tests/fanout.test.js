@@ -780,6 +780,8 @@ test('AC-20261105-07-5 a lane that is red on top of the landed trunk is gated be
   const laneRun = (...a) => runNode('scripts/run.js', [P('02-beta'), '--root', w, ...a])
   assert.match(laneRun().stdout, /^▶ REPAIR/, 'the lane gates again and finds it red')
   fs.rmSync(path.join(w, 'src/b.js')); fs.writeFileSync(path.join(w, 'src/b2.js'), 'b2\n')
+  const sp = path.join(w, P('02-beta')) // a real build that moves its planned file amends the File Plan row
+  fs.writeFileSync(sp, fs.readFileSync(sp, 'utf8').split('src/b.js').join('src/b2.js'))
   assert.match(laneRun('--mark', 'repaired').stdout, /REPAIR → REVIEW/)
   const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'clean' }))
   assert.match(laneRun('--mark', 'reviewed', '--file', f).stdout, /REVIEW → MERGE_READY/)

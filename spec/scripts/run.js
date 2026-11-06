@@ -31,8 +31,8 @@ const Q = require('./lib/queue')
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2
 const FIX_CAP = 1
-const CHOICES = ['retry', 'park', 'amend', 'revert', 'keep', 'fix', 'widen', 'separate', 'plan']
-const OFFERED = { 'spec-edit': ['revert', 'amend'], 'review-decision': ['keep', 'fix', 'amend'], scope: ['widen', 'separate', 'park'], 'fix-choices': ['keep', 'revert', 'plan'] } // every other escalation offers retry, park, amend
+const CHOICES = ['retry', 'park', 'amend', 'revert', 'keep', 'fix', 'widen', 'separate', 'plan', 'exclude', 'stage']
+const OFFERED = { 'spec-edit': ['revert', 'amend'], 'review-decision': ['keep', 'fix', 'amend'], scope: ['widen', 'separate', 'park'], 'fix-choices': ['keep', 'revert', 'plan'], secrets: ['exclude', 'stage'] } // every other escalation offers retry, park, amend
 // An assumption question offers its arm's options (planner-written labels), else retry, park, amend; amend is always last.
 const offered = (state) => state.why === 'assumption' && state.assumption.options.length ? [...state.assumption.options.filter((o) => o !== 'amend'), 'amend'] : OFFERED[state.why] || (state.spec ? ['retry', 'park', 'amend'] : ['retry', 'park'])
 const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
@@ -47,6 +47,7 @@ const KIND_OF = {
   'spec-edit': 'spec-edit',
   conflicts: 'conflict',
   'fix-choices': 'decision',
+  secrets: 'decision',
 }
 // Only while a builder or reviewer is out is the checkout marked for block-worker-git.sh.
 const AGENT_STEPS = ['BUILD', 'REPAIR', 'FIX', 'REVIEW']
@@ -187,6 +188,7 @@ function open(state, ctx) {
   }
   if (spec && state.fix && !['done', 'hardened'].includes(status)) refuse(`${s.rel} is ${status}, not done or hardened — a fix lane runs on a finished or hardened spec`)
   if (spec && status === 'done' && !state.fix) refuse(`${s.rel} is already done — nothing to run`)
+  if (spec && !state.fix && !['hardened', 'implementing'].includes(status)) refuse(`${s.rel} is ${status || '<missing>'} — /spec:run needs hardened or implementing`)
   if (!cfg.testCommand) refuse('no testCommand in .claude/spec.config.json — run /spec:init')
   const protoStem = spec && typeof spec.frontmatter.prototype === 'string' && spec.frontmatter.prototype ? spec.frontmatter.prototype : null
   if (protoStem) {
@@ -221,7 +223,11 @@ function open(state, ctx) {
   if (fresh && wt !== mainRoot(ctx.root)) host.copyLaneFiles(mainRoot(ctx.root), wt, cfg.laneFiles)
   if (fresh && cfg.setupCommand) {
     const r = host.run(cfg.setupCommand, { cwd: wt })
-    if (r.status !== 0) refuse(`setupCommand failed in ${wt}:\n${r.tail}\nfix setupCommand in .claude/spec.config.json, then re-run`, 1)
+    if (r.status !== 0) {
+      // The worktree this OPEN made goes with it, so the re-run provisions a fresh one and runs setup again.
+      if (!why) git.worktreeRemove(ctx.root, wt, { force: true, deleteBranch: specBranch })
+      refuse(`setupCommand failed in ${wt}:\n${r.tail}\nfix setupCommand in .claude/spec.config.json, then re-run`, 1)
+    }
   }
   if (!why) {
     // The branch copy says done from the start, so the gated tree is the tree that merges and
@@ -284,9 +290,47 @@ function builderFiles(ctx) {
   return h.digest('hex')
 }
 
+// File Plan rows as one {action, path} per path (a cell may hold several; braces are expanded).
+const planRows = (spec) => spec.filePlan.flatMap((r) => st.splitPlanCell(r.path).map((p) => ({ action: r.action, path: p })))
+const isGlob = (p) => /[*?]/.test(p)
+const planMatch = (rows, f) => rows.some((r) => r.path === f || (isGlob(r.path) && st.globToRe(r.path).test(f)))
+const listFiles = (wt, args) => { const r = git.raw(['ls-files', ...args, '-z'], wt); if (r.status !== 0) refuse(`git ls-files failed in ${wt}: ${(r.stderr || r.stdout).trim()}`); return r.stdout.split('\0').filter(Boolean) }
+
+// ADR-0015: before the gate, a planned file the build created is in the index as intent-to-add, so a gate that
+// reads `git ls-files` sees it. Only File Plan paths; entries stay until COMMIT; a planned file .gitignore hides is warned.
+function intentToAdd(state, ctx) {
+  const wt = wtOf(state, ctx)
+  const rows = planRows(st.readSpec(specIn(state, ctx))).filter((r) => r.action !== 'DELETE')
+  const add = listFiles(wt, ['-o', '--exclude-standard']).filter((f) => planMatch(rows, f))
+  if (add.length) {
+    const r = git.raw(['--literal-pathspecs', 'add', '-N', '--', ...add], wt)
+    if (r.status !== 0) refuse(`git add -N failed in ${wt}: ${(r.stderr || r.stdout).trim()}`)
+  }
+  for (const r of rows) {
+    let regular = false
+    try { regular = !isGlob(r.path) && fs.lstatSync(path.join(wt, r.path)).isFile() } catch { /* not on disk */ }
+    if (regular && git.raw(['check-ignore', '-q', '--', r.path], wt).status === 0) process.stderr.write(`⚠️ ${r.path} is in the File Plan but .gitignore hides it — it will not be committed\n`)
+  }
+}
+
+// After a green gate: a build that changed nothing, or a File Plan row that is not true on disk, is not reviewed.
+// Returns the red tail, or null.
+function buildProof(state, ctx) {
+  const wt = wtOf(state, ctx)
+  const own = state.spec ? state.spec.split(path.sep).join('/') : null
+  const changed = git.changedFiles(state.base, wt).filter((f) => f !== own && !/(^|\/)[^/]*\.run\//.test(f))
+  if (!changed.length) return `build: nothing changed since ${state.base}`
+  if (state.fix) return null
+  const files = listFiles(wt, ['-c', '-o', '--exclude-standard']).filter((f) => fs.existsSync(path.join(wt, f))) // -c still lists a tracked file the build deleted
+  const present = (r) => (isGlob(r.path) ? files.some((f) => st.globToRe(r.path).test(f)) : fs.existsSync(path.join(wt, r.path)))
+  const bad = planRows(st.readSpec(specIn(state, ctx))).filter((r) => (r.action === 'CREATE' || r.action === 'MODIFY' ? !present(r) : r.action === 'DELETE' && present(r)))
+  return bad.length ? bad.map((r) => `file plan: ${r.action} ${r.path} is not true on disk`).join('\n') : null
+}
+
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx)
   const wt = wtOf(state, ctx)
+  if (!state.fix) intentToAdd(state, ctx)
   const t0 = Date.now()
   let g = host.gate(wt, cfg)
   let waited = g.lockWaitMs || 0
@@ -303,10 +347,14 @@ function gateStep(state, ctx) {
     }
   }
   const ms = Date.now() - t0
-  const red = g.status !== 0
-  const tail = red && cfg.testFileCommand ? g.tail + '\n' + redCheck(state, wt) : g.tail
+  let red = g.status !== 0
+  let tail = g.tail
+  const bad = red ? null : buildProof(state, ctx)
+  if (bad) { red = true; tail = bad }
   state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail, tree: g.tree, files: builderFiles(ctx), failing: g.failing || [], reruns, lockWaitMs: waited }
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
+  // Red-check is information for the reviewer, once per tree, only after a green gate.
+  if (!cfg.testFileCommand) { delete state.redCheck; delete state.redCheckTree } else if (state.redCheckTree !== g.tree) { state.redCheck = redCheck(state, wt); state.redCheckTree = g.tree }
   const edits = specEdits(state, ctx)
   if (edits.length) return go(state, 'ESCALATE', { why: 'spec-edit', specEdits: edits })
   const scope = askedScope(state, ctx, cfg)
@@ -352,7 +400,8 @@ const loadBullet = (state) => {
 const fixBullets = (state) => [`root cause: ${state.fix.cause}`, `regression test: ${state.fix.test}`]
 const readyReport = (state, ctx) => render({
   outcome: state.fix ? `✅ fixed — ${state.fix.symptom}` : `✅ ${specInfo(ctx).id} built and reviewed — merge-ready on ${state.branch}`,
-  bullets: [...(state.fix ? fixBullets(state) : []), `commit ${state.commit || 'none (nothing changed)'}`, ...protoLine(state), ...loadBullet(state)], next: 'nothing needs you — fanout merges the lane',
+  bullets: [...(state.fix ? fixBullets(state) : []), `commit ${state.commit || 'none (nothing changed)'}`, ...protoLine(state), ...loadBullet(state)],
+  warns: state.commitWarns, next: 'nothing needs you — fanout merges the lane',
 })
 
 // What the build did differently from the spec, one bullet each: the builder's as-built.md, the review's
@@ -389,6 +438,24 @@ function appendAsBuilt(file, bullets) {
   st.writeText(file, lines.join(eol))
 }
 
+// What this commit leaves out on purpose, through commitAll's `exclude`: an in-place spec run leaves out every
+// changed file outside its File Plan that was not widened; a fix leaves out the untracked files it opened with.
+// A worktree run or a lane holds only the build, so it leaves nothing out.
+function leaveOut(state, ctx, spec) {
+  if (state.fix) return state.untracked0 || []
+  if (!state.inPlace || state.lane) return []
+  return outsideFiles(state, ctx, spec).filter((f) => !(state.widened || []).includes(f))
+}
+
+// The commit's warnings for the report: what stayed out and what went in on the user's say-so.
+function commitWarns(state, ctx, left) {
+  const dirty = new Set(git.sh(['status', '--porcelain', '-z', '--untracked-files=all'], wtOf(state, ctx)).split('\0').filter(Boolean).map((e) => e.slice(3)))
+  const stray = left.filter((f) => dirty.has(f))
+  return [...(stray.length ? [`left uncommitted: ${stray.join(', ')}`] : []),
+    ...((state.keptOut || []).length ? [`kept out of this commit: ${state.keptOut.join(', ')}`] : []),
+    ...((state.staged || []).length ? [`staged on your say-so: ${state.staged.join(', ')}`] : [])]
+}
+
 function commit(state, ctx) {
   const spec = specIn(state, ctx) ? st.readSpec(specIn(state, ctx)) : null
   if (state.inPlace && !state.lane && !state.fix) st.writeStatus(specIn(state, ctx), 'done')
@@ -405,14 +472,18 @@ function commit(state, ctx) {
   // Evidence an AC asks to record goes in <run dir>/evidence.md; it rides in the commit body.
   const evidence = st.readText(runFile(ctx, 'evidence.md'), '').replace(/\r\n/g, '\n').replace(/\s+$/, '')
   const message = [subject, ...protoLine(state), ...(state.fix ? [`Root cause: ${state.fix.cause}\nRegression test: ${state.fix.test}`] : []), ...(evidence.trim() ? [evidence] : [])].join('\n\n')
+  const left = leaveOut(state, ctx, spec)
   try {
-    state.commit = git.commitAll(wt, message) || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
+    const r = git.commitAll(wt, message, { exclude: [...left, ...(state.keptOut || [])], allow: state.staged || [] })
+    if (r && r.hits) return go(state, 'ESCALATE', { why: 'secrets', hits: r.hits }) // nothing was committed; the answer repeats COMMIT
+    state.commit = r || (git.headSha(wt) !== state.base ? git.headSha(wt) : null)
   } catch (e) { // a commit hook rejected the build: repair it like a red gate; anything else is the user's git
     const hooks = git.raw(['rev-parse', '--git-path', 'hooks'], wt).stdout.trim()
     if (!['pre-commit', 'commit-msg'].some((h) => fs.existsSync(path.resolve(wt, hooks, h)))) refuse(`git commit failed in ${wt}: ${e.message}`, 1)
     state.gate = { ...(state.gate || {}), status: 'red', output_tail: `git commit was rejected (a commit hook?):\n${e.message}` }
     return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   }
+  state.commitWarns = commitWarns(state, ctx, left)
   if (state.lane) return go(state, 'MERGE_READY', { report: readyReport(state, ctx) })
   return go(state, 'MERGE')
 }
@@ -461,7 +532,7 @@ function finish(state, ctx) {
       ...loadBullet(state),
     ],
     pins: state.pin,
-    warns: [...(rm.removed ? [] : [`worktree kept at ${state.worktree}: ${rm.reason} — git worktree remove --force ${state.worktree}`]),
+    warns: [...(state.commitWarns || []), ...(rm.removed ? [] : [`worktree kept at ${state.worktree}: ${rm.reason} — git worktree remove --force ${state.worktree}`]),
       ...findings.filter((f) => f.severity !== 'blocking').map((f) => `${f.severity}: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`)],
     blocks: tg && tg.status === 'red' ? `trunk gate red after the merge:\n${tg.output_tail}` : null,
     artifacts: s.rel,
@@ -528,12 +599,12 @@ const fixTestFile = (state) => (state.fix && state.fix.test ? String(state.fix.t
 // Files changed outside the File Plan (the spec itself and, with a Canonical Delta, docs/canonical are not).
 // A spec-bound fix's plan is the File Plan plus its regression test file.
 function outsideFiles(state, ctx, spec) {
-  const planned = new Set(spec.filePlan.map((r) => r.path))
-  if (state.fix && fixTestFile(state)) planned.add(fixTestFile(state))
+  const rows = planRows(spec)
+  if (state.fix && fixTestFile(state)) rows.push({ action: 'MODIFY', path: fixTestFile(state) })
   const own = state.spec.split(path.sep).join('/')
   const run = own.replace(/\.md$/, '.run/')
   const delta = hasDelta(spec)
-  return git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planned.has(f) && f !== own && !f.startsWith(run) && !(delta && f.startsWith('docs/canonical/')))
+  return git.changedFiles(state.base, wtOf(state, ctx)).filter((f) => !planMatch(rows, f) && f !== own && !f.startsWith(run) && !(delta && f.startsWith('docs/canonical/')))
 }
 
 // The builder may list these in its summary; the reviewer decides whether they block. The spec
@@ -562,6 +633,7 @@ function reviewerBrief(state, ctx) {
     ...(spec ? [`Spec: ${specPath}`] : []),
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
     state.fix && !spec ? 'Files changed outside the File Plan: n/a (fix — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec, cfg).join(', ') || 'none'}${state.fix ? " (a fix's plan is the spec's File Plan plus its regression test)" : ''}`,
+    ...(state.redCheck ? [state.redCheck] : []),
     ...(spec ? ["The spec's frontmatter status line changes during the run; that is bookkeeping, not a finding."] : []),
     '',
     ...(state.fix ? fixReviewBlock(state) : ['## Intent', intentText(spec), '']),
@@ -609,6 +681,13 @@ function escalateBody(state, ctx) {
       { label: 'revert', description: 'one builder round that undoes them back to the pre-fix behaviour, keeping the fix and its test' },
       { label: 'plan', description: 'drop this fix and queue /spec:plan: they need the client\'s say' },
     ]) + '\n\n```\n' + all.map((x) => `- ${x}`).join('\n') + '\n```'
+  }
+  if (state.why === 'secrets') {
+    const named = state.hits.map((h) => `  ${h.path}${h.line ? ':' + h.line : ''} (${h.reason})`).join('\n')
+    return ask(state, ctx, `These files look like secrets. Keep them out of this commit?\n${named}`, [
+      { label: 'exclude', description: 'recommended: they stay on disk but out of history' },
+      { label: 'stage', description: 'they go into history' },
+    ])
   }
   if (state.why === 'spec-edit') {
     return ask(state, ctx, `${id} edited spec text it may not: ${state.specEdits.join(', ')}. How should it continue?`, [
@@ -930,6 +1009,13 @@ const steps = {
       if (c === 'keep') return toReview(state, ctx)
       if (c === 'revert') return go(state, 'FIX', { fixFor: 'choices' })
       return endNeedsPlan(state, ctx, 'the user sent the fix to plan')
+    }
+    if (state.why === 'secrets') { // the answer joins what COMMIT leaves out or lets through, and COMMIT repeats
+      const paths = [...new Set(state.hits.map((h) => h.path))]
+      const key = c === 'exclude' ? 'keptOut' : 'staged'
+      state[key] = [...new Set([...(state[key] || []), ...paths])]
+      delete state.hits
+      return go(state, 'COMMIT')
     }
     if (c === 'revert') return revertSpecEdits(state, ctx)
     if (state.why === 'assumption' && state.assumption.options.includes(c) && c !== 'amend') {

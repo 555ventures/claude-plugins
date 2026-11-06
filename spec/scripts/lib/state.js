@@ -327,6 +327,11 @@ const slugOf = (symptom) => {
 const fixRunDir = (root, slug) => path.join(gitCommonDir(root), 'spec-fix', slug + '.run')
 const fixRunPath = (root, slug) => path.join(fixRunDir(root, slug), 'state.json')
 
+// The green staging run /spec:release promotes from: {sha, note}. release.js is the only caller; null clears it.
+const releasePath = (root) => path.join(gitCommonDir(root), 'spec-release.json')
+const readRelease = (root) => readJson(releasePath(root))
+const writeRelease = (root, rec) => (rec == null ? fs.rmSync(releasePath(root), { force: true }) : writeJson(releasePath(root), rec))
+
 const fanoutPath = (root) => path.join(gitCommonDir(root), 'spec-fanout.json')
 const readFanout = (root) => readJson(fanoutPath(root))
 const writeFanout = (root, f) => writeJson(fanoutPath(root), f)
@@ -401,8 +406,8 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 module.exports = {
   writeText, writeJson, readJson, readText,
   DEFAULTS, readConfig, writeConfig, configPath, bootCommandOf,
-  readSpec, isSpecText, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
+  readSpec, isSpecText, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells, splitPlanCell,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
-  gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout,
+  gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout, readRelease, writeRelease,
   readProto, writeProto, protoV7, protoDir, specsCiting, readMocks, writeMocks, readGenesis, writeGenesis,
 }

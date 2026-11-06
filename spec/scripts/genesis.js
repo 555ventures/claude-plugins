@@ -163,7 +163,12 @@ const steps = {
     })
     ensureGitignore(ctx.root)
     S.writeGenesis(ctx.root, s) // the committed status already reads GROUNDED
-    git.commitAll(ctx.root, 'chore(genesis): grounded')
+    const c = git.commitAll(ctx.root, 'chore(genesis): grounded')
+    if (c && c.hits) { // no one to ask here: the rest is committed, the hits stay out and are named
+      const kept = [...new Set(c.hits.map((h) => h.path))]
+      git.commitAll(ctx.root, 'chore(genesis): grounded', { exclude: kept })
+      writeOut(2, `kept out of this commit: ${kept.join(", ")}\n`)
+    }
   },
 }
 

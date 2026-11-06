@@ -17,10 +17,13 @@ the checkout it is in). You dispatch agents; the driver gates, commits and repor
   `repaired` or `fixed`, then re-run the driver for the next step.
 - **ESCALATE**: after green, when the fix authored user-facing strings or display or policy choices,
   ask the printed question (keep / revert / plan) and mark `escalate <label>`. An empty list is no
-  stop. A red gate or review that will not clear asks its printed options the same way.
+  stop. A red gate or review that will not clear asks its printed options the same way. A file
+  that looks like a secret stops the commit: ask the printed question (exclude / stage) and mark
+  `escalate <label>`; exclude keeps it on disk and out of history.
 - **REVIEW**: dispatch one `spec:reviewer`, then mark `reviewed --file <findings path>`; a clean
   review commits `fix(<slug>): <symptom>` itself.
 
 If the cause needs an architecture or behaviour change, the builder must stop before the first edit and
 says so in `fix.json`; the driver ends the fix at `🚫 needs a spec` with `/spec:plan` queued.
-Otherwise the report is `✅ fixed — <symptom>` with the root cause and the guarding test.
+Otherwise the report is `✅ fixed — <symptom>` with the root cause and the guarding test. The commit holds
+only what the fix touched; untracked files that were there before it are warned as `left uncommitted: <paths>`.

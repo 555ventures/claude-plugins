@@ -61,10 +61,70 @@ function worktreeRemove(root, wtPath, { deleteBranch, force } = {}) {
   return { removed: true }
 }
 
+// The secrets scan (v7 secrets-scan.js, tag spec-v7-final, rules byte for byte): a closed list, no host patterns.
+// A path rule matches the basename and short-circuits that file's content scan; the content scan reads the
+// first 1 MiB, skips a file whose first 8 KiB holds a NUL byte and any line holding `secrets-scan:allow`.
+const PATH_RULES = [
+  [/^\.env$/, '.env'],
+  [/^\.env\..+$/, '.env.*', (b) => !['.env.example', '.env.sample', '.env.template'].includes(b)],
+  [/\.pem$/, '*.pem'], [/\.key$/, '*.key'], [/\.p12$/, '*.p12'], [/\.pfx$/, '*.pfx'], [/\.jks$/, '*.jks'],
+  [/^id_rsa$/, 'id_rsa'], [/^id_rsa\..+$/, 'id_rsa.*'],
+  [/^id_ed25519$/, 'id_ed25519'], [/^id_ed25519\..+$/, 'id_ed25519.*'],
+  [/^credentials\.json$/, 'credentials.json'], [/^service-account.*\.json$/, 'service-account*.json'],
+  [/^secrets\.json$/, 'secrets.json'], [/^secrets\.yml$/, 'secrets.yml'], [/^secrets\.yaml$/, 'secrets.yaml'],
+  [/^\.netrc$/, '.netrc'], [/^\.pgpass$/, '.pgpass'],
+]
+const CONTENT_RULES = [
+  'AKIA[0-9A-Z]{16}',
+  '-----BEGIN [A-Z ]*PRIVATE KEY-----',
+  'gh[pousr]_[A-Za-z0-9]{36}',
+  'github_pat_[A-Za-z0-9_]{22,}',
+  'sk-[A-Za-z0-9_-]{20,}',
+  'xox[baprs]-[A-Za-z0-9-]{10,}',
+  '(sk|rk)_live_[A-Za-z0-9]{20,}',
+  'AIza[0-9A-Za-z_-]{35}',
+  '_authToken\\s*=\\s*\\S+',
+].map((src) => [new RegExp(src), src])
+const ALLOW = 'secrets-scan:allow'
+
+function scanFile(cwd, rel) {
+  const abs = path.join(cwd, rel)
+  let stat
+  try { stat = fs.statSync(abs) } catch { return [] }
+  if (!stat.isFile()) return []
+  const base = path.basename(rel)
+  const pr = PATH_RULES.find(([re, , ok]) => re.test(base) && (!ok || ok(base)))
+  if (pr) return [{ path: rel, reason: 'path:' + pr[1], line: null }]
+  let buf
+  try {
+    const fd = fs.openSync(abs, 'r')
+    buf = Buffer.alloc(Math.min(stat.size, 1048576))
+    const n = fs.readSync(fd, buf, 0, buf.length, 0)
+    fs.closeSync(fd)
+    buf = buf.subarray(0, n)
+  } catch { return [] }
+  if (buf.subarray(0, 8192).includes(0)) return []
+  const hits = []
+  buf.toString('utf8').split('\n').forEach((l, i) => {
+    if (l.includes(ALLOW)) return
+    const cr = CONTENT_RULES.find(([re]) => re.test(l))
+    if (cr) hits.push({ path: rel, reason: 'content:' + cr[1], line: i + 1 })
+  })
+  return hits
+}
+
 // Stages everything and commits; returns the new sha, or null when there was nothing to commit.
-function commitAll(cwd, message, { noVerify } = {}) {
+// `exclude` paths are unstaged after `add -A` (they stay on disk, out of this commit). Unless `noVerify`, the
+// staged names minus `allow` pass the secrets scan; hits commit nothing and come back as {hits: [{path, reason, line}]}.
+function commitAll(cwd, message, { noVerify, exclude = [], allow = [] } = {}) {
   sh(['add', '-A'], cwd)
+  if (exclude.length) sh(['--literal-pathspecs', 'reset', '-q', '--', ...exclude], cwd)
   if (raw(['diff', '--cached', '--quiet'], cwd).status === 0) return null
+  if (!noVerify) {
+    const skip = new Set(allow)
+    const hits = sh(['diff', '--cached', '--name-only', '-z', '--diff-filter=d'], cwd).split('\0').filter((f) => f && !skip.has(f)).flatMap((f) => scanFile(cwd, f))
+    if (hits.length) return { hits }
+  }
   sh(['commit', '-q', ...(noVerify ? ['--no-verify'] : []), '-m', message], cwd)
   return headSha(cwd)
 }

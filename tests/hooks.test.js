@@ -93,3 +93,29 @@ test('block-worker-git parses quotes, spaces, chains and nested shells', () => {
   const noNode = spawnSync('/bin/bash', [path.join(SPEC, 'scripts/block-worker-git.sh')], { input: JSON.stringify({ cwd: wt, tool_input: { command: 'git commit' } }), env: { PATH: '/nonexistent' }, encoding: 'utf8' })
   assert.strictEqual(noNode.status, 0, 'no node on PATH fails open')
 })
+
+test('AC-20261105-15-10 inside a marked lane only v7\'s read-only allowlist, git add and git rebase --continue pass; in the main checkout only the destructive verbs stay blocked', () => {
+  const dir = tmpdir('wgit-allow')
+  gitRepo(dir)
+  const wt = path.join(dir, '.claude/worktrees/spec-l')
+  execFileSync('git', ['-C', dir, 'worktree', 'add', '-q', '-b', 'l', wt])
+  const gd = execFileSync('git', ['-C', wt, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim()
+  fs.writeFileSync(path.join(gd, 'spec-lane-open'), 'fanout')
+  const inLane = (command) => hook('block-worker-git.sh', { cwd: wt, tool_input: { command } }).status
+  const inMain = (command) => hook('block-worker-git.sh', { cwd: dir, tool_input: { command } }).status
+  for (const v of ['cherry-pick', 'revert', 'am', 'apply', 'pull', 'fetch', 'tag', 'rm', 'mv', 'update-ref', 'symbolic-ref', 'update-index', 'config', 'remote', 'submodule', 'gc', 'bisect']) {
+    assert.strictEqual(inLane(`git ${v} x`), 2, `git ${v} is blocked in a lane`)
+    assert.strictEqual(inLane(`git -C ${wt} ${v}`), 2, `git -C <lane> ${v} is blocked`)
+  }
+  for (const v of 'status diff log show rev-parse ls-files ls-tree blame grep describe cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help'.split(' ')) {
+    assert.strictEqual(inLane(`git ${v}`), 0, `git ${v} is allowed in a lane`)
+  }
+  assert.strictEqual(inLane('git add -A'), 0)
+  assert.strictEqual(inLane('git rebase --continue'), 0)
+  assert.strictEqual(inLane('git rebase --abort'), 2)
+  assert.strictEqual(inMain('git fetch'), 0, 'a fetch in the main checkout is not blocked while a lane is open')
+  assert.strictEqual(inMain('git cherry-pick x'), 0, 'nor are the other non-destructive verbs')
+  assert.strictEqual(inMain('git reset --hard'), 2, 'a reset there still is')
+  for (const c of ['git checkout .', 'git restore .', 'git clean -fd', 'git stash', 'git switch x', 'git branch -D x', 'git worktree remove x']) assert.strictEqual(inMain(c), 2, `${c} is blocked in the main checkout while a lane is open`)
+  assert.strictEqual(inMain('git branch --list'), 0, 'a harmless form is not')
+})

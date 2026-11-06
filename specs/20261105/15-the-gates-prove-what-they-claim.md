@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: implementing
 area: run
 depends_on: [specs/20261105/14-the-prototype-is-pinned-in-chat-and-proved-at-look.md]
 brief: n/a
@@ -121,3 +121,18 @@ A build that did nothing, a plan row that is not on disk and a superseded spec e
 - A2: The six stale tests are a prediction from a prototype without spec 14, D9 or the release rows — if false: repair each further stale setup by doing what a real build does, add its file as a deviation, and never weaken a Decision to pass it.
 - A3: Spec 17 D8 carries `capabilities.testCountPattern` into `release.testCountPattern` verbatim, `none` included, and owns host-footprint.md's two rows (read in its draft) — if false: a migrated host's e2e reads `tests not counted` until the key is set by hand, and this spec is unaffected.
 - A4: `curl` works on `file://` urls and a child-process HTTP server, so `tests/release.test.js` needs no in-process server (`runNode` is `spawnSync`) — if false: use a file-local async spawn runner.
+
+## As built
+
+- D3, D6, D7: File Plan cells are read with `state.splitPlanCell` (now exported from `lib/state.js`, already in the File Plan), so a cell holding several paths or `{a,b}` counts as several rows; `outsideFiles` uses the same rows and also honours glob rows, so the reviewer's "outside the File Plan" list and the `askPaths` stop no longer treat a glob match as outside.
+- D3: a glob row is matched over `git ls-files -co --exclude-standard` filtered to files that still exist on disk, because `-c` keeps listing a tracked file the build deleted and a DELETE glob could never be satisfied otherwise.
+- D4: `state.redCheck` holds the line and `state.redCheckTree` the tree it ran on; red-check runs after the build proof passes, before the spec-edit and scope checks.
+- D7: the in-place `exclude` set is `outsideFiles` minus `state.widened`, so a Canonical Delta's `docs/canonical/` files and the own spec are committed, as they are never "outside the File Plan" elsewhere in the driver.
+- D9: the secrets question lists each hit as `  path:line (reason)` under the sentence `These files look like secrets. Keep them out of this commit?`, inside the question text, so a lane's pending question names every hit.
+- D14: a counted e2e prints `e2e ok (N tests)`; `release.js` also exports `testsExecuted` for the oracle test; `healthPath` defaults to an empty string; staging env (`BASE_URL`, `STAGING_URL`, `RELEASE_NOTE`) is given to deploy and migrations too.
+- D13, D16: `commands/release.md` drives `release.js -- $ARGUMENTS` for staging and `release.js --promote -- $ARGUMENTS` for the promote; a promote with a note uses it, else the staged note.
+- D18: `release.js` is 121 lines, so architecture.md's figure moves from ≤ 120 to ≤ 130 LOC.
+- D19: the three stale `tests/run.test.js` setups now also write `feature.txt`; AC-20261105-07-5's repair round in `tests/fanout.test.js` moves its planned file by amending the File Plan row to `src/b2.js`, as a real build would; `tests/integration.test.js` keeps its `stray.js` (the reviewer's outside-list pin needs it) and now asserts it stays untracked with `left uncommitted: stray.js` instead of a clean tree; the red-gate tail pin in `tests/red-check.test.js` became the green-gate brief line. No assertion was weakened.
+- AC-11 and AC-18 pins (the doc sentences) live in `tests/run.test.js`; the other test files in the File Plan hold their own ACs.
+- tests/fanout.test.js:768 The AC-07-5 repair edits the lane's spec File Plan row (src/b.js -> src/b2.js) and labels it a builder action, but builder.md:16 says 'Never edit the spec', so under D3 a build that must move a planned file goes REPAIR -> ESCALATE gate -> user amend; the fixture performs the user's amend, and its comment should say so rather than attribute it to the build.
+- spec/scripts/run.js:444 Per D7 an in-place spec run leaves every builder-created out-of-plan file that askPaths did not widen (e.g. a test file outside the File Plan) out of the build commit and only warns, while the spec is marked done and the reviewer judged a diff that included it; the warning is printed, so this is the Decision's chosen consequence, noted for the user.

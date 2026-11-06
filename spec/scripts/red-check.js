@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict'
-// red-check.js — every test file added or changed since base must fail on base and pass on HEAD.
-// A test that passes on base too is a vacuous green: it proves nothing about the new code.
+// red-check.js — every test file ADDED since base must fail on base and pass on HEAD (an edited existing
+// test is not checked). A test that passes on base too is a vacuous green: it proves nothing about the new
+// code. It is information for the reviewer, never a block.
 //
 // node red-check.js --base <sha> --root <worktree>
 //   → stdout JSON {files: [{file, redOnBase, greenOnHead}], vacuousGreen: [file…], error?}
@@ -16,14 +17,17 @@ const { run } = require('./lib/host')
 const git = require('./lib/git')
 
 const quote = (s) => "'" + s.replace(/'/g, "'\\''") + "'"
-const isTest = (f) => /test|spec/i.test(f) && !/\.md$/.test(f) && !/\.run\//.test(f)
+// A test file is named by its basename: *.test.*, *.spec.*, *_test.*, *_spec.* or test_*.
+const TEST_NAME = /^(?:.+\.(?:test|spec)\..+|.+_(?:test|spec)\..+|test_.+)$/
+const isTest = (f) => TEST_NAME.test(path.basename(f)) && !/\.md$/.test(f) && !/\.run\//.test(f)
 
 function check(base, root) {
   const out = { files: [], vacuousGreen: [] }
   const cmd = readConfig(root).testFileCommand
   if (!cmd) return { ...out, error: 'no testFileCommand in .claude/spec.config.json' }
   if (!base) return { ...out, error: 'usage: red-check.js --base <sha> --root <worktree>' }
-  const files = git.changedFiles(base, root).filter((f) => isTest(f) && fs.existsSync(path.join(root, f)))
+  const added = (f) => git.raw(['cat-file', '-e', `${base}:${f}`], root).status !== 0 // base lacks it
+  const files = git.changedFiles(base, root).filter((f) => isTest(f) && fs.existsSync(path.join(root, f)) && added(f))
   if (!files.length) return out
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'red-check-'))
   const tree = path.join(tmp, 'base')

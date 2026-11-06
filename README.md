@@ -27,6 +27,17 @@ small files, so any run survives a crash or a `/clear` and resumes where it stop
 
 Needs `git` and Node 22 or newer.
 
+Optional terminal shortcut: `spec-status` prints the same view as `/spec:status` without
+opening Claude Code. It needs this repo cloned at `~/Projects/claude-plugins`. Set
+`CLAUDE_PLUGINS_DIR` to use another path. Run this once:
+
+```
+bash ~/Projects/claude-plugins/setup/install-shell.sh
+```
+
+Your `~/.zshrc` then loads `setup/shellrc.sh` from the repo, so the shortcut follows
+`git pull`. `setup/export.sh user@host` installs it on a new machine as well.
+
 ## Lifecycle
 
 A spec moves `draft → hardened → implementing → done`. `/spec:plan` writes and locks it.

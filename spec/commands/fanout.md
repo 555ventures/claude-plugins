@@ -22,11 +22,13 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   A PARKED, AMENDED or NEEDS_PLAN lane is dismissed by it, and a
   lane that marked `waiting --on` becomes waiting. A lane whose rebase conflicts is re-sent (mark
   `resent`): it resolves the conflict, continues the rebase, gates and reviews inside that one
-  dispatch, and lands when marked returned. A lane that needs another spec done first: mark
+  dispatch, and lands when marked returned. The re-send dispatch is followed by the lane list, which shows
+  what every other lane is doing. A lane that needs another spec done first: mark
   `waiting --lane <id> --on <spec>`; PLAN re-picks it once that spec is done, on a rebased worktree.
   A stopped or waiting lane keeps its work in a `wip(spec):` commit. `dismissed --lane <id> --discard`
   removes the worktree and branch and prints the wip sha; `dismissed` is also accepted at DISPATCH,
-  MERGE_RED and REPORT.
+  MERGE_RED and REPORT; `returned` is accepted at MERGE_RED too: a lane that comes back while the trunk is red
+  is held (`lane N held — trunk gate is red`) and lands when `gate-repaired` is marked.
 - **RELAY**: the questions are printed grouped by kind (`[assumption]`, `[decision]`, `[unmet]`,
   `[scope]`, `[spec-edit]`, `[escalate]`, `[conflict]`), recommended option first. Relay every lane
   question verbatim in one AskUserQuestion per RELAY (at most 4 per call), then run each printed

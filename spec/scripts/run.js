@@ -302,13 +302,13 @@ const readyReport = (state, ctx) => render({
 })
 
 // What the build did differently from the spec, one bullet each: the builder's as-built.md, the review's
-// advisories, and (outside a fix lane, which has no File Plan) every file outside the File Plan.
+// advisories, and every file outside the File Plan (a spec-less fix has no spec, so no plan).
 function departures(state, ctx, spec) {
   const lines = st.readText(runFile(ctx, 'as-built.md'), '').replace(/\r\n/g, '\n').split('\n')
     .map((l) => l.trim().replace(/^[-*]\s+/, '').trim()).filter(Boolean)
   const advisories = ((state.review && state.review.findings) || []).filter((f) => f.severity === 'advisory')
     .map((f) => `${f.file || ''}${f.file && f.line ? ':' + f.line : ''} ${f.summary || ''}`.trim()).filter(Boolean)
-  const outside = state.fix ? [] : outsideFiles(state, ctx, spec).map((f) => `touched outside the File Plan: ${f}`)
+  const outside = spec ? outsideFiles(state, ctx, spec).map((f) => `touched outside the File Plan: ${f}`) : []
   const prefix = state.fix ? `(fix: ${state.fix.symptom}) ` : ''
   return [...new Set([...lines, ...advisories, ...outside].map((d) => prefix + d))]
 }
@@ -336,7 +336,7 @@ function appendAsBuilt(file, bullets) {
 }
 
 function commit(state, ctx) {
-  const spec = state.fix ? null : st.readSpec(specIn(state, ctx))
+  const spec = specIn(state, ctx) ? st.readSpec(specIn(state, ctx)) : null
   if (state.inPlace && !state.lane && !state.fix) st.writeStatus(specIn(state, ctx), 'done')
   // A spec-less fix has no spec to carry an As built section.
   const asBuilt = departures(state, ctx, spec)
@@ -460,9 +460,14 @@ function builderBrief(state, ctx, kind) {
   return out.join('\n')
 }
 
+// A fix's regression test file: the part of fix.json's `test` before ` :: ` (the whole value without one).
+const fixTestFile = (state) => (state.fix && state.fix.test ? String(state.fix.test).split(' :: ')[0].trim() : '')
+
 // Files changed outside the File Plan (the spec itself and, with a Canonical Delta, docs/canonical are not).
+// A spec-bound fix's plan is the File Plan plus its regression test file.
 function outsideFiles(state, ctx, spec) {
   const planned = new Set(spec.filePlan.map((r) => r.path))
+  if (state.fix && fixTestFile(state)) planned.add(fixTestFile(state))
   const own = state.spec.split(path.sep).join('/')
   const run = own.replace(/\.md$/, '.run/')
   const delta = hasDelta(spec)
@@ -493,7 +498,7 @@ function reviewerBrief(state, ctx) {
     `Diff (working tree vs base): ${runFile(ctx, 'diff.patch')}`,
     ...(spec ? [`Spec: ${specPath}`] : []),
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
-    state.fix ? 'Files changed outside the File Plan: n/a (fix — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec, cfg).join(', ') || 'none'}`,
+    state.fix && !spec ? 'Files changed outside the File Plan: n/a (fix — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec, cfg).join(', ') || 'none'}${state.fix ? " (a fix's plan is the spec's File Plan plus its regression test)" : ''}`,
     ...(spec ? ["The spec's frontmatter status line changes during the run; that is bookkeeping, not a finding."] : []),
     '',
     ...(state.fix ? fixReviewBlock(state) : ['## Intent', intentText(spec), '']),

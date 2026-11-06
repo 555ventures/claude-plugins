@@ -1177,20 +1177,55 @@ test('AC-20261105-10-8 with no as-built.md, no advisory and nothing outside the 
   assert.ok(!h.g('show', 'main:' + REL).includes('As built'))
 })
 
-test('AC-20261105-10-9 AC-20261105-10-10 a fix lane appends the (fix: <symptom>) bullet under an existing ## As built once, and reaches MERGE_READY', () => {
+test('AC-20261105-10-9 AC-20261105-10-10 AC-20261105-11-4 AC-20261105-11-9 a fix lane appends the (fix: <symptom>) bullets, the outside file included and the regression test exempt, once, and reaches MERGE_READY', () => {
   const existing = SPEC_DOC.replace('status: hardened', 'status: done') + '\n## As built\n\n- (fix: x) already there\n'
   const h = fixture({ files: { [REL]: existing } })
   h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
   const brief = ok(h.runIn(h.wt, '--fix', 'x'))
   assert.ok(brief.includes('as-built.md'), 'the fix brief names as-built.md')
   fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.wt, 't.test.js'), 'x\n')
   fs.mkdirSync(path.join(h.wt, 'src'), { recursive: true }); fs.writeFileSync(path.join(h.wt, 'src/extra.js'), 'x\n')
   fs.writeFileSync(path.join(h.wt, 'specs/20261104/01-thing.run/as-built.md'), 'already there\nrenamed the column\n')
   st.writeJson(path.join(h.wt, 'specs/20261104/01-thing.run/fix.json'), { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null })
   ok(h.runIn(h.wt, '--mark', 'built'))
+  const review = ok(h.runIn(h.wt))
+  assert.ok(review.includes("Files changed outside the File Plan: src/extra.js (a fix's plan is the spec's File Plan plus its regression test)"), review)
   assert.match(ok(h.runIn(h.wt, '--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → MERGE_READY/)
   const spec = h.g('show', 'spec/01-thing:' + REL)
-  assert.strictEqual(asBuiltOf(spec).trim(), '- (fix: x) already there\n- (fix: x) renamed the column', 'the old bullet is not appended twice; a fix lane lists no outside files')
+  assert.strictEqual(asBuiltOf(spec).trim(), '- (fix: x) already there\n- (fix: x) renamed the column\n- (fix: x) touched outside the File Plan: src/extra.js', 'the old bullet is not appended twice; the regression test is not listed')
+})
+
+test('AC-20261105-11-4 a spec-bound fix touching only plan files and its regression test appends no section', () => {
+  const h = fixture({ status: 'done' })
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
+  ok(h.runIn(h.wt, '--fix', 'x'))
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.writeFileSync(path.join(h.wt, 't.test.js'), 'x\n')
+  st.writeJson(path.join(h.wt, 'specs/20261104/01-thing.run/fix.json'), { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null })
+  ok(h.runIn(h.wt, '--mark', 'built'))
+  const review = ok(h.runIn(h.wt))
+  assert.ok(review.includes("Files changed outside the File Plan: none (a fix's plan is"), review)
+  ok(h.runIn(h.wt, '--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(!h.g('show', 'spec/01-thing:' + REL).includes('As built'))
+})
+
+test('AC-20261105-11-5 a spec-bound fix never stops for scope on an askPaths file; a spec-less fix prints n/a at REVIEW and commits no section', () => {
+  const h = fixture({ status: 'done', cfg: { askPaths: ['src/extra.js'] } })
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-thing', h.wt, 'main'); pending.markLane(h.wt)
+  ok(h.runIn(h.wt, '--fix', 'x'))
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  fs.mkdirSync(path.join(h.wt, 'src'), { recursive: true }); fs.writeFileSync(path.join(h.wt, 'src/extra.js'), 'x\n')
+  st.writeJson(path.join(h.wt, 'specs/20261104/01-thing.run/fix.json'), { cause: 'c', test: 't.test.js :: guards c', strings: [], choices: [], needsPlan: null })
+  assert.match(ok(h.runIn(h.wt, '--mark', 'built')), /BUILD → REVIEW/, 'the askPaths file is a record, not a stop')
+  assert.ok(ok(h.runIn(h.wt)).includes('src/extra.js (askPaths) (a fix\'s plan'), 'the brief names it')
+
+  const l = fixture(); const f = specless(l, { lane: true })
+  f.built()
+  const review = ok(f.fx())
+  assert.ok(review.includes('Files changed outside the File Plan: n/a (fix — it has no File Plan)'), review)
+  ok(f.fx('--mark', 'reviewed', '--file', l.findings([{ severity: 'advisory', file: 'a.js', summary: 'note' }])))
+  assert.ok(!l.g('log', '--all', '-p').includes('As built'), 'no ## As built anywhere: a spec-less fix has no spec to carry one')
 })
 
 test('AC-20261105-10-9 a fix lane on a spec with no ## As built creates it after the last section', () => {

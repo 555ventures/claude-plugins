@@ -127,8 +127,8 @@ runnable specs as checkbox questions (≤ 4 boxes × ≤ 4 questions, labels = t
 call per lane: subagent `claude`, model = orchestrator seat, prompt = `/spec:run <spec> --root
 .claude/worktrees/spec-<stem>` (absolute; the Agent tool has no cwd). WAIT: lanes return; the driver reads each lane's
 run state. RELAY: all `pending-question.json` batched into one message; `answered --lane`.
-Landing, per done lane: WAIT lands the first `done` lane as soon as it returns when no lane is
-`sent-back` and no dispatched lane is mid-rebase (early landing); MERGE lands whatever is left in batch
+Landing, per done lane: WAIT lands the first `done` lane as it returns whenever the trunk gate is not red
+(a `sent-back` lane or a lane mid-rebase does not hold it); MERGE lands whatever is left in batch
 order. `git.rebaseOnto(<worktree>, trunk)` (run state still MERGE_READY), then status done + commit in
 the lane, `mergeBack` ff-only (`lane.landed` = trunk sha), gate on trunk (`MERGE_RED` → `gate-repaired` on
 red). A rebase conflict leaves the rebase in progress, sets the lane `sent-back` with its conflict files,
@@ -331,10 +331,14 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   the rebased tree before the fast-forward, and a new conflict is a fresh `conflictAt`.
 - **What a mark did.** Lane-touching marks (`returned`, `resent`, `dismissed`, `waiting`, `answered`, `resumed`,
   `gate-repaired`) bump `s.seq`; `mergeLane` stamps the lane it worked on with `lane.last = {seq, outcome,
-  detail}` (`landed` + sha, `conflict` + files, `red` + first failing line), and a landing held by `s.red`
-  stamps `held` on every `done` lane. The `after` hook prints one line per lane with `last.seq === s.seq`, in
+  detail}` (`landed` + sha, `conflict` + files, `red` + first failing line). `held` is stamped by `holdDone`
+  in two places: `gateAfter`'s red branch (a landing that turns the trunk red stamps every other `done` lane
+  inside the same settle) and the wrapper of a mark run while the trunk is already red; the lane whose landing
+  turned it red keeps its `landed` stamp, and MERGE_RED accepts `returned` so a lane that comes back there is
+  held and lands at `gate-repaired`. The `after` hook prints one line per lane with `last.seq === s.seq`, in
   batch order, with the Agent call after `sent back` and `gate red`; `--json` prints nothing extra. WAIT's
-  lane list shows `resolving rebase (<n> files)` or `gate red after rebase` instead of a stale run step.
+  lane list shows `resolving rebase (<n> files)` or `gate red after rebase` instead of a stale run step; the
+  sent-back WAIT body is the dispatch body, a blank line, then that lane list.
 
 ### run.js notes
 
@@ -380,7 +384,7 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   `conflicts-resolved` refuses while a file the merge reported still holds `<<<<<<<`/`>>>>>>>`
   lines, then commits the merge in the main checkout.
 
-- **As built.** The builder writes departures to `<spec>.run/as-built.md`; COMMIT (before `commitAll`) appends them, the review's advisories and, outside a fix lane, the files outside the File Plan as bullets under `## As built` in the spec (a fix lane prefixes `(fix: <symptom>) `; bullets already there are not repeated). `specEdits` compares Decisions only and `outsidePlan` runs at REVIEW, so neither sees the section. Table rows are split by `lib/state.js` `splitCells`, which keeps a pipe inside a backtick span.
+- **As built.** The builder writes departures to `<spec>.run/as-built.md`; COMMIT (before `commitAll`) appends them, the review's advisories and the files outside the File Plan as bullets under `## As built` in the spec (a spec-bound fix lane's plan is the spec's File Plan plus its regression test, `fixTestFile`, and it prefixes `(fix: <symptom>) `; a spec-less fix has no spec, so no plan and no section; bullets already there are not repeated). `specEdits` compares Decisions only and `outsidePlan` runs at REVIEW, so neither sees the section. Table rows are split by `lib/state.js` `splitCells`, which keeps a pipe inside a backtick span.
 
 ### integration notes
 

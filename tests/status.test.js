@@ -36,7 +36,8 @@ function v7Screen(host, ...flags) {
 
 // ---- the fixture hosts ---------------------------------------------------------------------
 
-function fullHost() {
+// openBrief leaves q16 pending: brief 01 is then done but still queued, and v8 raises the decide line (brief-done-queued).
+function fullHost({ openBrief = false } = {}) {
   const d = tmpdir('status'); gitRepo(d)
   w(d, 'docs/roadmap/00-overview.md', '# Overview\n\n| # | Brief | Status |\n|---|---|---|\n| 01 | foundation | done |\n| 02 | schema | |\n')
   w(d, 'docs/roadmap/01-foundation.md', brief('01', 'Foundation', 'P0', '—'))
@@ -92,7 +93,10 @@ function fullHost() {
     { id: 'q13', kind: 'prompt', payload: 'after a ghost', type: 'plan', after: { spec: `${A}/99-ghost.md` } },
     { id: 'q14', kind: 'prompt', payload: 'after retired', type: 'plan', after: { spec: `${A}/09-retired.md` } },
     { id: 'q15', kind: 'spec', payload: `${A}/08-gated.md`, after: { brief: '03' } },
-    { id: 'q16', kind: 'brief', payload: '01', done: '2026-11-02T00:00:00.000Z' }, // brief 01 is done: the driver no longer ticks it, so the host does
+    // Brief 01 is done. The default host stamps q16 done because v7's oracle reconcile ticks a done brief and v7
+    // never printed the decide line (a pending q16 would break the byte-identity of AC-20261105-05-1); openBrief
+    // leaves it pending for the brief-queued golden.
+    { id: 'q16', kind: 'brief', payload: '01', ...(openBrief ? {} : { done: '2026-11-02T00:00:00.000Z' }) },
     { id: 'q17', kind: 'brief', payload: '77' },
     { id: 'q18', kind: 'brief', payload: '07' },
   ].map((i) => ({ added: '2026-11-01T00:00:00.000Z', ...i }))
@@ -134,12 +138,16 @@ test('AC-20261105-05-1 a missing v7 tag fails the oracle, it never skips', () =>
 
 test('the goldens are the full host\'s render (UPDATE_GOLDENS=1 regenerates them)', () => {
   const d = fullHost()
-  const runs = { 'bare.txt': status(d), 'all.txt': status(d, '--all'), 'brief-met.txt': status(d, '04b'), 'brief-unmet.txt': status(d, '05') }
+  const runs = { 'bare.txt': status(d), 'all.txt': status(d, '--all'), 'brief-met.txt': status(d, '04b'), 'brief-unmet.txt': status(d, '05'), 'brief-queued.txt': status(fullHost({ openBrief: true })) }
   for (const [name, r] of Object.entries(runs)) {
     if (process.env.UPDATE_GOLDENS) fs.writeFileSync(path.join(__dirname, 'fixtures', 'status', name), r.stdout)
     assert.strictEqual(r.stdout, GOLD(name), name)
   }
-  assert.deepStrictEqual(Object.values(runs).map((r) => r.status), [0, 0, 0, 1])
+  assert.deepStrictEqual(Object.values(runs).map((r) => r.status), [0, 0, 0, 1, 0])
+  const queued = GOLD('brief-queued.txt')
+  assert.ok(queued.includes('⚠️ Brief 01 (foundation) has every spec done but is still queued.\n   Close it?  /spec:queue done 01\n'), 'the decide pair')
+  assert.ok(queued.includes('· 3 more to decide (--all)'), 'the footer clause')
+  assert.ok(!v7Screen(fullHost({ openBrief: true })).includes('still queued'), 'v7 ticks a done brief in its oracle reconcile and never printed the line')
 })
 
 // ---- what the oracle cannot say ------------------------------------------------------------

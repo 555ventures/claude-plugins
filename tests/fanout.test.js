@@ -151,15 +151,14 @@ test('a red trunk gate after a merge stops at MERGE_RED until gate-repaired', ()
   h.ok('--mark', 'returned', '--lane', '1')
   assert.strictEqual(h.step(), 'MERGE_RED', 'lane 1 lands as it returns; the red gate stops the queue while lane 2 is still out')
   assert.ok(!fs.existsSync(path.join(h.dir, 'src/b.js')), 'the next lane is not merged while trunk is red')
-  assert.strictEqual(h.run('--mark', 'returned', '--lane', '2').status, 2, 'no lane returns onto a red trunk')
+  assert.strictEqual(h.run('--mark', 'returned', '--lane', '2').status, 0, 'a lane returning onto a red trunk is accepted and held (spec 20261105/11 D1)')
+  assert.ok(!fs.existsSync(path.join(h.dir, 'src/b.js')), 'and it does not land')
   assert.strictEqual(h.run('--mark', 'gate-repaired').status, 0)
   assert.strictEqual(h.step(), 'MERGE_RED', 'still red: gate-repaired re-runs the gate and stays')
   h.g('rm', '-q', 'RED')
   h.g('commit', '-q', '-m', 'repair')
   h.ok('--mark', 'gate-repaired')
-  assert.strictEqual(h.step(), 'WAIT', 'green → lane 2 is still out, so the batch waits for it')
-  h.ok('--mark', 'returned', '--lane', '2')
-  assert.strictEqual(h.step(), 'REPORT', 'the remaining lane lands as it returns → REPORT')
+  assert.strictEqual(h.step(), 'REPORT', 'green → the held lane 2 lands in that settle → REPORT')
   assert.ok(fs.existsSync(path.join(h.dir, 'src/b.js')))
   assert.ok(st.readQueue(h.dir).items[0].done, 'the repaired lane is ticked')
 })
@@ -1262,4 +1261,113 @@ test('AC-20261105-09-14 the fix command drives the driver; the commands, builder
   assert.ok(read('doctrine.md').includes('keep / revert / plan'))
   const contract = fs.readFileSync(path.join(SPEC, '..', 'docs/v8/interface-contract.md'), 'utf8')
   for (const s of ['fix-<slug>', 'NEEDS_PLAN', 'fix-choices']) assert.ok(contract.includes(s), 'the contract names ' + s)
+})
+
+// ---- spec 20261105/11: the batch tells the rest of the truth -------------------------------------
+
+const TRIO = [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js'], ['03-gamma', 'src/c.js']]
+function trioOut() {
+  const h = host({ lanes: 3, specs: TRIO })
+  h.ok('--mark', 'planned')
+  h.ok('--mark', 'dispatched')
+  return h
+}
+const repair = (h) => { h.g('rm', '-q', 'RED'); h.g('commit', '-q', '-m', 'repair') }
+const setStatus = (h, id, status) => { const f = st.readFanout(h.dir); f.batch.find((l) => l.id === id).status = status; st.writeFanout(h.dir, f) }
+
+// Lane 1 lands RED (the trunk goes red), the host repairs it, lane 2 is rebased onto the repaired trunk and adds RED
+// again, lane 3 is clean: both return while the trunk is red, so both are `done`. gate-repaired lands lane 2 with an
+// unmoved base (no pre-ff gate), which turns the trunk red inside that mark's settle while lane 3 is still `done`.
+function settleRed() {
+  const h = trioOut()
+  h.finish('01-alpha', 'RED')
+  h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'MERGE_RED')
+  repair(h)
+  execFileSync('git', ['-C', h.wt('02-beta'), 'rebase', '-q', 'main'])
+  h.finish('02-beta', 'RED'); h.finish('03-gamma', 'src/c.js')
+  h.ok('--mark', 'returned', '--lane', '2'); h.ok('--mark', 'returned', '--lane', '3')
+  return h
+}
+
+test('AC-20261105-11-1 a landing that turns the trunk red stamps the other done lane in the same mark; --json prints neither line', () => {
+  const h = settleRed()
+  const out = h.ok('--mark', 'gate-repaired').stdout
+  const lines = out.split('\n')
+  const landed = lines.indexOf(`lane 2 landed as ${mainHead(h)}`)
+  assert.ok(landed > 0 && lines[0].startsWith('✅ checkpoint'), out)
+  assert.ok(lines.indexOf('lane 3 held — trunk gate is red') > landed, out)
+  assert.ok(!out.includes('lane 2 held'), 'the landed lane is not held:\n' + out)
+  assert.strictEqual(h.step(), 'MERGE_RED')
+  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.status), ['merged', 'done', 'done'])
+
+  const j = settleRed()
+  const json = j.ok('--mark', 'gate-repaired', '--json').stdout
+  assert.ok(!json.includes('landed as') && !json.includes('held —'), json)
+})
+
+test('AC-20261105-11-2 a lane returning at MERGE_RED is accepted and held, never the landed one; gate-repaired lands it', () => {
+  const h = trioOut()
+  h.finish('01-alpha', 'RED')
+  h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'MERGE_RED')
+  h.finish('02-beta', 'src/b.js')
+  const trunk = mainHead(h)
+  const out = h.ok('--mark', 'returned', '--lane', '2').stdout
+  assert.ok(out.includes('lane 2 held — trunk gate is red'), out)
+  assert.ok(!out.includes('lane 1'), 'the landed lane gets no line:\n' + out)
+  assert.strictEqual(mainHead(h), trunk, 'trunk did not move')
+  assert.strictEqual(h.step(), 'MERGE_RED')
+  assert.strictEqual(st.readFanout(h.dir).batch[1].status, 'done')
+  repair(h)
+  const rep = h.ok('--mark', 'gate-repaired').stdout
+  assert.ok(rep.includes(`lane 2 landed as ${mainHead(h)}`), rep)
+  assert.notStrictEqual(mainHead(h), trunk)
+  assert.deepStrictEqual(st.readFanout(h.dir).batch.map((l) => l.status), ['merged', 'merged', 'dispatched'])
+})
+
+test('AC-20261105-11-3 dismissed at MERGE_RED prints no held line for the landed lane; a stopped return is relayed after the repair', () => {
+  const h = trioOut()
+  h.finish('01-alpha', 'RED')
+  h.ok('--mark', 'returned', '--lane', '1')
+  const dis = h.ok('--mark', 'dismissed', '--lane', '3').stdout
+  assert.ok(!dis.includes('lane 1 held'), dis)
+  h.ok('--mark', 'returned', '--lane', '2', '--stopped', 'needs a call')
+  assert.strictEqual(st.readFanout(h.dir).batch[1].status, 'stopped')
+  repair(h)
+  h.ok('--mark', 'gate-repaired')
+  assert.strictEqual(h.step(), 'RELAY')
+  assert.ok(h.ok().stdout.includes('lane 2 —'), 'RELAY names lane 2')
+})
+
+test('AC-20261105-11-7 the sent-back WAIT body is the dispatch body, a blank line, then the lane list, and nothing after it', () => {
+  const g = threeOut()
+  g.finish('01-alpha', 'src/a.js', 'alpha\n'); g.finish('03-gamma', 'src/a.js', 'gamma\n')
+  g.ok('--mark', 'returned', '--lane', '1')
+  g.ok('--mark', 'returned', '--lane', '2')
+  const out = g.ok().stdout
+  const lines = out.split('\n')
+  const at = lines.indexOf('Lanes (status · run step):')
+  assert.ok(at > 2 && lines[at - 1] === '' && lines[at - 2] !== '', out)
+  assert.ok(lines.slice(0, at).some((l) => l.startsWith('  Agent({')) && /^These lanes hit a rebase conflict/.test(lines.find((l) => l.startsWith('These lanes'))), 'the dispatch body comes first:\n' + out)
+  const list = lines.slice(at + 1)
+  const ids = list.filter((l) => /^ {2}lane \d+ — /.test(l)).map((l) => l.split(' ')[3])
+  assert.deepStrictEqual(ids, ['1', '2', '3'], 'one line per lane in batch order:\n' + out)
+  const lastLane = list.map((l, i) => [l, i]).filter(([l]) => /^ {2}lane \d+ — /.test(l)).pop()[1]
+  assert.strictEqual(list.slice(lastLane + 1).filter((l) => !l.startsWith('▶ when done')).join('').trim(), '', 'nothing after the list:\n' + out)
+})
+
+test('AC-20261105-11-8 fanout.md, the contract and the architecture note carry the lane list, returned at MERGE_RED, the fix plan and gateAfter', () => {
+  const root = path.join(__dirname, '..')
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8')
+  const md = read('spec/commands/fanout.md')
+  assert.match(md, /lane list/i)
+  assert.match(md, /`returned`[^\n]*(MERGE_RED|red trunk)|(MERGE_RED|red trunk)[^\n]*`returned`/)
+  const ic = read('docs/v8/interface-contract.md')
+  assert.match(ic, /`returned`[^\n]*MERGE_RED|MERGE_RED[^\n]*`returned`/)
+  assert.match(ic, /File Plan plus (its|the) regression test/)
+  const arch = read('docs/v8/architecture.md')
+  assert.ok(!/(early landing)/.test(arch) && !/no lane is `sent-back` and no dispatched lane is mid-rebase/.test(arch), 'the stale landing sentence is gone')
+  assert.match(arch, /gateAfter[\s\S]{0,200}held|held[\s\S]{0,200}gateAfter/)
+  assert.match(arch, /File Plan plus (its|the) regression test/)
 })

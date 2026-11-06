@@ -378,11 +378,19 @@ function finalize(s, ctx, lane) {
   return s
 }
 
+// Where the hold happens: every `done` lane is held while the trunk gate is red, except the lane whose landing
+// turned it red (it keeps its `landed` stamp until gate-repaired finalizes it).
+const stamp = (s, lane, outcome, detail) => { lane.last = { seq: s.seq || 0, outcome, detail } }
+function holdDone(s) {
+  for (const l of s.batch) if (l.status === 'done' && l.id !== s.red.lane) stamp(s, l, 'held', 'trunk gate is red')
+}
+
 function gateAfter(s, ctx, lane) {
   const g = host.gate(ctx.root, st.readConfig(ctx.root))
   if (g.status !== 0) {
     s.step = 'MERGE_RED'
     s.red = { lane: lane.id, runId: g.runId, tail: g.tail }
+    holdDone(s)
     return s
   }
   return finalize(s, ctx, lane)
@@ -390,7 +398,6 @@ function gateAfter(s, ctx, lane) {
 
 // Rebase the lane onto trunk in its worktree, then fast-forward trunk to it, then gate. The run state
 // stays MERGE_READY until the rebase lands, so a sent-back lane's /spec:run is a no-op.
-const stamp = (s, lane, outcome, detail) => { lane.last = { seq: s.seq || 0, outcome, detail } }
 
 function mergeLane(s, ctx, lane) {
   const root = ctx.root
@@ -461,7 +468,7 @@ function deriveRed(s, ctx) {
       `The gate is red on trunk after merging lane ${lane.id} (${lane.stem}). The queue stops here.`, '',
       (s.red.tail || '(no output)').split('\n').slice(-15).join('\n'), '',
       `Repair it in ${ctx.root} (dispatch a builder or fix it here) and commit the repair, or re-run as it is when the failure was a flake: mark gate-repaired either way; the driver re-runs the gate.`].join('\n'),
-    accepts: ['dismissed'],
+    accepts: ['dismissed', 'returned'],
     mark: 'gate-repaired',
   }
 }
@@ -656,8 +663,9 @@ const steps = {
 }
 
 // A mark that touches lanes bumps s.seq before its step runs; mergeLane stamps what it did to a lane with
-// that seq (lane.last), and a landing held back by a red trunk stamps every done lane `held`. The `after`
-// hook prints the lanes stamped by this mark.
+// that seq (lane.last). `held` is stamped in two places, both by holdDone: gateAfter when a landing turns the
+// trunk red (inside the settle), and the wrapper below when a mark runs while the trunk is already red; the
+// lane whose landing turned it red is never held. The `after` hook prints the lanes stamped by this mark.
 const TOUCHING = ['returned', 'resent', 'dismissed', 'waiting', 'answered', 'resumed', 'gate-repaired']
 for (const verb of TOUCHING) {
   const step = steps[verb]
@@ -665,7 +673,7 @@ for (const verb of TOUCHING) {
     s.seq = (s.seq || 0) + 1
     const out = step(s, flags, ctx)
     const t = out || s
-    if (t.red) for (const l of t.batch) if (l.status === 'done') stamp(t, l, 'held', 'trunk gate is red')
+    if (t.red) holdDone(t)
     return out
   }
 }

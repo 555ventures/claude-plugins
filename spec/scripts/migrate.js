@@ -16,6 +16,7 @@ const { ensureGitignore, IGNORE } = require('./init')
 
 const ARCH = 'docs/archive/v7'
 const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design']
+const V7_CONFIG = ['generatedBy', 'contractHash', 'policy', 'gateCommand'] // config keys only v7 wrote: trimConfig drops them, so they mark a host not yet migrated
 const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-runs.stopped.jsonl', '.claude/spec-session.json',
   '.claude/spec-preimage', '.claude/spec-manifest.json', '.claude/release-manifest.json', '.claude/rules/enforcement.json',
   'scripts/spec-patterns.sh'] // .claude/rules/conventions is repo-owned (tests and lint messages read it): never archived
@@ -193,6 +194,8 @@ function plan(root) {
   const ops = []
   const add = (op, p, to, note) => ops.push({ op, path: p, ...(to ? { to } : {}), ...(note ? { note } : {}) })
   const rel = (p) => path.relative(root, p)
+  // A name whose archive destination is taken was already migrated: planning it again could only warn.
+  const arch = (p, to) => { if (!exists(path.join(root, to))) add('archive', p, to) }
   const common = gitCommonDir(root)
   const cfgFile = configPath(root)
   const cfg = readJson(cfgFile, null)
@@ -228,12 +231,12 @@ function plan(root) {
   // sidecars and deviations
   walk(path.join(root, 'specs'), (p, isDir) => {
     if (isDir && SIDECAR.test(p)) { if (exists(p.replace(SIDECAR, '.md'))) add('delete', rel(p)); return true } // a dotted dir with no spec beside it is the user's
-    if (!isDir && p.endsWith('.deviations.md')) add('archive', rel(p), path.posix.join(ARCH, 'deviations', path.relative(path.join(root, 'specs'), p).split(path.sep).join('/')))
+    if (!isDir && p.endsWith('.deviations.md')) arch(rel(p), path.posix.join(ARCH, 'deviations', path.relative(path.join(root, 'specs'), p).split(path.sep).join('/')))
     return false
   })
-  for (const a of ARCHIVE) if (exists(path.join(root, a))) add('archive', a, path.posix.join(ARCH, a.replace(/^\.claude\//, '')))
+  for (const a of ARCHIVE) if (exists(path.join(root, a))) arch(a, path.posix.join(ARCH, a.replace(/^\.claude\//, '')))
   const pipe = path.join(root, '.claude/rules/spec-pipeline.md')
-  if (exists(pipe)) {
+  if (exists(pipe) && !exists(path.join(root, ARCH, 'rules/spec-pipeline.md'))) {
     add('extract', '.claude/rules/spec-pipeline.md', '.claude/rules/spec-gotchas.md', 'Gotchas + Risk Tiers')
     add('archive', '.claude/rules/spec-pipeline.md', path.posix.join(ARCH, 'rules/spec-pipeline.md'))
   }
@@ -244,7 +247,7 @@ function plan(root) {
   const agents = path.join(root, '.claude/agents')
   if (exists(agents)) for (const n of fs.readdirSync(agents)) {
     const f = path.join(agents, n)
-    if (n.endsWith('.md') && fs.readFileSync(f, 'utf8').includes('## Worker Contract (spec pipeline)')) add('archive', rel(f), path.posix.join(ARCH, 'agents', n))
+    if (n.endsWith('.md') && fs.readFileSync(f, 'utf8').includes('## Worker Contract (spec pipeline)')) arch(rel(f), path.posix.join(ARCH, 'agents', n))
     else owned.push('.claude/agents/' + n)
   }
   const skills = path.join(root, '.claude/skills')
@@ -252,10 +255,10 @@ function plan(root) {
     const dir = path.join(skills, n)
     let body = ''
     try { body = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8') } catch { /* none */ }
-    if (SKILLS.includes(n) && /spec-paths|spec-runs/.test(body)) add('archive', '.claude/skills/' + n, path.posix.join(ARCH, 'skills', n))
+    if (SKILLS.includes(n) && /spec-paths|spec-runs/.test(body)) arch('.claude/skills/' + n, path.posix.join(ARCH, 'skills', n))
     else owned.push('.claude/skills/' + n)
   }
-  if (exists(path.join(common, 'spec-queue-done.json'))) add('archive', path.join(common, 'spec-queue-done.json'), path.posix.join(ARCH, 'spec-queue-done.json'))
+  if (exists(path.join(common, 'spec-queue-done.json'))) arch(path.join(common, 'spec-queue-done.json'), path.posix.join(ARCH, 'spec-queue-done.json'))
   // git dir leftovers
   const privs = [common]
   if (exists(path.join(common, 'worktrees'))) for (const n of fs.readdirSync(path.join(common, 'worktrees'))) privs.push(path.join(common, 'worktrees', n))
@@ -264,9 +267,8 @@ function plan(root) {
   const fan = readJson(path.join(common, 'spec-fanout.json'), null)
   const v8Fan = fan && typeof fan.step === 'string' && Array.isArray(fan.batch) ? fan : null
   const liveFanout = !!(v8Fan && v8Fan.batch.some((l) => l && l.status !== 'merged' && l.status !== 'dismissed'))
-  for (const d of privs) for (const n of ['spec-fanout.json', 'spec-delegated', 'spec-lane-exit.json', 'spec-wave-open'])
-    if (exists(path.join(d, n)) && !(n === 'spec-fanout.json' && d === common && v8Fan)) add('delete', path.join(d, n))
-  if (exists(path.join(common, 'spec-run-cache')) && !v8Fan) add('delete', path.join(common, 'spec-run-cache'))
+  for (const d of privs) for (const n of ['spec-delegated', 'spec-lane-exit.json', 'spec-wave-open'])
+    if (exists(path.join(d, n))) add('delete', path.join(d, n))
   const refs = git.raw(['for-each-ref', '--format=%(refname)', 'refs/spec-review/'], root).stdout.split('\n').filter(Boolean)
   for (const r of refs) add('ref', r)
   // .gitignore / .gitattributes
@@ -277,8 +279,16 @@ function plan(root) {
   try {
     if (/spec-runs\.jsonl merge=union/.test(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8'))) add('gitattributes', '.gitattributes')
   } catch { /* none */ }
-  // The v7 tag marks a v7 host: a version 2 queue file is v8's own, and its conversion plans no tag.
-  if (ops.some((o) => o.op !== 'gitignore' && o.op !== 'queue-fields' && o.op !== 'prototype' && !(o.op === 'queue' && q.version === 2)) && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
+  // A v7 migration is pending only while some v7 artifact is: a version 2 queue file, a config with no
+  // v7-only key, the gitignore and prototype records are v8's own conversions. spec-fanout.json and
+  // spec-run-cache keep v7's names in v8, so they are v7 leftovers only beside such an artifact, never on their own.
+  const v7Config = !!cfg && V7_CONFIG.some((k) => k in cfg)
+  const v7Pending = () => v7Config || ops.some((o) => !['config', 'gitignore', 'queue-fields', 'prototype'].includes(o.op) && !(o.op === 'queue' && q.version === 2))
+  if (v7Pending()) {
+    for (const d of privs) if (exists(path.join(d, 'spec-fanout.json')) && !(d === common && v8Fan)) add('delete', path.join(d, 'spec-fanout.json'))
+    if (exists(path.join(common, 'spec-run-cache')) && !v8Fan) add('delete', path.join(common, 'spec-run-cache'))
+  }
+  if (v7Pending() && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
   // listed, never touched
   const listed = []
   const wt = path.join(root, '.claude/worktrees')
@@ -298,19 +308,20 @@ function plan(root) {
 // ---- apply ----------------------------------------------------------------------------------
 function archive(root, src, dst, warns) {
   const s = path.resolve(root, src), d = path.resolve(root, dst)
-  if (exists(d)) { warns.push(`not moved, destination exists: ${dst}`); return }
+  if (exists(d)) { warns.push(`not moved, destination exists: ${dst}`); return false }
   fs.mkdirSync(path.dirname(d), { recursive: true })
   const tracked = git.raw(['ls-files', '--', s], root).stdout.trim()
-  if (tracked && git.raw(['mv', s, d], root).status === 0) return
+  if (tracked && git.raw(['mv', s, d], root).status === 0) return true
   fs.renameSync(s, d)
+  return true
 }
 
 function commit(root, warns) {
   git.raw(['add', '-A'], root)
-  if (git.raw(['diff', '--cached', '--quiet'], root).status === 0) return null
+  if (git.raw(['diff', '--cached', '--quiet'], root).status === 0) return { sha: null }
   const r = git.raw(['commit', '-q', '-m', 'chore(spec): migrate v7 → v8'], root)
-  if (r.status !== 0) { warns.push('migration commit failed: ' + (r.stderr || r.stdout).trim()); return null }
-  return git.headSha(root)
+  if (r.status !== 0) { warns.push('migration commit failed: ' + (r.stderr || r.stdout).trim()); return { sha: null, failed: true } }
+  return { sha: git.headSha(root) }
 }
 
 // Copies every git-dir file the apply deletes or rewrites, and the refs/spec-review refs (refs.txt,
@@ -329,6 +340,7 @@ function backup(root, p) {
 
 function apply(root, p) {
   const warns = []
+  let skipped = 0
   for (const o of p.ops) {
     const abs = path.resolve(root, o.path)
     if (o.op === 'tag') git.sh(['tag', 'spec-v7-final'], root)
@@ -339,7 +351,7 @@ function apply(root, p) {
       for (const f of p.fills) { const it = (q.items || []).find((i) => i.id === f.id); if (it && it[f.field] === undefined) it[f.field] = f.value }
       writeJson(abs, q)
     } else if (o.op === 'delete') fs.rmSync(abs, { recursive: true, force: true })
-    else if (o.op === 'archive') archive(root, o.path, o.to, warns)
+    else if (o.op === 'archive') { if (!archive(root, o.path, o.to, warns)) skipped++ }
     else if (o.op === 'extract') {
       const text = fs.readFileSync(abs, 'utf8')
       const fm = /^---\n[\s\S]*?\n---\n/.exec(text)
@@ -353,7 +365,7 @@ function apply(root, p) {
       if (keep.trim()) fs.writeFileSync(abs, keep); else fs.rmSync(abs)
     }
   }
-  return warns
+  return { warns, skipped }
 }
 
 function main(argv) {
@@ -373,8 +385,9 @@ function main(argv) {
     }
   }
   const saved = doApply && p.ops.length ? backup(root, p) : null
-  const applyWarns = doApply ? apply(root, p) : []
-  const sha = doApply && p.ops.length ? commit(root, applyWarns) : null
+  const { warns: applyWarns, skipped } = doApply ? apply(root, p) : { warns: [], skipped: 0 }
+  const { sha, failed } = doApply && p.ops.length ? commit(root, applyWarns) : { sha: null }
+  const done = p.ops.length - skipped
   const counts = {}
   for (const o of p.ops) counts[o.op] = (counts[o.op] || 0) + 1
   if (argv.includes('--json')) { process.stdout.write(JSON.stringify({ applied: doApply, commit: sha, backup: saved, counts, ...p, warns: [...p.warns, ...applyWarns] }) + '\n'); return 0 }
@@ -391,7 +404,7 @@ function main(argv) {
   if (p.owned.length) warns.push('left alone (user-owned): ' + p.owned.join(', '))
   if (p.listed.length) warns.push('left in place, review them: ' + p.listed.join('; '))
   process.stdout.write(render({
-    outcome: !p.ops.length ? '✅ nothing to migrate' : doApply ? `✅ migrated — ${p.ops.length} steps applied` : `plan — ${p.ops.length} steps, nothing changed`,
+    outcome: !p.ops.length ? '✅ nothing to migrate' : doApply ? (failed ? `⚠️ ${done} steps applied, migration commit failed` : done ? `✅ migrated — ${done} steps applied` : `⚠️ nothing applied — ${skipped} steps skipped`) : `plan — ${p.ops.length} steps, nothing changed`,
     bullets, warns, next: doApply || !p.ops.length ? '/spec:doctor' : 'node migrate.js --apply',
   }))
   return 0

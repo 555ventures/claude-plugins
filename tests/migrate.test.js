@@ -274,6 +274,83 @@ test('a live v8 fan-out is never a v7 leftover: plan keeps spec-fanout.json and 
   assert.ok(!p2.ops.some((o) => o.op === 'delete' && /spec-fanout\.json/.test(o.path)))
 })
 
+test('an already-migrated host is idempotent: shared v7/v8 names and names already archived plan nothing, the outcome is truthful', () => {
+  const { d, g } = migrated()
+  const c = path.join(d, '.git')
+  // live v8 state under names v7 shared, and v7 names the migration already archived, back in place
+  fs.writeFileSync(path.join(c, 'spec-fanout.json'), 'null')
+  fs.mkdirSync(path.join(c, 'spec-run-cache')); fs.writeFileSync(path.join(c, 'spec-run-cache/x.json'), '{}')
+  fs.writeFileSync(path.join(d, '.claude/spec-session.json'), '{}'); fs.writeFileSync(path.join(c, 'spec-queue-done.json'), '{"items":[]}')
+  assert.ok(fs.existsSync(path.join(d, 'docs/archive/v7/spec-session.json')) && fs.existsSync(path.join(d, 'docs/archive/v7/spec-queue-done.json')))
+  const head = g('rev-parse', 'HEAD').trim()
+  assert.deepStrictEqual(mig(d).ops, [])
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /✅ nothing to migrate/)
+  assert.ok(fs.existsSync(path.join(c, 'spec-fanout.json')) && fs.existsSync(path.join(c, 'spec-run-cache/x.json')), 'live v8 state kept')
+  assert.ok(fs.existsSync(path.join(d, '.claude/spec-session.json')) && fs.existsSync(path.join(c, 'spec-queue-done.json')))
+  assert.strictEqual(g('rev-parse', 'HEAD').trim(), head)
+})
+
+test('a v7 host whose session file is already archived still migrates fully, the plan leaving that one name alone', () => {
+  const { d } = synthetic()
+  fs.mkdirSync(path.join(d, 'docs/archive/v7'), { recursive: true }); fs.writeFileSync(path.join(d, 'docs/archive/v7/spec-session.json'), 'old')
+  const p = mig(d)
+  assert.ok(!p.ops.some((o) => /spec-session/.test(o.path)), JSON.stringify(p.ops))
+  assert.ok(p.ops.some((o) => o.op === 'delete' && /spec-fanout\.json/.test(o.path)) && p.ops.some((o) => o.op === 'delete' && /spec-run-cache/.test(o.path)))
+  execFileSync('git', ['-C', d, 'add', '-A']); execFileSync('git', ['-C', d, 'commit', '-q', '-m', 'seed archive'])
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.match(r.stdout, new RegExp(`✅ migrated — ${p.ops.length} steps applied`))
+  assert.ok(!fs.existsSync(path.join(d, '.git/spec-fanout.json')) && !fs.existsSync(path.join(d, '.git/spec-run-cache')))
+})
+
+// A host whose git dir holds only the names v7 and v8 share, beside the given config.
+function sharedNamesHost(config, fanout) {
+  const d = tmpdir('mig')
+  fs.mkdirSync(path.join(d, '.claude'))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify(config))
+  const g = gitRepo(d)
+  fs.writeFileSync(path.join(d, '.git/spec-fanout.json'), fanout)
+  fs.mkdirSync(path.join(d, '.git/spec-run-cache')); fs.writeFileSync(path.join(d, '.git/spec-run-cache/x.json'), '{}')
+  return { d, g }
+}
+
+for (const key of ['generatedBy', 'contractHash', 'policy', 'gateCommand']) {
+  test(`a config carrying the v7-only key ${key} is v7 evidence: the shared names go, the tag is made, a second run plans nothing`, () => {
+    const { d, g } = sharedNamesHost({ testCommand: 'true', [key]: key === 'policy' ? { mergeStrategy: 'squash' } : 'x' }, '{"lanes":[],"wave":1}')
+    const c = path.join(d, '.git')
+    const p = mig(d)
+    assert.strictEqual(p.ops[0].op, 'tag', JSON.stringify(p.ops))
+    for (const n of ['spec-fanout.json', 'spec-run-cache']) assert.ok(p.ops.some((o) => o.op === 'delete' && o.path === path.join(c, n)), n + ' planned: ' + JSON.stringify(p.ops))
+    mig(d, '--apply')
+    assert.ok(g('tag', '-l', 'spec-v7-final').trim())
+    assert.ok(!fs.existsSync(path.join(c, 'spec-fanout.json')) && !fs.existsSync(path.join(c, 'spec-run-cache')))
+    assert.ok(!(key in JSON.parse(fs.readFileSync(path.join(d, '.claude/spec.config.json'), 'utf8'))))
+    // v8 state under the shared names, after the migration: a second run leaves it alone
+    fs.writeFileSync(path.join(c, 'spec-fanout.json'), 'null'); fs.mkdirSync(path.join(c, 'spec-run-cache'))
+    assert.deepStrictEqual(mig(d).ops, [])
+  })
+}
+
+test('a plain v8 config trim is no v7 evidence: no tag, and the live v8 state under the shared names is kept', () => {
+  const { d, g } = sharedNamesHost({ testCommand: 'true', staleKey: 1 }, 'null')
+  const c = path.join(d, '.git')
+  const p = mig(d)
+  assert.ok(p.ops.some((o) => o.op === 'config'), JSON.stringify(p.ops))
+  assert.ok(!p.ops.some((o) => o.op === 'tag' || o.op === 'delete'), JSON.stringify(p.ops))
+  mig(d, '--apply')
+  assert.strictEqual(g('tag', '-l', 'spec-v7-final').trim(), '')
+  assert.ok(fs.existsSync(path.join(c, 'spec-fanout.json')) && fs.existsSync(path.join(c, 'spec-run-cache/x.json')))
+})
+
+test('a failed migration commit is not reported as a completed migration', () => {
+  const { d } = synthetic()
+  fs.writeFileSync(path.join(d, '.git/hooks/pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.doesNotMatch(r.stdout, /✅ migrated/)
+  assert.match(r.stdout, /migration commit failed/)
+})
+
 // ---- spec 20261105/12: the queue converts to version 3 ----------------------------------------
 
 const convert = (items, extra = {}) => {

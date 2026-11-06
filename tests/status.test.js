@@ -8,6 +8,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { SPEC, ROOT, tmpdir, gitRepo, runNode, v7Scripts, v1Queue } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
+const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
 
 const w = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
 const GOLD = (n) => fs.readFileSync(path.join(__dirname, 'fixtures', 'status', n), 'utf8')
@@ -100,7 +101,7 @@ function fullHost({ openBrief = false } = {}) {
     { id: 'q17', kind: 'brief', payload: '77' },
     { id: 'q18', kind: 'brief', payload: '07' },
   ].map((i) => ({ added: '2026-11-01T00:00:00.000Z', ...i }))
-  st.writeQueue(d, { version: 2, seq: 18, items })
+  Q.write(d, { version: 3, seq: 18, items })
   st.writeFanout(d, { step: 'WAIT', batch: [] })
   w(d, '.claude/pending-question.json', JSON.stringify({ lane: 'root', question: 'which?', options: [], answer: null }))
   return d
@@ -156,7 +157,7 @@ const lines = (r) => r.stdout.split('\n')
 const small = (files, queue) => {
   const d = tmpdir('status'); gitRepo(d)
   for (const [rel, text] of Object.entries(files)) w(d, rel, text)
-  if (queue) st.writeQueue(d, { version: 2, seq: queue.length, items: queue.map((i, n) => ({ id: 'q' + (n + 1), added: '2026-11-01T00:00:00.000Z', ...i })) })
+  if (queue) Q.write(d, { version: 3, seq: queue.length, items: queue.map((i, n) => ({ id: 'q' + (n + 1), added: '2026-11-01T00:00:00.000Z', ...i })) })
   return d
 }
 const rm = (d, rel) => fs.rmSync(path.join(d, rel), { recursive: true, force: true })

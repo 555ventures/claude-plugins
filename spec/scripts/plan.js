@@ -3,7 +3,8 @@
 // validates it, locks it and (in a git repo) commits it on the current branch, so lanes branch with it.
 const fs = require('fs')
 const path = require('path')
-const { readSpec, writeStatus, writeText, readText, readQueue, decisionRows } = require('./lib/state')
+const { readSpec, writeStatus, writeText, readText, decisionRows } = require('./lib/state')
+const Q = require('./lib/queue')
 const git = require('./lib/git')
 
 const REQUIRED = ['Intent', 'Goal', 'Decisions', 'File Plan', 'Acceptance Criteria', 'Assumptions']
@@ -62,7 +63,7 @@ function lock(root, arg, confirmed) {
     git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel, ...docs], root)
   }
   let queued = false // no queue outside git
-  try { queued = readQueue(root).items.some((i) => !i.done && i.payload === rel.split(path.sep).join('/')) } catch { /* not a repo */ }
+  try { queued = Q.open(Q.read(root)).some((i) => i.payload === rel.split(path.sep).join('/')) } catch (e) { if (e.exit === 2) throw e /* an unmigrated queue stops here */ }
   return `✅ spec hardened & locked — ${rel}\nNext: ${queued ? '/spec:run' : '/spec:queue add'} ${rel}`
 }
 

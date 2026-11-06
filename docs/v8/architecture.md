@@ -50,7 +50,7 @@ per file; writes are atomic (tmp + rename).
 | `.claude/spec.config.json` | `readConfig(root)` | Keys in §3. Missing file → `{}` with defaults applied. |
 | `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, title, sections, intent, filePlan, acs, markers}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. |
 | `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | `<spec>` = spec path minus `.md`. One sidecar per in-flight spec. Gitignored (`specs/**/*.run/`). Shape in §4. |
-| `<git-common-dir>/spec-queue.json` | `readQueue(root)`, `writeQueue(root, q)` | `{version: 2, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?, type?, after?}` (`type` plan\|prototype\|fix\|decide, prompt only; `after` `{brief: "NN"}` or `{spec: "specs/…md"}`). |
+| `<git-common-dir>/spec-queue.json` | `lib/queue.js`: `read(root)`, `write(root, q)`, `add`, `tick`, `reconcile`, `paste` — the only owner; `state.js` holds no queue code | `{version: 3, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?}` (`type` plan\|prototype\|fix\|decide, prompt only, the only carrier of the command; `spec?` only on `type: fix`, the bound spec; `payload` bare text; `after` `{brief: "NN"}` or `{spec: "specs/…md"}`). Strict read: another version is refused, naming `/spec:migrate`. |
 | `<git-common-dir>/spec-fanout.json` | `readFanout`, `writeFanout` | `{step, batch: [{spec, worktree, branch, status, question?}], started}` |
 | `.claude/pending-question.json` | in `lib/pending.js` | Lane question relay. Doc `{lane, question, options: [{label, description?}], writtenAt, answer: {label, by, at} \| null}`. |
 | `<git-dir>/spec-lane-open` | `isLane`, `markLane`, `unmarkLane` in `lib/pending.js` | Lane marker (private git dir of the lane worktree); read by `block-worker-git.sh`. |
@@ -179,7 +179,7 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
 
 ## 9. Other drivers
 
-- `queue.js`: `next|list|add|move|done|show`. ≤ 200 LOC. Duplicate payload refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done specs, never a brief (only `done` closes one): `next` skips a finished brief, `list` tags it `✔ specs done`.
+- `queue.js`: `next|list|add|move|done|show`, the CLI over `lib/queue.js` (the queue's one owner: file, version, item shape, `parse`, `add`, `tick`, `reconcile`, `paste`; ≤ 200 LOC; no script outside it, the CLI and `migrate.js` touches items — `tests/queue.test.js` walks `spec/scripts/`). Duplicate refused. `add --type/--after`; `next` and `list` honour the `after` gate (`⏳ after`); `reconcile` ticks done specs, never a brief (only `done` closes one): `next` skips a finished brief, `list` tags it `✔ specs done`.
 - `status.js` (≤ 400 LOC): the dashboard, v7's screen drawn from `lib/next.js`. Roadmap (collapsed
   ranges with phase and `n/m` bar, ✅/🔨/⬜/⛔), 🎯 Next (`qNN` prompt rows, then
   `⚡ N parallel lanes — first stays on main, each other lane gets a worktree (/git:enter-worktree):` with `🔶`
@@ -229,10 +229,11 @@ Later builders: use these, do not re-derive them.
   `writeJson/writeText/readJson/readText` (atomic tmp+rename). `readConfig` merges defaults key by
   key, objects one level deep. `intent` = `{asked, build[], notTouch[], architecture: false | true |
   '<what>'}`; `filePlan` rows `{path, action (upper-case), summary}` found by header name;
-  `acs` = `[{id, text}]`; `markers` = count of `[NEEDS CLARIFICATION:` in the body. `readQueue` of
-  an absent file → `{version: 2, seq: 0, items: []}`; `readFanout`/`readRun`/`readGenesis` → `null`.
+  `acs` = `[{id, text}]`; `markers` = count of `[NEEDS CLARIFICATION:` in the body. The queue file is not
+  here: `lib/queue.js` owns it (an absent file reads `{version: 3, seq: 0, items: []}`); `readFanout`/`readRun`/`readGenesis` → `null`.
   `readProto(root, stem)` → `{status, pins, contract}` (each `null` when absent); `writeProto` and
   `writeMocks(root, {status?, seed?})` write only the keys given.
+- `lib/queue.js`: the one owner of the queue (≤ 200 LOC, no CLI): `VERSION`, `TYPES`, `CMD_TYPES`, `queuePath`, `kindOf`, `briefNo`, `parse(text, type)` (the only reader of typed text), `read` (strict: version 3 or a refusal naming `/spec:migrate`), `write`, `open`, `reconcile`, `add(root, fields, {top})` (the door; dedupe), `tick(root, pred)`, `text`, `paste`. `/spec:migrate` is the only converter of older files (ADR-0042).
 - `lib/work.js`: the one reader of specs and roadmap briefs (≤ 250 LOC, no CLI): `normBrief`, `briefOrd`, `readSpecs(root)`, `readBriefs(root, specs)` (brief status `unplanned|in-flight|done|superseded`, a brief is done when its live specs are done), `gateWhy`. `state.js` adds `liveRun`/`specState`: a run sidecar in the root or the lane worktree makes a spec `implementing`.
 - `driver.js`: `makeDriver({name, specArg, load, save, derive, steps, script?})` returns
   `main(argv) → exit code` (script does `process.exitCode = main()`). `derive(state, ctx)` returns
@@ -301,10 +302,10 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
 - **The turn ends at REPORT.** `reported` clears the state and the driver stops at its checkpoint; REPORT's
   next line counts the runnable specs and fixes left and says `/clear`, then `/spec:fanout`. The next bare
   run plans.
-- **Fix lanes.** Every pending queue item of type `fix` whose payload is `/spec:fix …` is a lane, picked
-  after the runnable specs (spec-bound fixes first). With a spec path (`/spec:fix <spec> — <symptom>`) the
+- **Fix lanes.** Every pending queue item of type `fix` is a lane, picked
+  after the runnable specs (spec-bound fixes first). Bound to a `spec` (pasted `/spec:fix <spec> — <symptom>`) the
   lane is `fix-<stem>`, `.claude/worktrees/fix-<stem>`, branch `fix/<stem>`, picked once the spec is out of
-  any live lane, prompt `/spec:run <spec> --root <wt> --fix <symptom>`. Without one it is `fix-<slug>` (the
+  any live lane, prompt `/spec:run <spec> --root <wt> --fix <symptom>`. Spec-less it is `fix-<slug>` (the
   first six words of the symptom plus six hex of its sha1), branch `fix/<slug>`, prompt
   `/spec:run --fix <symptom> --root <wt>`, and its run state lives under `<git-common-dir>/spec-fix/<slug>.run/`
   (shared by every worktree, never tracked, so no gitignore line). `run.js` accepts `--fix` as a lane or

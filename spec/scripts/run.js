@@ -23,7 +23,7 @@ const host = require('./lib/host')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
 const { render } = require('./lib/report')
-const queue = require('./queue')
+const Q = require('./lib/queue')
 
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2
@@ -126,6 +126,7 @@ function go(state, step, extra = {}) {
 function load(ctx) {
   const fix = ctx.flags.fix
   if (fix !== undefined && (typeof fix !== 'string' || !fix.trim())) refuse('--fix needs a symptom: --fix "<symptom>"')
+  Q.read(ctx.root) // an unmigrated queue stops the run before it changes anything: exit 2, naming /spec:migrate
   const s = specInfo(ctx)
   const ignored = (p) => git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', p], ctx.root).status !== 1 // 0 ignored; 128 (e.g. a symlinked dir) is not "missing"; the repo's own ignores only
   // A spec-less fix keeps its state under the git dir (never tracked) and, in place, makes no worktree.
@@ -390,10 +391,8 @@ function finish(state, ctx) {
   if (state.marked) pending.unmarkLane(wt)
   const rm = state.inPlace ? { removed: true } : git.worktreeRemove(ctx.root, wt, { deleteBranch: state.mergeSha ? state.branch : undefined })
   // Tick this spec's queue item; Next is whatever the queue holds after it.
-  const q = st.readQueue(ctx.root)
-  const mine = state.fix ? [] : queue.pending(q).filter((i) => i.kind === 'spec' && path.resolve(ctx.root, i.payload) === s.abs)
-  if (mine.length) { for (const i of mine) i.done = new Date().toISOString(); st.writeQueue(ctx.root, q) }
-  const head = queue.pending(q)[0]
+  if (!state.fix) Q.tick(ctx.root, (i) => i.kind === 'spec' && path.resolve(ctx.root, i.payload) === s.abs)
+  const head = Q.open(Q.read(ctx.root))[0]
   const tg = state.trunkGate
   const findings = (state.review && state.review.findings) || []
   state.report = render({
@@ -410,7 +409,7 @@ function finish(state, ctx) {
       ...findings.filter((f) => f.severity !== 'blocking').map((f) => `${f.severity}: ${f.file || ''}${f.line ? ':' + f.line : ''} ${f.summary || ''}`)],
     blocks: tg && tg.status === 'red' ? `trunk gate red after the merge:\n${tg.output_tail}` : null,
     artifacts: s.rel,
-    next: tg && tg.status === 'red' ? `/spec:fix trunk gate red after merging ${s.rel}` : head ? queue.pasteLine(ctx.root, head) : undefined,
+    next: tg && tg.status === 'red' ? `/spec:fix trunk gate red after merging ${s.rel}` : head ? Q.paste(ctx.root, head) : undefined,
   })
   return go(state, 'DONE', { ended: true })
 }
@@ -709,16 +708,6 @@ function recordRuling(state, ctx, text, at) {
   return id
 }
 
-function queuePrompt(ctx, payload) {
-  const q = st.readQueue(ctx.root)
-  if (!q.items.some((i) => !i.done && i.payload === payload)) {
-    q.seq = (q.seq || 0) + 1
-    const type = (/^\/spec:(fix|plan|prototype) /.exec(payload) || [])[1]
-    q.items.push({ id: 'q' + q.seq, kind: 'prompt', ...(type ? { type } : {}), payload, added: new Date().toISOString() })
-    st.writeQueue(ctx.root, q)
-  }
-}
-
 // The fix is not a fix: the cause needs an architecture or behaviour change. Whatever the builder added is
 // discarded (the files that were untracked when the run opened stay), /spec:plan is queued with the diagnosis,
 // and the run ends. In a lane the step stays as an ending like PARKED; fanout reports it.
@@ -727,10 +716,10 @@ function endNeedsPlan(state, ctx, why) {
   git.sh(['reset', '-q', '--hard', state.lane ? state.base : 'HEAD'], wt)
   const kept = new Set(state.untracked0 || [])
   for (const f of git.sh(['ls-files', '--others', '--exclude-standard'], wt).split('\n').filter(Boolean)) if (!kept.has(f)) fs.rmSync(path.join(wt, f), { recursive: true, force: true })
-  const payload = `/spec:plan ${state.fix.symptom.replace(/\s+/g, ' ')} — ${why}`
-  queuePrompt(ctx, payload)
+  const fields = { payload: `${state.fix.symptom.replace(/\s+/g, ' ')} — ${why}`, type: 'plan' }
+  const queued = Q.add(ctx.root, fields) || { kind: 'prompt', ...fields } // null: the same plan is already open
   if (state.marked) pending.unmarkLane(wt)
-  const report = render({ outcome: `🚫 needs a spec — ${why}`, queued: `queued ${payload}`, next: '/spec:queue next' })
+  const report = render({ outcome: `🚫 needs a spec — ${why}`, queued: `queued ${Q.paste(ctx.root, queued)}`, next: '/spec:queue next' })
   return go(state, 'NEEDS_PLAN', { ended: !state.lane, report, needsPlan: why })
 }
 
@@ -846,7 +835,7 @@ const steps = {
     const s = specInfo(ctx)
     if (c === 'separate') {
       restoreFromBase(state, ctx, state.scope)
-      queuePrompt(ctx, `follow-up: ${s.rel} changed ${state.scope.join(', ')} outside its File Plan — plan it`)
+      Q.add(ctx.root, { payload: `follow-up: ${s.rel} changed ${state.scope.join(', ')} outside its File Plan — plan it` })
       delete state.scope
       return go(state, 'GATE')
     }
@@ -857,9 +846,9 @@ const steps = {
         : state.why === 'scope' ? `changed files outside its File Plan: ${state.scope.join(', ')}`
           : state.why === 'gate' ? redLine(state.gate.output_tail)
             : (state.review.findings.find((f) => f.severity === 'blocking') || {}).summary || 'blocking review findings'
-    const payload = s.rel ? `/spec:fix ${s.rel} — ${first.trim()}` : `/spec:fix ${state.fix.symptom.replace(/\s+/g, ' ')}`
-    queuePrompt(ctx, payload)
-    return endRun(state, ctx, 'hardened', `⏸️ ${s.id} parked; a fix is queued`, { queued: payload, next: '/spec:queue next' })
+    const fields = s.rel ? { payload: first.trim(), spec: s.rel, type: 'fix' } : { payload: state.fix.symptom.replace(/\s+/g, ' '), type: 'fix' }
+    const queued = Q.add(ctx.root, fields) || { kind: 'prompt', ...fields } // null: the same fix is already open
+    return endRun(state, ctx, 'hardened', `⏸️ ${s.id} parked; a fix is queued`, { queued: Q.paste(ctx.root, queued), next: '/spec:queue next' })
   },
   'conflicts-resolved'(state, flags, ctx) {
     const main = mainRoot(ctx.root)

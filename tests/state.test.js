@@ -162,15 +162,12 @@ test('run sidecar round-trips next to the spec and clears completely', () => {
   assert.ok(!fs.existsSync(S.runDir(p)), 'DONE must leave no sidecar behind')
 })
 
-test('queue and fanout live in the git common dir, shared by every worktree', () => {
+test('fanout lives in the git common dir, shared by every worktree', () => {
   const root = tmpdir('q')
   const g = gitRepo(root)
   const wt = path.join(root, '.claude', 'worktrees', 'lane')
   g('worktree', 'add', '-q', '-b', 'lane', wt)
-  assert.deepStrictEqual(S.readQueue(root), { version: 2, seq: 0, items: [] }, 'an absent queue reads as empty')
-  S.writeQueue(wt, { version: 2, seq: 1, items: [{ id: 'q1', kind: 'prompt', payload: 'x' }] })
-  assert.ok(fs.existsSync(path.join(root, '.git', 'spec-queue.json')), 'the queue must sit in the common git dir, not the checkout')
-  assert.strictEqual(S.readQueue(root).items[0].id, 'q1', 'a lane write must be visible from the main root')
+  assert.ok(!('readQueue' in S) && !('writeQueue' in S), 'the queue file belongs to lib/queue.js')
   assert.strictEqual(S.readFanout(root), null, 'no fanout file means no batch')
   S.writeFanout(root, { step: 'PLAN', batch: [] })
   assert.strictEqual(S.readFanout(wt).step, 'PLAN', 'fanout state must be shared across worktrees')

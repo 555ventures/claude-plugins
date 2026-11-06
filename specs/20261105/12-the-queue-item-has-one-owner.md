@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: done
 area: queue
 depends_on: [specs/20261105/11-the-batch-tells-the-rest-of-the-truth.md]
 brief: n/a
@@ -95,3 +95,10 @@ A queue item means one thing everywhere: status, `queue next`, fanout, run and p
 - A4: `genesis.js`'s dedupe moving to open items only changes nothing on a greenfield repo, where genesis runs once — if false: the test shows the double row and genesis keeps a check over done items through `read`.
 - A5: The seed-call inventory (`tests/fanout`, `genesis`, `migrate`, `prototype`, `queue`, `run`, `state`, `status`) is a prediction — if another test seeds the queue: move it to the owner in the same batch; never loosen the strict read.
 - A6: Spec 11 lands first; its `fanout.js` edits touch neither PLAN's no-lane branch nor REPORT's `next` — if false: rebase on it.
+
+## As built
+
+- No deviation from the spec as amended.
+- docs/v8/interface-contract.md:37 The §2 fanout driver row still describes the fix lane by the old text criterion (a queued `/spec:fix …` item, bound 'with a spec path') while §7 now says the lane is picked by `type: fix` and bound by `spec`; D9 named §3 and §7 only, so this row was left behind and now contradicts §7.
+- spec/scripts/migrate.js:300 A host whose fan-out is live when the plugin is upgraded has no command that can proceed: `migrate --apply` refuses while a fan-out is in flight and tells the user to finish or dismiss its lanes, but every `run.js` invocation now reads the queue first (exit 2 on a version 1/2 file) and fanout's return/report path reads and ticks it too, so the lanes cannot finish; D4 records the refusal as protection and migrate.md gains no 'finish fan-outs before upgrading' note.
+- spec/scripts/lib/queue.js:501 `add` takes a `spec` field without requiring `type: 'fix'`, so a caller passing `{payload, spec}` alone stores an item D1 forbids (`spec` only on `type: fix`): `paste` renders it as a bare `specs/x.md — words` note and fanout never picks it; every current caller passes the type, so this is a guard the owner is missing rather than a live bug.

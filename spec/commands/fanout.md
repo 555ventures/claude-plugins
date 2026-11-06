@@ -10,8 +10,9 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/fanout.js $ARGUMENTS`.
 
 - **Bare (AUTO)**: the driver picks the batch (📌 Auto-picked) and asks nothing; mark `planned`. A queued
-  `/spec:fix …` item is a fix lane: with a spec path `fix-<stem>`, without one `fix-<slug>`; both are picked
+  `type: fix` item is a fix lane: bound to a spec `fix-<stem>`, spec-less `fix-<slug>`; both are picked
   after the runnable specs. A lane that ends `NEEDS_PLAN` queued `/spec:plan` and is reported.
+  PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
 - **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane

@@ -13,15 +13,16 @@
 // waitingOn) is not done waits. The session only dispatches agents and relays questions.
 // A lane whose base is older than trunk is gated on the rebased tree before the fast-forward; red sends
 // it back to its own /spec:run at GATE. Every lane-touching mark bumps s.seq and mergeLane stamps lane.last,
-// so the `after` hook prints what the mark landed, sent back or held. Every queued `/spec:fix …` item is a fix lane (`run.js --fix`):
-// `<spec> — <symptom>` is bound to its spec (fix-<stem>), any other text is a spec-less fix (fix-<slug>,
-// its run state under the git common dir), picked after the specs. REPORT ends the turn: the next bare run plans.
+// so the `after` hook prints what the mark landed, sent back or held. Every queued `type: fix` item is a fix lane (`run.js --fix`):
+// one with a `spec` is bound to it (fix-<stem>), any other is a spec-less fix (fix-<slug>, its run state
+// under the git common dir), picked after the specs. The queue is read through lib/queue.js only. REPORT ends the turn: the next bare run plans.
 // Lane mode contract with run.js: architecture.md §11 "fanout.js notes".
 
 const fs = require('fs')
 const path = require('path')
 const { makeDriver, parseArgv, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state')
+const Q = require('./lib/queue')
 const git = require('./lib/git')
 const host = require('./lib/host')
 const pending = require('./lib/pending')
@@ -56,17 +57,16 @@ function findLane(s, flags) {
 
 // ---- PLAN -------------------------------------------------------------------------------------
 
+// The open spec items; a spec that is done on disk counts as closed, as `queue list` shows it.
+const queuedSpecs = (root) => Q.open(Q.reconcile(root, Q.read(root))).filter((i) => i.kind === 'spec')
+
 function candidates(root) {
-  const list = EXPLICIT.length ? EXPLICIT
-    : st.readQueue(root).items.filter((i) => !i.done && i.kind === 'spec').map((i) => i.payload)
+  const list = EXPLICIT.length ? EXPLICIT : queuedSpecs(root).map((i) => i.payload)
   return [...new Set(list.map((p) => rel(root, p)))]
 }
 
-// Every queued `/spec:fix …` prompt item is a fix lane: bound to a spec when the text starts with a spec path,
-// else spec-less. Text that is not a /spec:fix prompt stays a paste.
-const FIX_RE = /^\/spec:fix (.+)$/
-const SPEC_FIX_RE = /^(specs\/\S+\.md)(?: — (.+))?$/
-const fixItems = (root) => st.readQueue(root).items.filter((i) => !i.done && i.kind === 'prompt' && i.type === 'fix' && FIX_RE.test(String(i.payload)))
+// Every open `type: fix` item is a fix lane: bound to its `spec` when it has one, else spec-less.
+const fixItems = (root) => Q.open(Q.reconcile(root, Q.read(root))).filter((i) => i.kind === 'prompt' && i.type === 'fix')
 const specWt = (root, spec) => path.join(root, '.claude', 'worktrees', 'spec-' + stemOf(spec))
 const fixWt = (root, spec) => path.join(root, '.claude', 'worktrees', 'fix-' + stemOf(spec))
 const slugWt = (root, slug) => path.join(root, '.claude', 'worktrees', 'fix-' + slug)
@@ -81,7 +81,7 @@ function eligible(root, opts = {}) {
   const waited = []
   const laneOf = new Map()
   const cache = {}
-  const queued = st.readQueue(root).items.filter((i) => !i.done && i.kind === 'spec')
+  const queued = queuedSpecs(root)
   const unmet = (spec, entry, written, label) => {
     const dep = rel(root, entry)
     if (dep === spec || !isSpecFile(root, dep)) return null // an entry with no file on disk is ignored
@@ -118,13 +118,11 @@ function eligible(root, opts = {}) {
   const fixing = new Set()
   const lessFixes = []
   if (!EXPLICIT.length) for (const item of fixItems(root)) {
-    const text = FIX_RE.exec(item.payload)[1].trim()
-    const bound = SPEC_FIX_RE.exec(text)
-    if (!bound) { lessFixes.push({ item, text }); continue }
-    const [, fixSpec, written] = bound
-    const spec = rel(root, fixSpec)
-    const symptom = (written || '').trim() || 'repair ' + stemOf(spec)
-    const wait = (why) => waited.push({ spec: item.payload, why })
+    if (!item.spec) { lessFixes.push(item); continue }
+    const spec = rel(root, item.spec)
+    const symptom = item.payload || 'repair ' + stemOf(spec)
+    const label = Q.paste(root, item)
+    const wait = (why) => waited.push({ spec: label, why })
     const doc = isSpecFile(root, spec) ? specDoc(path.join(root, spec)) : null
     if (!doc) { wait('fix item names no spec on disk'); continue }
     const status = doc.frontmatter.status || 'missing'
@@ -137,12 +135,14 @@ function eligible(root, opts = {}) {
     const g = work.gateWhy(root, item.after, cache)
     if (g) { wait('after ' + g); continue }
     fixing.add(spec)
-    ok.push({ fix: true, spec, symptom, item: item.id, title: `fix ${stemOf(spec)} — ${symptom}` })
+    ok.push({ fix: true, spec, symptom, payload: label, item: item.id, title: `fix ${stemOf(spec)} — ${symptom}` })
   }
-  for (const { item, text } of lessFixes) {
+  for (const item of lessFixes) {
+    const text = item.payload
+    const label = Q.paste(root, item)
     const slug = st.slugOf(text)
     const wt = slugWt(root, slug)
-    const wait = (why) => waited.push({ spec: item.payload, why })
+    const wait = (why) => waited.push({ spec: label, why })
     const run = st.readJson(st.fixRunPath(root, slug)) || {}
     // The ending is a marker only while its worktree is there to remove: the state lives under the git dir.
     if (ENDED.includes(run.step) && fs.existsSync(wt)) { wait(`its lane ended ${run.step} — see the report; remove ${path.relative(root, wt)} to run it again`); continue }
@@ -151,14 +151,14 @@ function eligible(root, opts = {}) {
     if (!why) { const g = work.gateWhy(root, item.after, cache); if (g) why = 'after ' + g }
     if (why) { wait(why); continue }
     fixing.add(slug)
-    ok.push({ fix: true, spec: null, slug, symptom: text, payload: item.payload, item: item.id, title: `fix — ${text}` })
+    ok.push({ fix: true, spec: null, slug, symptom: text, payload: label, item: item.id, title: `fix — ${text}` })
   }
   return { ok, waited, held }
 }
 
 function plan(root, config, auto = true) {
   const { ok, waited, held } = eligible(root, { lanes: config.lanes, auto })
-  for (const o of ok.slice(config.lanes)) waited.push({ spec: o.spec || o.payload, why: `all ${config.lanes} lanes are taken` })
+  for (const o of ok.slice(config.lanes)) waited.push({ spec: o.payload || o.spec, why: `all ${config.lanes} lanes are taken` })
   return { picked: ok.slice(0, config.lanes), waited, held }
 }
 
@@ -177,6 +177,22 @@ function pickBody(ok, cap) {
 
 const waitLines = (waited) => waited.map((w) => `${w.spec} waits — ${w.why}`)
 
+// Open items that are neither a lane, waiting nor held: each needs the user, with its reason. A spec item
+// is known by its path, a fix by its paste (the labels `eligible` uses); every open item appears once.
+const NEEDS = { plan: 'needs /spec:plan', prototype: 'needs /spec:prototype', decide: 'decide' }
+function needsYou(root, picked, waited, held) {
+  const seen = new Set([...picked.map((p) => p.payload || p.spec), ...waited.map((w) => w.spec), ...held.map((h) => h.spec)])
+  const out = []
+  for (const item of Q.open(Q.reconcile(root, Q.read(root)))) {
+    const key = item.kind === 'spec' ? rel(root, item.payload) : Q.paste(root, item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    const reason = item.kind === 'brief' ? NEEDS.plan : NEEDS[item.type] || 'plain note — paste by hand'
+    out.push({ item, line: `${item.id} needs you — ${reason}: ${Q.paste(root, item)}` })
+  }
+  return out
+}
+
 function derivePlan(ctx) {
   const root = ctx.root
   const config = st.readConfig(root)
@@ -187,15 +203,26 @@ function derivePlan(ctx) {
   if (picked.length && PICK) {
     return { name: 'PLAN', body: pickBody(eligible(root, { lanes: config.lanes, auto: false }).ok, config.lanes), mark: ['picked --label <title>', '[--label <title> …]', ...extra].join(' '), accepts: ['planned'] }
   }
+  const needs = EXPLICIT.length ? [] : needsYou(root, picked, waited, held)
   if (!picked.length) {
+    const opens = Q.open(Q.reconcile(root, Q.read(root)))
+    if (EXPLICIT.length) {
+      return { name: 'PLAN', body: render({ outcome: `⏸️ nothing runnable — ${waited.length} named spec(s) wait`, warns: waitLines(waited), next: 'nothing runnable — /spec:queue list' }) }
+    }
+    if (!opens.length) return { name: 'PLAN', body: render({ outcome: '✅ queue drained — nothing queued', next: 'nothing needs you — queue drained' }) }
     return {
       name: 'PLAN',
-      body: render({ outcome: '✅ queue drained — no hardened spec is runnable', warns: waitLines(waited), next: 'nothing needs you — queue drained' }),
+      body: render({
+        outcome: `⏸️ nothing runnable — ${opens.length} open item(s)`,
+        warns: [...waitLines(waited), ...(held.length ? [heldLine(held)] : []), ...needs.map((n) => n.line)],
+        next: needs.length ? Q.paste(root, needs[0].item) : 'nothing runnable — /spec:queue list',
+      }),
     }
   }
   const lines = [`📌 Auto-picked batch: ${picked.length} lane(s), in queue order`, ...picked.map((p, i) => `  lane ${i + 1}: ${p.spec || 'fix-' + p.slug}${p.fix ? ` — fix: ${p.symptom}` : ''}`)]
   if (waited.length) lines.push('', 'Waiting:', ...waitLines(waited).map((w) => '  ' + w))
   if (held.length) lines.push('', heldLine(held))
+  if (needs.length) lines.push('', ...needs.map((n) => n.line))
   lines.push('', 'Mark planned; the driver then creates the worktrees and prints the dispatch.')
   return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...extra].join(' '), accepts: ['picked'] }
 }
@@ -347,18 +374,8 @@ function deriveRelay(s, ctx) {
 
 // ---- MERGE ------------------------------------------------------------------------------------
 
-function tickQueue(root, spec) {
-  const q = st.readQueue(root)
-  let hit = false
-  for (const i of q.items) if (!i.done && i.kind === 'spec' && rel(root, i.payload) === spec) { i.done = now(); hit = true }
-  if (hit) st.writeQueue(root, q)
-}
-
-function tickItem(root, id) {
-  const q = st.readQueue(root)
-  const it = q.items.find((i) => !i.done && i.id === id)
-  if (it) { it.done = now(); st.writeQueue(root, q) }
-}
+const tickQueue = (root, spec) => Q.tick(root, (i) => i.kind === 'spec' && rel(root, i.payload) === spec)
+const tickItem = (root, id) => Q.tick(root, (i) => i.id === id)
 
 function finalize(s, ctx, lane) {
   const root = ctx.root
@@ -488,6 +505,7 @@ function deriveReport(s, ctx) {
   const left = plan(ctx.root, st.readConfig(ctx.root)).picked
   EXPLICIT = saved
   const fixes = left.filter((p) => p.fix).length
+  const opens = Q.open(Q.reconcile(ctx.root, Q.read(ctx.root))).length
   const trunkStatus = (l) => (specDoc(path.join(ctx.root, l.spec)) || { frontmatter: {} }).frontmatter.status || 'missing'
   const dismissedLine = (l) => {
     if (l.discarded) return `dismissed ${l.stem} — worktree and branch removed (wip ${l.wip || 'none'})`
@@ -511,7 +529,8 @@ function deriveReport(s, ctx) {
         ...dismissed.map(dismissedLine),
         ...waiting.map((l) => `waiting ${l.stem} — on ${l.on}; worktree kept at ${l.worktree}`),
       ],
-      next: left.length ? `${left.length - fixes} spec(s) and ${fixes} fix(es) left — /clear, then /spec:fanout to continue` : 'nothing needs you — queue drained',
+      next: left.length ? `${left.length - fixes} spec(s) and ${fixes} fix(es) left — /clear, then /spec:fanout to continue`
+        : opens ? `nothing runnable — ${opens} open item(s) need you: /spec:queue list` : 'nothing needs you — queue drained',
     }),
     mark: 'reported',
     accepts: ['dismissed'],

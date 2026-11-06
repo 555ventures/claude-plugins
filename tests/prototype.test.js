@@ -103,7 +103,7 @@ test('full chain: words → OPEN → ROUND → pins → approve → contract + q
   assert.strictEqual(g('log', '-1', '--format=%s'), `chore(proto): contract ${stem}\n`, 'the contract is committed on trunk')
   assert.strictEqual(g('status', '--porcelain', '--', 'design').trim(), '', 'nothing of the stem is left uncommitted')
   const q = JSON.parse(fs.readFileSync(path.join(root, '.git/spec-queue.json'), 'utf8'))
-  assert.deepStrictEqual(q.items.map((i) => i.payload), [`/spec:plan design/prototypes/${stem}/contract.json`])
+  assert.deepStrictEqual(q.items.map((i) => [i.kind, i.type, i.payload]), [['prompt', 'plan', `design/prototypes/${stem}/contract.json`]])
   assert.strictEqual(mark(root, stem, 'contracted').status, 2, 'a second contracted is out of step')
   assert.strictEqual(drive(root, [stem, '--state']).stdout.trim(), 'CONTRACTED')
 

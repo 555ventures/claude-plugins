@@ -929,3 +929,11 @@ test('AC-20261105-16-17 AC-20261105-16-24 the commands, contract, architecture, 
   const fix = read('spec/commands/fix.md').replace(/\s+/g, ' ')
   for (const t of ['--root', '--in-place', '<spec> — <symptom>', 'Edit', 'commands/run.md']) assert.ok(fix.includes(t), 'fix.md names ' + t)
 })
+
+test('add refuses a payload that opens with -- (a mistyped flag) and queues nothing', () => {
+  const d = repo()
+  const r = q(d, 'add', '--help')
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('unknown flag --help'), r.stderr)
+  assert.deepStrictEqual(Q.read(d).items, [], 'nothing was queued')
+})

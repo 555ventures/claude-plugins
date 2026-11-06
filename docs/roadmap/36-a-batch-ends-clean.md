@@ -49,7 +49,7 @@ its own lanes created, and tells the truth in every report:
   a migrate wipe). `gate-repaired` with no new commit is allowed and the MERGE_RED text says so
   (a flaky re-run needs no commit).
 - **The contract lists what exists.** interface-contract.md names the marks and flags the code
-  accepts and no others (`groom` is gone from § 7), and queue.js refuses a trailing `--type` or
+  accepts and no others, and queue.js refuses a trailing `--type` or
   `--after` with no value instead of ignoring it.
 
 ## Not in this brief

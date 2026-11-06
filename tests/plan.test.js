@@ -38,7 +38,7 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   assert.strictEqual(status(f), 'hardened')
 })
 
-test('lock refuses a File Plan that lists another spec file; its own spec, non-spec paths and prose pass', () => {
+test('lock refuses a File Plan that lists another spec file; its own spec and run dir, non-spec paths and prose pass', () => {
   const d = tmpdir('plan')
   const f = fresh(d, 'first')
   const text = fs.readFileSync(f, 'utf8')
@@ -49,6 +49,7 @@ test('lock refuses a File Plan that lists another spec file; its own spec, non-s
     ['`specs/20260101/01-old.md`', 'specs/20260101/01-old.md'],
     ['./specs/20260101/01-old.md', 'specs/20260101/01-old.md'],
     ['src/a.js, specs/20260101/02-older.md', 'specs/20260101/02-older.md'],
+    ['specs/20260101/{01-old,02-older}.md', 'specs/20260101/01-old.md, specs/20260101/02-older.md'],
   ]) {
     fs.writeFileSync(f, planned(row))
     const r = plan(d, 'lock', f)
@@ -56,7 +57,9 @@ test('lock refuses a File Plan that lists another spec file; its own spec, non-s
     assert.ok(r.stderr.includes(`File Plan lists other spec files: ${named} —`), r.stderr)
     assert.strictEqual(status(f), 'draft')
   }
-  fs.writeFileSync(f, planned(own, 'specs/README.txt', 'docs/specs/guide.md') + '\n## After merge\n\nEdit specs/20260101/01-old.md on the trunk.\n')
+  fs.writeFileSync(f, text.replace('## File Plan', '## File Plan\n\n| specs/20260101/01-old.md | MODIFY | x |\n')) // a table with no header row
+  assert.ok(plan(d, 'lock', f).stderr.includes('File Plan lists other spec files: specs/20260101/01-old.md —'))
+  fs.writeFileSync(f, planned(own, own.replace(/\.md$/, '.run/evidence.md'), 'specs/README.txt', 'docs/specs/guide.md') + '\n## After merge\n\nEdit specs/20260101/01-old.md on the trunk.\n')
   const r = plan(d, 'lock', f)
   assert.strictEqual(r.status, 0, r.stderr)
   assert.strictEqual(status(f), 'hardened')

@@ -44,8 +44,8 @@ function lock(root, arg, confirmed) {
   if (left.length) throw new Refusal(`template placeholders left: ${left.join(' ')} — fill them in first`)
   // Every gate refuses a build that edits another spec (run.js `specEdits`), so such a plan can never pass.
   const own = path.relative(root, file).split(path.sep).join('/')
-  const others = s.filePaths.map((p) => p.replace(/^\.\//, '')).filter((p) => isSpecText(p) && p !== own)
-  if (others.length) throw new Refusal(`File Plan lists other spec files: ${others.join(', ')} — a build may not edit them. Edit them on the trunk yourself, before lock or after the merge, and drop the rows`)
+  const others = s.filePaths.map((p) => p.replace(/^\.\//, '')).filter((p) => isSpecText(p) && p !== own && !p.startsWith(own.replace(/\.md$/, '.run/')))
+  if (others.length) throw new Refusal(`File Plan lists other spec files: ${others.join(', ')} — a build may not edit them. Drop the rows and edit them on the trunk yourself: commit before lock, or edit after the merge`)
   if (s.frontmatter.architecture === true && !confirmed) throw new Refusal("architecture change — needs the user's yes; re-run with --confirmed")
   // A v7-era spec without an Intent section is unaffected.
   const intentKey = Object.keys(s.sections).find((k) => k === 'Intent' || k.startsWith('Intent '))

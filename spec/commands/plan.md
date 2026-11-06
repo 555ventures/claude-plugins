@@ -38,8 +38,10 @@ prototype contract's behaviour pins become acceptance criteria.
 5. `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js lock <path>` (add `--confirmed` after that yes)
    refuses while gaps or `<placeholders>` remain, and while the sign-off line says `none` for a
    `breaking: true` spec or a Decisions row that takes something away from users and carries no
-   `[asked:]` (it names the row; ask, then fill the line). Otherwise it locks, commits and prints
-   Next; run it.
+   `[asked:]` (it names the row; ask, then fill the line). It also refuses a File Plan that lists
+   another spec file, because a build may not edit one: drop the row and edit that spec on the
+   trunk, committed before lock or after the merge. Otherwise it locks, commits and prints Next;
+   run it.
 
 A brief may become several specs; use `depends_on` when one must land first. When the brief
 is fully planned run `/spec:queue done <NN>`; a brief folded into another gets

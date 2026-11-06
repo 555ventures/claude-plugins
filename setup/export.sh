@@ -29,11 +29,6 @@ jq 'del(.permissions, .feedbackSurveyState)' "$CLAUDE_DIR/settings.json" \
 [ -f "$CLAUDE_DIR/keybindings.json" ] && cp "$CLAUDE_DIR/keybindings.json" "$STAGE/"
 jq '.mcpServers // {}' "$HOME/.claude.json" > "$STAGE/mcp-servers.json"
 
-# Portable shell block (aliases/functions that reference the cloned plugin
-# repos, e.g. spec-status). Marked block in ~/.zshrc; empty file when absent.
-awk '/^# >>> claude-plugins shell setup >>>/,/^# <<< claude-plugins shell setup <<</' \
-  "$HOME/.zshrc" 2>/dev/null > "$STAGE/shellrc.snippet" || true
-
 # Directory-sourced marketplaces (local plugin repos) must exist on the
 # remote machine too — record their git remotes so the installer can clone.
 jq -r '(.extraKnownMarketplaces // {}) | to_entries[]
@@ -66,14 +61,10 @@ sed "s|__HOME__|$HOME|g" "$HERE/settings.json" > "$CLAUDE_DIR/settings.json"
 [ -d "$HERE/hooks" ] && cp -R "$HERE/hooks/." "$CLAUDE_DIR/hooks/"
 [ -f "$HERE/keybindings.json" ] && cp "$HERE/keybindings.json" "$CLAUDE_DIR/"
 
-# Shell block (spec-status etc.): replace any previous copy, then append.
-if [ -s "$HERE/shellrc.snippet" ]; then
-  touch "$HOME/.zshrc"
-  awk '/^# >>> claude-plugins shell setup >>>/{skip=1} !skip; /^# <<< claude-plugins shell setup <<</{skip=0}' \
-    "$HOME/.zshrc" > "$HOME/.zshrc.tmp" && mv "$HOME/.zshrc.tmp" "$HOME/.zshrc"
-  cat "$HERE/shellrc.snippet" >> "$HOME/.zshrc"
-  echo "Shell setup block installed in ~/.zshrc (spec-status etc.) — open a new shell to use it."
-fi
+# Shell shortcuts (spec-status etc.) live in the cloned repo's setup/shellrc.sh;
+# ~/.zshrc only sources it, so they follow the repo instead of going stale.
+SHELL_INSTALL="$HOME/Projects/claude-plugins/setup/install-shell.sh"
+[ -f "$SHELL_INSTALL" ] && bash "$SHELL_INSTALL"
 
 if command -v claude >/dev/null; then
   while read -r name; do

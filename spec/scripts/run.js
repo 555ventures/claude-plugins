@@ -18,6 +18,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 const { makeDriver, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state')
@@ -272,6 +273,17 @@ function specEdits(state, ctx) {
 
 const secs = (ms) => Math.round(ms / 1000)
 
+// The run files a builder writes (the driver and reviewer write diff.patch and findings.json): a round
+// that changes only these is a round, though the tree the gate keys on is the same.
+function builderFiles(ctx) {
+  const h = crypto.createHash('sha1')
+  for (const name of ['evidence.md', 'fix.json', 'as-built.md']) {
+    const f = runFile(ctx, name)
+    h.update(name + '\0' + (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '') + '\0')
+  }
+  return h.digest('hex')
+}
+
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx)
   const wt = wtOf(state, ctx)
@@ -293,7 +305,7 @@ function gateStep(state, ctx) {
   const ms = Date.now() - t0
   const red = g.status !== 0
   const tail = red && cfg.testFileCommand ? g.tail + '\n' + redCheck(state, wt) : g.tail
-  state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail, tree: g.tree, failing: g.failing || [], reruns, lockWaitMs: waited }
+  state.gate = { status: red ? 'red' : 'green', runId: g.runId, cached: g.cached, ms, output_tail: tail, tree: g.tree, files: builderFiles(ctx), failing: g.failing || [], reruns, lockWaitMs: waited }
   if (red) return state.attempts.repair >= REPAIR_CAP ? go(state, 'ESCALATE', { why: 'gate' }) : go(state, 'REPAIR')
   const edits = specEdits(state, ctx)
   if (edits.length) return go(state, 'ESCALATE', { why: 'spec-edit', specEdits: edits })
@@ -546,6 +558,7 @@ function reviewerBrief(state, ctx) {
     `Worktree: ${wtOf(state, ctx)}`,
     `Base: ${state.base}`,
     `Diff (working tree vs base): ${runFile(ctx, 'diff.patch')}`,
+    ...(fs.existsSync(runFile(ctx, 'evidence.md')) && fs.readFileSync(runFile(ctx, 'evidence.md'), 'utf8').trim() ? [`Evidence the builder recorded (not in the diff): ${runFile(ctx, 'evidence.md')}`] : []),
     ...(spec ? [`Spec: ${specPath}`] : []),
     `Write the findings JSON to: ${runFile(ctx, 'findings.json')}`,
     state.fix && !spec ? 'Files changed outside the File Plan: n/a (fix — it has no File Plan)' : `Files changed outside the File Plan: ${outsidePlan(state, ctx, spec, cfg).join(', ') || 'none'}${state.fix ? " (a fix's plan is the spec's File Plan plus its regression test)" : ''}`,
@@ -808,10 +821,11 @@ function endNeedsPlan(state, ctx, why) {
 const LANE_ASKS = ['waiting', 'unmet']
 const laneAsks = (state) => (state.spec ? LANE_ASKS : ['waiting']) // a spec-less fix has no Decisions or Assumptions to be unmet
 
-// A builder round changes the tree; a mark with the tree the last gate ran on spends the budget for nothing.
+// A builder round changes the tree or the run files it writes; a mark with both as the last gate saw them
+// spends the budget for nothing. Only REPAIR accepts regate.
 function unchanged(state, ctx) {
-  if (state.gate && state.gate.tree && host.treeSha(wtOf(state, ctx)) === state.gate.tree) {
-    refuse('nothing changed since the last gate — re-run the gate (mark regate) or dispatch a builder')
+  if (state.gate && state.gate.tree && host.treeSha(wtOf(state, ctx)) === state.gate.tree && builderFiles(ctx) === state.gate.files) {
+    refuse(`nothing changed since the last gate — ${state.step === 'REPAIR' ? 're-run the gate (mark regate) or ' : ''}dispatch a builder`)
   }
 }
 

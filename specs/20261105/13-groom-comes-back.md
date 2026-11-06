@@ -1,6 +1,6 @@
 ---
 date: 2026-11-05
-status: hardened
+status: done
 area: queue
 depends_on: []
 brief: n/a
@@ -80,3 +80,11 @@ breaking: false
 - A1: v7's `spec-status.js --json` and v8's `work.js` agree on spec and brief status for the fixture cases, as the status oracle already shows for its hosts — if false: the byte comparison fails, and the builder ports the missing rule into groom's view; a difference that needs v8's state changed is a question.
 - A2: v7's `brief.name` equals v8's slug name — if false: same remedy.
 - A3: A builder has no Agent tool, so the session flow cannot run in a lane. The real end-to-end run happens after merge, in the session: `/spec:queue groom` on a repo with flagged items, confirming the haiku checks, a 📌 tick and a question. This repo's queue is empty today — if no repo has flagged items: add a real flagged item for the run.
+
+## As built
+
+- `groom`'s code in `spec/scripts/queue.js` is written compactly (one-line helpers, the pending view inside `groom`) to stay within the 200-line cap `tests/work.test.js` enforces on that file; the logic is v7's.
+- The six ported helpers keep v7's names and take `Q.text(it)` (D3); `citesDoneSpec(item, ctx)` takes `ctx = {specStatus(rel), specRoot}` instead of v7's full `makeCtx` object, since groom needs only those two.
+- `queue.md` also names `queue.js show <id> --json` for the agents and says groom takes no flag but `--root`.
+- `lib/queue.js` gains two helpers past the six: `isSupersededBriefText` (v7's bold-only banner rule) and `v7Briefs`, because `work.js` also takes a plain `> Superseded by`; groom reads brief status through them and hands `gateWhy` a `cache.briefs` built from them, so D6's call stands and a plainly bannered or number-sharing brief gates as v7 did (A1 remedy).
+- A missing flag value no longer returns from the parser at once: it is held until the groom flag check has run, so every other subcommand keeps `queue: <flag> needs a value` and `groom` reports `unknown flag` (D8).

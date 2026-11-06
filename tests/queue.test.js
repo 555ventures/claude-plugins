@@ -3,7 +3,8 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { tmpdir, gitRepo, runNode, SPEC } = require('./helpers')
+const { spawnSync } = require('child_process')
+const { tmpdir, gitRepo, runNode, SPEC, ROOT, v7Scripts, v1Queue } = require('./helpers')
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
 
 function repo() {
@@ -454,4 +455,175 @@ test('AC-20261105-12-10 the contract, architecture, fanout.md, migrate.md and AD
   assert.ok(read('spec/commands/fanout.md').includes('PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty'))
   assert.ok(read('spec/commands/migrate.md').includes('and to the current queue version'))
   assert.match(read('docs/adr/0041-the-screen-is-v7s-derivation-on-v8-state.md').split('\n').slice(0, 8).join('\n'), /Amended by: docs\/adr\/0042-the-queue-item-has-one-owner\.md/)
+})
+
+// ---- spec 20261105/13: groom comes back --------------------------------------------------------
+// v7's own spec-queue.js groom runs on the host's v1 twin; queue.js groom must print the same bytes.
+
+const D = 'specs/20261101'
+const ago = (days) => new Date(Date.now() - days * 86400000 - 3600000).toISOString()
+const hostWith = (files, items) => {
+  const d = tmpdir('groom'); gitRepo(d)
+  for (const [rel, text] of Object.entries(files)) w(d, rel, text)
+  Q.write(d, { version: 3, seq: items.length, items: items.map((i, n) => ({ id: 'q' + (n + 1), added: new Date().toISOString(), ...i })) })
+  return d
+}
+const groom = (d, ...a) => q(d, 'groom', ...a)
+function v7Groom(host) {
+  const twin = v1Queue(host)
+  return spawnSync(process.execPath, [path.join(v7Scripts(), 'spec-queue.js'), 'groom'], { cwd: twin, encoding: 'utf8' })
+}
+const same = (d) => {
+  const mine = groom(d); const old = v7Groom(d)
+  assert.strictEqual(old.status, 0, old.stderr)
+  assert.strictEqual(mine.status, 0, mine.stderr)
+  assert.strictEqual(mine.stdout, old.stdout)
+  return mine.stdout
+}
+const baseFiles = {
+  'docs/roadmap/02-schema.md': '# 02 — Schema\n', 'docs/roadmap/03-rounds.md': '# 03 — Rounds\n', 'docs/roadmap/04-boards.md': '# 04 — Boards\n', 'docs/roadmap/05-extra.md': '# 05 — Extra\n',
+  [`${D}/01-done.md`]: sp('done'), [`${D}/02-sup.md`]: sp('superseded'), [`${D}/03-open.md`]: sp('hardened'), [`${D}/04-schema.md`]: sp('done', '02'),
+}
+
+function groomHost() {
+  const long = 'rework the whole notification pipeline so that every channel retries with backoff and the digest never sends twice to anyone'
+  return hostWith(baseFiles, [
+    { kind: 'prompt', type: 'plan', payload: `polish the output of ${D}/01-done.md` },
+    { kind: 'prompt', type: 'plan', payload: `revisit specs/20261101/01 for leftovers` },
+    { kind: 'prompt', type: 'plan', payload: `see ${D}/02-sup.md again` },
+    { kind: 'brief', payload: '03', after: { brief: '02' } },
+    { kind: 'spec', payload: `${D}/03-open.md`, after: { spec: `${D}/01-done.md` } },
+    { kind: 'prompt', type: 'plan', payload: 'wait for rounds', after: { brief: '03' } },
+    { kind: 'prompt', type: 'plan', payload: 'ancient ungated thing', added: ago(20) },
+    { kind: 'prompt', type: 'plan', payload: 'ancient gated thing', added: ago(20), after: { brief: '03' } },
+    { kind: 'prompt', type: 'plan', payload: 'migrate the billing exports into the warehouse nightly' },
+    { kind: 'prompt', type: 'plan', payload: 'migrate billing exports warehouse nightly job' },
+    { kind: 'prompt', type: 'plan', payload: 'design/prototypes/a/contract.json' },
+    { kind: 'prompt', type: 'plan', payload: './design/prototypes/a/contract.json' },
+    { kind: 'prompt', type: 'plan', payload: 'design/prototypes/b/contract.json' },
+    { kind: 'prompt', type: 'prototype', payload: long, added: ago(20) },
+    { kind: 'prompt', type: 'decide', payload: 'drop the legacy export?' },
+    { kind: 'prompt', payload: 'a plain note about nothing' },
+    { kind: 'prompt', type: 'fix', spec: `${D}/03-open.md`, payload: 'digest sends twice' },
+    { kind: 'prompt', type: 'fix', spec: `${D}/01-done.md`, payload: 'repair the output' },
+    { kind: 'brief', payload: '04' },
+    { kind: 'spec', payload: `${D}/03-open.md` },
+  ])
+}
+
+test('AC-20261105-13-1 queue.js groom prints v7\'s bytes, buckets and all, on one host holding every flag shape', () => {
+  const out = same(groomHost())
+  for (const b of ['duplicates (', 'cites done (', 'gate met (', 'stale (']) assert.ok(out.includes(b), b)
+  assert.match(out, /^ {2}q9 ~ q10 {2}0\.\d\d$/m)
+  assert.match(out, /^ {2}q11 ~ q12 {2}1\.00$/m)
+  assert.ok(!/q11 ~ q13|q12 ~ q13/.test(out), 'a differing path pair is no duplicate')
+  assert.ok(/^ {2}q4 .*brief 03 \(rounds\)$/m.test(out) && /^ {2}q5 .*spec specs\/20261101\/03-open\.md$/m.test(out), 'met brief and spec gates')
+  assert.ok(!/^ {2}q8 .*$/m.test(out.slice(out.indexOf('stale ('))), 'a gated prompt is never stale')
+  assert.ok(/^ {2}q14 .*…$/m.test(out) && out.split('\n').every((l) => [...l].length <= 100), 'a long row is cut to 100 columns')
+  assert.ok(out.endsWith('fates: spec-queue done <ref> · spec-queue move <ref> <n> · keep — never tick without a yes\n'))
+})
+
+test('AC-20261105-13-2 nothing flagged: the empty line counts queued and unqueued pending work as v7 did', () => {
+  const d = hostWith({
+    'docs/roadmap/01-open.md': '# 01\n', 'docs/roadmap/02-old.md': '# 02\n\n> **Superseded by 03**\n', 'docs/roadmap/03-fin.md': '# 03\n', 'docs/roadmap/05-queued.md': '# 05\n',
+    [`${D}/03-fin.md`]: sp('done', '03'), [`${D}/05-queued.md`]: sp('done', '05'), [`${D}/06-adhoc.md`]: sp('draft'),
+  }, [{ kind: 'brief', payload: '05' }, { kind: 'spec', payload: `${D}/09-gone.md` }])
+  assert.strictEqual(same(d), '✨ nothing to groom · 2 pending\n')
+})
+
+test('AC-20261105-13-2 only v7\'s bold banner supersedes: a plain `> Superseded by` brief counts, gates and closes as v7 had it', () => {
+  const plain = '# 01\n\n> Superseded by 02\n'; const bold = '# 01\n\n> **Superseded by 02**\n'
+  const brief = (n) => `docs/roadmap/${n}-a.md`
+  assert.strictEqual(same(hostWith({ [brief('01')]: plain }, [])), '✨ nothing to groom · 1 pending\n')
+  assert.strictEqual(same(hostWith({ [brief('01')]: bold }, [])), '✨ nothing to groom · 0 pending\n')
+  const spec = { [`${D}/01-a.md`]: sp('done', '01') }
+  assert.strictEqual(same(hostWith({ [brief('01')]: plain, ...spec }, [])), '✨ nothing to groom · 0 pending\n')
+  assert.strictEqual(same(hostWith({ [brief('01')]: plain, ...spec }, [{ kind: 'brief', payload: '01' }])), '✨ nothing to groom · 0 pending\n')
+  assert.strictEqual(same(hostWith({ [brief('01')]: bold, ...spec }, [{ kind: 'brief', payload: '01' }])), '✨ nothing to groom · 1 pending\n')
+  const gated = [{ kind: 'prompt', type: 'plan', payload: 'after the old brief', after: { brief: '01' } }]
+  assert.match(same(hostWith({ [brief('01')]: plain, ...spec }, gated)), /^gate met \(1\):\n {2}q1 /m)
+  assert.strictEqual(same(hostWith({ [brief('01')]: bold, ...spec }, gated)), '✨ nothing to groom · 1 pending\n')
+})
+
+test('AC-20261105-13-2 two roadmap files sharing a number are one brief, read as the last file, as v7 had it', () => {
+  const [a, b] = ['docs/roadmap/04-a.md', 'docs/roadmap/04-b.md']; const bold = '# 04\n\n> **Superseded by 05**\n'; const plain = '# 04\n'
+  assert.strictEqual(same(hostWith({ [a]: plain, [b]: plain }, [])), '✨ nothing to groom · 1 pending\n')
+  assert.strictEqual(same(hostWith({ [a]: bold, [b]: plain }, [])), '✨ nothing to groom · 1 pending\n')
+  assert.strictEqual(same(hostWith({ [a]: plain, [b]: bold }, [])), '✨ nothing to groom · 1 pending\n')
+  const spec = { [`${D}/04-a.md`]: sp('done', '04') }
+  const gated = [{ kind: 'prompt', type: 'plan', payload: 'wait', after: { brief: '04' } }]
+  assert.match(same(hostWith({ [a]: bold, [b]: plain, ...spec }, gated)), /^gate met \(1\):/m)
+  assert.strictEqual(same(hostWith({ [a]: plain, [b]: bold, ...spec }, gated)), '✨ nothing to groom · 1 pending\n')
+  assert.strictEqual(same(hostWith({ [a]: plain, [b]: bold, ...spec }, [{ kind: 'brief', payload: '04' }])), '✨ nothing to groom · 1 pending\n')
+  const named = { [a]: plain, [b]: plain, [`${D}/01-done.md`]: sp('done') }
+  assert.match(same(hostWith(named, [{ kind: 'brief', payload: '04', after: { spec: `${D}/01-done.md` } }])), /brief 04 \(b\)$/m)
+})
+
+test('AC-20261105-13-3 groom writes nothing: the queue file is byte-identical and the git dir gains no file', () => {
+  const d = hostWith(baseFiles, [{ kind: 'spec', payload: `${D}/01-done.md` }, { kind: 'prompt', type: 'plan', payload: 'ancient ungated thing', added: ago(20) }])
+  const listing = () => spawnSync('find', [path.join(d, '.git'), '-type', 'f'], { encoding: 'utf8' }).stdout.split('\n').sort().join('\n')
+  const file = path.join(d, '.git/spec-queue.json')
+  const [bytes, before] = [fs.readFileSync(file), listing()]
+  const r = groom(d)
+  assert.match(r.stdout, /^stale \(1\):\n {2}q2 /m)
+  assert.ok(fs.readFileSync(file).equals(bytes))
+  assert.strictEqual(listing(), before)
+})
+
+test('AC-20261105-13-4 bound fixes pair on their words and cite a done spec as v7 did', () => {
+  const d = hostWith(baseFiles, [
+    { kind: 'prompt', type: 'fix', spec: `${D}/03-open.md`, payload: 'digest sends twice to every customer' },
+    { kind: 'prompt', type: 'fix', spec: `${D}/03-open.md`, payload: 'digest sends twice to some customers' },
+    { kind: 'prompt', type: 'fix', spec: `${D}/01-done.md`, payload: 'repair the output' },
+  ])
+  const out = same(d)
+  assert.match(out, /^ {2}q1 ~ q2 {2}\d\.\d\d$/m)
+  assert.match(out, /^cites done \(1\):\n {2}q3 /m)
+})
+
+test('AC-20261105-13-5 groom refuses every flag but --root, exits 2 and leaves the queue file alone', () => {
+  const d = groomHost()
+  const bytes = fs.readFileSync(path.join(d, '.git/spec-queue.json'))
+  for (const flag of ['--json', '--distinct', '--top']) {
+    const r = runNode('scripts/queue.js', ['groom', flag, '--root', d])
+    assert.strictEqual(r.status, 2, flag)
+    assert.strictEqual(r.stderr, `queue: groom: unknown flag ${flag}\n`)
+    assert.strictEqual(r.stdout, '')
+  }
+  for (const args of [['--type', 'plan'], ['--type'], ['--after'], ['--after', '02']]) {
+    const r = runNode('scripts/queue.js', ['groom', ...args, '--root', d])
+    assert.strictEqual(r.status, 2, args.join(' '))
+    assert.strictEqual(r.stderr, `queue: groom: unknown flag ${args[0]}\n`)
+    const last = runNode('scripts/queue.js', ['groom', '--root', d, ...args])
+    assert.strictEqual(last.stderr, `queue: groom: unknown flag ${args[0]}\n`, 'with the flag last')
+  }
+  assert.strictEqual(runNode('scripts/queue.js', ['add', 'x', '--type', '--root', d]).stderr, 'queue: --type needs a value\n', 'every other subcommand keeps the parser message')
+  assert.ok(fs.readFileSync(path.join(d, '.git/spec-queue.json')).equals(bytes))
+  const other = tmpdir('groom-other'); gitRepo(other)
+  const r = spawnSync(process.execPath, [path.join(SPEC, 'scripts/queue.js'), 'groom', '--root', d], { cwd: other, encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.ok(r.stdout.includes('duplicates ('), 'grooms the --root repo, not the cwd repo')
+})
+
+test('AC-20261105-13-6 the command lists Agent, AskUserQuestion and groom; the doctrine seats the haiku checks', () => {
+  const cmd = fs.readFileSync(path.join(SPEC, 'commands/queue.md'), 'utf8')
+  const head = cmd.split('---')[1]
+  assert.match(head, /^allowed-tools:.*\bAgent\b.*\bAskUserQuestion\b/m)
+  assert.match(head, /^argument-hint:.*\bgroom\b/m)
+  for (const w of ['groom` checks before it proposes', 'Agent {model: "haiku"}', '📌 Auto-picked done', 'never tick without a yes', 'No agent, no proposal', 'show <id> --json', 'queue.js done <ref>']) assert.ok(cmd.includes(w), w)
+  const doc = fs.readFileSync(path.join(SPEC, 'doctrine.md'), 'utf8')
+  assert.match(doc, /^\| queue groom checks \| haiku \| low \|$/m)
+})
+
+test('AC-20261105-13-7 the contract lists groom in § 1 and the § 7 subcommand table', () => {
+  const doc = fs.readFileSync(path.join(ROOT, 'docs/v8/interface-contract.md'), 'utf8')
+  assert.match(doc, /^\| `\/spec:queue` \|[^\n]*groom/m)
+  const s7 = doc.slice(doc.search(/^## 7\b/m)).split(/^## (?!7\b)/m)[0]
+  assert.match(s7, /^\| `groom` \|/m)
+})
+
+test('AC-20261105-13-8 a missing spec-v7-final tag fails the groom oracle, it never skips', () => {
+  const r = spawnSync('git', ['-C', ROOT, 'rev-parse', '--verify', 'refs/tags/spec-v7-final'], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, 'tag spec-v7-final must exist: the oracle has no skip path')
+  assert.ok(fs.existsSync(path.join(v7Scripts(), 'spec-queue.js')))
 })

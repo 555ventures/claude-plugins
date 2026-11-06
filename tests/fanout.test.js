@@ -937,11 +937,9 @@ test('AC-20261105-07-12 REPORT says what trunk holds for a dismissed lane; WAIT 
   assert.match(g.ok().stdout, /^⚠️ dismissed 01-alpha — worktree kept at \.claude\/worktrees\/spec-01-alpha, spec left hardened in the lane$/m, 'a hardened root copy adds no trunk note')
 })
 
-test('AC-20261105-07-15 the contract names the discard flag, --fix and no groom in the queue table; fanout.md ends the turn at REPORT', () => {
+test('AC-20261105-07-15 the contract names the discard flag and --fix; fanout.md ends the turn at REPORT', () => {
   const doc = fs.readFileSync(path.join(__dirname, '..', 'docs/v8/interface-contract.md'), 'utf8')
   assert.ok(doc.includes('dismissed --lane <id> [--discard]') && doc.includes('--fix'))
-  const s7 = doc.slice(doc.search(/^## 7\b/m)).split(/^## (?!7\b)/m)[0]
-  assert.ok(!s7.includes('groom'), '§ 7 no longer lists groom')
   const cmd = fs.readFileSync(path.join(__dirname, '..', 'spec/commands/fanout.md'), 'utf8')
   const report = cmd.slice(cmd.indexOf('**REPORT**'))
   assert.ok(report.includes('end the turn') && !cmd.includes('continue until the queue drains'))

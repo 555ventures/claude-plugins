@@ -9,6 +9,7 @@ const { spawnSync, spawn } = require('child_process')
 const { tmpdir, gitRepo, runNode, runBash, SPEC } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const pending = require(path.join(SPEC, 'scripts/lib/pending.js'))
+const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
 
 const REL = 'specs/20261104/01-thing.md'
 const SPEC_DOC = `---
@@ -177,10 +178,10 @@ test('red gate: two repairs then ESCALATE; retry bumps to opus with fresh attemp
   assert.match(ok(h.run('--mark', 'repaired')), /→ ESCALATE/)
 
   assert.match(ok(h.run('--mark', 'escalate', 'park')), /ESCALATE → PARKED/)
-  const items = st.readQueue(h.dir).items
+  const items = Q.read(h.dir).items
   assert.strictEqual(items.length, 1)
-  assert.strictEqual(items[0].kind, 'prompt')
-  assert.ok(items[0].payload.startsWith(`/spec:fix ${REL} — `), 'park queues a /spec:fix item for the spec')
+  assert.deepStrictEqual([items[0].kind, items[0].type, items[0].spec], ['prompt', 'fix', REL], 'park queues a fix item bound to the spec')
+  assert.ok(items[0].payload.length > 0 && !items[0].payload.startsWith('/spec:'), 'the payload is the bare first finding')
   assert.strictEqual(h.status(), 'hardened', 'park sets the spec back to hardened')
   assert.strictEqual(h.state(), null, 'park ends the run')
   assert.ok(!pending.isLane(h.wt), 'park removes the lane marker')
@@ -1050,8 +1051,8 @@ test('AC-20261105-06-9 widen records a ruling and goes to REVIEW (marking the fi
   assert.match(ok(s.run('--mark', 'escalate', 'separate')), /ESCALATE → REVIEW/, 'back through the gate, now clean')
   assert.ok(!fs.existsSync(path.join(s.wt, FILE)), 'the file is restored from base (absent there)')
   assert.ok(fs.existsSync(path.join(s.wt, 'feature.txt')), 'the build itself is kept')
-  const item = st.readQueue(s.dir).items.find((i) => i.kind === 'prompt')
-  assert.ok(item.payload.includes(REL) && item.payload.includes(FILE) && item.payload.startsWith('follow-up:'), JSON.stringify(item))
+  const item = Q.read(s.dir).items.find((i) => i.kind === 'prompt')
+  assert.ok(item.payload.includes(REL) && item.payload.includes(FILE) && item.payload.startsWith('follow-up:') && item.type === undefined, JSON.stringify(item))
   assert.ok(!specAt(s).includes('scope widened'))
 
   const p = fixture({ cfg: SCOPE_CFG })
@@ -1333,12 +1334,12 @@ test('AC-20261105-09-4 needsPlan restores the tree, queues /spec:plan with the d
   assert.strictEqual(fs.readFileSync(path.join(f.root, 'a.txt'), 'utf8'), 'a\n', 'tracked edits are gone')
   assert.ok(!fs.existsSync(path.join(f.root, 'new.txt')), 'untracked files the builder added are gone')
   assert.strictEqual(h.g('-C', f.root, 'status', '--porcelain'), '')
-  const items = st.readQueue(h.dir).items
-  assert.deepStrictEqual(items.map((i) => [i.kind, i.type, i.payload]), [['prompt', 'plan', `/spec:plan ${SYMPTOM} — the handler needs a new table`]])
+  const items = Q.read(h.dir).items
+  assert.deepStrictEqual(items.map((i) => [i.kind, i.type, i.payload]), [['prompt', 'plan', `${SYMPTOM} — the handler needs a new table`]])
   assert.deepStrictEqual([f.state().step, f.state().needsPlan], ['NEEDS_PLAN', 'the handler needs a new table'], 'a lane keeps its ending for fanout')
   const again = f.fx('--mark', 'built')
   assert.strictEqual(again.status, 2); assert.ok(again.stderr.includes('not accepted at NEEDS_PLAN'), again.stderr)
-  assert.strictEqual(st.readQueue(h.dir).items.length, 1, 'nothing is queued twice')
+  assert.strictEqual(Q.read(h.dir).items.length, 1, 'nothing is queued twice')
 
   const solo = fixture()
   const g = specless(solo)
@@ -1403,7 +1404,7 @@ test('AC-20261105-09-6 keep goes to REVIEW; revert is one uncounted builder roun
   const end = ok(pf.fx('--mark', 'escalate', 'plan'))
   assert.match(end, /ESCALATE → NEEDS_PLAN;/)
   assert.ok(end.includes('🚫 needs a spec — the user sent the fix to plan'))
-  assert.deepStrictEqual(st.readQueue(p.dir).items.map((i) => [i.type, i.payload]), [['plan', `/spec:plan ${SYMPTOM} — the user sent the fix to plan`]])
+  assert.deepStrictEqual(Q.read(p.dir).items.map((i) => [i.type, i.payload]), [['plan', `${SYMPTOM} — the user sent the fix to plan`]])
   assert.ok(!fs.existsSync(path.join(p.dir, 'feature.txt')), 'the fix is discarded')
 })
 

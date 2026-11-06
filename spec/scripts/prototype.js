@@ -18,6 +18,7 @@ const http = require('http')
 const { spawnSync } = require('child_process')
 const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
 const state = require('./lib/state')
+const Q = require('./lib/queue')
 const git = require('./lib/git')
 const { render } = require('./lib/report')
 
@@ -100,7 +101,8 @@ const entryWired = (s, ctx) => {
 
 const pinIds = (ctx) => (state.readProto(ctx.root, ctx.stem).pins || []).map((p) => p.id)
 const unhandled = (s, ctx) => pinIds(ctx).filter((id) => !(s.handled || []).includes(id))
-const planItem = (stem) => `/spec:plan design/prototypes/${stem}/contract.json`
+const contractPath = (stem) => `design/prototypes/${stem}/contract.json`
+const planItem = (stem) => `/spec:plan ${contractPath(stem)}`
 
 function derive(s, ctx) {
   const p = ctx.config.prototype
@@ -178,13 +180,7 @@ const steps = {
       id, kind, route, ...(selector ? { selector } : {}), note, sentence: `On ${route}: ${String(note).trim()}`,
     })
     state.writeProto(ctx.root, ctx.stem, { contract: { stem: ctx.stem, rounds: s.rounds, pins: pins.map(rec) } })
-    const payload = planItem(ctx.stem)
-    const q = state.readQueue(ctx.root)
-    if (!q.items.some((i) => i.payload === payload && !i.done)) {
-      q.seq += 1
-      q.items.push({ id: 'q' + q.seq, kind: 'prompt', payload, added: now() })
-      state.writeQueue(ctx.root, q)
-    }
+    Q.add(ctx.root, { payload: contractPath(ctx.stem), type: 'plan' })
     s.marks.contracted = now()
     save(s, ctx) // the committed status.json already carries the contracted mark
     const dir = path.join('design', 'prototypes', ctx.stem)
@@ -192,8 +188,8 @@ const steps = {
     if (git.raw(['diff', '--cached', '--quiet', '--', dir], ctx.root).status !== 0) git.sh(['commit', '-q', '-m', `chore(proto): contract ${ctx.stem}`, '--', dir], ctx.root)
   },
   closed(s, _f, ctx) {
-    const queued = state.readQueue(ctx.root).items.find((i) => i.payload === planItem(ctx.stem) && !i.done)
-    if (queued) s.closeWarn = `${planItem(ctx.stem)} is still pending in the queue (${queued.id}) — plan it, or drop it with /spec:queue done ${queued.id}`
+    const queued = Q.open(Q.read(ctx.root)).find((i) => i.type === 'plan' && i.payload === contractPath(ctx.stem))
+    if (queued) s.closeWarn = `${Q.paste(ctx.root, queued)} is still pending in the queue (${queued.id}) — plan it, or drop it with /spec:queue done ${queued.id}`
     git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch, force: true }) // a throwaway prototype
     s.marks.closed = now()
   },

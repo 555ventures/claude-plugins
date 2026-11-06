@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 'use strict'
-// migrate.js — v7 host -> v8. node migrate.js [--root <dir>] [--apply] [--json]
-// Without --apply prints the plan. Idempotent: a second --apply finds nothing to do.
+// migrate.js — v7 host -> v8, and the queue file to its current version (3). node migrate.js [--root <dir>] [--apply] [--json]
+// Without --apply prints the plan. Idempotent: a second --apply finds nothing to do. The only converter of
+// the queue file: lib/queue.js reads version 3 strictly, so text is parsed here, once, and never on read.
 
 const fs = require('fs')
 const path = require('path')
 const git = require('./lib/git')
-const { readJson, writeJson, configPath, gitCommonDir, readQueue, writeQueue } = require('./lib/state')
+const { readJson, writeJson, configPath, gitCommonDir } = require('./lib/state')
+const { parse, VERSION } = require('./lib/queue')
 const { normBrief } = require('./lib/work')
 const { detectTestCommand } = require('./lib/host')
 const { render } = require('./lib/report')
@@ -78,6 +80,8 @@ function afterOf(a) {
   return null
 }
 
+// Every stored shape (versions 1 and 2, and the mixed files real repos hold) to version 3: `lane` is `type`,
+// `ticked` is `done`, a spec item keeps the `payload` it already carries, a prompt goes through `parse`.
 function convertQueue(root, q) {
   const lost = []
   const briefFile = (n) => {
@@ -85,17 +89,20 @@ function convertQueue(root, q) {
     return f ? 'docs/roadmap/' + f : String(n)
   }
   const items = (q.items || []).map((it) => {
-    const payload = it.kind === 'brief' ? briefFile(it.brief) : it.kind === 'spec' ? it.spec : it.payload
-    const kind = it.kind === 'brief' || it.kind === 'spec' ? it.kind : 'prompt'
-    if (it.when && it.when.type === 'ledger') lost.push(it.id)
-    const o = { id: it.id, kind: it.when && it.when.type === 'ledger' ? 'prompt' : kind, payload, added: isoAdded(it.added) }
-    if (it.ticked || it.done) o.done = true
-    if (o.kind === 'prompt' && TYPES.includes(it.lane)) o.type = it.lane
+    const payload = it.payload ?? (it.kind === 'brief' ? briefFile(it.brief) : it.spec ?? '')
+    const ledger = it.when && it.when.type === 'ledger'
+    if (ledger) lost.push(it.id)
+    const kind = !ledger && (it.kind === 'brief' || it.kind === 'spec') ? it.kind : 'prompt'
+    const type = [it.type, it.lane].find((t) => TYPES.includes(t))
+    const body = kind === 'prompt' ? parse(payload, type) : { payload }
+    const o = { id: it.id, kind, ...(body.type ? { type: body.type } : {}), ...(body.spec ? { spec: body.spec } : {}), payload: body.payload }
+    o.added = it.added === undefined && kind === 'brief' ? undefined : isoAdded(it.added)
+    if (it.ticked || it.done) o.done = typeof it.done === 'string' && Number.isFinite(Date.parse(it.done)) ? it.done : new Date().toISOString()
     const after = afterOf(it.after)
     if (after) o.after = after
     return o
   })
-  return { queue: { version: 2, seq: q.seq || 0, items }, lost }
+  return { queue: { version: VERSION, seq: q.seq || 0, items }, lost }
 }
 
 // An already-migrated (v2) queue lacks the `type`/`after` v7 held; the newest spec-v7-backup queue that
@@ -151,11 +158,15 @@ function plan(root) {
   const qf = path.join(common, 'spec-queue.json')
   const q = readJson(qf, null)
   let lost = []
-  if (q && q.version !== 2) { lost = convertQueue(root, q).lost; add('queue', qf, null, `${(q.items || []).length} items -> v2`) }
   let fills = []
-  if (q && q.version === 2) {
-    fills = queueFills(common, q)
-    if (fills.length) add('queue-fields', qf, null, `${fills.length} fills`)
+  if (q && q.version !== VERSION) {
+    lost = convertQueue(root, q).lost
+    // A version 2 file lacks the `type`/`after` v7 held: the fills run first, on the raw file, then the conversion.
+    if (q.version === 2) {
+      fills = queueFills(common, q)
+      if (fills.length) add('queue-fields', qf, null, `${fills.length} fills`)
+    }
+    add('queue', qf, null, `${(q.items || []).length} items -> v${VERSION}`)
   }
   // sidecars and deviations
   walk(path.join(root, 'specs'), (p, isDir) => {
@@ -206,7 +217,8 @@ function plan(root) {
   try {
     if (/spec-runs\.jsonl merge=union/.test(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8'))) add('gitattributes', '.gitattributes')
   } catch { /* none */ }
-  if (ops.some((o) => o.op !== 'gitignore' && o.op !== 'queue-fields') && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
+  // The v7 tag marks a v7 host: a version 2 queue file is v8's own, and its conversion plans no tag.
+  if (ops.some((o) => o.op !== 'gitignore' && o.op !== 'queue-fields' && !(o.op === 'queue' && q.version === 2)) && git.raw(['rev-parse', '-q', '--verify', 'refs/tags/spec-v7-final'], root).status !== 0) ops.unshift({ op: 'tag', path: 'spec-v7-final' })
   // listed, never touched
   const listed = []
   const wt = path.join(root, '.claude/worktrees')
@@ -260,9 +272,9 @@ function apply(root, p) {
     else if (o.op === 'config') writeJson(abs, trimConfig(root, readJson(abs, {})))
     else if (o.op === 'queue') writeJson(abs, convertQueue(root, readJson(abs, {})).queue)
     else if (o.op === 'queue-fields') {
-      const q = readQueue(root)
-      for (const f of p.fills) { const it = q.items.find((i) => i.id === f.id); if (it && it[f.field] === undefined) it[f.field] = f.value }
-      writeQueue(root, q)
+      const q = readJson(abs, {})
+      for (const f of p.fills) { const it = (q.items || []).find((i) => i.id === f.id); if (it && it[f.field] === undefined) it[f.field] = f.value }
+      writeJson(abs, q)
     } else if (o.op === 'delete') fs.rmSync(abs, { recursive: true, force: true })
     else if (o.op === 'archive') archive(root, o.path, o.to, warns)
     else if (o.op === 'extract') {

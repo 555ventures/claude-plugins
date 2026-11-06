@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { tmpdir, gitRepo, runNode } = require('./helpers')
 const S = require('../spec/scripts/lib/state')
+const Q = require('../spec/scripts/lib/queue')
 
 function setup() {
   const dir = tmpdir('gen')
@@ -69,7 +70,7 @@ test('genesis walks idea to GROUNDED', () => {
   assert.strictEqual(g.mark('roadmap-written').status, 2, 'a malformed brief refused')
   g.w('docs/roadmap/03-billing.md', BRIEF('03'))
   assert.strictEqual(g.mark('roadmap-written').status, 0)
-  assert.deepStrictEqual(S.readQueue(g.dir).items.map((i) => [i.kind, i.payload]),
+  assert.deepStrictEqual(Q.read(g.dir).items.map((i) => [i.kind, i.payload]),
     ['01-first-light', '02-booking', '03-billing'].map((b) => ['brief', `docs/roadmap/${b}.md`]))
   assert.strictEqual(g.step(), 'HANDOFF')
 

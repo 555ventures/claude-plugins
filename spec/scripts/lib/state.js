@@ -1,5 +1,5 @@
 'use strict'
-// lib/state.js — the single reader/writer of every on-disk file in architecture §2.
+// lib/state.js — the single reader/writer of every on-disk file in architecture §2 (the queue file: lib/queue.js).
 // Writes are atomic (tmp + rename). Parsers are CRLF-safe. No CLI.
 
 const fs = require('fs')
@@ -322,9 +322,6 @@ const slugOf = (symptom) => {
 const fixRunDir = (root, slug) => path.join(gitCommonDir(root), 'spec-fix', slug + '.run')
 const fixRunPath = (root, slug) => path.join(fixRunDir(root, slug), 'state.json')
 
-const queuePath = (root) => path.join(gitCommonDir(root), 'spec-queue.json')
-const readQueue = (root) => readJson(queuePath(root), null) || { version: 2, seq: 0, items: [] }
-const writeQueue = (root, q) => writeJson(queuePath(root), q)
 const fanoutPath = (root) => path.join(gitCommonDir(root), 'spec-fanout.json')
 const readFanout = (root) => readJson(fanoutPath(root))
 const writeFanout = (root, f) => writeJson(fanoutPath(root), f)
@@ -364,6 +361,6 @@ module.exports = {
   DEFAULTS, readConfig, writeConfig, configPath,
   readSpec, writeStatus, parseFrontmatter, parseAssumptions, globToRe, decisionRows, splitCells,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
-  gitCommonDir, slugOf, fixRunDir, fixRunPath, readQueue, writeQueue, readFanout, writeFanout,
+  gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout,
   readProto, writeProto, readMocks, writeMocks, readGenesis, writeGenesis,
 }

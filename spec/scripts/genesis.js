@@ -8,6 +8,7 @@ const path = require('path')
 const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
 const git = require('./lib/git')
 const S = require('./lib/state')
+const Q = require('./lib/queue')
 const host = require('./lib/host')
 const report = require('./lib/report')
 
@@ -142,13 +143,7 @@ const steps = {
       if (bad) refuse(`docs/roadmap/${b} lacks ${bad}`)
     }
     if (!bs[0].startsWith('01-')) refuse('briefs must be numbered from 01 (01 = first light)')
-    const q = S.readQueue(ctx.root)
-    for (const b of bs) {
-      const payload = 'docs/roadmap/' + b
-      if (q.items.some((i) => i.payload === payload)) continue
-      q.items.push({ id: 'q' + ++q.seq, kind: 'brief', payload, added: new Date().toISOString() })
-    }
-    S.writeQueue(ctx.root, q)
+    for (const b of bs) Q.add(ctx.root, { payload: 'docs/roadmap/' + b })
     s.phase = 'HANDOFF'
   },
   'profile-written': (s, f, ctx) => {

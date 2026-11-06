@@ -6,7 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const work = require('./work')
-const { pasteLine, reconcile } = require('../queue')
+const { paste, reconcile, VERSION } = require('./queue')
 
 const KNOWN = ['draft', 'hardened', 'implementing', 'done']
 const RANK = { implementing: 0, hardened: 1, draft: 2 }
@@ -18,7 +18,7 @@ const landed = (s) => s === 'done' || s === 'implementing'
 const shortBlocker = (b) => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
 
 // The queue file for the overlay: off in a linked worktree, with no git, no file, or an unusable file
-// (an unparseable one is reported). `items` are v8's, as written.
+// (an unparseable one, or one that is not version 3, is reported). `items` are v8's, as written.
 function overlay(root) {
   const git = (arg) => { const r = spawnSync('git', ['-C', root, 'rev-parse', arg], { encoding: 'utf8' }); return r.error || r.status !== 0 ? null : r.stdout.trim() }
   const common = git('--git-common-dir'); const dir = git('--git-dir')
@@ -28,6 +28,7 @@ function overlay(root) {
   let data
   try { data = JSON.parse(fs.readFileSync(file, 'utf8')) } catch (e) { return { on: false, parseError: `${file}: ${e.message}` } }
   if (!data || !Array.isArray(data.items)) return { on: false, parseError: `${file}: missing "items" array` }
+  if (data.version !== VERSION) return { on: false, parseError: `${file}: version ${data.version} — run /spec:migrate` }
   return { on: true, items: data.items.filter((i) => i && typeof i === 'object') }
 }
 
@@ -58,7 +59,7 @@ function derive(root) {
   const ov = overlay(root)
   const posBrief = new Map(); const posSpec = new Map(); const gateBrief = new Map(); const gateSpec = new Map()
   const prompts = []
-  if (ov.parseError) note({ kind: 'queue-unparseable', detail: `${ov.parseError} — the session queue overlay is disabled until this is fixed (or the file removed and reseeded with \`/spec:queue next\`)` })
+  if (ov.parseError) note({ kind: 'queue-unparseable', detail: `${ov.parseError} — the session queue overlay is disabled until this is fixed${/\/spec:migrate$/.test(ov.parseError) ? '' : ' (or the file removed and reseeded with `/spec:queue next`)'}` })
   if (ov.on) {
     const cache = { briefs }
     virtualQueue(root, ov.items, briefs).forEach((it, i) => {
@@ -74,7 +75,7 @@ function derive(root) {
       } else if (it.kind === 'spec') posSpec.set(it.payload, i)
       const why = work.gateWhy(root, it.after, cache)
       if (it.kind === 'brief') { if (why) gateBrief.set(num, 'after ' + why) } else if (it.kind === 'spec') { if (why) gateSpec.set(it.payload, 'after ' + why) } else if (it.kind === 'prompt' && !it.done) {
-        prompts.push({ action: pasteLine(root, it), path: null, status: 'queued', brief: null, blockers: why ? ['after ' + why] : [], rank: 0, queue: true, pos: i, id: it.id })
+        prompts.push({ action: paste(root, it), path: null, status: 'queued', brief: null, blockers: why ? ['after ' + why] : [], rank: 0, queue: true, pos: i, id: it.id })
       }
     })
   }

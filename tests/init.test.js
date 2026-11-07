@@ -12,6 +12,10 @@ const repo = (files) => {
   return dir
 }
 const cfgOf = (d) => JSON.parse(fs.readFileSync(path.join(d, '.claude/spec.config.json'), 'utf8'))
+const seeded = (scripts, cmd, files = {}) => repo({ 'package.json': JSON.stringify({ scripts }), '.claude/spec.config.json': JSON.stringify({ testCommand: cmd }), ...files })
+const initRun = (d, extra = []) => { const r = runNode('scripts/init.js', ['--root', d, '--json', ...extra]); assert.strictEqual(r.status, 0, r.stderr); return cfgOf(d).testCommand }
+const twice = (d, want, extra) => { assert.strictEqual(initRun(d, extra), want); assert.strictEqual(initRun(d), want, 'a second run changes nothing'); return want }
+const sh = (cmd, cwd) => require('child_process').spawnSync('sh', ['-c', cmd], { cwd }).status
 
 test('node repo: detects test, setup, lint+typecheck fold; gitignore written', () => {
   const d = repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true', typecheck: 'true' } }), 'package-lock.json': '{}' })
@@ -67,50 +71,21 @@ test('AC-20261105-17-1 a gate that exits 1 is written but not verified: warn, ex
   assert.match(ok.stdout, /✅ initialized — config written, gate verified/)
 })
 
-const checks = (files, extra = []) => {
-  const d = repo(files)
-  const r = runNode('scripts/init.js', ['--root', d, '--json', ...extra])
-  assert.strictEqual(r.status, 0, r.stderr)
-  return { d, out: JSON.parse(r.stdout) }
-}
-
 test('AC-20261105-17-2 lint:ci and type-check, make targets and a bun lockfile reach the gate; config files alone add nothing', () => {
-  const a = checks({ 'package.json': JSON.stringify({ scripts: { test: 'true', 'lint:ci': 'true', 'type-check': 'true' } }) })
-  assert.strictEqual(cfgOf(a.d).testCommand, 'npm run lint:ci && npm run type-check && npm test')
-  const pref = checks({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true', 'lint:ci': 'true', typecheck: 'true', 'type-check': 'true' } }) })
-  assert.strictEqual(cfgOf(pref.d).testCommand, 'npm run lint && npm run typecheck && npm test', 'lint beats lint:ci, typecheck beats type-check')
-  const m = checks({ Makefile: 'lint:\n\ttrue\ntypecheck:\n\ttrue\n', 'go.mod': 'module x\n' })
-  assert.strictEqual(cfgOf(m.d).testCommand, 'make lint && make typecheck && go test ./...')
-  const b = checks({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true' } }), 'bun.lockb': '' })
-  assert.strictEqual(cfgOf(b.d).testCommand, 'bun run lint && bun run test')
-  const bl = checks({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true' } }), 'bun.lock': '' })
-  assert.strictEqual(cfgOf(bl.d).testCommand, 'bun run lint && bun run test')
-  const bare = checks({ '.eslintrc': '{}', 'tsconfig.json': '{}', '.golangci.yml': 'x: 1\n', 'Cargo.toml': '[package]\n' })
-  assert.strictEqual(cfgOf(bare.d).testCommand, 'cargo test', 'no check from a bare config file')
+  assert.strictEqual(initRun(repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', 'lint:ci': 'true', 'type-check': 'true' } }) })), 'npm run lint:ci && npm run type-check && npm test')
+  assert.strictEqual(initRun(repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true', 'lint:ci': 'true', typecheck: 'true', 'type-check': 'true' } }) })), 'npm run lint && npm run typecheck && npm test', 'lint beats lint:ci, typecheck beats type-check')
+  assert.strictEqual(initRun(repo({ Makefile: 'lint:\n\ttrue\ntypecheck:\n\ttrue\n', 'go.mod': 'module x\n' })), 'make lint && make typecheck && go test ./...')
+  assert.strictEqual(initRun(repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true' } }), 'bun.lockb': '' })), 'bun run lint && bun run test')
+  assert.strictEqual(initRun(repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true' } }), 'bun.lock': '' })), 'bun run lint && bun run test')
+  assert.strictEqual(initRun(repo({ '.eslintrc': '{}', 'tsconfig.json': '{}', '.golangci.yml': 'x: 1\n', 'Cargo.toml': '[package]\n' })), 'cargo test', 'no check from a bare config file')
 })
 
 test('AC-20261105-17-3 a hand answer gets the detected checks; a re-run adds a missing one once; a covered gate is byte-identical', () => {
-  const lint = { 'package.json': JSON.stringify({ scripts: { lint: 'true' } }) }
-  const a = checks(lint, ['--set', 'testCommand=make test'])
-  assert.strictEqual(cfgOf(a.d).testCommand, 'npm run lint && make test')
-  const again = () => { runNode('scripts/init.js', ['--root', a.d, '--json']); return cfgOf(a.d).testCommand }
-  assert.strictEqual(again(), 'npm run lint && make test', 'a further run changes nothing')
+  twice(repo({ 'package.json': JSON.stringify({ scripts: { lint: 'true' } }) }), 'npm run lint && make test', ['--set', 'testCommand=make test'])
   // a re-run on a config whose testCommand lacks a detected check adds it
-  const d = repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true', typecheck: 'true' } }) })
-  fs.mkdirSync(path.join(d, '.claude'))
-  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'npm test' }))
-  runNode('scripts/init.js', ['--root', d, '--json'])
-  assert.strictEqual(cfgOf(d).testCommand, 'npm run lint && npm run typecheck && npm test')
-  runNode('scripts/init.js', ['--root', d, '--json'])
-  assert.strictEqual(cfgOf(d).testCommand, 'npm run lint && npm run typecheck && npm test')
+  twice(seeded({ test: 'true', lint: 'true', typecheck: 'true' }, 'npm test'), 'npm run lint && npm run typecheck && npm test')
   // covered: by the command's own words, by a script it names, by a file it names
-  const keep = (files, cmd) => {
-    const h = repo({ 'package.json': JSON.stringify({ scripts: { test: 'true', lint: 'true', typecheck: 'true', ...files.scripts } }), ...files.files })
-    fs.mkdirSync(path.join(h, '.claude'))
-    fs.writeFileSync(path.join(h, '.claude/spec.config.json'), JSON.stringify({ testCommand: cmd }))
-    runNode('scripts/init.js', ['--root', h, '--json'])
-    assert.strictEqual(cfgOf(h).testCommand, cmd)
-  }
+  const keep = (files, cmd) => assert.strictEqual(initRun(seeded({ test: 'true', lint: 'true', typecheck: 'true', ...files.scripts }, cmd, files.files)), cmd)
   keep({}, 'pnpm turbo run typecheck lint build test')
   keep({ files: { 'scripts/gate.sh': '#!/bin/sh\nnpm run lint\nnpm run typecheck\n' } }, 'bash scripts/gate.sh')
   keep({ scripts: { check: 'npm run lint && npm run typecheck && node --test' } }, 'npm run check')
@@ -137,13 +112,30 @@ test('AC-20261105-17-15 the contract, the footprint and the command files descri
 })
 
 test('a failed lint always fails the gate: a testCommand with || ; or & is grouped behind the chained checks', () => {
-  const sh = (cmd) => require('child_process').spawnSync('sh', ['-c', cmd]).status
   for (const cmd of ['false || true', 'false; true', 'sleep 0 & true']) {
-    const a = checks({ 'package.json': JSON.stringify({ scripts: { lint: 'exit 1' } }) }, ['--set', `testCommand=${cmd}`])
-    const got = cfgOf(a.d).testCommand
-    assert.strictEqual(got, `npm run lint && (${cmd})`)
+    const got = twice(repo({ 'package.json': JSON.stringify({ scripts: { lint: 'exit 1' } }) }), `npm run lint && (${cmd})`, ['--set', `testCommand=${cmd}`])
     assert.notStrictEqual(sh(got.replace('npm run lint', 'false')), 0, `a failed lint fails the gate for ${cmd}`)
-    runNode('scripts/init.js', ['--root', a.d, '--json'])
-    assert.strictEqual(cfgOf(a.d).testCommand, got, 'a re-run does not group again')
   }
+})
+
+test('AC-20261106-04-1 AC-20261106-04-2 an old unsafe chain is grouped behind its checks; a second run is byte-identical', () => {
+  twice(seeded({ lint: 'true' }, 'npm run lint && a || b'), 'npm run lint && (a || b)')
+  twice(seeded({ lint: 'true', typecheck: 'true' }, 'npm run lint && npm run typecheck && a; b'), 'npm run lint && npm run typecheck && (a; b)')
+})
+
+test('AC-20261106-04-3 a hand-written command is never rewritten', () => {
+  for (const [scripts, cmd] of [[{}, 'a || b'], [{ lint: 'true' }, 'custom-lint && a || b']]) assert.strictEqual(initRun(seeded(scripts, cmd)), cmd)
+})
+
+test('AC-20261106-04-4 repairChain groups only what is not one balanced group, skipping quotes and comments', () => {
+  const { repairChain } = require(path.join(require('./helpers').SPEC, 'scripts/init.js'))
+  assert.strictEqual(repairChain('npm run lint && (a) || (b)', ['npm run lint']), 'npm run lint && ((a) || (b))')
+  for (const cmd of ['npm run lint && (a || b)', 'npm run lint && (echo ")" ; b)', 'npm run lint && (a; b # x)\n)']) assert.strictEqual(repairChain(cmd, ['npm run lint']), cmd)
+})
+
+test('AC-20261106-04-5 a command ending in a comment groups into one the shell runs; a failed lint still fails it', () => {
+  const d = repo({ 'package.json': JSON.stringify({ scripts: { lint: 'true' } }) })
+  const got = twice(d, 'npm run lint && (true; true # note\n)', ['--set', 'testCommand=true; true # note'])
+  assert.strictEqual(sh(got, d), 0, got)
+  assert.notStrictEqual(sh(got.replace('npm run lint', 'false'), d), 0)
 })

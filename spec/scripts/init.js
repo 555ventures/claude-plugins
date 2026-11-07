@@ -34,22 +34,18 @@ function detectTrunk(root) {
 // the check is recognised.
 const CHECK_WORDS = { lint: ['lint', 'ruff'], typecheck: ['typecheck', 'type-check', 'mypy'] }
 
+const scriptsOf = (root) => { try { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts || {} } catch { return {} } }
+
 function detect(root) {
   const has = (f) => fs.existsSync(path.join(root, f))
   const read = (f) => { try { return fs.readFileSync(path.join(root, f), 'utf8') } catch { return '' } }
-  let scripts = {}
-  try { scripts = JSON.parse(read('package.json')).scripts || {} } catch { /* no package.json */ }
+  const scripts = scriptsOf(root)
   const pm = has('pnpm-lock.yaml') ? 'pnpm' : has('yarn.lock') ? 'yarn' : (has('bun.lockb') || has('bun.lock')) ? 'bun' : 'npm'
   const py = read('pyproject.toml')
   const make = read('Makefile')
   const target = (n) => new RegExp(`^${n}\\s*:`, 'm').test(make)
-  let setupCommand = null
-  if (has('package-lock.json')) setupCommand = 'npm ci'
-  else if (has('pnpm-lock.yaml')) setupCommand = 'pnpm install --frozen-lockfile'
-  else if (has('yarn.lock')) setupCommand = 'yarn install --frozen-lockfile'
-  else if (has('requirements.txt')) setupCommand = 'pip install -r requirements.txt'
-  else if (has('go.mod')) setupCommand = 'go mod download'
-  else if (has('Cargo.toml')) setupCommand = 'cargo fetch'
+  const setupCommand = ([['package-lock.json', 'npm ci'], ['pnpm-lock.yaml', 'pnpm install --frozen-lockfile'], ['yarn.lock', 'yarn install --frozen-lockfile'],
+    ['requirements.txt', 'pip install -r requirements.txt'], ['go.mod', 'go mod download'], ['Cargo.toml', 'cargo fetch']].find(([f]) => has(f)) || [])[1] || null
   const script = (...names) => { const n = names.find((x) => scripts[x]); return n ? `${pm} run ${n}` : null }
   const lint = script('lint', 'lint:ci') || (target('lint') ? 'make lint' : null) || ((has('ruff.toml') || /\[tool\.ruff/.test(py)) ? 'ruff check .' : null)
   const typecheck = script('typecheck', 'type-check') || (target('typecheck') ? 'make typecheck' : null) || ((has('mypy.ini') || /\[tool\.mypy/.test(py)) ? 'mypy .' : null)
@@ -62,8 +58,7 @@ function detect(root) {
 function covered(root, testCommand, check) {
   const re = new RegExp(`(^|[^A-Za-z0-9])(${CHECK_WORDS[check].join('|')})([^A-Za-z0-9]|$)`)
   if (re.test(testCommand)) return true
-  let scripts = {}
-  try { scripts = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts || {} } catch { /* none */ }
+  const scripts = scriptsOf(root)
   for (const tok of testCommand.split(/[\s;&|()]+/).filter(Boolean)) {
     if (typeof scripts[tok] === 'string' && re.test(scripts[tok])) return true
     try {
@@ -74,13 +69,30 @@ function covered(root, testCommand, check) {
   return false
 }
 
-// The checks `detect` found that `testCommand` does not run yet, in front of it.
+// One balanced `( … )` group: the `)` closing the first `(` is the last non-blank character, scanned with escapes,
+// '…', "…" and comments (`#` at the start or after whitespace, to the end of its line) blanked so their `)` never counts.
+function oneGroup(cmd) {
+  const s = cmd.replace(/\\[\s\S]|'[^']*'|"(?:\\[\s\S]|[^"\\])*"|(^|\s)#[^\n]*/g, (m, sp) => sp ?? '_').trim(); let depth = 0
+  for (let i = 0; i < s.length; i++) if (s[i] === '(') depth++; else if (s[i] === ')' && --depth === 0) return s[0] === '(' && i === s.length - 1
+  return false
+}
+
+// `a || b`, `a; b` and `a & b` bind looser than `&&`: group them so a failed check fails the whole gate; after a
+// comment, which would swallow it, the `)` goes on its own line.
+const group = (cmd) => !/\|\||;|\n|(?<!&)&(?!&)/.test(cmd) || oneGroup(cmd) ? cmd : /(^|\s)#/.test(cmd) ? `(${cmd}\n)` : `(${cmd})`
+
+// A chain setup wrote before the lint fix: only leading `<check> && ` prefixes `detect` found prove it ours.
+function repairChain(testCommand, commands) {
+  const front = []; let rest = testCommand; let c
+  while ((c = commands.find((x) => rest.startsWith(x + ' && ')))) { front.push(c); rest = rest.slice(c.length + 4) }
+  return front.length && rest ? [...front, group(rest)].join(' && ') : testCommand
+}
+
+// Repairs an old chain, then puts the checks `detect` found that it does not run yet in front of it.
 function chain(root, testCommand, checks) {
-  const front = checks.filter((c) => !covered(root, testCommand, c.check)).map((c) => c.command)
-  if (!front.length) return testCommand
-  // `a || b`, `a; b` and `a & b` bind looser than `&&`: group them so a failed check fails the whole gate.
-  const grouped = /\|\||;|\n|(?<!&)&(?!&)/.test(testCommand) ? `(${testCommand})` : testCommand
-  return [...front, grouped].join(' && ')
+  const cmd = repairChain(testCommand, checks.map((c) => c.command))
+  const front = checks.filter((c) => !covered(root, cmd, c.check)).map((c) => c.command)
+  return front.length ? [...front, group(cmd)].join(' && ') : cmd
 }
 
 function main(argv) {
@@ -110,9 +122,8 @@ function main(argv) {
     probe = run(cfg.testCommand, { cwd: root, timeoutMs: 600000 }).status
     if (probe !== 0) warns.push(`testCommand exited ${probe}${probe === 127 ? ' (command not found)' : ''} — fix it with: init.js --set testCommand=<cmd>`)
   }
-  const verified = probe === 0
   const outcome = questions.length ? 'config written — answers needed'
-    : verified ? '✅ initialized — config written, gate verified' : 'config written — gate not verified'
+    : probe === 0 ? '✅ initialized — config written, gate verified' : 'config written — gate not verified'
   if (opt.json) process.stdout.write(JSON.stringify({ config: cfg, gitignoreAdded: added, questions, warns, probe }) + '\n')
   else {
     process.stdout.write(render({
@@ -125,4 +136,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))
-module.exports = { ensureGitignore, detect, chain, IGNORE }
+module.exports = { ensureGitignore, detect, chain, repairChain, IGNORE }

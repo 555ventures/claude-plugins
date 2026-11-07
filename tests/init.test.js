@@ -135,3 +135,15 @@ test('AC-20261105-17-15 the contract, the footprint and the command files descri
   for (const f of ['spec/commands/enforce.md', 'spec/commands/init.md']) for (const w of ['package.json', 'Makefile', 'pyproject']) assert.ok(read(f).includes(w), `${f} names ${w}`)
   for (const code of ['not-ignored', 'bad-config', 'bad-settings']) assert.ok(read('spec/commands/connect.md').includes(code), code)
 })
+
+test('a failed lint always fails the gate: a testCommand with || ; or & is grouped behind the chained checks', () => {
+  const sh = (cmd) => require('child_process').spawnSync('sh', ['-c', cmd]).status
+  for (const cmd of ['false || true', 'false; true', 'sleep 0 & true']) {
+    const a = checks({ 'package.json': JSON.stringify({ scripts: { lint: 'exit 1' } }) }, ['--set', `testCommand=${cmd}`])
+    const got = cfgOf(a.d).testCommand
+    assert.strictEqual(got, `npm run lint && (${cmd})`)
+    assert.notStrictEqual(sh(got.replace('npm run lint', 'false')), 0, `a failed lint fails the gate for ${cmd}`)
+    runNode('scripts/init.js', ['--root', a.d, '--json'])
+    assert.strictEqual(cfgOf(a.d).testCommand, got, 'a re-run does not group again')
+  }
+})

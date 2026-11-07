@@ -76,7 +76,11 @@ function covered(root, testCommand, check) {
 
 // The checks `detect` found that `testCommand` does not run yet, in front of it.
 function chain(root, testCommand, checks) {
-  return [...checks.filter((c) => !covered(root, testCommand, c.check)).map((c) => c.command), testCommand].join(' && ')
+  const front = checks.filter((c) => !covered(root, testCommand, c.check)).map((c) => c.command)
+  if (!front.length) return testCommand
+  // `a || b`, `a; b` and `a & b` bind looser than `&&`: group them so a failed check fails the whole gate.
+  const grouped = /\|\||;|\n|(?<!&)&(?!&)/.test(testCommand) ? `(${testCommand})` : testCommand
+  return [...front, grouped].join(' && ')
 }
 
 function main(argv) {

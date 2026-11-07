@@ -1,37 +1,115 @@
 'use strict'
-// The size gate: a file over its cap may not grow past its merge-base size; tests never read more prose.
+// The size gate: capped files count bytes, a new spec/scripts line is at most 120 characters, a file past
+// its cap needs a size.json `over` entry citing a locked Decision, long test files warn, tests never read more prose.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { execFileSync } = require('child_process')
+const { spawnSync } = require('child_process')
 const { tmpdir, gitRepo } = require('./helpers')
 
 const CHECK = path.join(__dirname, 'size-check.js')
 const write = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
-const run = (d) => { try { return { status: 0, out: execFileSync('node', [CHECK, d], { encoding: 'utf8', stdio: 'pipe' }) } } catch (e) { return { status: e.status, out: e.stderr } } }
-const host = () => {
+const run = (d) => { const r = spawnSync('node', [CHECK, d], { encoding: 'utf8' }); return { status: r.status, out: r.stdout + r.stderr } }
+const CFG = { caps: { 'spec/scripts/*.js': 100, 'spec/scripts/lib/*.js': 100, 'tests/*.test.js': 500 }, totals: { 'spec/scripts/': 1000 } }
+const host = (cfg = CFG) => {
   const d = tmpdir('size'); const g = gitRepo(d)
-  write(d, 'tests/size.json', JSON.stringify({ caps: { 'spec/scripts/*.js': 3, 'tests/*.test.js': 500 }, totals: { 'spec/scripts/': 100 } }))
-  return { d, g }
+  write(d, 'tests/size.json', JSON.stringify(cfg))
+  return { d, g, cfg: (c) => write(d, 'tests/size.json', JSON.stringify(c)) }
 }
+const RAISE = 'specs/20261107/09-raise.md'
+const raiseSpec = (status, rows) => `---\nstatus: ${status}\n---\n\n# Raise\n\n## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n${rows}\n\n## File Plan\n\n| Path | Action | Summary |\n|------|--------|---------|\n| tests/size.json | MODIFY | spec/scripts/a.js D2 |\n`
 
-test('an over-cap file may hold at its merge-base size, never grow; a new one must be under cap', () => {
+test('AC-20261107-03-1 a capped script is measured in bytes: many short lines under the cap are green, bytes over it are red whatever the merge-base held', () => {
   const { d, g } = host()
-  write(d, 'spec/scripts/a.js', 'é\n'.repeat(5))
-  assert.match(run(d).out, /spec\/scripts\/a\.js 5 > cap 3 — cut it under the cap/)
+  write(d, 'spec/scripts/a.js', 'x\n'.repeat(45))
+  const green = run(d)
+  assert.strictEqual(green.status, 0, green.out)
+  write(d, 'spec/scripts/a.js', 'é\n'.repeat(40))
+  let r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/a\.js 120 bytes > cap 100/)
   g('add', '-A'); g('commit', '-qm', 'over cap at base')
+  r = run(d)
+  assert.strictEqual(r.status, 1, 'holding at its merge-base size is no longer a pass: ' + r.out)
+  assert.match(r.out, /spec\/scripts\/a\.js 120 bytes > cap 100/)
+  write(d, 'spec/scripts/lib/b.js', 'y'.repeat(99) + '\n'); write(d, 'spec/scripts/c.js', 'y'.repeat(99) + '\n')
+  write(d, 'spec/scripts/a.js', 'x\n')
   assert.strictEqual(run(d).status, 0)
-  write(d, 'spec/scripts/a.js', 'é\n'.repeat(6))
-  assert.match(run(d).out, /a\.js 6 > 5 at the merge-base \(cap 3\)/)
+  for (const f of ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']) write(d, `spec/scripts/${f}.js`, 'z'.repeat(99) + '\n')
+  r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/ 1102 bytes > cap 1000/)
 })
 
-test('a test that reads command, agent, doctrine or design prose is red unless its base read as much', () => {
+test('AC-20261107-03-2 a new spec/scripts line over 120 characters is red naming file:line; one the merge-base already held, and 120, are green', () => {
+  const { d, g } = host({ ...CFG, caps: { 'spec/scripts/*.js': 10000, 'spec/scripts/lib/*.js': 10000 }, totals: { 'spec/scripts/': 100000 } })
+  const long = 'é'.repeat(121)
+  write(d, 'spec/scripts/a.js', 'ok\n' + 'y'.repeat(120) + '\n')
+  assert.strictEqual(run(d).status, 0, '120 characters is green')
+  write(d, 'spec/scripts/a.js', 'ok\n' + long + '\n')
+  let r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/a\.js:2 121 > 120/)
+  write(d, 'spec/scripts/lib/b.js', '\n\n' + 'q'.repeat(121) + '\n')
+  assert.match(run(d).out, /spec\/scripts\/lib\/b\.js:3 121 > 120/, 'lib files too')
+  g('add', '-A'); g('commit', '-qm', 'long lines at base')
+  write(d, 'spec/scripts/a.js', 'moved\n\n' + long + '\n')
+  r = run(d)
+  assert.strictEqual(r.status, 0, 'an identical line at the merge-base is green: ' + r.out)
+  write(d, 'spec/scripts/a.js', 'moved\n\n' + long + 'x\n')
+  assert.match(run(d).out, /spec\/scripts\/a\.js:3 122 > 120/, 'a changed long line is red')
+  write(d, 'tests/t.test.js', 'w'.repeat(200) + '\n')
+  write(d, 'spec/scripts/a.js', long + '\n')
+  assert.strictEqual(run(d).status, 0, 'test files are not under the 120 rule')
+})
+
+test('AC-20261107-03-3 a file or total over its cap is green only on an over entry at or above its size citing a non-draft spec whose row Dn names the path', () => {
+  const { d, cfg } = host()
+  write(d, 'spec/scripts/a.js', 'x\n'.repeat(75))
+  const entry = (bytes, by) => cfg({ ...CFG, over: { 'spec/scripts/a.js': { bytes, by } } })
+  write(d, RAISE, raiseSpec('hardened', '| D1 | other | x |\n| D2 | raise spec/scripts/a.js to 160 bytes | a locked raise |'))
+  entry(160, `${RAISE} D2`)
+  let r = run(d)
+  assert.strictEqual(r.status, 0, r.out)
+  entry(150, `${RAISE} D2`)
+  assert.strictEqual(run(d).status, 0, 'bytes equal to the size is green')
+  const red = (why) => { const x = run(d); assert.strictEqual(x.status, 1, why + ': ' + x.out); assert.match(x.out, /spec\/scripts\/a\.js 150 bytes > cap 100 — over entry spec\/scripts\/a\.js/, why); return x.out }
+  entry(149, `${RAISE} D2`); assert.match(red('bytes below the size'), /bytes 149 < 150/)
+  entry(160, `${RAISE} D3`); assert.match(red('no row D3'), /D3/)
+  entry(160, `${RAISE} D1`); assert.match(red('row D1 does not name the path'), /D1/)
+  entry(160, 'specs/20261107/08-gone.md D2'); red('no spec on disk')
+  write(d, RAISE, raiseSpec('draft', '| D2 | raise spec/scripts/a.js to 160 bytes | a locked raise |'))
+  entry(160, `${RAISE} D2`); assert.match(red('a draft spec'), /draft/)
+  write(d, RAISE, '---\nstatus: done\n---\n\n# Raise\n\nspec/scripts/a.js D2\n')
+  r = run(d)
+  assert.strictEqual(r.status, 0, 'a non-draft stub with no Decisions section is not read further: ' + r.out)
+  entry(149, `${RAISE} D2`); assert.match(red('a stub still has its bytes checked'), /bytes 149 < 150/)
+  entry(160, `${RAISE} D2`)
+  write(d, RAISE, raiseSpec('done', '- D2: raise spec/scripts/ as a total'))
+  write(d, 'spec/scripts/a.js', 'x\n'); for (const f of 'bcdefghijkl') write(d, `spec/scripts/${f}.js`, 'z'.repeat(99) + '\n')
+  r = run(d)
+  assert.match(r.out, /spec\/scripts\/ 1102 bytes > cap 1000 — stop and say so/, r.out)
+  cfg({ ...CFG, over: { 'spec/scripts/': { bytes: 1200, by: `${RAISE} D2` } } })
+  r = run(d)
+  assert.strictEqual(r.status, 0, 'a total with an entry, a bullet Decisions row naming it: ' + r.out)
+})
+
+test('AC-20261107-03-4 a test file over 500 lines and a tests total past 4,000 warn and exit 0; a test reading more prose than its base stays red', () => {
   const { d, g } = host()
-  write(d, 'tests/a.test.js', "read('spec/comm" + "ands/run.md')\n")
-  assert.match(run(d).out, /tests\/a\.test\.js 1 prose references > cap 0/)
+  write(d, 'tests/x.test.js', '//\n'.repeat(600))
+  for (const f of 'abcdefg') write(d, `tests/${f}.test.js`, '//\n'.repeat(499))
+  const r = run(d)
+  assert.strictEqual(r.status, 0, r.out)
+  assert.ok(r.out.includes('size-check: ⚠️ tests/x.test.js 600 lines > 500 — split it by behaviour\n'), r.out)
+  assert.ok(!/a\.test\.js/.test(r.out), r.out)
+
+  write(d, 'tests/p.test.js', "read('spec/comm" + "ands/run.md')\n")
+  assert.match(run(d).out, /tests\/p\.test\.js 1 prose references > cap 0/)
   g('add', '-A'); g('commit', '-qm', 'base reads prose')
   assert.strictEqual(run(d).status, 0)
-  write(d, 'tests/a.test.js', "read('spec/comm" + "ands/run.md'); read('spec/doc" + "trine.md')\n")
-  assert.match(run(d).out, /2 prose references > 1 at the merge-base/)
+  write(d, 'tests/p.test.js', "read('spec/comm" + "ands/run.md'); read('spec/doc" + "trine.md')\n")
+  const p = run(d)
+  assert.strictEqual(p.status, 1)
+  assert.match(p.out, /2 prose references > 1 at the merge-base/)
 })

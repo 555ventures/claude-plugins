@@ -1,5 +1,6 @@
 {
   "testCommand": "npm test",
+  "testCountPattern": "ℹ tests (\\d+)",
   "setupCommand": "npm install",
   "trunk": "main",
   "forge": "github",

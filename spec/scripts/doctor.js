@@ -12,28 +12,20 @@ const { run, cacheDir, worktreeIncluded } = require('./lib/host')
 const { derive } = require('./lib/next')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
-const { IGNORE } = require('./init')
+const { IGNORE, detect, repairChain } = require('./init')
 
 function walkRuns(dir, out, depth = 0) {
-  if (depth > 3) return out
   let ents = []
-  try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
-  for (const e of ents) {
-    if (!e.isDirectory()) continue
-    const p = path.join(dir, e.name)
-    if (e.name.endsWith('.run')) out.push(p)
-    else walkRuns(p, out, depth + 1)
-  }
+  try { ents = depth > 3 ? [] : fs.readdirSync(dir, { withFileTypes: true }) } catch { /* unreadable: no runs */ }
+  for (const e of ents) if (e.isDirectory()) (e.name.endsWith('.run') ? out.push(path.join(dir, e.name)) : walkRuns(path.join(dir, e.name), out, depth + 1))
   return out
 }
 
 // Probe cap: SPEC_DOCTOR_PROBE_MS wins, then config doctorProbeMs, then 10 min (real gates take
 // minutes cold; a short cap reported healthy repos as "not proven healthy").
 function probeCap(cfg) {
-  const env = Number(process.env.SPEC_DOCTOR_PROBE_MS)
-  if (env > 0) return env
-  const c = cfg && Number(cfg.doctorProbeMs)
-  return c > 0 ? c : 600000
+  const env = Number(process.env.SPEC_DOCTOR_PROBE_MS); const c = cfg && Number(cfg.doctorProbeMs)
+  return env > 0 ? env : c > 0 ? c : 600000
 }
 
 // Free space and filesystem of the one holding `p` (df -Pk); null when df is unavailable.
@@ -54,11 +46,7 @@ function cachedGateMs(root) {
   let best = null
   try {
     const dir = cacheDir(root)
-    for (const n of fs.readdirSync(dir)) {
-      if (!n.endsWith('.json')) continue
-      const e = readJson(path.join(dir, n), null)
-      if (e && Number(e.ms) > 0 && (!best || String(e.ts) > String(best.ts))) best = e
-    }
+    for (const e of fs.readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => readJson(path.join(dir, n), null))) if (e && Number(e.ms) > 0 && (!best || String(e.ts) > String(best.ts))) best = e
   } catch { /* no cache yet */ }
   return best ? Number(best.ms) : null
 }
@@ -95,6 +83,7 @@ function check(root, { probe = true } = {}) {
     cfg = readJson(configPath(root), null)
     if (!cfg || typeof cfg !== 'object') f.push('config: .claude/spec.config.json does not parse')
     else if (!cfg.testCommand) f.push('config: testCommand is not set — run /spec:init')
+    else if (repairChain(cfg.testCommand, detect(root).checks.map((c) => c.command)) !== cfg.testCommand) f.push('config: testCommand lets a failed check pass the gate — run /spec:init')
   }
   let probedMs = null
   if (probe && cfg && cfg.testCommand) {

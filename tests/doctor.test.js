@@ -6,17 +6,19 @@ const path = require('path')
 const { execFileSync } = require('child_process')
 const { tmpdir, gitRepo, runNode, SPEC } = require('./helpers')
 
-const setup = (cfg) => {
+const doctor = require(path.join(SPEC, 'scripts/doctor.js'))
+const setup = (cfg, scripts) => {
   const d = tmpdir('doctor')
   gitRepo(d)
   fs.mkdirSync(path.join(d, '.claude'), { recursive: true })
   if (cfg) fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify(cfg))
+  if (scripts) fs.writeFileSync(path.join(d, 'package.json'), JSON.stringify({ scripts }))
   return d
 }
+const inited = (cfg) => { const d = setup(cfg); runNode('scripts/init.js', ['--root', d]); return d }
 
 test('clean host exits 0', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   const r = runNode('scripts/doctor.js', ['--root', d, '--json'])
   assert.strictEqual(r.status, 0, r.stdout)
   assert.deepStrictEqual(JSON.parse(r.stdout).findings, [])
@@ -41,8 +43,7 @@ test('missing or unparsable config is a finding', () => {
 })
 
 test('probe timeout is a finding, not healthy; probe is announced', () => {
-  const d = setup({ testCommand: 'sleep 5' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'sleep 5' })
   const r = runNode('scripts/doctor.js', ['--root', d, '--json'], { env: { SPEC_DOCTOR_PROBE_MS: '300' } })
   assert.strictEqual(r.status, 1)
   assert.ok(JSON.parse(r.stdout).findings.some((x) => /timed out/.test(x)))
@@ -51,7 +52,7 @@ test('probe timeout is a finding, not healthy; probe is announced', () => {
 })
 
 test('probe cap: default 10 min, config doctorProbeMs overrides, env wins; the timeout remedy names doctorProbeMs', () => {
-  const { probeCap } = require(path.join(require('./helpers').SPEC, 'scripts/doctor.js'))
+  const { probeCap } = doctor
   const env = process.env.SPEC_DOCTOR_PROBE_MS
   delete process.env.SPEC_DOCTOR_PROBE_MS
   try {
@@ -61,8 +62,7 @@ test('probe cap: default 10 min, config doctorProbeMs overrides, env wins; the t
     process.env.SPEC_DOCTOR_PROBE_MS = '42'
     assert.strictEqual(probeCap({ testCommand: 'true', doctorProbeMs: 900000 }), 42)
   } finally { if (env === undefined) delete process.env.SPEC_DOCTOR_PROBE_MS; else process.env.SPEC_DOCTOR_PROBE_MS = env }
-  const d = setup({ testCommand: 'sleep 5', doctorProbeMs: 300 })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'sleep 5', doctorProbeMs: 300 })
   const r = runNode('scripts/doctor.js', ['--root', d, '--json'], { env: { SPEC_DOCTOR_PROBE_MS: undefined } })
   assert.strictEqual(r.status, 1)
   const f = JSON.parse(r.stdout).findings.find((x) => /timed out after 0\.3s/.test(x))
@@ -71,8 +71,7 @@ test('probe cap: default 10 min, config doctorProbeMs overrides, env wins; the t
 })
 
 test('tracked settings.local.json and uncommitted migration are findings', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   fs.writeFileSync(path.join(d, '.claude/settings.local.json'), '{}')
   fs.mkdirSync(path.join(d, 'docs/archive/v7'), { recursive: true })
   fs.writeFileSync(path.join(d, 'docs/archive/v7/a.md'), 'a')
@@ -88,7 +87,6 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   fs.writeFileSync(path.join(d, 'specs/20260101/01-live.run/state.json'), JSON.stringify({ step: 'BUILD' }))
   fs.mkdirSync(path.join(d, 'specs/20260101/02-old.run'), { recursive: true })
   fs.writeFileSync(path.join(d, 'specs/20260101/02-old.run/state.json'), JSON.stringify({ step: 'DONE', ended: true }))
-  const { execFileSync } = require('child_process')
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/03-busy', '.claude/worktrees/spec-03-busy'])
   fs.writeFileSync(path.join(d, '.claude/worktrees/spec-03-busy/wip.txt'), 'x')
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/04-idle', '.claude/worktrees/spec-04-idle'])
@@ -107,8 +105,7 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
 })
 
 test('a sidecar at DONE or STOPPED is stale, whatever its spec says', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   for (const [stem, step] of [['01-done', 'DONE'], ['02-stopped', 'STOPPED']]) {
     fs.mkdirSync(path.join(d, `specs/20260101/${stem}.run`), { recursive: true })
     fs.writeFileSync(path.join(d, `specs/20260101/${stem}.run/state.json`), JSON.stringify({ step }))
@@ -128,7 +125,6 @@ test('gitignore is judged by git: a broader pattern that covers the sidecars is 
 test('check(root, { probe: false }) returns the same findings without running the test command', () => {
   const marker = 'probed.marker'
   const d = setup({ testCommand: `touch ${marker}; exit 3` })
-  const doctor = require(path.join(require('./helpers').SPEC, 'scripts/doctor.js'))
   const quiet = doctor.check(d, { probe: false })
   assert.ok(!fs.existsSync(path.join(d, marker)), 'the test command did not run')
   assert.ok(!quiet.findings.some((x) => /^testCommand:/.test(x)))
@@ -158,8 +154,7 @@ const FIVE_GB = 5 * 1024 * 1024
 const cores = os.cpus().length
 
 test('AC-20261105-08-10 doctor prints a box: info line with cores, the measured gate time and the free space of TMPDIR and the worktrees filesystem', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   const j = doctorJson(d, { ...fakeDf(FIVE_GB), TMPDIR: '/var/tmp' })
   const box = j.info.find((x) => x.startsWith('box:'))
   assert.ok(box, 'a box: line: ' + j.info)
@@ -170,8 +165,7 @@ test('AC-20261105-08-10 doctor prints a box: info line with cores, the measured 
 })
 
 test('AC-20261105-08-11 lanes above cores/2 prints the advice line and still exits 0; lanes at or under it prints none', () => {
-  const over = setup({ testCommand: 'true', lanes: 1000 })
-  runNode('scripts/init.js', ['--root', over])
+  const over = inited({ testCommand: 'true', lanes: 1000 })
   const j = doctorJson(over, fakeDf(FIVE_GB))
   assert.strictEqual(j.status, 0, 'advice is not a finding')
   assert.deepStrictEqual(j.findings, [])
@@ -179,14 +173,12 @@ test('AC-20261105-08-11 lanes above cores/2 prints the advice line and still exi
   assert.ok(w, j.info.join('\n'))
   assert.ok(w.includes(`(${cores}) — set "lanes": ${Math.max(1, Math.floor(cores / 2))} in .claude/spec.config.json`), w)
   assert.ok(!w.includes('"gateConcurrency": 1'), 'lanes count builders and the gate lock already caps gates: too many lanes is fixed by lanes, never by gateConcurrency')
-  const under = setup({ testCommand: 'true', lanes: Math.max(1, Math.floor(cores / 2)) })
-  runNode('scripts/init.js', ['--root', under])
+  const under = inited({ testCommand: 'true', lanes: Math.max(1, Math.floor(cores / 2)) })
   assert.ok(!doctorJson(under, fakeDf(FIVE_GB)).info.some((x) => x.includes('cores/2')), 'lanes within cores/2: no advice')
 })
 
 test('AC-20261105-08-12 a gate over two minutes and a TMPDIR under 2 GB each print their ⚠️ info line with the remedy', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   const cache = path.join(d, '.git', 'spec-run-cache')
   fs.mkdirSync(cache, { recursive: true })
   fs.writeFileSync(path.join(cache, 'old.json'), JSON.stringify({ cmd: 'true', tree: 'a', ms: 5000, ts: '2026-01-01T00:00:00.000Z' }))
@@ -194,8 +186,7 @@ test('AC-20261105-08-12 a gate over two minutes and a TMPDIR under 2 GB each pri
   const saved = process.env.PATH
   process.env.PATH = fakeDf(1500000).PATH // 1.4 GB free
   try {
-    const { check } = require(path.join(require('./helpers').SPEC, 'scripts/doctor.js'))
-    const { info, findings } = check(d, { probe: false })
+    const { info, findings } = doctor.check(d, { probe: false })
     assert.deepStrictEqual(findings, [])
     assert.match(info.find((x) => x.startsWith('box:')), /gate 130s \(cached\)/, 'no probe: the newest cached run supplies the time')
     assert.ok(!info.some((x) => x.includes('gate took')), 'a slow gate alone is no evidence two gates compete: doctor reports the time, never gateConcurrency advice')
@@ -207,8 +198,7 @@ test('AC-20261105-08-12 a gate over two minutes and a TMPDIR under 2 GB each pri
 })
 
 test('an untracked .env or .env.local that .worktreeinclude does not name is a finding naming the line to add; a tracked or named one is not', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   fs.writeFileSync(path.join(d, '.env'), 'K=1\n')
   fs.writeFileSync(path.join(d, '.env.local'), 'K=2\n')
   fs.appendFileSync(path.join(d, '.gitignore'), '.env\n.env.local\n')
@@ -223,8 +213,7 @@ test('an untracked .env or .env.local that .worktreeinclude does not name is a f
 })
 
 test('AC-20261105-14-13 doctor reads prototype worktrees: in flight, leftover, v7 record', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   const rec = (stem, status) => {
     fs.mkdirSync(path.join(d, 'design/prototypes', stem), { recursive: true })
     fs.writeFileSync(path.join(d, 'design/prototypes', stem, 'status.json'), JSON.stringify(status))
@@ -264,8 +253,7 @@ const briefDoc = (nn, title) => `# ${nn} — ${title}\n\nPhase: P1 · Depends on
 const specDoc = (stat, brief) => `---\nstatus: ${stat}\nbrief: ${brief}\n---\n# S\n\n## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n| x.js | MODIFY | x |\n`
 
 test('AC-20261105-17-8 doctor reports status\'s hygiene anomalies as roadmap findings and the decide ones as info lines', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   put(d, 'docs/roadmap/03-rounds.md', briefDoc('03', 'Rounds'))
   put(d, 'specs/20261104/01-rounds.md', specDoc('done', '03'))
   put(d, 'specs/20261104/02-stamp.md', specDoc('hardened', '77')) // orphan-stamp: hygiene
@@ -281,8 +269,7 @@ test('AC-20261105-17-8 doctor reports status\'s hygiene anomalies as roadmap fin
   assert.deepStrictEqual(j.findings.filter((x) => x.startsWith('roadmap: [')), hygiene.map((a) => `roadmap: [${a.kind}] ${a.detail}`))
   assert.deepStrictEqual(j.info.filter((x) => x.startsWith('roadmap: [')), decide.map((a) => `roadmap: [${a.kind}] ${a.detail}`))
   assert.ok(!j.findings.some((x) => x.includes('brief-done-queued')), 'a decide anomaly adds no finding')
-  const clean = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', clean])
+  const clean = inited({ testCommand: 'true' })
   assert.deepStrictEqual(JSON.parse(runNode('scripts/doctor.js', ['--root', clean, '--json']).stdout).findings, [], 'no roadmap, no roadmap finding')
 })
 
@@ -298,8 +285,7 @@ test('AC-20261105-17-9 a missing .gitignore entry names its remedy: migrate on a
 })
 
 test('AC-20261105-17-11 a .env that .worktreeinclude matches is named for lanes: no finding', () => {
-  const d = setup({ testCommand: 'true' })
-  runNode('scripts/init.js', ['--root', d])
+  const d = inited({ testCommand: 'true' })
   fs.writeFileSync(path.join(d, '.env'), 'K=1\n')
   fs.writeFileSync(path.join(d, '.env.local'), 'K=2\n')
   fs.appendFileSync(path.join(d, '.gitignore'), '.env\n.env.local\n')
@@ -318,4 +304,16 @@ test('a directory outside any repository is a refusal naming the remedy, not a c
   const out = JSON.parse(r.stdout)
   assert.strictEqual(out.ok, false)
   assert.ok(out.findings.some((x) => /not inside a git repository/.test(x) && /run git i/.test(x)), out.findings.join('\n'))
+})
+
+// ---- spec 20261106/04: doctor names an unsafe chain setup wrote before the lint fix ---------------
+const UNSAFE = 'config: testCommand lets a failed check pass the gate — run /spec:init'
+
+test('AC-20261106-04-6 AC-20261106-04-3 an unsafe chain is a config finding with and without the probe; a hand-written one is none', () => {
+  const d = setup({ testCommand: 'npm run lint && true || true' }, { lint: 'true' })
+  for (const opts of [undefined, { probe: false }]) assert.ok(doctor.check(d, opts).findings.includes(UNSAFE), JSON.stringify(opts))
+  const r = runNode('scripts/doctor.js', ['--root', d])
+  assert.strictEqual(r.status, 1)
+  assert.ok(r.stdout.includes('- ' + UNSAFE), r.stdout)
+  for (const h of [setup({ testCommand: 'a || b' }), setup({ testCommand: 'custom-lint && a || b' }, { lint: 'true' })]) assert.ok(!doctor.check(h, { probe: false }).findings.includes(UNSAFE))
 })

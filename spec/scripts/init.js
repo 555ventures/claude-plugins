@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict'
-// init.js — detect trunk, test/setup/lint/typecheck commands; merge .claude/spec.config.json;
-// ensure .gitignore entries. node init.js [--root <dir>] [--json] [--set key=value]...
+// init.js — detect trunk, test/setup/lint/typecheck commands and, from the probe, testCountPattern; merge
+// .claude/spec.config.json; ensure .gitignore entries. node init.js [--root <dir>] [--json] [--set key=value]...
 // Prints undetected keys as a JSON `questions` list; answers come back through --set.
 
 const fs = require('fs')
 const path = require('path')
 const { readJson, writeConfig, configPath } = require('./lib/state')
-const { run, detectTestCommand } = require('./lib/host')
+const { run, detectTestCommand, testsExecuted, COUNT_PATTERNS } = require('./lib/host')
 const git = require('./lib/git')
 const { render } = require('./lib/report')
 
@@ -119,7 +119,12 @@ function main(argv) {
   const warns = []
   let probe = null
   if (cfg.testCommand) {
-    probe = run(cfg.testCommand, { cwd: root, timeoutMs: 600000 }).status
+    const r = run(cfg.testCommand, { cwd: root, timeoutMs: 600000 })
+    probe = r.status
+    // The probe's own summary turns the gate's zero-tests check on; a value already there, `none` too, is kept.
+    const pat = probe === 0 && cfg.testCountPattern == null
+      && COUNT_PATTERNS.find((p) => testsExecuted(r.stdout + r.stderr, p) > 0)
+    if (pat) { cfg.testCountPattern = pat; writeConfig(root, cfg) }
     if (probe !== 0) warns.push(`testCommand exited ${probe}${probe === 127 ? ' (command not found)' : ''} — fix it with: init.js --set testCommand=<cmd>`)
   }
   const outcome = questions.length ? 'config written — answers needed'

@@ -11,6 +11,7 @@ package.json (`lint`, else `lint:ci`; `typecheck`, else `type-check`), a Makefil
 targets) or pyproject (`ruff.toml`, `mypy.ini`) in front of it, also when the user answers the test
 command by hand and on a re-run, unless the command already runs the check. A bare eslint, tsconfig,
 golangci or clippy config adds nothing. `gate verified` is printed only when `testCommand` exits 0;
-any other exit prints `gate not verified` and the exit code. Ask only what the code can't answer: this session asks
+any other exit prints `gate not verified` and the exit code. A green probe whose output carries a known runner summary
+(node --test, jest, vitest, pytest) sets `testCountPattern`, unless one is already there (`none` too). Ask only what the code can't answer: this session asks
 the printed `questions` together in ONE AskUserQuestion, then answers with
 `init.js --set key=value` (one `--set` per answer).

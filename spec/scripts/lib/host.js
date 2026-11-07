@@ -148,6 +148,11 @@ function testsExecuted(output, pattern) {
   return last ? Number(last[1]) || 0 : null
 }
 
+// Known runner summaries, one capture group each: node --test TAP and spec reporter, jest, vitest, pytest. init sets
+// the first that counts more than 0 in its probe's output as config.testCountPattern.
+const COUNT_PATTERNS = ['# tests (\\d+)', 'ℹ tests (\\d+)', 'Tests:\\s+(\\d+) passed', 'Tests\\s+(\\d+) passed',
+  '(\\d+) passed']
+
 // Runs config.testCommand in root unless this exact tree already ran green under it. With config.testCountPattern
 // set (not `none`), an exit 0 that counts 0 tests or matches nothing is red.
 function gate(root, config, { timeoutMs } = {}) {
@@ -261,4 +266,4 @@ function allocApp(urlTemplate) {
 
 module.exports = { freePort, resolveUrl, listening, allocApp, withApp, run, gate, treeSha, cacheDir, commonDir,
   copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine,
-  testsExecuted }
+  testsExecuted, COUNT_PATTERNS }

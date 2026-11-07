@@ -54,6 +54,17 @@ test('undetectable repo returns a testCommand question; --set fills it and gate 
   const again = runNode('scripts/init.js', ['--root', d, '--json'])
   assert.strictEqual(cfgOf(d).testCommand, 'exit 0')
   assert.strictEqual(fs.readFileSync(path.join(d, '.gitignore'), 'utf8').split('specs/**/*.run/').length, 2, again.stderr)
+  assert.strictEqual(cfgOf(d).testCountPattern, undefined, 'a gate that prints no known summary leaves the key unset')
+  // the probe's own summary sets testCountPattern, so the gate's zero-tests check is on; a value already there is kept
+  const tap = "printf '# tests 3\\n# pass 3\\n'"
+  const t = repo({})
+  runNode('scripts/init.js', ['--root', t, '--json', '--set', `testCommand=${tap}`])
+  assert.strictEqual(cfgOf(t).testCountPattern, '# tests (\\d+)')
+  for (const kept of ['none', 'ran (\\d+)']) {
+    const k = repo({ '.claude/spec.config.json': JSON.stringify({ testCommand: tap, testCountPattern: kept }) })
+    runNode('scripts/init.js', ['--root', k, '--json'])
+    assert.strictEqual(cfgOf(k).testCountPattern, kept)
+  }
 })
 
 test('AC-20261105-17-1 a gate that exits 1 is written but not verified: warn, exit 0, no verified line', () => {

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-06
-status: hardened
+status: draft
 area: doctrine
 depends_on: []
 brief: 39

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-06
-status: hardened
+status: draft
 area: queue
 depends_on: []
 brief: n/a

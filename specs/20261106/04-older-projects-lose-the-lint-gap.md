@@ -2,7 +2,7 @@
 date: 2026-11-06
 status: hardened
 area: init
-depends_on: [specs/20261106/01-the-queue-travels-with-the-repo.md]
+depends_on: []
 brief: n/a
 architecture: false
 breaking: false

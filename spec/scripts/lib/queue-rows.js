@@ -93,8 +93,13 @@ function ctxOf(root) {
 }
 const nameOf = (c, it) => c.byNum.get(work.normBrief(it.payload))
 const gate = (c, it) => work.gateWhy(c.root, it.after, c.cache) // null = met or none
-// A brief item whose brief has every spec done (or is superseded) stays queued until the user closes it.
+// A brief item whose brief has every spec done (or is superseded) and is still queued: the user closes it.
 const finished = (c, it) => { const b = it.kind === 'brief' && nameOf(c, it); return b && ['done', 'superseded'].includes(b.status) ? b.status : null }
+// The list tag of a finished brief: a done one with open steps outside specs says how many.
+const finTag = (c, it, fin) => {
+  const n = (nameOf(c, it).open || []).length
+  return fin === 'done' ? `✔ specs done${n ? `, ${n} step(s) open` : ''}` : '⛔ superseded'
+}
 const inProgress = (c, it) => it.kind === 'spec' ? busy([c.statusOf.get(it.payload)])
   : it.kind === 'brief' ? busy(((nameOf(c, it) || { specs: [] }).specs).map((s) => s.status))
     : busy([], it.type === 'fix' ? laneOf(c.root, it.id) : null)
@@ -136,7 +141,7 @@ function list(root, q, json) {
     const tail = (info(it).inProgress ? '  🔨 in progress' : '') +
       (it.after ? (why ? `  ⏳ after ${why.replace(/^\S*\//, '').replace(/\.md(?= \()/, '')}` : '  ⏳ gate met') : '') +
       (cites ? `  📎 cites done ${path.basename(cites).replace(/\.md$/, '')}` : '') + (isStale(it) ? '  ⌛ stale' : '') +
-      (fin ? `  ${fin === 'done' ? '✔ specs done' : '⛔ superseded'} — /spec:queue done ${work.normBrief(it.payload)}` : '')
+      (fin ? `  ${finTag(c, it, fin)} — /spec:queue done ${work.normBrief(it.payload)}` : '')
     const words = it.kind === 'brief' ? desc(c, it) : it.kind === 'spec' ? it.payload : text(it)
     return head + oneLine(words, Math.max(20, ROW_WIDTH() - head.length - tail.length)) + tail
   })

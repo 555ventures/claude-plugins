@@ -232,7 +232,7 @@ test('AC-20261105-04-5 a superseded spec meets a spec gate; a path with no file 
   assert.match(q(d, 'list').stdout, /ghost gate {2}⏳ after brief 77 \(missing\)/)
 })
 
-test('AC-20261105-04-6 AC-20261105-10-15 a brief item is never ticked by the driver (it stays pending); a spec item ticks only with no live sidecar', () => {
+test('AC-20261105-04-6 AC-20261105-10-15 a brief item is never ticked by a read (it stays pending); a spec item ticks only with no live sidecar', () => {
   const d = empty()
   w(d, 'docs/roadmap/03-rounds.md', '# 03\n'); w(d, 'docs/roadmap/04-boards.md', '# 04\n')
   w(d, 'specs/20261104/03-a.md', sp('done', '03')); w(d, 'specs/20261104/03-b.md', sp('superseded', '03'))
@@ -251,7 +251,7 @@ test('AC-20261105-04-6 AC-20261105-10-15 a brief item is never ticked by the dri
   assert.ok(!items(d).some((i) => i.payload === 'specs/20261104/01-a.md'), 'an ended sidecar ticks it')
 })
 
-test('AC-20261105-04-11 the interface contract and architecture name type, after, --type, --after, decide and the ⏳ row; §7 drops the v7 fields', () => {
+test('AC-20261105-04-11 AC-20261107-05-7 the interface contract and architecture name type, after, --type, --after, decide and the ⏳ row; §7 drops the v7 fields; the brief template and queue.md carry Steps outside specs, queue.md and architecture.md name auto-closed brief and drop the never-ticked rule, the contract list row carries step(s) open', () => {
   const root = path.join(__dirname, '..')
   const ic = fs.readFileSync(path.join(root, 'docs/v8/interface-contract.md'), 'utf8')
   const arch = fs.readFileSync(path.join(root, 'docs/v8/architecture.md'), 'utf8')
@@ -262,6 +262,15 @@ test('AC-20261105-04-11 the interface contract and architecture name type, after
   for (const t of ['lane?', 'when?', 'origin?', 'trigger?']) assert.ok(!s7.includes(t), '§7 no longer names ' + t)
   const cmd = fs.readFileSync(path.join(root, 'spec/commands/queue.md'), 'utf8')
   assert.ok(cmd.includes('--type') && cmd.includes('--after') && cmd.includes('⏳ after'))
+  const tpl = fs.readFileSync(path.join(root, 'spec/templates/roadmap-brief.md'), 'utf8')
+  assert.ok(tpl.includes('\n## Steps outside specs\n') && cmd.includes('## Steps outside specs'))
+  for (const t of [cmd, arch]) {
+    assert.ok(t.includes('auto-closed brief'))
+    const flat = t.replace(/\s+/g, ' ')
+    for (const bad of ['the driver never ticks it', 'never ticked by the driver']) assert.ok(!flat.includes(bad), bad)
+  }
+  const row = ic.split('\n').find((l) => l.startsWith('| `list` |'))
+  assert.ok(row && row.includes('step(s) open'), row)
 })
 
 test('AC-20261105-07-14 --type or --after with no value exits 2 with needs a value and adds nothing', () => {
@@ -276,7 +285,7 @@ test('AC-20261105-07-14 --type or --after with no value exits 2 with needs a val
   assert.strictEqual(JSON.parse(q(d, 'list', '--json').stdout).items.length, 0, 'nothing was added')
 })
 
-// ---- spec 20261105/10: a brief closes when the user says so -----------------------------------
+// ---- spec 20261105/10: a finished brief still queued, closed by done ------------------------------
 
 function finishedBrief() {
   const d = empty()
@@ -941,3 +950,18 @@ test('add refuses a payload that opens with -- (a mistyped flag) and queues noth
   assert.ok(r.stderr.includes('unknown flag --help'), r.stderr)
   assert.deepStrictEqual(Q.read(d).items, [], 'nothing was queued')
 })
+
+// ---- spec 20261107/05: a finished brief closes itself ----------------------------------------------
+
+test('AC-20261107-05-6 an unstored done brief with an open step stays listed with its count, next skips it; ticking the box drops it; a stored done brief keeps today\'s tail', () => {
+  const d = empty()
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n\n## Steps outside specs\n\n- [ ] cut over DNS\n')
+  w(d, 'specs/20261104/03-a.md', sp('done', '03'))
+  assert.match(q(d, 'list').stdout, /^1 {2}— {2}\? {2}📝 plan {7}brief 03 \(rounds\) {2}✔ specs done, 1 step\(s\) open — \/spec:queue done 03$/m)
+  assert.strictEqual(q(d, 'next').stdout.trim(), 'nothing ready — 1 waiting on after gates or finished briefs')
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n\n## Steps outside specs\n\n- [x] cut over DNS\n')
+  assert.strictEqual(q(d, 'list').stdout.trim(), '✨ nothing pending · 0 done')
+  q(d, 'add', '03')
+  assert.match(q(d, 'list').stdout, /^1 {2}q1 {2}0d {2}📝 plan {7}brief 03 \(rounds\) {2}✔ specs done — \/spec:queue done 03$/m)
+})
+

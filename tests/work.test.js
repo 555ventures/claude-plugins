@@ -59,6 +59,15 @@ test('AC-20261105-04-7 brief state: a Superseded banner with no live member spec
   assert.deepStrictEqual(st, { '05': 'superseded', '06': 'superseded' })
 })
 
+test('AC-20261107-05-1 readBriefs lists the open boxes under ## Steps outside specs, comments stripped; no section is []; status is unchanged', () => {
+  const d = tmpdir('work'); gitRepo(d)
+  w(d, 'docs/roadmap/03-rounds.md', '# 03\n\n## Scope\n\n- [ ] e\n\n## Steps Outside Specs\n\n- [ ] a\n- [x] b\n* [X] b2\n1. [ ] c\n<!-- - [ ] d\n-->\n\n### sub\n\n+ [ ] f  \n\n## Notes\n\n- [ ] e2\n')
+  w(d, 'docs/roadmap/04-boards.md', '# 04\n\n## Scope\n\n- [ ] e\n')
+  w(d, 'specs/20261105/03-x.md', sp('done', '03')); w(d, 'specs/20261105/04-x.md', sp('hardened', '04'))
+  const bs = W.readBriefs(d, W.readSpecs(d))
+  assert.deepStrictEqual(bs.map((b) => [b.num, b.open, b.status]), [['03', ['a', 'c', 'f'], 'done'], ['04', [], 'in-flight']])
+})
+
 test('readSpecs: a live lane sidecar makes a hardened spec implementing; depends_on loses @ and ./', () => {
   const d = tmpdir('work'); gitRepo(d)
   w(d, 'specs/20261105/01-x.md', sp('hardened', 'n/a', 'depends_on: @specs/a.md, ./specs/b.md\n'))

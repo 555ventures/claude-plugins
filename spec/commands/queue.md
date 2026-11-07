@@ -16,9 +16,14 @@ item has no id (`—`): name it by its brief number or spec path. `move` or `don
 on unfinished work prints `⚠️ <ref> is still open work, so it stays in the list`. `next` prints the real next
 command (a prompt's paste line, else the derivation's top pick as `/spec:run @<spec>` with its `⏳` branches when it
 is blocked) and never a blocked spec while an unblocked one exists. An item whose `--after` gate is unmet is skipped
-by `next` and listed with `⏳ after <target> (<state>)`. A brief item is closed only by `done`: the driver never
-ticks it when the brief's last spec merges. `next` skips a finished brief (every spec done, or superseded) and
-`list` ends its row with `✔ specs done — /spec:queue done NN` (`⛔ superseded` for a superseded brief); the status
+by `next` and listed with `⏳ after <target> (<state>)`. When `/spec:run` or `/spec:fanout` merges a brief's last
+spec and the brief's `## Steps outside specs` lists no open `- [ ]` box, the brief closes itself: its item is ticked
+(an unstored brief leaves the fill) and the report says `📌 auto-closed brief NN (<name>) — its last spec merged and
+<file> lists no open step (veto anytime)`. To veto, add an open box and the fill brings it back, or
+`/spec:queue add NN`. With a box still open the brief stays queued and the report warns how many steps are open; an
+in-place run, a superseded last spec or a box ticked after the merge closes nothing, and `done` closes it. `next`
+skips a finished brief (every spec done, or superseded) and `list` ends its row with `✔ specs done — /spec:queue
+done NN` (`✔ specs done, N step(s) open — …` with open steps, `⛔ superseded` for a superseded brief); the status
 screen raises a decide line to close it.
 
 `list` rows are `n  id  age  type  text` and end with the flags `🔨 in progress`, `⏳`, `📎 cites done`, `⌛ stale`: the

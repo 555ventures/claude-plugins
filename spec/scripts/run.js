@@ -12,7 +12,7 @@ const { spawnSync } = require('child_process')
 const { makeDriver, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state'); const S = require('./lib/spec'); const B = require('./lib/briefs'); const Q = require('./lib/queue')
 const host = require('./lib/host'); const git = require('./lib/git'); const pending = require('./lib/pending')
-const { land } = require('./lib/land'); const { render } = require('./lib/report')
+const { land, briefClosed, briefOpen } = require('./lib/land'); const { render } = require('./lib/report')
 const criteria = require('./lib/criteria')
 
 const PLUGIN = path.resolve(__dirname, '..')
@@ -260,6 +260,8 @@ function merge(state, ctx) {
   if (r.red) return go(state, 'GATE', { base: r.base, review: null, attempts: { repair: 0, fix: 0 } })
   if (r.kept) state.commitWarns = [...(state.commitWarns || []), `worktree kept at ${state.worktree}: ${r.kept} — git worktree remove --force ${state.worktree}`]
   state.mergeSha = state.inPlace ? null : r.landed
+  if (r.brief && r.brief.closed) decide(state, briefClosed(r.brief))
+  else if (r.brief && r.brief.open.length) state.commitWarns = [...(state.commitWarns || []), briefOpen(r.brief)]
   const head = Q.open(Q.read(ctx.root))[0]
   state.report = B.report(state, state.fix ? `✅ fixed — ${state.fix.symptom}` : state.inPlace ? `✅ ${s.id} built and reviewed on ${state.branch}` : `✅ ${s.id} built, reviewed and merged`, head ? Q.paste(ctx.root, head) : undefined)
   return go(state, 'DONE', { ended: true, marked: false })

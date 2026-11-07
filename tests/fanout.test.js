@@ -345,6 +345,58 @@ test('a re-locked AMENDED lane whose rebase conflicts: the spec is locked and th
   assert.ok(fs.readFileSync(alpha, 'utf8').includes('Amended on trunk.'), 'the lane has the amended spec')
 })
 
+test('a lane that ends AMENDED with a rebase in progress and is re-locked is reset on its next fanout, not re-planned for ever', () => {
+  const h = host()
+  dispatchTwo(h)
+  const w = h.wt('01-alpha')
+  const alpha = path.join(w, specPath('01-alpha'))
+  // The lane has a commit on src/a.js and trunk moves it too: a rebase onto trunk conflicts and is left in progress.
+  fs.mkdirSync(path.join(w, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(w, 'src/a.js'), 'lane\n')
+  gitIn(w, 'add', '-A'); gitIn(w, 'commit', '-q', '-m', 'lane work')
+  fs.mkdirSync(path.join(h.dir, 'src'), { recursive: true })
+  fs.writeFileSync(path.join(h.dir, 'src/a.js'), 'trunk\n')
+  h.g('add', '-A'); h.g('commit', '-q', '-m', 'trunk edit')
+  const tip = h.g('rev-parse', 'main').trim()
+  assert.throws(() => gitIn(w, '-c', 'core.editor=true', 'rebase', 'main'), /./, 'the rebase conflicts')
+  const gd = gitIn(w, 'rev-parse', '--absolute-git-dir').trim()
+  const rebaseOn = () => fs.existsSync(path.join(gd, 'rebase-merge')) || fs.existsSync(path.join(gd, 'rebase-apply'))
+  assert.ok(rebaseOn(), 'a rebase is in progress in the lane')
+  // The lane ends AMENDED mid-rebase (the lane driver does not guard an AMENDED step) and returns.
+  st.writeStatus(alpha, 'draft')
+  st.writeRun(alpha, { step: 'AMENDED', spec: specPath('01-alpha'), lane: true, worktree: '.', branch: 'spec/01-alpha', base: tip, amendedOn: tip, attempts: { repair: 1, fix: 1 }, gate: { tree: 'x' }, review: { verdict: 'fix' }, report: 'old', widened: ['src/old.js'], opus: true })
+  h.ok('--mark', 'returned', '--lane', '1')
+  h.finish('02-beta', 'src/b.js')
+  h.ok('--mark', 'returned', '--lane', '2')
+  h.ok('--mark', 'reported')
+  // The user amends the spec on trunk and locks it.
+  const trunkSpec = path.join(h.dir, specPath('01-alpha'))
+  fs.writeFileSync(trunkSpec, fs.readFileSync(trunkSpec, 'utf8') + '\nAmended on trunk.\n')
+  h.g('add', '-A'); h.g('commit', '-q', '-m', 'chore(spec): lock 20261104/01')
+  const plan = JSON.parse(h.run('--json').stdout).body
+  assert.match(plan, /lane \d: specs\/20261104\/01-alpha\.md/, 'the re-locked AMENDED lane is picked: ' + plan)
+  h.ok('--mark', 'planned')
+  const out = h.ok().stdout
+  assert.ok(out.includes('reused worktree — rebase in progress, conflicts: src/a.js (the lane resolves first)'), out)
+  assert.ok(rebaseOn(), 'the lane conflict is in progress again')
+  assert.strictEqual(fs.readFileSync(path.join(gd, 'rebase-merge/onto'), 'utf8').trim(), h.g('rev-parse', 'main').trim(), 'the rebase in progress targets the re-locked trunk, not the old one')
+  const run = st.readRun(alpha)
+  assert.strictEqual(run.step, 'BUILD', 'the run restarts at BUILD though the rebase was already in progress')
+  assert.deepStrictEqual(run.attempts, { repair: 0, fix: 0 })
+  assert.deepStrictEqual([run.gate, run.review, run.report, run.amendedOn, run.widened, run.opus], [null, null, undefined, undefined, undefined, undefined])
+  assert.ok(fs.readFileSync(alpha, 'utf8').includes('Amended on trunk.'), 'the lane builds the amended spec, not the old text')
+  assert.strictEqual(st.readSpec(alpha).frontmatter.status, 'hardened', 'the lane spec is locked again')
+  // The lane resolves the conflict; its own run continues the rebase, and its earlier work is still there.
+  fs.writeFileSync(path.join(w, 'src/a.js'), 'both\n')
+  const lane = runNode('scripts/run.js', [specPath('01-alpha'), '--root', w])
+  assert.strictEqual(lane.status, 0, lane.stderr)
+  assert.match(lane.stdout, /^▶ BUILD/, lane.stdout)
+  assert.ok(!rebaseOn(), 'the rebase is finished')
+  assert.match(gitIn(w, 'log', '--format=%s', 'main..HEAD'), /lane work/, 'the lane keeps its commit')
+  assert.strictEqual(st.readSpec(alpha).frontmatter.status, 'hardened')
+  assert.ok(fs.readFileSync(alpha, 'utf8').includes('Amended on trunk.'))
+})
+
 test('explicit @-prefixed paths and lane prompts with spaces in the worktree path', () => {
   const base = tmpdir('fan sp')
   const h = host()

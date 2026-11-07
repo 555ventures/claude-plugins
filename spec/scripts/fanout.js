@@ -303,25 +303,31 @@ function wipLane(root, lane) {
   return null
 }
 
+// An amended lane restarts at BUILD with nothing carried over from the old spec text.
+function resetAmended(root, lane) {
+  const run = laneRun(root, lane)
+  for (const k of ['report', 'amendedOn', 'waitingOn', 'specEdits', 'unmet', 'assumption', 'scope', 'why', 'from', 'fixFor', 'widened', 'opus']) delete run[k]
+  writeLaneRun(root, lane, { ...run, step: 'BUILD', history: [...(run.history || []), { step: 'BUILD', at: now() }], attempts: { repair: 0, fix: 0 }, gate: null, review: null })
+}
+
 // A reused worktree (a lane from an earlier batch) is rebased onto trunk by the driver: the hook forbids
 // every agent from rebasing. A conflict stays in progress for the lane's own /spec:run.
 function reuseLane(root, config, lane) {
   const wt = wtAbs(root, lane)
-  if (git.rebasing(wt)) { lane.conflicts = git.conflictsIn(wt); return }
   // An amended lane's spec is the draft the lane set: it takes trunk's re-locked status before the wip commit
-  // and the run restarts at BUILD (its .run/ files stay), whether or not the rebase conflicts.
+  // and the run restarts at BUILD (its .run/ files stay), whether or not the rebase conflicts. A rebase it ended
+  // in targets the trunk from before the re-lock, so it is aborted (the lane's commits stay, its half-done
+  // resolution goes): only the rebase below brings in the amended spec text.
   const amended = (laneRun(root, lane) || {}).step === 'AMENDED'
   if (amended) {
+    if (git.rebasing(wt)) git.sh(['rebase', '--abort'], wt)
     const spec = specDoc(path.join(root, lane.spec))
     if (spec) st.writeStatus(laneSpec(root, lane), spec.frontmatter.status || 'hardened')
   }
+  if (git.rebasing(wt)) { lane.conflicts = git.conflictsIn(wt); return }
   git.commitWip(wt, wipMessage(lane))
   const r = git.rebaseOnto(wt, config.trunk)
-  if (amended) {
-    const run = laneRun(root, lane)
-    for (const k of ['report', 'amendedOn', 'waitingOn', 'specEdits', 'unmet', 'assumption', 'scope', 'why', 'from', 'fixFor', 'widened', 'opus']) delete run[k]
-    writeLaneRun(root, lane, { ...run, step: 'BUILD', history: [...(run.history || []), { step: 'BUILD', at: now() }], attempts: { repair: 0, fix: 0 }, gate: null, review: null })
-  }
+  if (amended) resetAmended(root, lane)
   if (!r.ok) { lane.conflicts = r.conflicts; lane.conflictAt = git.headSha(root); return }
   lane.rebased = git.sh(['rev-parse', config.trunk], root)
   const run = laneRun(root, lane)

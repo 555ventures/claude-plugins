@@ -158,7 +158,8 @@ function load(ctx) {
   const needsWorktreeIgnore = cfgOf(ctx).worktreePerSpec !== false && !(!s.abs && inPlaceFlag)
   if ((s.abs && !ignored(path.relative(ctx.root, st.runPath(s.abs)))) || (needsWorktreeIgnore && !ignored('.claude/worktrees/x')))
     refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
-  const prior = st.readJson(path.join(runDirOf(ctx), 'state.json'))
+  let prior = st.readJson(path.join(runDirOf(ctx), 'state.json'))
+  if (prior && prior.step === 'AMENDED' && !prior.lane) prior = null // an amended run starts over; its .run/ files stay
   if (fix !== undefined && !prior && !inPlaceFlag && !pending.isFanoutLane(ctx.root)) refuse('--fix works in place (--in-place) or as a fanout lane')
   if (prior && typeof prior.fix === 'string') prior.fix = { symptom: prior.fix } // a run state written before the fix mode kept its cause and test
   return prior || { step: 'OPEN', spec: s.rel, ...(fix === undefined ? {} : { fix: { symptom: fix.trim() } }) }
@@ -825,7 +826,10 @@ function endRun(state, ctx, status, outcome, extra = {}) {
   if (!state.fix) st.writeStatus(s.abs, status) // a fix lane leaves the spec's status alone
   if (state.marked) pending.unmarkLane(wtOf(state, ctx))
   const report = render({ outcome, artifacts: s.rel, ...extra })
-  return go(state, status === 'draft' ? 'AMENDED' : 'PARKED', { ended: !state.lane, report })
+  // An amended run keeps its .run/ (the evidence the amendment needs); a lane's is kept either way, and it
+  // notes the trunk commit it ended on: only a spec change after that re-locks it (fanout.js relocked).
+  const amended = status === 'draft'
+  return go(state, amended ? 'AMENDED' : 'PARKED', { ended: !state.lane && !amended, report, ...(amended && state.lane ? { amendedOn: git.sh(['rev-parse', cfgOf(ctx).trunk], ctx.root) } : {}) })
 }
 
 // A --on value as a repo-relative spec path; it must be a file under the checkout.

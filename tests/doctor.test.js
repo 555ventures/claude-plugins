@@ -106,6 +106,25 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   assert.ok(j2.info.some((x) => /fan-out at WAIT — \/spec:fanout/.test(x)) && j2.info.some((x) => /spec-03-busy.*\/spec:fanout/.test(x)))
 })
 
+test('an amended run keeps its sidecar while its spec is draft or hardened: reported, never stale; once the spec is done or gone it is stale', () => {
+  const d = setup({ testCommand: 'true' })
+  runNode('scripts/init.js', ['--root', d])
+  const put = (stem, status) => {
+    fs.mkdirSync(path.join(d, `specs/20260101/${stem}.run`), { recursive: true })
+    fs.writeFileSync(path.join(d, `specs/20260101/${stem}.run/state.json`), JSON.stringify({ step: 'AMENDED' }))
+    fs.writeFileSync(path.join(d, `specs/20260101/${stem}.run/evidence.md`), 'kept\n')
+    if (status) fs.writeFileSync(path.join(d, `specs/20260101/${stem}.md`), `---\nstatus: ${status}\n---\n\n# ${stem}\n`)
+  }
+  put('01-draft', 'draft'); put('02-relocked', 'hardened'); put('03-landed', 'done'); put('04-gone', null)
+  const j = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
+  const f = j.findings.join('\n')
+  for (const stem of ['01-draft', '02-relocked']) {
+    assert.ok(!f.includes(stem), `an amended run's evidence is not stale: ${f}`)
+    assert.ok(j.info.some((x) => x.startsWith(`amended: specs/20260101/${stem}.md — `)), j.info.join('\n'))
+  }
+  for (const stem of ['03-landed', '04-gone']) assert.match(f, new RegExp(`stale sidecar: specs/20260101/${stem}\\.run — rm -r`))
+})
+
 test('gitignore is judged by git: a broader pattern that covers the sidecars is not missing', () => {
   const d = setup({ testCommand: 'true' })
   fs.writeFileSync(path.join(d, '.gitignore'), '*.run/\n.claude/\n')

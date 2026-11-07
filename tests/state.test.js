@@ -124,7 +124,7 @@ Prose between tables.
 
 | File | Why |
 |------|-----|
-| docs/x.md, docs/y.md | two |
+| docs/{x,y}.md, docs/z-*.md | two |
 
 | docs/headerless.md | MODIFY | first column is the path |
 
@@ -135,8 +135,8 @@ Prose between tables.
 | not/in/the/plan.js | MODIFY |
 `
   const s = S.readSpec(writeSpec(tmpdir('plan'), body))
-  assert.deepStrictEqual(s.filePaths, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'Dockerfile', 'docs/x.md', 'docs/y.md', 'docs/headerless.md'])
-  assert.deepStrictEqual(s.filePlan.map((r) => [r.path, r.action]), [['src/a.ts + src/b.ts', 'MODIFY'], ['src/{c,d}.ts (generated)', 'CREATE'], ['Dockerfile', 'CREATE'], ['notes', 'NOTE'], ['src/a.ts', 'MODIFY'], ['docs/x.md, docs/y.md', '']], 'filePlan keeps the rows of every headed table as written')
+  assert.deepStrictEqual(s.filePaths, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'Dockerfile', 'docs/x.md', 'docs/y.md', 'docs/z-*.md', 'docs/headerless.md'])
+  assert.deepStrictEqual(s.filePlan.map((r) => [r.path, r.action]), [['src/a.ts + src/b.ts', 'MODIFY'], ['src/{c,d}.ts (generated)', 'CREATE'], ['Dockerfile', 'CREATE'], ['notes', 'NOTE'], ['src/a.ts', 'MODIFY'], ['docs/{x,y}.md, docs/z-*.md', '']], 'filePlan keeps the rows of every headed table as written')
   assert.deepStrictEqual(S.readSpec(writeSpec(tmpdir('plan'), SPEC_DOC)).filePaths, ['spec/scripts/queue.js', 'tests/queue.test.js'])
 })
 

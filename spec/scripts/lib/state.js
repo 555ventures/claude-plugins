@@ -159,13 +159,13 @@ function splitCells(line) {
   return cells
 }
 
-// A path cell split into paths: backticks and a trailing `(generated)` dropped, `{a,b}` expanded,
-// then cut on `+` and commas.
+// A path cell split into paths: backticks and a trailing `(generated)` dropped, cut on `+` and on
+// commas outside braces, then each piece's `{a,b}` expanded.
 function splitPlanCell(cell) {
   const c = cell.replace(/`/g, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
-  const brace = /^(.*)\{([^}]+)\}(.*)$/.exec(c)
-  if (brace) return brace[2].split(',').map((x) => (brace[1] + x.trim() + brace[3]).trim())
-  return c.split(/\s*\+\s*|,\s*/).map((x) => x.trim()).filter(Boolean)
+  const brace = (p) => /^(.*?)\{([^}]+)\}(.*)$/.exec(p)
+  return c.split(/\s*\+\s*|,\s*(?![^{]*\})/).map((x) => x.trim()).filter(Boolean)
+    .flatMap((p, _i, _a, b = brace(p)) => (b ? b[2].split(',').map((x) => (b[1] + x.trim() + b[3]).trim()) : [p]))
 }
 
 // Every File Plan table (a maximal run of `|` lines): its first row binds the columns when a cell reads

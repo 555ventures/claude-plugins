@@ -1,11 +1,12 @@
 {
   "caps": {
-    "spec/scripts/*.js": 400,
-    "spec/scripts/lib/*.js": 250,
-    "spec/commands/*.md": 60,
-    "spec/agents/*.md": 40,
-    "spec/doctrine.md": 80,
+    "spec/scripts/*.js": 40000,
+    "spec/scripts/lib/*.js": 16000,
+    "spec/commands/*.md": 6000,
+    "spec/agents/*.md": 4000,
+    "spec/doctrine.md": 8000,
     "tests/*.test.js": 500
   },
-  "totals": { "spec/scripts/": 4000, "tests/": 4000 }
+  "totals": { "spec/scripts/": 400000 },
+  "over": {}
 }

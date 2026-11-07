@@ -28,15 +28,16 @@ and `after:` gates, bound fixes and pin coverage break.
 
 Stub at merge. A done or superseded spec on disk is its frontmatter plus `text: <sha>` and
 `acs: [ids]`, its title and its Goal; `git show <sha>:<path>` prints the full text. The sweep
-runs after every merge, in every host, on every finished spec not yet a stub — existing specs
-included, with no migrate step. A fix on a stub hydrates the full text into its own copy, and
-the next sweep stubs it again.
+runs in `lib/land.js` right after every merge, in every host, on every finished spec not yet a
+stub — existing specs included, with no migrate step — and commits only those paths on trunk.
+`text:` is the merge result, so the landed commit stays the tree the gate passed. A fix on a
+stub reads the full text from history for its briefs; nothing writes it back.
 
 ## Consequences
 
 - `specs/` grows by ~300 bytes per finished spec instead of ~24 KB; the planner and reviewer
   stop being sent to old bodies; the `[retired:]` tags leave with the bodies.
-- One `chore(spec): stub …` commit follows each merge; a host's first merge after upgrade
-  stubs its whole backlog in one commit.
+- One `chore(spec): stub …` commit follows each merge, ungated; a host's first merge after
+  upgrade stubs its whole backlog in one commit. An in-place run merges nothing and stubs nothing.
 - Reading a finished spec's Decisions or As built takes one `git show`; a shallow clone
   cannot hydrate a stub for a fix and is refused with the fetch to run.

@@ -127,7 +127,7 @@ PLAN → DISPATCH → WAIT → RELAY → MERGE → REPORT, then back to PLAN unt
 empty. PLAN, bare (AUTO): the first `lanes` (default 4) runnable specs, queued or not, in the order
 `lib/next.js` derives (a queued brief's position orders its specs and the brief prints nothing unless
 it is finished; ADR-0044) —
-runnable = `hardened` (not `implementing`), its lane did not end PARKED/AMENDED, not already in a lane, every
+runnable = `hardened` (not `implementing`), its lane did not end PARKED (or AMENDED, unless trunk has since re-locked its spec with a `chore(spec): lock` commit), not already in a lane, every
 `depends_on` entry (plus the lane's run-state `waitingOn`) done on trunk, no unmet queue `after` gate, and not
 serial with the derivation's top pick: a shared brief waits (`shared brief NN`), and a brief dependency waits
 and ends the batch (`brief X depends on Y`, then `the batch stops before <stem>`) — File Plan
@@ -392,7 +392,7 @@ Lane-mode contract fanout needs from `run.js` (a lane = a worktree fanout create
   a stale run marker never turns the next run into one. MERGE, TRUNK_GATE and FINISH are separate
   saved auto steps. `reviewed` refuses a severity other than blocking/advisory and a `fix` verdict
   with nothing blocking; any blocking finding means FIX. A fanout lane that returns PARKED or
-  AMENDED is dismissed (`ended` kept) and PLAN skips it while its worktree stays. A lane's park/amend keeps its sidecar at `PARKED`/`AMENDED`. A lane at ESCALATE with an
+  AMENDED is dismissed (`ended` kept) and PLAN skips it while its worktree stays; an AMENDED lane is picked again only once trunk re-locks its spec (a `chore(spec): lock` commit touching it after `amendedOn`; any other trunk commit, such as a typo fix, does not count). The reused lane takes trunk's locked spec, restarts at BUILD with its `.run/` files kept and the old spec's `widened`, `opus`, attempts, gate, review and report cleared, and is rebased (a conflict stays in progress for the lane). A lane's park/amend keeps its sidecar at `PARKED`/`AMENDED`. A lane at ESCALATE with an
   answered pending doc applies the answer as an auto step.
 - **Attempts.** `attempts = {repair, fix}`. The builder attempt is `1 + repair + fix`, plus 1 for
   REPAIR/FIX briefs. Attempt 2 and up, or `escalate retry`, uses opus. Retry clears both counters

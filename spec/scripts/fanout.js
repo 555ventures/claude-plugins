@@ -74,11 +74,11 @@ const slugWt = (root, slug) => path.join(root, '.claude', 'worktrees', 'fix-' + 
 
 const isSpecFile = (root, p) => { try { return fs.statSync(path.join(root, p)).isFile() } catch { return false } }
 
-// An AMENDED lane is reusable once trunk has re-locked its spec: trunk changed the spec after the commit the
-// lane ended on (run.amendedOn; an edit from while it built does not count), and the caller has already seen
-// it hardened on trunk.
+// An AMENDED lane is reusable once trunk has re-locked its spec: a `chore(spec): lock` commit (what /spec:plan lock
+// makes) touched the spec after the commit the lane ended on (run.amendedOn; an edit from while it built, or any
+// other commit such as a typo fix, does not count), and the caller has already seen it hardened on trunk.
 function relocked(root, spec, run) {
-  return !!run.amendedOn && !!git.raw(['log', '--format=%h', `${run.amendedOn}..${st.readConfig(root).trunk}`, '--', spec], root).stdout.trim()
+  return !!run.amendedOn && !!git.raw(['log', '--format=%h', '--fixed-strings', '--grep=chore(spec): lock ', `${run.amendedOn}..${st.readConfig(root).trunk}`, '--', spec], root).stdout.trim()
 }
 
 // Runnable = hardened, its lane did not end, not already in a lane, every dependency done, no unmet gate, and not serial
@@ -115,9 +115,12 @@ function eligible(root, opts = {}) {
     if (doc.frontmatter.prototype) { waited.push({ spec, why: 'stops at LOOK for you — /spec:run it' }); continue }
     // A lane that parked or amended keeps its worktree and sidecar; re-running it would only
     // print the same ending, so it waits until the user removes that worktree — or, amended, until
-    // trunk re-locks its spec.
+    // trunk re-locks its spec (a `chore(spec): lock` commit): then PLAN picks it again and the lane is reset.
     const run = st.readRun(path.join(wt, spec)) || {}
-    if (ENDED.includes(run.step) && !(run.step === 'AMENDED' && relocked(root, spec, run))) { waited.push({ spec, why: `its lane ended ${run.step} — see the report; remove ${path.relative(root, wt)} to run it again` }); continue }
+    if (ENDED.includes(run.step) && !(run.step === 'AMENDED' && relocked(root, spec, run))) {
+      const again = run.step === 'AMENDED' ? `amend and lock the spec with /spec:plan, or remove ${path.relative(root, wt)}, to run it again` : `remove ${path.relative(root, wt)} to run it again`
+      waited.push({ spec, why: `its lane ended ${run.step} — see the report; ${again}` }); continue
+    }
     if (pending.isLane(wt)) { waited.push({ spec, why: `already in a lane at ${path.relative(root, wt)}` }); continue }
     const dep = doc.frontmatter.depends_on
     const entries = (Array.isArray(dep) ? dep : dep ? [dep] : []).map(String)
@@ -316,7 +319,7 @@ function reuseLane(root, config, lane) {
   const r = git.rebaseOnto(wt, config.trunk)
   if (amended) {
     const run = laneRun(root, lane)
-    for (const k of ['report', 'amendedOn', 'waitingOn', 'specEdits', 'unmet', 'assumption', 'scope', 'why', 'from', 'fixFor']) delete run[k]
+    for (const k of ['report', 'amendedOn', 'waitingOn', 'specEdits', 'unmet', 'assumption', 'scope', 'why', 'from', 'fixFor', 'widened', 'opus']) delete run[k]
     writeLaneRun(root, lane, { ...run, step: 'BUILD', history: [...(run.history || []), { step: 'BUILD', at: now() }], attempts: { repair: 0, fix: 0 }, gate: null, review: null })
   }
   if (!r.ok) { lane.conflicts = r.conflicts; lane.conflictAt = git.headSha(root); return }

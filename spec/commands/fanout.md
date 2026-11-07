@@ -29,7 +29,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   rebased again, and gated, when it lands). Every mark prints, under the checkpoint,
   what it did to each lane it touched: `lane N landed as <sha>`, `lane N sent back — conflicts: …` or
   `lane N gate red after rebase: …` with that lane's Agent call to re-send, or `lane N held — trunk gate is red`.
-  A PARKED, AMENDED or NEEDS_PLAN lane is dismissed by it, and a
+  A PARKED, AMENDED or NEEDS_PLAN lane is dismissed by it and PLAN skips it while its worktree stays; an
+  AMENDED lane is picked again once trunk re-locks its spec (`/spec:plan` lock), reset to BUILD, and a
   lane that marked `waiting --on` becomes waiting. A lane whose rebase conflicts is re-sent (mark
   `resent`): it resolves the conflict, continues the rebase, gates and reviews inside that one
   dispatch, and lands when marked returned. The re-send dispatch is followed by the lane list, which shows

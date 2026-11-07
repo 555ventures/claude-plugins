@@ -139,7 +139,7 @@ async function main(argv) {
   return done(note)
 }
 
-main(process.argv.slice(2)).then((out) => { process.stdout.write(out) }, (e) => {
+if (require.main === module) main(process.argv.slice(2)).then((out) => { process.stdout.write(out) }, (e) => {
   process.stderr.write(e instanceof wt.Refusal ? e.line() + '\n' : `connect: ${e.message || e}\n`)
   process.exitCode = e instanceof wt.Refusal ? e.exit : 1
 })

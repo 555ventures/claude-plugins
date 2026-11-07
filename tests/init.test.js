@@ -135,7 +135,11 @@ test('AC-20261106-04-1 AC-20261106-04-2 an old unsafe chain is grouped behind it
 })
 
 test('AC-20261106-04-3 a hand-written command is never rewritten', () => {
-  for (const [scripts, cmd] of [[{}, 'a || b'], [{ lint: 'true' }, 'custom-lint && a || b']]) assert.strictEqual(initRun(seeded(scripts, cmd)), cmd)
+  // Each names the detected `npm run lint`, but not as a leading `npm run lint && ` prefix setup wrote: a repair that
+  // matched the check anywhere, without its ` && `, or by its word alone would rewrite them.
+  const cmds = ['custom-lint && a || b', '(npm run lint && a) || b', 'npm run lint:ci && a || b', 'npm run lint&& a || b']
+  assert.strictEqual(initRun(seeded({}, 'a || b')), 'a || b')
+  for (const cmd of cmds) assert.strictEqual(initRun(seeded({ lint: 'true' }, cmd)), cmd)
 })
 
 test('AC-20261106-04-4 repairChain groups only what is not one balanced group, skipping quotes and comments', () => {

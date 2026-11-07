@@ -76,14 +76,25 @@ const capped = (key, n, cap) => {
   if (why) red.push(`${key} ${n} bytes > cap ${cap} — ${why}`)
 }
 
-const total = Object.fromEntries(Object.keys(cfg.totals || {}).map((k) => [k, 0]))
+// Bytes of every capped file but a test file (lines), and of each total's .js files.
+function measure(texts) {
+  const m = { bytes: {}, lines: {}, total: Object.fromEntries(Object.keys(cfg.totals || {}).map((k) => [k, 0])) }
+  for (const [rel, text] of texts) {
+    const g = capOf(rel)
+    if (g === TESTS) m.lines[rel] = lines(text)
+    else if (g) m.bytes[rel] = Buffer.byteLength(text)
+    for (const t of Object.keys(m.total)) if (rel.startsWith(t) && /\.js$/.test(rel)) m.total[t] += Buffer.byteLength(text)
+  }
+  return m
+}
+
+const now = measure(texts)
+for (const [rel, n] of Object.entries(now.bytes)) capped(rel, n, cfg.caps[capOf(rel)])
+for (const [rel, n] of Object.entries(now.lines)) {
+  if (n > cfg.caps[TESTS]) warn.push(`${rel} ${n} lines > ${cfg.caps[TESTS]} — split it by behaviour`)
+}
+for (const [key, n] of Object.entries(now.total)) capped(key, n, cfg.totals[key])
 for (const [rel, text] of texts) {
-  const g = capOf(rel)
-  if (g === TESTS) {
-    const n = lines(text)
-    if (n > cfg.caps[g]) warn.push(`${rel} ${n} lines > ${cfg.caps[g]} — split it by behaviour`)
-  } else if (g) capped(rel, Buffer.byteLength(text), cfg.caps[g])
-  for (const t of Object.keys(total)) if (rel.startsWith(t) && /\.js$/.test(rel)) total[t] += Buffer.byteLength(text)
   if (/^spec\/scripts\/.+\.js$/.test(rel)) {
     const was = new Set((base.get(rel) || '').split('\n'))
     text.split('\n').forEach((l, i) => {
@@ -98,7 +109,6 @@ for (const [rel, text] of texts) {
     else if (n > 0 && n > before) red.push(`${rel} ${n} prose references > ${before} at the merge-base — test behaviour, not prose`)
   }
 }
-for (const [key, n] of Object.entries(total)) capped(key, n, cfg.totals[key])
 
 if (warn.length) process.stdout.write(warn.map((w) => `size-check: ⚠️ ${w}\n`).join(''))
 if (red.length) { process.stderr.write(`size-check: ${red.length} over\n` + red.map((r) => `  ${r}\n`).join('')); process.exit(1) }

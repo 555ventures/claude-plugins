@@ -44,8 +44,13 @@ function detect(root) {
   const py = read('pyproject.toml')
   const make = read('Makefile')
   const target = (n) => new RegExp(`^${n}\\s*:`, 'm').test(make)
-  const setupCommand = ([['package-lock.json', 'npm ci'], ['pnpm-lock.yaml', 'pnpm install --frozen-lockfile'], ['yarn.lock', 'yarn install --frozen-lockfile'],
-    ['requirements.txt', 'pip install -r requirements.txt'], ['go.mod', 'go mod download'], ['Cargo.toml', 'cargo fetch']].find(([f]) => has(f)) || [])[1] || null
+  let setupCommand = null
+  if (has('package-lock.json')) setupCommand = 'npm ci'
+  else if (has('pnpm-lock.yaml')) setupCommand = 'pnpm install --frozen-lockfile'
+  else if (has('yarn.lock')) setupCommand = 'yarn install --frozen-lockfile'
+  else if (has('requirements.txt')) setupCommand = 'pip install -r requirements.txt'
+  else if (has('go.mod')) setupCommand = 'go mod download'
+  else if (has('Cargo.toml')) setupCommand = 'cargo fetch'
   const script = (...names) => { const n = names.find((x) => scripts[x]); return n ? `${pm} run ${n}` : null }
   const lint = script('lint', 'lint:ci') || (target('lint') ? 'make lint' : null) || ((has('ruff.toml') || /\[tool\.ruff/.test(py)) ? 'ruff check .' : null)
   const typecheck = script('typecheck', 'type-check') || (target('typecheck') ? 'make typecheck' : null) || ((has('mypy.ini') || /\[tool\.mypy/.test(py)) ? 'mypy .' : null)

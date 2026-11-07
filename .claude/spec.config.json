@@ -2,5 +2,11 @@
   "testCommand": "npm test",
   "setupCommand": "npm install",
   "trunk": "main",
-  "forge": "github"
+  "forge": "github",
+  "seats": {
+    "builder": {
+      "model": "opus",
+      "effort": "high"
+    }
+  }
 }

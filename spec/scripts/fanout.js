@@ -121,7 +121,8 @@ function derivePlan(ctx) {
     const lines = [`Ask the user which specs to run (at most ${config.lanes}) as ONE AskUserQuestion call with multiSelect checkboxes, up to 4 options per question:`]
     for (let i = 0; i < shown.length; i += 4) lines.push('', `  Question ${i / 4 + 1}: Which of these should run as lanes?`, ...shown.slice(i, i + 4).map((o) => `   [ ] ${o.title} — ${o.spec || o.label}`))
     lines.push('', 'Then mark picked with one --label per ticked box, e.g. ' + shown.slice(0, 2).map((o) => `--label ${shq(o.title)}`).join(' '))
-    return { name: 'PLAN', body: lines.join('\n'), mark: ['picked --label <title>', '[--label <title> …]', ...extra].join(' '), accepts: ['planned'] }
+    const mark = ['picked --label <title>', '[--label <title> …]', ...extra].join(' ')
+    return { name: 'PLAN', body: lines.join('\n'), mark }
   }
   if (!picked.length) {
     const opens = Q.pending(root)
@@ -134,7 +135,7 @@ function derivePlan(ctx) {
   if (held.length) lines.push('', heldLine(held))
   if (!EXPLICIT.length) lines.push('', 'The queue (/spec:queue list):', queueRows(root, Q.read(root)))
   lines.push('', 'Mark planned; the driver then creates the worktrees and prints the dispatch.')
-  return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...extra].join(' '), accepts: ['picked'] }
+  return { name: 'PLAN', body: lines.join('\n'), mark: ['planned', ...extra].join(' ') }
 }
 
 // The one lane shape. The Agent tool takes no working directory, so the prompt points the lane's driver at its worktree.
@@ -351,8 +352,17 @@ function afterLines(verb, s, ctx) {
 }
 
 // No state file but lanes open: say so and name the newest backup, never plan over running lanes.
+// --pick over a saved batch refuses: a pick is a new batch, and only the user drops the old one
+// (a held lane's kept worktree may be reused).
 function load(ctx) {
   const f = st.readFanout(ctx.root)
+  if (f && PICK) {
+    const lanes = f.batch.map((l) => `lane ${l.id} (${nameOf(l)})`).join(', ')
+    const cmd = `node ${shq(ctx.script)} --root ${shq(ctx.root)} --mark dismissed`
+    const drop = f.batch.map((l) => `${cmd} --lane ${l.id} --discard`).join(' ; ')
+    refuse(`--pick: the batch started ${f.started} is still open — ${lanes}; drop each with ${drop}, ` +
+      'or run /spec:fanout without --pick to resume it')
+  }
   if (f) return f
   const common = st.gitCommonDir(ctx.root)
   const open = (() => { try { return fs.readdirSync(path.join(common, 'worktrees')).filter((n) => (st.readText(path.join(common, 'worktrees', n, 'spec-lane-open'), '') || '').trim() === 'fanout') } catch { return [] } })()
@@ -363,15 +373,21 @@ function load(ctx) {
 }
 
 // A mark the settled step refuses but whose effect is already in the state is not an error (lib/driver.js).
+// planned and picked never are: a saved batch does not say which selection it holds.
 function applied(verb, s, flags) {
   const batch = s.batch || []; const lane = batch.find((l) => l.id === String(flags.lane))
   const none = (status) => s.step !== 'PLAN' && !batch.some((l) => l.status === status)
-  return { returned: !!lane && !['planned', 'dispatched'].includes(lane.status), dismissed: !!lane && lane.status === 'dismissed', planned: s.step !== 'PLAN', picked: s.step !== 'PLAN',
-    dispatched: none('planned'), resent: none('sent-back'), resumed: none('answered'), reported: s.step === 'PLAN' }[verb] || false
+  return { returned: !!lane && !['planned', 'dispatched'].includes(lane.status),
+    dismissed: !!lane && lane.status === 'dismissed',
+    dispatched: none('planned'), resent: none('sent-back'), resumed: none('answered'),
+    reported: s.step === 'PLAN' }[verb] || false
 }
 
 // PLAN holds nothing worth keeping: the fanout file is cleared and PLAN is re-derived.
-const driverMain = makeDriver({ name: 'fanout', load, applied, after: afterLines, save: (s, ctx) => st.writeFanout(ctx.root, s.step === 'PLAN' ? null : s), derive, steps, script: __filename })
+// --pick rides on every printed mark line, so the reply lands on the PLAN that asked.
+const driverMain = makeDriver({ name: 'fanout', load, applied, markArgs: () => (PICK ? ['--pick'] : []),
+  after: afterLines,
+  save: (s, ctx) => st.writeFanout(ctx.root, s.step === 'PLAN' ? null : s), derive, steps, script: __filename })
 
 function main(argv = process.argv.slice(2)) {
   try {

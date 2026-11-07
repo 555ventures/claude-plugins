@@ -259,13 +259,28 @@ test('AC-20261105-14-17 AC-20261105-12-8 AC-20261105-12-7 AC-20261105-16-7 PLAN:
   assert.match(h.run().stderr, /not trunk main — run \/spec:fanout from the main checkout/)
 })
 
-test('AC-20261105-02-3 --pick asks a checkbox question; picked builds the batch from the ticked titles and obeys the rules', () => {
+test('AC-20261105-02-3 --pick asks a checkbox question; picked builds the batch from the ticked titles and obeys the rules; nothing else starts or drops a pick', () => {
   const h = host({ lanes: 4, deps: { '02-beta': [P('01-alpha')] } })
   const pick = h.ok('--pick')
   assert.match(pick, /\[ \] 01-alpha/); assert.ok(!/\[ \] 02-beta/.test(pick))
-  assert.ok(h.run('--mark', 'picked', '--label', '02-beta').stderr.includes(`${P('02-beta')} is not runnable — depends on ${P('01-alpha')} (hardened, not done)`))
-  h.ok('--mark', 'picked', '--label', '01-alpha')
-  assert.deepStrictEqual(h.fan().batch.map((l) => l.spec), [P('01-alpha')])
+  assert.ok(pick.includes(`--pick --root ${h.dir} --mark picked --label`), pick) // the printed mark line keeps --pick
+  // planned never auto-picks at the --pick question, and picked is not taken at the bare PLAN
+  for (const a of [['--pick', '--mark', 'planned'], ['--mark', 'picked', '--label', '01-alpha']]) {
+    const r = h.run(...a); assert.strictEqual(r.status, 2, a.join(' ') + r.stdout); assert.strictEqual(h.fan(), null, a.join(' '))
+  }
+  assert.ok(h.run('--pick', '--mark', 'picked', '--label', '02-beta').stderr.includes(`${P('02-beta')} is not runnable — depends on ${P('01-alpha')} (hardened, not done)`))
+  h.ok('--pick', '--mark', 'picked', '--label', '01-alpha')
+  const saved = h.fan()
+  assert.deepStrictEqual(saved.batch.map((l) => l.spec), [P('01-alpha')])
+  // a saved batch: a second selection refuses instead of a green checkpoint that drops it
+  for (const a of [['--mark', 'picked', '--label', '03-gamma'], ['--mark', 'planned']]) {
+    const r = h.run(...a); assert.strictEqual(r.status, 2, a.join(' ') + r.stdout); assert.ok(!r.stdout.includes('already applied'), r.stdout)
+  }
+  // --pick over a saved batch refuses, naming the batch and the per-lane remedy; nothing is resumed or removed
+  const r = h.run('--pick')
+  assert.strictEqual(r.status, 2, r.stdout)
+  for (const s of [saved.started, 'lane 1 (spec-01-alpha)', `--mark dismissed --lane 1 --discard`, 'without --pick']) assert.ok(r.stderr.includes(s), s + '\n' + r.stderr)
+  assert.deepStrictEqual(h.fan(), saved); assert.ok(fs.existsSync(h.wt('01-alpha')))
 })
 
 test('AC-20261105-07-8 AC-20261105-07-11 AC-20261105-07-12 AC-20261105-09-13 dismissed keeps the worktree, --discard removes it and its branch and names the wip commit; a lost state file with open lanes refuses', () => {

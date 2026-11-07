@@ -18,6 +18,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   call runs `/spec:fix --root <wt> …`, never `/spec:run`; the advisories a review queues drain this way, unattended.
   PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
+  Only `picked` is taken there, and `--pick` over a saved batch exits 2 naming it and each lane's
+  `--mark dismissed --lane <id> --discard`; it never resumes or removes the batch for you.
 - A hardened spec with frontmatter `prototype:` is never a lane: LOOK needs the user's free-text reply and the app
   must outlive the agent. It waits with `stops at LOOK for you — /spec:run it`; a fix item bound to such a spec waits
   with its in-place `/spec:fix <spec> — <symptom>` line.

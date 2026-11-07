@@ -317,3 +317,18 @@ test('AC-20261106-04-6 AC-20261106-04-3 an unsafe chain is a config finding with
   assert.ok(r.stdout.includes('- ' + UNSAFE), r.stdout)
   for (const h of [setup({ testCommand: 'a || b' }), setup({ testCommand: 'custom-lint && a || b' }, { lint: 'true' })]) assert.ok(!doctor.check(h, { probe: false }).findings.includes(UNSAFE))
 })
+
+test('AC-20261107-04-8 doctor says how many test files cite an AC as info, never a finding; with none it says new criteria are warned about, never refused', () => {
+  const d = inited({ testCommand: 'true' })
+  fs.mkdirSync(path.join(d, 'tests'))
+  fs.writeFileSync(path.join(d, 'tests/a.test.js'), '// AC-20990101-01-1\n')
+  fs.writeFileSync(path.join(d, 'tests/b_test.py'), '# AC-20990101-01-2\n')
+  fs.writeFileSync(path.join(d, 'tests/c.test.js'), '// no criterion\n')
+  const j = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
+  assert.ok(j.info.includes('criteria: 2 of 3 test files cite an AC'), j.info.join('\n'))
+  assert.ok(!j.findings.some((x) => x.startsWith('criteria')), j.findings.join('\n'))
+  const none = inited({ testCommand: 'true' })
+  const k = JSON.parse(runNode('scripts/doctor.js', ['--root', none, '--json']).stdout)
+  assert.ok(k.info.includes('criteria: no test file cites an AC — new criteria are warned about, never refused'), k.info.join('\n'))
+  assert.strictEqual(k.ok, true)
+})

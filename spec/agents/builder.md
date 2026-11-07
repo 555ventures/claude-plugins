@@ -14,7 +14,9 @@ as `cd <worktree> && …`.
 On a build, read the code the File Plan names first; change that function rather than adding a
 sibling to it, and delete what your change makes dead (callers, tests, docs) in the same build.
 Write a failing test per criterion first, on the observable outcome (exit code, file, JSON),
-never on a branch or a private name; then code. Always run the test command
+never on a branch or a private name, and name the AC-IDs it proves in its title; then code. Delete
+a test only with a criterion this spec retires (its `## Retired criteria`): the gate refuses a build
+that leaves a cited criterion with no test. Always run the test command
 until green. Honour every Decision. Repair the code; never weaken a test. Do not touch files outside the File Plan without listing them in your
 final summary. Never edit the spec or any other spec file. When the spec has a `## Canonical Delta`,
 apply it verbatim to the `docs/canonical/<area>.md` it names, in the build; those edits are not

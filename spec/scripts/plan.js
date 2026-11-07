@@ -5,6 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const { readSpec, writeStatus, writeText, readText, readProto, specsCiting } = require('./lib/state')
 const { isSpecText, decisionRows } = require('./lib/spec')
+const { retiredRefusal } = require('./lib/criteria')
 const Q = require('./lib/queue')
 const N = require('./lib/next')
 const git = require('./lib/git')
@@ -66,6 +67,8 @@ function lock(root, arg, confirmed) {
   const prose = readText(file).split('\n').filter((l) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return false } return !fence }).join('\n').replace(/`[^`\n]*`/g, '')
   const left = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => prose.includes(t))
   if (left.length) throw new Refusal(`template placeholders left: ${left.join(' ')} — fill them in first`)
+  const retiring = retiredRefusal(s) // an optional `## Retired criteria`: each line names an AC and a reason it may go
+  if (retiring) throw new Refusal(`Retired criteria: ${retiring}`)
   // Every gate refuses a build that edits another spec (run.js `specEdits`), so such a plan can never pass.
   const own = path.relative(root, file).split(path.sep).join('/')
   const others = s.filePaths.map((p) => p.replace(/^\.\//, '')).filter((p) => isSpecText(p) && p !== own && !p.startsWith(own.replace(/\.md$/, '.run/')))

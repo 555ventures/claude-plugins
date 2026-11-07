@@ -20,6 +20,9 @@ prototype contract's behaviour pins become acceptance criteria.
    constraint the change touches as a Decisions row citing it, ACs as `AC-YYYYMMDD-NN-k`. A
    spec that departs from an accepted ADR sets `architecture: true`. An AC that needs recorded
    evidence (a listing, a render, a count) names `<spec>.run/evidence.md`, never the commit message.
+   A criterion no test will cite goes under an optional `## Retired criteria` after the ACs, one line
+   each: `- AC-… — retired by Dn: …` (a Decision of this spec drops it; the gate lets its last test go)
+   or `- AC-… — checked at review: …` (an AC of this spec read in the diff: prose, a grep, a count).
 3. Mark gaps `[NEEDS CLARIFICATION: …]` and close them by reading code or a throwaway
    experiment. The test for every question: would the client need to sign this off? The real
    forks are: a UI flow or screen the user will see change; a permission, restriction or

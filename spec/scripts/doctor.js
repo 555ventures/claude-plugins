@@ -13,6 +13,7 @@ const { derive } = require('./lib/next')
 const git = require('./lib/git')
 const pending = require('./lib/pending')
 const { IGNORE, detect, repairChain } = require('./init')
+const { testFiles } = require('./lib/criteria')
 
 function walkRuns(dir, out, depth = 0) {
   if (depth > 3) return out
@@ -161,6 +162,10 @@ function check(root, { probe = true } = {}) {
     const pending = git.raw(['status', '--porcelain', '--', 'docs/archive/v7'], root).stdout.trim()
     if (!tracked || pending) f.push('uncommitted migration: docs/archive/v7/ is untracked or staged — commit it (git add -A && git commit -m "chore(spec): migrate v7 → v8")')
   }
+  // Which mode GATE's criteria check is in here (ADR-0048): info, never a finding.
+  const tests = testFiles(root, null, readConfig(root)); const citing = tests.filter((t) => t.ids.length).length
+  info.push(citing ? `criteria: ${citing} of ${tests.length} test files cite an AC`
+    : 'criteria: no test file cites an AC — new criteria are warned about, never refused')
   info.push(...boxInfo(root, cfg, probedMs))
   return { findings: f, info, version: pluginVersion() }
 }

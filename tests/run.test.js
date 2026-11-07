@@ -613,3 +613,52 @@ test('AC-20261107-03-7 a pre-commit hook that rejects the build commit sends the
   assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → DONE/)
   assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n')
 })
+
+// ---- the criteria check at GATE (ADR-0048) ---------------------------------------------------------------
+
+const OLD_SPEC = '---\nstatus: done\n---\n# Old\n\n## Acceptance Criteria\n\n- **AC-20261101-01-1**: WHEN x THE SYSTEM SHALL y.\n'
+
+test('AC-20261107-04-5 a green build that deleted a criterion\'s last citing test goes to REPAIR naming the ID, restore and unmet, then to REVIEW once a test cites it again', () => {
+  const h = fixture({ files: { 'specs/20261101/01-old.md': OLD_SPEC, 'tests/old.test.js': '// AC-20261101-01-1\n', 'tests/thing.test.js': '// AC-20261104-01-1\n' } })
+  ok(h.run()); put(h.wt, 'feature.txt', 'thing\n'); fs.rmSync(path.join(h.wt, 'tests/old.test.js'))
+  assert.match(ok(h.run('--mark', 'built')), /BUILD → REPAIR;.*\ngate: red — criteria: AC-20261101-01-1 /)
+  const tail = h.state().gate.output_tail
+  assert.ok(tail.includes('AC-20261101-01-1') && tail.includes('tests/old.test.js') && tail.includes('restore') && tail.includes('unmet'), tail)
+  assert.ok(ok(h.run()).includes(tail), 'the repair brief prints the tail')
+  put(h.wt, REL, fs.readFileSync(path.join(h.wt, REL), 'utf8').replace('## Assumptions', '## Retired criteria\n\n- AC-20261101-01-1 — retired by D1: x\n\n## Assumptions'))
+  assert.match(ok(h.run('--mark', 'repaired')), /REPAIR → REPAIR;/, 'a retirement the build wrote is not the locked one')
+  put(h.wt, REL, fs.readFileSync(path.join(h.dir, REL), 'utf8').replace('status: hardened', 'status: done'))
+  put(h.wt, 'tests/moved.test.js', '// AC-20261101-01-1, moved\n')
+  assert.match(ok(h.run('--mark', 'repaired')), /REPAIR → REVIEW;/)
+})
+
+test('AC-20261107-04-5 where no test cites a criterion an uncited criterion of the spec reaches REVIEW and the report carries one 📌 line naming it', () => {
+  const h = fixture(); build(h)
+  assert.strictEqual(h.state().step, 'REVIEW')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings(BLOCKING)))
+  bump(h.wt); assert.match(ok(h.run('--mark', 'fixed')), /FIX → REVIEW;/, 'a second gate')
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  const lines = done.split('\n').filter((l) => l.startsWith('📌 criteria:'))
+  assert.strictEqual(lines.length, 1, done)
+  assert.ok(lines[0].includes('AC-20261104-01-1'), lines[0])
+})
+
+test('AC-20261107-04-6 the builder and reviewer briefs carry the spec\'s Retired criteria lines', () => {
+  const line = '- AC-20261104-01-1 — checked at review: prose; no test reads prose.'
+  const h = fixture({ files: { [REL]: SPEC_DOC.replace('## Assumptions', `## Retired criteria\n\n${line}\n\n## Assumptions`) } })
+  assert.ok(build(h) && h.state().step === 'REVIEW')
+  const builder = fs.readFileSync(path.join(h.dir, 'specs/20261104/01-thing.run/brief-build-1.md'), 'utf8')
+  assert.ok(builder.includes(`## Retired criteria\n${line}\n`), builder)
+  assert.ok(ok(h.run()).includes(`## Retired criteria\n${line}\n`), 'the reviewer brief')
+  const plain = fixture(); ok(plain.run())
+  assert.ok(!ok(plain.run()).includes('## Retired criteria'), 'no section, no heading')
+})
+
+test('AC-20261107-04-9 this repo cites every criterion of spec 20261107/04 but the one it retires to review', () => {
+  const C = require(path.join(SPEC, 'scripts/lib/criteria.js'))
+  const root = path.join(SPEC, '..'); const file = path.join(root, 'specs/20261107/04-the-gate-keeps-every-cited-criterion.md')
+  const doc = st.readSpec(file) // once a stub, it lists no criteria and this holds trivially
+  const now = C.cited(root, null, st.readConfig(root)); const listed = C.retired(doc)
+  assert.deepStrictEqual(doc.acs.map((a) => a.id).filter((id) => !now.has(id) && !listed.has(id)), [])
+  if (doc.acs.length) assert.deepStrictEqual([...listed.keys()], ['AC-20261107-04-10'])
+})

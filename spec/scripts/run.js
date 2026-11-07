@@ -13,6 +13,7 @@ const { makeDriver, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state'); const S = require('./lib/spec'); const B = require('./lib/briefs'); const Q = require('./lib/queue')
 const host = require('./lib/host'); const git = require('./lib/git'); const pending = require('./lib/pending')
 const { land } = require('./lib/land'); const { render } = require('./lib/report')
+const criteria = require('./lib/criteria')
 
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2; const FIX_CAP = 1; const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
@@ -132,6 +133,16 @@ function buildProof(state, wt, rows) {
   return bad.map((r) => `file plan: ${r.action} ${r.path} is not true on disk`).join('\n') || null
 }
 
+// After a green gate: a criterion the build stopped citing, or where tests cite criteria one of its own no test cites,
+// is red (ADR-0048). The spec's criteria and Retired criteria are read as locked at the base; a note is a 📌 line.
+function criteriaRed(state, ctx, wt, cfg) {
+  const own = !state.fix && ownOf(state); const locked = own && git.raw(['show', `${state.base}:${own}`], wt)
+  const doc = locked && locked.status === 0 ? S.parse(locked.stdout) : docOf(state, ctx)
+  const r = criteria.check({ wt, base: state.base, cfg, doc })
+  for (const w of r.warn) if (!(state.decided || []).includes(w)) decide(state, w)
+  return r.red.join('\n') || null
+}
+
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx); const wt = wtOf(state, ctx); const rows = S.planRows(docOf(state, ctx)); const t0 = Date.now()
   intentToAdd(wt, rows.filter((r) => r.action !== 'DELETE'))
@@ -141,7 +152,8 @@ function gateStep(state, ctx) {
   let reruns = prior ? prior.reruns || 0 : 0
   const touched = g.status !== 0 && !prior && g.failing && g.failing.length && new Set(git.changedFiles(state.base, wt))
   if (touched && g.failing.every((f) => !touched.has(f))) { g = host.gate(wt, cfg); waited += g.lockWaitMs || 0; reruns = 1 } // red only outside the diff: load, run once more
-  let tail = g.status !== 0 ? g.tail || `the test command exited ${g.status}` : buildProof(state, wt, rows)
+  let tail = g.status !== 0 ? g.tail || `the test command exited ${g.status}`
+    : buildProof(state, wt, rows) || criteriaRed(state, ctx, wt, cfg)
   if (!tail && state.prototype) { // the pin tests run against the app from the worktree, after the test command (ADR-0043)
     if (state.appUrl == null) { const a = host.allocApp(cfg.prototype.url); state.appPort = a.appPort; state.appUrl = a.url }
     const cmd = String(cfg.prototype.e2eCommand).replace(/\{file\}/g, String(cfg.prototype.e2eFile).replace(/\{stem\}/g, state.prototype))

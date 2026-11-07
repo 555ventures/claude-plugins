@@ -250,3 +250,22 @@ test('AC-20261105-14-8 a spec without prototype: locks as before', () => {
   assert.strictEqual(plan(d, 'lock', fresh(d, 'plain')).status, 0)
   assert.strictEqual(openItems(d).length, 1, 'the contract item is untouched')
 })
+
+test('AC-20261107-04-6 lock refuses a Retired criteria line with no AC-ID, a retired by with no such row, or a checked at review naming another spec\'s AC, quoting it; a valid section locks', () => {
+  const d = tmpdir('plan')
+  const f = fresh(d, 'retire')
+  const text = fs.readFileSync(f, 'utf8')
+  const own = /\*\*(AC-\d{8}-\d{2}-1)\*\*/.exec(text)[1]
+  const retire = (...lines) => fs.writeFileSync(f, text.replace('## Assumptions', `## Retired criteria\n\n${lines.join('\n')}\n\n## Assumptions`))
+  for (const line of ['- the old export — retired by D1: gone', '- AC-20990101-01-1 — retired by D9: gone', '- AC-20990101-01-1 — checked at review: prose']) {
+    retire(line)
+    const r = plan(d, 'lock', f)
+    assert.strictEqual(r.status, 2, line)
+    assert.ok(r.stderr.includes(`"${line}"`), r.stderr)
+    assert.strictEqual(status(f), 'draft')
+  }
+  retire('- AC-20990101-01-1 — retired by D1: the old export goes', `- ${own} — checked at review: prose`)
+  const r = plan(d, 'lock', f)
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(status(f), 'hardened')
+})

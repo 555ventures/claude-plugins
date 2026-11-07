@@ -102,8 +102,9 @@ function liveRun(root, rel) {
   return null
 }
 
-// What the screen calls a spec: `implementing` while a live sidecar says it is being built.
-const specState = (root, rel, status) => (status !== 'done' && status !== 'superseded' && liveRun(root, rel) ? 'implementing' : status)
+// What the screen calls a spec: a `hardened` one (the only status a run leaves in the root) is
+// `implementing` while a live sidecar says it is being built; every other status is the frontmatter's.
+const specState = (root, rel, status) => (status === 'hardened' && liveRun(root, rel) ? 'implementing' : status)
 
 // ---- git common dir files ----------------------------------------------------------------
 

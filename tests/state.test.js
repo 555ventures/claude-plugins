@@ -204,7 +204,7 @@ test('proto, mocks and genesis files round-trip at their §2 paths', () => {
 })
 
 // ---- spec 20261105/04 D6, D7 -----------------------------------------------------------------
-test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktree makes a hardened spec implementing; ended, STOPPED, DONE, done and superseded keep the frontmatter', () => {
+test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktree makes a hardened spec implementing; ended, STOPPED, DONE, draft, done and superseded keep the frontmatter', () => {
   const root = tmpdir('live'); gitRepo(root)
   const rel = 'specs/20261105/01-a.md'
   const put = (base, run) => { fs.mkdirSync(path.join(base, 'specs/20261105/01-a.run'), { recursive: true }); fs.writeFileSync(path.join(base, 'specs/20261105/01-a.run/state.json'), JSON.stringify(run)) }
@@ -214,6 +214,7 @@ test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktre
   assert.strictEqual(S.specState(root, rel, 'hardened'), 'implementing')
   assert.strictEqual(S.specState(root, rel, 'done'), 'done')
   assert.strictEqual(S.specState(root, rel, 'superseded'), 'superseded')
+  assert.strictEqual(S.specState(root, rel, 'draft'), 'draft', 'a run never starts from draft: an amended spec with a kept lane sidecar stays draft')
   for (const run of [{ step: 'STOPPED', ended: true }, { step: 'STOPPED', why: 'after' }, { step: 'BUILD', ended: true }, { step: 'DONE' }]) {
     put(wt, run)
     assert.strictEqual(S.specState(root, rel, 'hardened'), 'hardened', JSON.stringify(run))

@@ -151,7 +151,7 @@ function testsExecuted(output, pattern) {
 // Known runner summaries, one capture group each: node --test TAP and spec reporter, jest, vitest, pytest. init sets
 // the first that counts more than 0 in its probe's output as config.testCountPattern.
 const COUNT_PATTERNS = ['# tests (\\d+)', 'ℹ tests (\\d+)', 'Tests:\\s+(\\d+) passed', 'Tests\\s+(\\d+) passed',
-  '(\\d+) passed']
+  '(\\d+) passed[^\\n]* in [\\d.]+s']
 
 // Runs config.testCommand in root unless this exact tree already ran green under it. With config.testCountPattern
 // set (not `none`), an exit 0 that counts 0 tests or matches nothing is red.

@@ -5,6 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const { readSpec, isSpecText, writeStatus, writeText, readText, decisionRows, readProto, specsCiting } = require('./lib/state')
 const Q = require('./lib/queue')
+const N = require('./lib/next')
 const git = require('./lib/git')
 
 const REQUIRED = ['Intent', 'Goal', 'Decisions', 'File Plan', 'Acceptance Criteria', 'Assumptions']
@@ -88,15 +89,14 @@ function lock(root, arg, confirmed) {
     git.sh(['add', '--', rel, ...docs], root)
     git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel, ...docs], root)
   }
-  let queued = false // no queue outside git
-  try { queued = Q.open(Q.read(root)).some((i) => i.payload === rel.split(path.sep).join('/')) } catch (e) { if (e.exit === 2) throw e /* an unmigrated queue stops here */ }
   // Every active behaviour pin has an AC: the plan item the contract queued is done.
   let closed = false
   if (cover && git.raw(['rev-parse', '--git-dir'], root).status === 0) {
     const item = `design/prototypes/${cover.stem}/contract.json`
     try { closed = Q.tick(root, (i) => i.type === 'plan' && i.payload === item) > 0 } catch (e) { if (e.exit === 2) throw e }
   }
-  return `✅ spec hardened & locked — ${rel}${closed ? '\n📋 plan item closed — every behaviour pin has an AC' : ''}\nNext: ${queued ? '/spec:run' : '/spec:queue add'} ${rel}`
+  try { Q.read(root) } catch (e) { if (e.exit === 2) throw e /* an unmigrated queue stops here, before any Next */ }
+  return `✅ spec hardened & locked — ${rel}${closed ? '\n📋 plan item closed — every behaviour pin has an AC' : ''}\nNext: ${N.topLines(N.derive(root)).join('\n')}`
 }
 
 function main(argv) {

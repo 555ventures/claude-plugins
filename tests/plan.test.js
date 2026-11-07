@@ -34,7 +34,7 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   fs.writeFileSync(f, text)
   const r = plan(d, 'lock', f)
   assert.strictEqual(r.status, 0)
-  assert.match(r.stdout, /^✅ spec hardened & locked — specs\/\d{8}\/01-first\.md\nNext: \/spec:queue add specs\/\d{8}\/01-first\.md\n/)
+  assert.match(r.stdout, /^✅ spec hardened & locked — specs\/\d{8}\/01-first\.md\nNext: \/spec:run @specs\/\d{8}\/01-first\.md\n/)
   assert.strictEqual(status(f), 'hardened')
 })
 
@@ -65,11 +65,13 @@ test('lock refuses a File Plan that lists another spec file; its own spec and ru
   assert.strictEqual(status(f), 'hardened')
 })
 
-test('re-locking a queued spec points at /spec:run, not a second queue add', () => {
+test('lock prints the derivation\'s next pick, never a queue add', () => {
   const d = tmpdir('plan'); gitRepo(d)
   const f = fresh(d, 'again'); const rel = path.relative(d, f)
   assert.strictEqual(runNode('scripts/queue.js', ['add', rel, '--root', d]).status, 0)
-  assert.match(plan(d, 'lock', f).stdout, new RegExp(`Next: /spec:run ${rel.replace(/[/.]/g, '\\$&')}`))
+  const out = plan(d, 'lock', f).stdout
+  assert.match(out, new RegExp(`Next: /spec:run @${rel.replace(/[/.]/g, '\\$&')}`))
+  assert.doesNotMatch(out, /queue add/)
 })
 
 test('architecture: true needs --confirmed', () => {

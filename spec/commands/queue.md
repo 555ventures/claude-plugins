@@ -40,4 +40,4 @@ in this session, not in the queue, and work for another repo is never queued her
 and `queue.js show <id> --json` (the id, kind and gate): done (name the file or spec) or live (name what is
 missing)? Flagged = presumed `done`; `keep` only with the missing piece quoted. Hard evidence ticks with
 `queue.js done <ref>` and `📌 Auto-picked done — <evidence> (veto anytime)`; ask only `keep`/ambiguous items
-(`AskUserQuestion`, ≤ 4/call); never tick without a yes. No agent, no proposal.
+(`AskUserQuestion`, ≤ 4/call); never tick a keep or ambiguous item without a yes. No agent, no proposal.

@@ -1,7 +1,8 @@
 'use strict'
 // lib/host.js — host commands, the test gate with its green-run cache, the app, test-command detection. No CLI.
 // run(cmd, {cwd, env, timeoutMs}) → {status, stdout, stderr, tail}; timeout → 124. gate(root, config) → {status, cached,
-// runId, tail, tree, failing, lockWaitMs}: green runs cached by tree, at most gateConcurrency at once on the host.
+// runId, tail, tree, failing, lockWaitMs}: green runs cached by tree, at most gateConcurrency at once on the host;
+// testsExecuted(output, pattern) reads a test count.
 // copyIncluded(main, wt) copies the .worktreeinclude matches into a fresh worktree; treeSha(root) is the working tree's
 // git tree; withApp(cmd, {cwd, url, port}, fn) runs fn while the host's app answers; detectTestCommand, firstRedLine,
 // freePort, resolveUrl, listening, allocApp.
@@ -138,7 +139,17 @@ function takeSlot(root, config) {
   }
 }
 
-// Runs config.testCommand in root unless this exact tree already ran green under it.
+// Port of v7 computeTestsExecuted: the LAST match of the pattern (a decoy test name can quote the summary phrase
+// before the real one) read as a count; null when the pattern is absent or `none`, or matches nothing.
+function testsExecuted(output, pattern) {
+  if (!pattern || pattern === 'none') return null
+  let last = null
+  for (const m of output.matchAll(new RegExp(pattern, 'g'))) last = m
+  return last ? Number(last[1]) || 0 : null
+}
+
+// Runs config.testCommand in root unless this exact tree already ran green under it. With config.testCountPattern
+// set (not `none`), an exit 0 that counts 0 tests or matches nothing is red.
 function gate(root, config, { timeoutMs } = {}) {
   const cmd = config && config.testCommand
   if (!cmd) throw Object.assign(new Error('no testCommand in .claude/spec.config.json — run /spec:init'), { exit: 2 })
@@ -150,6 +161,10 @@ function gate(root, config, { timeoutMs } = {}) {
   try {
     const t0 = Date.now()
     const r = run(cmd, { cwd: root, timeoutMs })
+    const pat = r.status === 0 && config.testCountPattern
+    if (pat && pat !== 'none' && !testsExecuted(r.stdout + r.stderr, pat)) {
+      Object.assign(r, { status: 1, tail: `exited 0 but ran no tests (testCountPattern ${pat}):\n${r.tail}` })
+    }
     if (r.status === 0) record(root, cmd, tree, { runId, tail: r.tail, ms: Date.now() - t0 })
     return { status: r.status, cached: false, runId, tail: r.tail, tree, failing: r.status === 0 ? [] : failingFiles(root, r.tail), lockWaitMs: slot.waitedMs }
   } finally { slot.release() }
@@ -244,4 +259,6 @@ function allocApp(urlTemplate) {
   return { appPort: null, url: urlTemplate }
 }
 
-module.exports = { freePort, resolveUrl, listening, allocApp, withApp, run, gate, treeSha, cacheDir, commonDir, copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }
+module.exports = { freePort, resolveUrl, listening, allocApp, withApp, run, gate, treeSha, cacheDir, commonDir,
+  copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine,
+  testsExecuted }

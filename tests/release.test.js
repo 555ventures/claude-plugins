@@ -146,7 +146,7 @@ test('AC-20261105-15-14 the count equals v7 computeTestsExecuted on outputs that
   for (const out of outputs) {
     for (const pattern of [COUNT, 'ran (\\d+) tests', 'none', undefined]) {
       const want = v7.computeTestsExecuted(out, pattern)
-      const got = R.testsExecuted(out, pattern)
+      const got = require(path.join(SPEC, 'scripts/lib/host.js')).testsExecuted(out, pattern)
       assert.deepStrictEqual(got, typeof want === 'number' ? want : null, `${JSON.stringify(out)} / ${pattern}`)
     }
   }

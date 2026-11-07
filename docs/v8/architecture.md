@@ -74,6 +74,7 @@ per file; writes are atomic (tmp + rename).
 ```json
 {
   "testCommand": "npm test",              // whole suite; the gate
+  "testCountPattern": "",                 // optional, one capture group: a gate that exits 0 counting 0 or nothing is red
   "testFileCommand": "npx vitest {file}", // optional: single-file run used by red-check
   "setupCommand": "npm ci",               // run once in a fresh worktree
   "trunk": "main",
@@ -247,7 +248,7 @@ seat, checkpoint). Maintainer rules live in this repo's CLAUDE.md, not in the pl
 Later builders: use these, do not re-derive them.
 
 - `spec.js`: the spec grammar, text in and objects out: `parse` (what `readSpec` returns), `section`, `splitCells`,
-  `planRows`, `inPlan`, `decisionRows`, `decisionsOf`, `parseAssumptions`, `globToRe`, `isSpecText`, and `fixDoc(symptom, spec?)`.
+  `planRows`, `inPlan`, `decisionRows`, `parseAssumptions`, `globToRe`, `isSpecText`, and `fixDoc(symptom, spec?)`.
 - `briefs.js`: the text run.js prints — builder, reviewer, question, look and rebase briefs, the report, the commit message.
 - `land.js`: `land(main, {wt, branch, spec?, id, config, message, inPlace?, tick?})` → `{landed}` | `{conflicts}` | `{red, base}`.
 - `state.js`: everything in §2 (`readSpec` reads the file, `spec.js` parses it) plus `writeConfig(root, cfg)`, `DEFAULTS`, `gitCommonDir(root)`,

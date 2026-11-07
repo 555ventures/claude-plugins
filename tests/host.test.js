@@ -37,6 +37,12 @@ test('gate caches a green run by tree and re-runs when the tree changes', () => 
   assert.ok(!H.gate(root, config).cached, 'a red run must never be cached')
   fs.rmSync(path.join(root, 'fail'))
   assert.ok(H.gate(root, config).cached, 'returning to a green tree hits the old entry')
+  for (const out of ['tests 0', 'no summary']) {
+    const z = H.gate(root, { testCommand: `echo ${out}`, testCountPattern: 'tests (\\d+)' })
+    assert.deepStrictEqual([z.status, z.cached, /exited 0 but ran no tests/.test(z.tail)], [1, false, true], out)
+    assert.ok(!H.gate(root, { testCommand: `echo ${out}`, testCountPattern: 'tests (\\d+)' }).cached, 'no tests ran: never cached')
+  }
+  assert.strictEqual(H.gate(root, { testCommand: 'echo tests 3', testCountPattern: 'tests (\\d+)' }).status, 0)
 })
 
 test('the cache is shared by worktrees with the same content', () => {

@@ -167,12 +167,14 @@ function gateStep(state, ctx) {
 
 const redCheck = (state, wt) => B.redCheckLine(spawnSync(process.execPath, [path.join(__dirname, 'red-check.js'), '--base', state.base, '--root', wt], { encoding: 'utf8' }).stdout)
 
-// Spec text a build may not change: any other spec, and its own spec's Decisions section.
+// Spec text a build may not change: any other spec, and its own spec below the frontmatter.
+const body = (text) => S.parseFrontmatter(String(text).replace(/\r\n/g, '\n')).body
 function specEdits(state, ctx) {
   const wt = wtOf(state, ctx); const own = ownOf(state)
   const files = git.changedFiles(state.base, wt).filter((f) => S.isSpecText(f) && f !== own)
   const was = own && git.raw(['show', `${state.base}:${own}`], wt)
-  return was && was.status === 0 && S.decisionsOf(was.stdout) !== S.decisionsOf(st.readText(specIn(state, ctx), '')) ? [...files, own] : files
+  const edited = was && was.status === 0 && body(was.stdout) !== body(st.readText(specIn(state, ctx), ''))
+  return edited ? [...files, own] : files
 }
 
 // Files changed outside the File Plan (the spec itself and, with a Canonical Delta, docs/canonical are not).

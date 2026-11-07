@@ -57,6 +57,8 @@ architecture: false
 const CHECK = `const fs = require('fs')
 if (process.env.RUN_COUNTER) fs.appendFileSync(process.env.RUN_COUNTER, process.cwd() + '\\n')
 if (fs.existsSync('RED')) { console.error('FAIL: RED flag present'); process.exit(1) }
+const main = fs.existsSync('MOVER') && fs.readFileSync('MOVER', 'utf8') // every gate run moves that checkout's trunk
+if (main) { fs.appendFileSync(main + '/moves.txt', 'x'); require('child_process').execSync('git add -A && git commit -qm move', { cwd: main }) }
 console.log('ok')
 `
 const put = (dir, f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t) }
@@ -127,6 +129,14 @@ for (const mergeStrategy of ['ff-only', 'merge-commit', 'squash']) {
     assert.strictEqual(h.g('status', '--porcelain'), '')
   })
 }
+
+test('a trunk that moves during every landing gate is refused after the third round: nothing merges, main is clean', () => {
+  const h = fixture(); ok(h.run()); put(h.wt, 'feature.txt', 'thing\n'); put(h.wt, 'MOVER', h.dir); ok(h.run('--mark', 'built'))
+  const r = h.run('--mark', 'reviewed', '--file', h.findings([]))
+  assert.strictEqual(r.status, 2, r.stdout)
+  assert.match(r.stderr, /trunk moved three times while landing — re-run/)
+  assert.ok(!h.g('ls-tree', '--name-only', 'main').split('\n').includes('feature.txt') && h.g('status', '--porcelain') === '')
+})
 
 test('AC-20261107-02-1 a conflict at MERGE stays in the worktree: the rebase step prints, main is clean, the re-run gates and reviews again', () => {
   const h = fixture(); build(h)
@@ -272,9 +282,10 @@ test('rules decide instead of asking: spec edits are reverted and gated again, a
   ok(h.run())
   put(h.wt, 'feature.txt', 'thing\n'); put(h.wt, '.env', 'KEY=1\n')
   put(h.wt, 'specs/20261104/02-other.md', '---\nstatus: draft\n---\n# Other, edited\n')
-  put(h.wt, REL, fs.readFileSync(path.join(h.wt, REL), 'utf8').replace('ADR-0001 |', 'ADR-0001 |\n| D2 | invented | by the build |'))
+  put(h.wt, REL, fs.readFileSync(path.join(h.wt, REL), 'utf8').replace('SHALL have feature.txt.', 'SHALL have any file.').replace('| the thing |', '| a build-picked thing |'))
   assert.match(ok(h.run('--mark', 'built')), /BUILD → REVIEW;/)
-  assert.ok(!fs.readFileSync(path.join(h.wt, REL), 'utf8').includes('D2') && fs.readFileSync(path.join(h.wt, 'specs/20261104/02-other.md'), 'utf8').includes('# Other\n'))
+  const own = fs.readFileSync(path.join(h.wt, REL), 'utf8')
+  assert.ok(!own.includes('any file') && !own.includes('build-picked') && fs.readFileSync(path.join(h.wt, 'specs/20261104/02-other.md'), 'utf8').includes('# Other\n'), own)
   assert.strictEqual(h.status(h.wt), 'done', 'the own spec keeps its status line')
   const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.ok(done.includes('📌 reverted spec text the build edited (specs/20261104/02-other.md, specs/20261104/01-thing.md) and gated again'), done)

@@ -12,20 +12,11 @@
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readConfig, readRelease, writeRelease } = require('./lib/state')
-const { run } = require('./lib/host')
+const { run, testsExecuted } = require('./lib/host')
 const git = require('./lib/git')
 const { render } = require('./lib/report')
 
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-
-// Port of v7 computeTestsExecuted: the LAST match of the pattern (a decoy test name can quote the summary phrase
-// before the real one) read as a count; null when the pattern is absent or `none`, or matches nothing.
-function testsExecuted(output, pattern) {
-  if (!pattern || pattern === 'none') return null
-  let last = null
-  for (const m of output.matchAll(new RegExp(pattern, 'g'))) last = m
-  return last ? Number(last[1]) || 0 : null
-}
 
 // curl -fsS, 3 tries 5 s apart. A missing curl is not retried.
 function ready(url) {
@@ -118,4 +109,4 @@ function main(argv) {
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))
 
-module.exports = { main, testsExecuted }
+module.exports = { main }

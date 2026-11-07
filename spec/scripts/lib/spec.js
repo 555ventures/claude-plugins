@@ -197,9 +197,8 @@ function decisionRows(text) {
     .filter((c) => c.length >= 2 && !/^id$/i.test(c[0]) && !c.some((x) => /^<[^>]+>$/.test(x)))
 }
 
-// A path a File Plan row names, a glob row included; the Decisions section of a spec's raw text.
+// A path a File Plan row names, a glob row included.
 const inPlan = (rows, f) => rows.some((r) => r.path === f || (/[*?]/.test(r.path) && globToRe(r.path).test(f)))
-const decisionsOf = (text) => section(parseSections(parseFrontmatter(String(text).replace(/\r\n/g, '\n')).body), 'Decisions')
 
 // Spec text: what a build may not change in any spec but its own (run.js reverts it), so plan.js will not lock a plan that needs it.
 const isSpecText = (f) => /^specs\/.+\.md$/.test(f)
@@ -239,5 +238,5 @@ function fixDoc(symptom, spec) {
 
 module.exports = {
   parse, parseFrontmatter, section, parseIntent, splitCells, splitPlanCell, parseFilePlan, planRows, parseAcs, parseAssumptions,
-  globToRe, inPlan, decisionRows, decisionsOf, isSpecText, fixDoc,
+  globToRe, inPlan, decisionRows, isSpecText, fixDoc,
 }

@@ -28,14 +28,16 @@ function land(main, o) {
       st.writeStatus(o.spec, 'done')
       git.commitAll(o.wt, `chore(spec): ${o.id} done`, { noVerify: true })
     }
-    // A trunk that moves while the gate runs is rebased onto again, so what merges is what was gated.
+    // A trunk that moves while the gate runs is rebased onto again: what merges was gated. A third move refuses.
     for (let round = 0; !landed; round++) {
       const head = git.sh(['rev-parse', trunk], main)
       const r = git.rebaseOnto(o.wt, trunk)
       if (!r.ok) return { conflicts: r.conflicts }
       const g = host.gate(o.wt, o.config)
       if (g.status !== 0) return { red: g.tail, base: git.sh(['merge-base', trunk, 'HEAD'], o.wt) }
-      if (round < 2 && git.sh(['rev-parse', trunk], main) !== head) continue
+      const moved = git.sh(['rev-parse', trunk], main) !== head
+      if (moved && round < 2) continue
+      if (moved) throw refusal('trunk moved three times while landing — re-run')
       const m = git.mergeBack(main, o.branch, o.config.mergeStrategy, { message: o.message })
       if (!m.merged) throw refusal(`${o.branch} was not merged into ${trunk} (backed out, ${main} is clean): ${m.reason}`, 1)
       landed = m.sha

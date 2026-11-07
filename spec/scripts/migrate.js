@@ -16,7 +16,7 @@ const { ensureGitignore, IGNORE } = require('./init')
 
 const ARCH = 'docs/archive/v7'
 const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design',
-  'gateConcurrency', 'doctorProbeMs'] // the last two are v8's own keys: a re-run on a v8 host keeps them
+  'gateConcurrency', 'doctorProbeMs', 'testCountPattern'] // the last three are v8's own: a v8 re-run keeps them
 const MERGE = ['merge-commit', 'ff-only', 'squash'] // v7's `derived` and `rebase-ff` have no v8 meaning: git.mergeBack throws on them
 const V7_CONFIG = ['generatedBy', 'contractHash', 'policy', 'gateCommand'] // config keys only v7 wrote: trimConfig drops them, so they mark a host not yet migrated
 const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-runs.stopped.jsonl', '.claude/spec-session.json',

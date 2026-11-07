@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // doctor.js — health check of the host. node doctor.js [--root <dir>] [--json]
-// Exit 0 clean, 1 with findings.
+// Exit 0 clean, 1 with findings, 2 a refusal (not inside a git repository).
 
 const fs = require('fs')
 const os = require('os')
@@ -81,9 +81,15 @@ function boxInfo(root, cfg, probedMs) {
   return out
 }
 
+const pluginVersion = () => (readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {}) || {}).version || null
+
 // probe:false skips the testCommand run (status counts hygiene findings and must stay fast).
 function check(root, { probe = true } = {}) {
   const f = []; const info = [] // info: runs in flight, printed but not a finding
+  // Every check below reads git state; outside a repository they would crash, so refuse and name the remedy.
+  if (spawnSync('git', ['-C', root, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).status !== 0) {
+    return { findings: [`git: ${root} is not inside a git repository — run git init`], info, version: pluginVersion(), refusal: true }
+  }
   let cfg = null
   if (!fs.existsSync(configPath(root))) f.push('config: .claude/spec.config.json is missing — run /spec:init')
   else {
@@ -160,17 +166,16 @@ function check(root, { probe = true } = {}) {
     if (!tracked || pending) f.push('uncommitted migration: docs/archive/v7/ is untracked or staged — commit it (git add -A && git commit -m "chore(spec): migrate v7 → v8")')
   }
   info.push(...boxInfo(root, cfg, probedMs))
-  const plugin = readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {}) || {}
-  return { findings: f, info, version: plugin.version || null }
+  return { findings: f, info, version: pluginVersion() }
 }
 
 function main(argv) {
   const i = argv.indexOf('--root')
   const root = i >= 0 ? path.resolve(argv[i + 1]) : git.repoRoot(process.cwd())
-  const { findings, info, version } = check(root)
+  const { findings, info, version, refusal } = check(root)
   if (argv.includes('--json')) process.stdout.write(JSON.stringify({ ok: !findings.length, version, findings, info }) + '\n')
   else process.stdout.write([...info.map((x) => '· ' + x), ...findings.map((x) => '- ' + x)].join('\n') + (findings.length ? `\n${findings.length} finding(s)\n` : `${info.length ? '\n' : ''}✅ healthy — spec ${version || ''}\n`))
-  return findings.length ? 1 : 0
+  return refusal ? 2 : findings.length ? 1 : 0 // 2: a refusal naming its remedy (not a repository), 1: findings
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))

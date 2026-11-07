@@ -324,3 +324,13 @@ test('AC-20261105-17-11 a .env that .worktreeinclude matches is named for lanes:
   assert.ok(!f.some((x) => x.includes('root has .env that')), f.join('\n'))
   assert.ok(f.some((x) => x.includes('root has .env.local that')), 'the unmatched sibling is still reported')
 })
+
+test('a directory outside any repository is a refusal naming the remedy, not a crash', () => {
+  const d = tmpdir('doctor-norepo')
+  const r = runNode('scripts/doctor.js', ['--root', d, '--json'])
+  assert.strictEqual(r.status, 2, r.stderr)
+  assert.doesNotMatch(r.stderr, /at gitCommonDir|Error:/)
+  const out = JSON.parse(r.stdout)
+  assert.strictEqual(out.ok, false)
+  assert.ok(out.findings.some((x) => /not inside a git repository/.test(x) && /run git i/.test(x)), out.findings.join('\n'))
+})

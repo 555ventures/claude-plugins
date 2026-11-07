@@ -86,6 +86,10 @@ test('refs: id, position, basename, substring; ambiguous or unknown exits 2 nami
   const none = show('nope')
   assert.strictEqual(none.status, 2)
   assert.ok(none.stderr.includes('no item matches "nope" — run `/spec:queue list`'), none.stderr)
+  q(d, 'add', 'supersedes q9 for good')
+  const gone = show('q9')
+  assert.strictEqual(gone.status, 2, 'an unknown id never falls back to a text match')
+  assert.ok(gone.stderr.includes('no item matches "q9"'), gone.stderr)
 })
 
 test('a spec item whose spec is done counts as done, and the next write records it', () => {

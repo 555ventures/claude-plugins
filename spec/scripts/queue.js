@@ -28,6 +28,8 @@ function resolve(view, list, ref, root, soft) {
   if (/^[1-9]\d*$/.test(ref) && list[Number(ref) - 1]) return list[Number(ref) - 1]
   const byId = view.find((i) => i.id === ref)
   if (byId) return byId
+  // An id-shaped ref names an id or nothing: another item's text that mentions it is not a match.
+  if (/^q\d+$/.test(ref)) throw refuse(`no item matches "${ref}" — run \`/spec:queue list\``)
   const hits = [list.filter((i) => text(i) === ref || path.basename(text(i)) === ref), list.filter((i) => text(i).includes(ref))].find((xs) => xs.length) || []
   if (hits.length > 1) throw refuse(`"${ref}" is ambiguous — matches ${hits.map((m) => m.id || (m.kind === 'brief' ? work.normBrief(m.payload) : m.payload)).join(', ')} — use the id instead`)
   if (!hits.length) throw refuse(`no item matches "${ref}" — run \`/spec:queue list\``)

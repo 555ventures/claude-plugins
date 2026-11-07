@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-06
+- Amended by: docs/adr/0045-the-queue-lives-on-trunk.md ("the file" is now one tracked file per item on trunk)
 - Deciders: JJ + session (specs/20261105/16-the-queue-fills-itself-again.md)
 - Amends: ADR-0041 §1 (what the queue holds) and §6 (the proof), and ADR-0042 (what the file holds).
   ADR-0041 §5 and ADR-0042's single owner, version 3 file and strict read stand.

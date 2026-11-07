@@ -12,7 +12,9 @@ const SPEC = path.join(ROOT, 'spec')
 // per-process root, removed exactly once when the process ends — normal exit, thrown error, or
 // an interrupt signal. Without this each tmpdir() leaked a fixture tree on /tmp until the inode
 // table filled. TMPDIR is set so scripts under test that call os.tmpdir() land under it too.
-const RUN_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-tests-' + process.pid + '-'))
+// Resolved to its real path: macOS reaches the temp dir through /var -> /private/var and Windows
+// through 8.3 short names, and the scripts name state paths by their real path on every OS.
+const RUN_ROOT = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'cp-tests-' + process.pid + '-')))
 process.env.TMPDIR = RUN_ROOT
 
 let swept = false

@@ -314,7 +314,9 @@ const specState = (root, rel, status) => (status !== 'done' && status !== 'super
 function gitCommonDir(root) {
   const r = spawnSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' })
   if (r.status !== 0) throw new Error(`state: ${root} is not inside a git repository — run git init`)
-  return path.resolve(root, r.stdout.trim())
+  // One dir, one name: from the main checkout git answers relative to the root as given, from a
+  // worktree with its real path, so a root reached through a symlink (macOS /tmp, Windows 8.3) differs.
+  return fs.realpathSync.native(path.resolve(root, r.stdout.trim()))
 }
 
 // A fix with no spec keeps its run state here, under the git common dir: shared by every worktree of

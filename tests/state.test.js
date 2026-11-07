@@ -327,6 +327,17 @@ test('AC-20261105-09-2 slugOf is the first six words plus six hex of the whole s
   assert.match(S.slugOf('ログインできない'), /^fix-[0-9a-f]{6}$/, 'a symptom with no ascii words still gets a slug')
 })
 
+test('gitCommonDir names one dir one way: a root reached through a symlink resolves the same as from a worktree', (t) => {
+  const d = tmpdir('commondir'); const g = gitRepo(d)
+  const link = path.join(tmpdir('link'), 'repo')
+  try { fs.symlinkSync(d, link, 'junction') } catch { return t.skip('this OS refuses symlinks here') }
+  const wt = path.join(d, '.claude/worktrees/w'); g('worktree', 'add', '-q', '-b', 'w', wt, 'main')
+  const real = fs.realpathSync.native(path.join(d, '.git'))
+  assert.strictEqual(S.gitCommonDir(link), real, 'the main checkout through a symlink')
+  assert.strictEqual(S.gitCommonDir(wt), real, 'a worktree')
+  assert.strictEqual(S.fixRunPath(link, 'x-abcdef'), S.fixRunPath(wt, 'x-abcdef'))
+})
+
 test('AC-20261105-09-1 fixRunPath is <git-common-dir>/spec-fix/<slug>.run/state.json, shared by every worktree of the host', () => {
   const d = tmpdir('fixrun'); const g = gitRepo(d)
   const p = S.fixRunPath(d, 'x-abcdef')

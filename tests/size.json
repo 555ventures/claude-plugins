@@ -1,0 +1,34 @@
+{
+  "caps": {
+    "spec/scripts/*.js": 400,
+    "spec/scripts/lib/*.js": 250,
+    "spec/commands/*.md": 60,
+    "spec/agents/*.md": 40,
+    "spec/doctrine.md": 80,
+    "tests/*.test.js": 500
+  },
+  "totals": { "spec/scripts/": 4000, "tests/": 4000 },
+  "pinned": {
+    "spec/scripts/fanout.js": 850,
+    "spec/scripts/lib/host.js": 271,
+    "spec/scripts/lib/state.js": 415,
+    "spec/scripts/migrate.js": 422,
+    "spec/scripts/run.js": 1113,
+    "tests/fanout.test.js": 1783,
+    "tests/migrate.test.js": 641,
+    "tests/queue.test.js": 939,
+    "tests/run.test.js": 2075,
+    "spec/scripts/": 6395,
+    "tests/": 9178
+  },
+  "prose": {
+    "tests/fanout.test.js": 20,
+    "tests/init.test.js": 6,
+    "tests/migrate.test.js": 7,
+    "tests/prototype.test.js": 7,
+    "tests/queue.test.js": 29,
+    "tests/release.test.js": 1,
+    "tests/run.test.js": 15,
+    "tests/status.test.js": 3
+  }
+}

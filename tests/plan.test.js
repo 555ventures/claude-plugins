@@ -30,6 +30,11 @@ test('lock refuses a missing section or an open marker, then locks', () => {
   assert.strictEqual(plan(d, 'lock', f).status, 2)
   fs.writeFileSync(f, text.replace('## Goal', '## Goal\n\nx [NEEDS CLARIFICATION: y]'))
   assert.strictEqual(plan(d, 'lock', f).status, 2)
+  // A spec past 12 Decisions or 90 lines is refused: it is two specs or a wrong design.
+  fs.writeFileSync(f, text.replace(/^\| D1 \|.*$/m, Array.from({ length: 13 }, (_, i) => `| D${i + 1} | x | x |`).join('\n')))
+  assert.match(plan(d, 'lock', f).stderr, /13 Decisions \(max 12\)/)
+  fs.writeFileSync(f, text + '\nx\n'.repeat(90))
+  assert.strictEqual(plan(d, 'lock', f).status, 2)
   assert.strictEqual(status(f), 'draft')
   fs.writeFileSync(f, text)
   const r = plan(d, 'lock', f)

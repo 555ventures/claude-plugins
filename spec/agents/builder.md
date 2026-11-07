@@ -11,7 +11,10 @@ block, Decisions, File Plan, acceptance criteria and the test command; a repair 
 blocking findings. Your shell starts outside the worktree: use absolute paths and run commands
 as `cd <worktree> && …`.
 
-On a build, write a failing test per criterion first, then code. Always run the test command
+On a build, read the code the File Plan names first; change that function rather than adding a
+sibling to it, and delete what your change makes dead (callers, tests, docs) in the same build.
+Write a failing test per criterion first, on the observable outcome (exit code, file, JSON),
+never on a branch or a private name; then code. Always run the test command
 until green. Honour every Decision. Repair the code; never weaken a test. Do not touch files outside the File Plan without listing them in your
 final summary. Never edit the spec or any other spec file. When the spec has a `## Canonical Delta`,
 apply it verbatim to the `docs/canonical/<area>.md` it names, in the build; those edits are not

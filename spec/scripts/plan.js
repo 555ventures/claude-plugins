@@ -56,6 +56,10 @@ function lock(root, arg, confirmed) {
   const missing = REQUIRED.filter((n) => !Object.keys(s.sections).some((k) => k === n || k.startsWith(n + ' ') || k.startsWith(n + '(')))
   if (missing.length) throw new Refusal(`missing sections: ${missing.join(', ')}`)
   if (s.markers) throw new Refusal(`${s.markers} [NEEDS CLARIFICATION:] marker(s) left — resolve them first`)
+  // A spec this big is two specs or a wrong design: cut before lock, never after review.
+  const dKey = Object.keys(s.sections).find((k) => k === 'Decisions' || k.startsWith('Decisions ') || k.startsWith('Decisions('))
+  const size = { Decisions: dKey ? decisionRows(s.sections[dKey]).length : 0, lines: readText(file).trimEnd().split('\n').length }
+  if (size.Decisions > 12 || size.lines > 90) throw new Refusal(`spec too big: ${size.Decisions} Decisions (max 12), ${size.lines} lines (max 90) — split it, or name the existing code each Decision changes and cut the rest`)
   // Code may say `--root <path>` or <Title>Hi</Title>: drop fenced blocks (line by line, so a stray fence cannot swallow prose) and inline code.
   let fence = false
   const prose = readText(file).split('\n').filter((l) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return false } return !fence }).join('\n').replace(/`[^`\n]*`/g, '')

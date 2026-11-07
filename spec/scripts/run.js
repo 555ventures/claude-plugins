@@ -87,8 +87,8 @@ const FIX_JSON = '{"cause": "<one sentence>", "test": "<file> :: <test name>", "
 const fixBlock = (state, ctx, kind) => [
   '## Fix', state.fix.symptom,
   ...(kind === 'build' ? [
-    '1. Reproduce it and state the root cause in one sentence before the first edit.',
-    '2. Write a regression test that fails for that reason.',
+    '1. Reproduce it, then state in one sentence what made the bug possible, not where it shows. A path that exists for one edge, or two paths doing one job, is deleted or merged, not given a branch; set needsPlan when that crosses a Decision.',
+    '2. Extend the nearest existing test so it fails for that reason; a new test only when no test covers the path, and only for an outcome a user sees (exit code, file, JSON).',
     '3. Fix the cause.',
     '4. Run the test command until green.',
     '', `Write ${runFile(ctx, 'fix.json')}: ${FIX_JSON}. When needsPlan is set, make no edit.`,

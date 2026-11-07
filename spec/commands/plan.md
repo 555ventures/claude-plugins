@@ -10,8 +10,11 @@ prototype contract's behaviour pins become acceptance criteria.
 
 1. Read the brief and the specs already marked `brief: NN`, then `ls docs/adr` and open every
    ADR the brief cites or whose title touches the change, following any `superseded by`. A
-   live ADR beats the brief's wording. Then explore the code until you can name every file the
-   change touches.
+   live ADR beats the brief's wording. Then explore the code until you can name, for each
+   Decision, the existing function it changes, what it replaces and what it makes dead (a DELETE
+   row in the File Plan). A Decision that adds a flag, mode, step, file or config key says in its
+   reason why the existing one cannot carry it. A bug in a path that exists for one edge means the
+   path goes, not a branch on it.
 2. For a new spec, `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.js new <slug>` writes the template
    and prints its path. Fill it in, "You asked" in the user's words, `brief: NN`, each ADR
    constraint the change touches as a Decisions row citing it, ACs as `AC-YYYYMMDD-NN-k`. A
@@ -50,6 +53,7 @@ prototype contract's behaviour pins become acceptance criteria.
    id (write the AC, or `node ${CLAUDE_PLUGIN_ROOT}/scripts/prototype.js <stem> drop pN --why …`),
    and once every behaviour pin is covered the queued plan item closes.
 
-A brief may become several specs; use `depends_on` when one must land first. A brief that has specs
+A brief may become several specs; more than ten Decisions is two specs or a wrong design: cut before lock (`plan.js lock` refuses
+past 12 Decisions or 90 lines). Use `depends_on` when one spec must land first. A brief that has specs
 stands for them in the queue (ADR-0044): do not tick it, because a tick sends it to the back. A brief
 folded into another gets `> Superseded by NN` under its title. Report Next.

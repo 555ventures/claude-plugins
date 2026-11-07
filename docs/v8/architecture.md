@@ -12,7 +12,9 @@ first, then build.
   is consumed by code.
 - One module owns each on-disk file (see §2). Nobody else parses it.
 - Size caps: driver ≤ 400 LOC, lib file ≤ 250 LOC, command md ≤ 60 lines, agent md ≤ 40
-  lines. If you are over, cut features, not line breaks.
+  lines, doctrine ≤ 80, test file ≤ 500. If you are over, cut features, not line breaks.
+  `npm test` runs `tests/size-check.js` first: a file over its cap is pinned in `tests/size.json`
+  and a pin only goes down, so a feature on a pinned file is paid for by a deletion there.
 - Tests: `tests/<name>.test.js` with `node:test`, behavioural only (run the script on a tmp
   tree, assert exit code / files / JSON). Never assert on prose wording. Use
   `tests/helpers.js` (`tmpdir`, `gitRepo`, `runNode`, `runBash`, `freePort`).

@@ -75,8 +75,7 @@ function boxInfo(root, cfg, probedMs) {
   const wtDf = dfOf(fs.existsSync(wtDir) ? wtDir : root)
   const out = [`box: ${cores} cores${ms != null ? ` · gate ${(ms / 1000).toFixed(0)}s (${measured ? 'measured' : 'cached'})` : ''} · TMPDIR ${tmp} ${freeOf(tmpDf)} free · worktrees on ${wtDf ? wtDf.fs : '?'} ${freeOf(wtDf)} free`]
   const half = Math.floor(cores / 2)
-  if (lanes > half) out.push(`⚠️ lanes ${lanes} > cores/2 (${cores}) — set "lanes": ${Math.max(1, half)} or "gateConcurrency": 1 in .claude/spec.config.json`)
-  if (ms != null && ms > 120000) out.push(`⚠️ gate took ${(ms / 1000).toFixed(0)}s (over 2 min) — set "gateConcurrency": 1, or lower lanes`)
+  if (lanes > half) out.push(`⚠️ lanes ${lanes} > cores/2 (${cores}) — set "lanes": ${Math.max(1, half)} in .claude/spec.config.json`)
   if (tmpDf && tmpDf.bytes < 2 * GB) out.push(`⚠️ TMPDIR has ${human(tmpDf.bytes)} free (under 2 GB) — export TMPDIR=<path on the worktrees' filesystem> before /spec:fanout`)
   return out
 }

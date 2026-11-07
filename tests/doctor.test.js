@@ -184,7 +184,8 @@ test('AC-20261105-08-11 lanes above cores/2 prints the advice line and still exi
   assert.deepStrictEqual(j.findings, [])
   const w = j.info.find((x) => x.startsWith('⚠️ lanes 1000 > cores/2'))
   assert.ok(w, j.info.join('\n'))
-  assert.ok(w.includes(`(${cores}) — set "lanes": ${Math.max(1, Math.floor(cores / 2))} or "gateConcurrency": 1 in .claude/spec.config.json`), w)
+  assert.ok(w.includes(`(${cores}) — set "lanes": ${Math.max(1, Math.floor(cores / 2))} in .claude/spec.config.json`), w)
+  assert.ok(!w.includes('"gateConcurrency": 1'), 'lanes count builders and the gate lock already caps gates: too many lanes is fixed by lanes, never by gateConcurrency')
   const under = setup({ testCommand: 'true', lanes: Math.max(1, Math.floor(cores / 2)) })
   runNode('scripts/init.js', ['--root', under])
   assert.ok(!doctorJson(under, fakeDf(FIVE_GB)).info.some((x) => x.includes('cores/2')), 'lanes within cores/2: no advice')
@@ -204,7 +205,7 @@ test('AC-20261105-08-12 a gate over two minutes and a TMPDIR under 2 GB each pri
     const { info, findings } = check(d, { probe: false })
     assert.deepStrictEqual(findings, [])
     assert.match(info.find((x) => x.startsWith('box:')), /gate 130s \(cached\)/, 'no probe: the newest cached run supplies the time')
-    assert.ok(info.includes('⚠️ gate took 130s (over 2 min) — set "gateConcurrency": 1, or lower lanes'), info.join('\n'))
+    assert.ok(!info.some((x) => x.includes('gate took')), 'a slow gate alone is no evidence two gates compete: doctor reports the time, never gateConcurrency advice')
     const tmp = info.find((x) => x.startsWith('⚠️ TMPDIR has'))
     assert.match(tmp, /^⚠️ TMPDIR has 1\.4 GB free \(under 2 GB\) — export TMPDIR=<path on the worktrees' filesystem> before \/spec:fanout$/)
   } finally { process.env.PATH = saved }

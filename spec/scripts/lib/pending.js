@@ -12,8 +12,8 @@ const { spawnSync } = require('child_process')
 const PENDING = 'PENDING_QUESTION'
 const MARKER = 'spec-lane-open'
 
-// Informational for the relay (fanout groups by it); answerPending keys on labels alone.
-const KINDS = ['escalate', 'unmet', 'assumption', 'decision', 'scope', 'spec-edit', 'conflict']
+// The three questions a run asks (fanout relays them in this order); answerPending keys on labels alone.
+const KINDS = ['assumption', 'decision', 'unmet']
 
 const pendingPath = (root) => path.join(root, '.claude', 'pending-question.json')
 
@@ -53,7 +53,7 @@ function readPending(root) {
 const normOption = (o) => (typeof o === 'string' ? { label: o } : { label: String(o.label), ...(o.description ? { description: String(o.description) } : {}) })
 
 // Never overwrites a pending question: an existing one is returned with written: false.
-function writePending(root, { lane, question, options, kind = 'escalate' }) {
+function writePending(root, { lane, question, options, kind }) {
   const prior = readPending(root)
   if (prior) return { path: pendingPath(root), written: false, doc: prior }
   if (!question || !Array.isArray(options) || options.length < 2) {

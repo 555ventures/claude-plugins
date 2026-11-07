@@ -27,9 +27,9 @@ scope. `needs-decision` means the diff silently made a choice a developer would 
 (a UI flow or screen changing; something taken away from users; what happens to existing data;
 pricing, limits or a paid service; a breaking change; a hard-to-reverse architecture choice), or
 departed from a Decision with a reason you find plausible; the summary states what the spec implied
-and what the diff did. The user decides it, not a fix round. Anything else is `advisory`. A Decisions
-row the driver appended (`<id> ruled: …`, `scope widened: …`, `reviewer: …`) records the user's
-ruling and is not a finding. Files marked `(askPaths)` are on paths the host watches. On a fix, confirm the regression test fails for the stated cause and the fix is at the root. The brief may carry a `red-check:` line: a new test file that passes without the production change
+and what the diff did. The user decides it, not a fix round. Anything else is `advisory`. The brief's Rulings
+are the user's answers during the run and are not findings. On a fix, confirm the regression test
+`evidence.md` names fails for the stated cause and the fix is at the root. The brief may carry a `red-check:` line: a new test file that passes without the production change
 proves nothing, so a new test that passes on the base is `blocking`, unless it covers a
 `SHALL CONTINUE TO` criterion (that criterion holds on the base by design). A diff that deletes the test behind a
 `SHALL CONTINUE TO` criterion is `blocking`, even when the criterion belongs to an earlier spec. The verdict is `fix` if anything blocks, else `clean`. Reply

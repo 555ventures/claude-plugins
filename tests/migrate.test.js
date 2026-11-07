@@ -451,7 +451,7 @@ test('AC-20261105-12-1 shop-bltr q52: a version 2 fix with a bare payload is a f
   assert.strictEqual(planned.status, 0, planned.stderr)
   const batch = require(path.join(__dirname, '../spec/scripts/lib/state.js')).readFanout(d).batch
   assert.strictEqual(batch.length, 1)
-  assert.match(batch[0].stem, /^fix-admin-polish-after-10-[0-9a-f]{6}$/)
+  assert.match(path.basename(batch[0].worktree), /^fix-admin-polish-after-10-[0-9a-f]{6}$/)
   assert.strictEqual(batch[0].item, 'q52')
 })
 
@@ -481,7 +481,7 @@ test('AC-20261105-12-9 every stored shape, migrated, is one shape to status and 
       if (it.type === 'fix') {
         const lane = it.spec ? `${it.spec} — fix: ${it.payload}`.replace(/^[^ ]+ — /, '') : `fix-${stt.slugOf(it.payload)}`
         assert.ok(plan.includes(lane), `fanout makes ${paste} a lane (${lane}):\n${plan}`)
-      } else assert.ok(plan.includes(paste), `fanout accounts for ${paste}:\n${plan}`)
+      } else assert.ok(plan.includes(Qm.text(it)), `fanout lists ${paste} in its queue rows:\n${plan}`)
     }
   }
 })
@@ -596,7 +596,7 @@ test('AC-20261105-17-5 enforcement.json is archived and enforcementManifest drop
 
 test('AC-20261105-17-6 v8\'s own keys survive a trim; a v7-only mergeStrategy is dropped, squash is kept', () => {
   const { trimConfig } = require('../spec/scripts/migrate')
-  const own = { laneFiles: ['.env'], gateConcurrency: 1, askPaths: ['a'], doctorProbeMs: 5000 }
+  const own = { gateConcurrency: 1, doctorProbeMs: 5000 }
   const out = trimConfig('/nonexistent', { testCommand: 't', ...own })
   for (const [k, v] of Object.entries(own)) assert.deepStrictEqual(out[k], v, k)
   for (const v of ['derived', 'rebase-ff']) {
@@ -628,14 +628,4 @@ test('AC-20261105-17-7 capabilities.testCountPattern lands in release.testCountP
   assert.strictEqual(first.status, 0, first.stderr)
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).release, { deployCommand: 'd', testCountPattern: 'none' })
   assert.match(runNode('scripts/migrate.js', ['--root', d, '--apply']).stdout, /✅ nothing to migrate/)
-})
-
-test('AC-20261105-17-11 migrate on a config with laneFiles writes no .worktreeinclude', () => {
-  const { d } = synthetic()
-  const cfgFile = path.join(d, '.claude/spec.config.json')
-  fs.writeFileSync(cfgFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfgFile, 'utf8')), laneFiles: ['.env'] }))
-  execFileSync('git', ['-C', d, 'commit', '-qam', 'lanefiles'])
-  mig(d, '--apply')
-  assert.ok(!fs.existsSync(path.join(d, '.worktreeinclude')))
-  assert.deepStrictEqual(JSON.parse(fs.readFileSync(cfgFile, 'utf8')).laneFiles, ['.env'])
 })

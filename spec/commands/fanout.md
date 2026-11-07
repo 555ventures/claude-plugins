@@ -1,5 +1,5 @@
 ---
-description: Drain the queue as parallel worktree lanes, merged in order behind the gate
+description: Drain the queue as parallel worktree lanes, each landed behind its own gate
 argument-hint: "[--pick] [<spec path>…]"
 model: opus
 effort: medium
@@ -11,49 +11,37 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 
 - **Bare (AUTO)**: the driver picks the batch (📌 Auto-picked) and asks nothing; mark `planned`. It takes every
   startable hardened spec, queued or not, in queue order (the queue is the file plus the fill: ADR-0044); a queued
-  brief stands for its specs and prints nothing. A spec that must not run stays `draft`. A shared brief waits for
-  its sibling (`shared brief NN`), and a brief dependency waits and ends the batch (`brief X depends on Y`, then
-  `the batch stops before <stem>`); a queue prompt or an unplanned brief ends nothing. An unknown flag exits 2
-  (`fanout: unknown argument <flag>`). A queued
-  `type: fix` item is a fix lane: bound to a spec `fix-<stem>`, spec-less `fix-<slug>`; both are picked
-  after the runnable specs and their Agent calls run `/spec:fix --root <wt> …`, never `/spec:run`. A lane that ends `NEEDS_PLAN` queued `/spec:plan` and is reported.
-  PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty. A finished brief prints `specs done: /spec:queue done NN`. REPORT opens `⚠️` when a lane parked, needed a spec, was dismissed or waits.
+  brief stands for its specs. A spec that must not run stays `draft`. A shared brief waits for its sibling
+  (`shared brief NN`), and a brief dependency waits and ends the batch (`brief X depends on Y`, then
+  `the batch stops before <stem>`). An unknown flag exits 2 (`fanout: unknown argument <flag>`). Every queued
+  `type: fix` item is a lane after the specs — bound to a spec `fix-<stem>`, spec-less `fix-<slug>` — and its Agent
+  call runs `/spec:fix --root <wt> …`, never `/spec:run`; the advisories a review queues drain this way, unattended.
+  PLAN with nothing runnable lists every open item with why it needs you; drained means the queue is empty.
 - **`--pick` (SELF-PICK)**: ask the printed checkbox question, then mark `picked` with one `--label` per ticked box.
-- A hardened spec with frontmatter `prototype:` is never a lane, because LOOK needs the user's free-text
-  reply and the app must outlive the agent: it waits with the reason `stops at LOOK for you — /spec:run it`.
-  A `type: fix` item bound to such a spec is held the same way, and its reason prints the in-place `/spec:fix <spec> — <symptom>` line;
-  that run closes the item when it finishes.
+- A hardened spec with frontmatter `prototype:` is never a lane: LOOK needs the user's free-text reply and the app
+  must outlive the agent. It waits with `stops at LOOK for you — /spec:run it`; a fix item bound to such a spec waits
+  with its in-place `/spec:fix <spec> — <symptom>` line.
 - **DISPATCH**: send every printed Agent call in one message and mark `dispatched`.
-- **WAIT**: mark `returned --lane <id>` as each lane comes back; a MERGE_READY lane
-  lands as it returns, also while another lane is sent-back or resolving a rebase (the resolver is
-  rebased again, and gated, when it lands). Every mark prints, under the checkpoint,
-  what it did to each lane it touched: `lane N landed as <sha>`, `lane N sent back — conflicts: …` or
-  `lane N gate red after rebase: …` with that lane's Agent call to re-send, or `lane N held — trunk gate is red`.
-  A PARKED, AMENDED or NEEDS_PLAN lane is dismissed by it and PLAN skips it while its worktree stays; an
-  AMENDED lane is picked again once trunk re-locks its spec (`/spec:plan` lock), reset to BUILD, and a
-  lane that marked `waiting --on` becomes waiting. A lane whose rebase conflicts is re-sent (mark
-  `resent`): it resolves the conflict, continues the rebase, gates and reviews inside that one
-  dispatch, and lands when marked returned. The re-send dispatch is followed by the lane list, which shows
-  what every other lane is doing. A lane that needs another spec done first: mark
-  `waiting --lane <id> --on <spec>`; PLAN re-picks it once that spec is done, on a rebased worktree.
-  A stopped or waiting lane keeps its work in a `wip(spec):` commit. `dismissed --lane <id> --discard`
-  removes the worktree and branch and prints the wip sha; `dismissed` is also accepted at DISPATCH,
-  MERGE_RED and REPORT; `returned` is accepted at MERGE_RED too: a lane that comes back while the trunk is red
-  is held (`lane N held — trunk gate is red`) and lands when `gate-repaired` is marked.
-- **RELAY**: the questions are printed grouped by kind (`[assumption]`, `[decision]`, `[unmet]`,
-  `[scope]`, `[spec-edit]`, `[escalate]`, `[conflict]`), recommended option first. Relay every lane
-  question verbatim in one AskUserQuestion per RELAY (at most 4 per call), then run each printed
-  `answered` line with the user's pick, or the printed `waiting` line when the lane stopped for a
-  dependency. The orchestrator never answers for the user; only `📌 Auto-picked` lines are unrelayed.
-- **MERGE**: whatever is left lands in batch order; a lane whose rebase onto trunk conflicts goes
-  back; send its printed Agent call, mark `resent`. **MERGE_RED**: repair the trunk gate, commit,
-  mark `gate-repaired` (a flaky failure needs no commit: re-run it as it is). A lane whose base is
-  older than trunk is gated on the rebased tree before it lands; red sends it back (mark `resent`).
-- **Long marks**: every `returned` of a MERGE_READY lane may run a rebase, fast-forward and trunk
-  gate: 600000 ms. So do the marks that end RELAY or MERGE_RED (a four-lane batch took 4m38s on a
-  2-minute gate). A killed mark is resumed by re-running the driver without `--mark`.
-  Builders still run in parallel; only gates queue, at most `gateConcurrency` at once (default 2).
-  Temp space: suites that write temp data fill a tmpfs with four lanes; export TMPDIR to a
-  directory on a real disk before /spec:fanout (doctor prints the free space).
-- **REPORT**: mark `reported`, then end the turn and report; the user runs `/spec:fanout` again, after
-  `/clear`. Never loop to the next batch in the same turn.
+- **WAIT**: mark `returned --lane <id>` as each lane comes back. A lane ends at DONE in its own worktree, committed;
+  fanout lands it as it returns, through the same path a solo run takes: the rebase onto trunk, the gate and the
+  merge all happen in the lane's worktree, so trunk gets exactly the tree that was gated. Each mark prints what it did
+  to each lane it touched: `lane N landed as <sha>`, or `lane N sent back — conflicts: …` / `lane N gate red after
+  rebase: …` with that lane's Agent call. A sent-back lane resolves in its own worktree, gates and reviews inside one
+  dispatch (mark `resent`), and lands when marked returned; a second conflict on the same trunk stops it for you.
+- A lane that needs another spec ends `after` it: returned, it is held on its queue item (the queue's own `after`),
+  and a later PLAN sends it out again on its kept worktree once that spec is done. A lane that stopped by a rule
+  (a cap, amend, a dismissed question) keeps its worktree and waits until you remove it; its item is queued.
+  `dismissed --lane <id>` drops a lane, `--discard` also removes its worktree and branch and prints the wip commit.
+- **RELAY**: lane questions are printed by kind (`[assumption]`, `[decision]`, `[unmet]`), each in the agent's own
+  words, recommended option first. Relay every one verbatim in one AskUserQuestion per RELAY (at most 4 per call),
+  then run each printed `answered` line with the user's pick, or the printed `dismissed` line when the user dismissed
+  it (the lane stops with the question queued as a decide item). The orchestrator never answers for the user.
+- **MERGE**: whatever is left lands in batch order; a lane sent back is re-sent (mark `resent`).
+- **Long marks**: every `returned` of a DONE lane may run a rebase, a gate and a merge: 600000 ms. A killed mark is
+  resumed by re-running the driver without `--mark`. Builders run in parallel; only gates queue, at most
+  `gateConcurrency` at once (default 2). Temp space: suites that write temp data fill a tmpfs with four lanes;
+  export TMPDIR to a directory on a real disk before /spec:fanout (doctor prints the free space).
+- **REPORT**: it lists what merged (with the gate reruns and slot waits lanes paid, summed in a `load:` line), every
+  answered question with its text, and every line a lane's rules decided (📌).
+  Mark `reported`, then end the turn and report; the user runs `/spec:fanout` again, after `/clear`. Never loop to the
+  next batch in the same turn.

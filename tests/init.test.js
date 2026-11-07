@@ -129,7 +129,7 @@ test('AC-20261105-17-15 the contract, the footprint and the command files descri
   for (const gone of ['Bootstraps the grounding layer', 'Turns rules into deterministic checks', 'Next: /spec:enforce', 'Substrate question', 'vacuous-pass']) assert.ok(!contract.includes(gone), gone)
   const row = contract.split('\n').find((l) => l.startsWith('| `.claude/spec.config.json`'))
   assert.ok(row && !row.includes('generatedBy'), 'the config row no longer promises v7 keys')
-  for (const kept of ['gateConcurrency', 'laneFiles', '.worktreeinclude']) assert.ok(contract.includes(kept), kept)
+  for (const kept of ['gateConcurrency', '.worktreeinclude']) assert.ok(contract.includes(kept), kept)
   assert.match(read('docs/v8/host-footprint.md'), /release\.testCountPattern[^\n]*optional|optional[^\n]*release\.testCountPattern|`config\.release\.testCountPattern` verbatim[^\n]*optional/)
   assert.match(read('spec/commands/enforce.md'), /Retired/)
   for (const f of ['spec/commands/enforce.md', 'spec/commands/init.md']) for (const w of ['package.json', 'Makefile', 'pyproject']) assert.ok(read(f).includes(w), `${f} names ${w}`)

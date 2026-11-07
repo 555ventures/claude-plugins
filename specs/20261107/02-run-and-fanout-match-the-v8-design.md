@@ -1,6 +1,6 @@
 ---
 date: 2026-11-07
-status: hardened
+status: done
 area: run
 depends_on: []
 brief: 39
@@ -77,3 +77,30 @@ run.js, fanout.js, state.js and host.js are under their caps with every behaviou
 
 - A1: no host sets `askPaths` — if false: its stop is lost silently; ask before lock.
 - A2: `.worktreeinclude` covers what `laneFiles` copied — if false: keep the key in host.js only.
+
+## As built
+
+- The mark a lane uses to wait for another spec is `after --on <spec>` (D8 names the ending, STOPPED {why: 'after'}, not the verb); it commits the work as `wip(spec):`, folded into the build commit, so the resume can rebase onto trunk.
+- A dismissed question is the mark `dismissed` at ESCALATE; fanout's `dismissed --lane` on a lane with a pending question runs that mark in the lane's own run.js, so parkRun stays the one place a run stops (D4).
+- "Needs a plan" is the mark `needs-plan --why <text>` on a fix (D7 names the ending, not the verb); the builder's edits are not reset, since the builder is told to make none.
+- Reviewer advisories are queued as one fix item for spec runs only, not for fix runs: a fix run's advisories would queue a fix that queues a fix, one per run, without end.
+- A spec-less fix keeps its run state under the checkout's own git dir (`--git-dir`, not `--git-common-dir`): a lane's goes with its worktree, which is what lets D1 delete `clearLaneRun`.
+- `worktreePerSpec: false` no longer builds in place (D9: `--in-place` is the only way); the key is left in config and migrate untouched. No host on this machine sets it to false.
+- `git.commitAll` lost its `allow` option: with secrets always kept out, nothing staged a hit on the user's say-so any more.
+- PLAN prints the queue rows (`lib/queue-rows.js` `list`) when lanes are picked too, so every open item is still accounted for after `needsYou` went.
+- GATE boots the app itself for a `prototype:` spec's pin tests (`host.withApp`: `bootCommand` with PORT, wait for the url, run e2eCommand, stop the app); LOOK prints the boot line for the session, as PIN_TESTS used to.
+- `readSpec` stays in lib/state.js as the file read, calling `lib/spec.js` `parse`; the grammar itself moved, so work.js and queue.js needed no change.
+- lib/next.js, lib/report.js, status.js and prototype.js needed no edit: next.js blockers already carry a queue item's `after`, report.js already has the 📌 slot, and the other two call no moved or retired name.
+- doctor's `.env` finding now names `.worktreeinclude` (`lanes: the root has .env that lanes will not see — add the line .env to .worktreeinclude`) in place of the retired config key.
+- spec/commands/migrate.md is outside the File Plan: it named the two retired config keys, which AC-8 bans under spec/.
+- fanout REPORT prints a lane's `Users will notice:` line only for a merged lane (`📌 lane <n> (<name>): Users will notice: <notice>`, before its decided lines); a held, stopped or dismissed lane landed nothing for users to notice.
+- fanout names a lane by its worktree (`spec-<stem>`, `fix-<stem>`, `fix-<slug>`) in WAIT, RELAY and REPORT, where v8 printed the bare spec stem: D8's lane shape carries no stem.
+- fanout REPORT keeps v8's batch `load:` line, a dismissed spec lane's `spec left hardened in the lane (trunk: <status>)` and the `wip <sha>` discard wording, which the first build of this spec had dropped with no Decision behind it.
+- Earlier specs' prose-only criteria that lost their tests here (20261105/02-16, 06-13, 06-14, 07-15, 08-17, 09-14, 10-14, 15-11, 15-18) stay unpinned: reviewer.md blocks a test that asserts prose; they were checked by hand and are listed as retired in the build evidence.
+- tests/run.test.js:1 Untagged tests of behaviour the code still has were deleted to fit the 500-line cap with no replacement anywhere under tests/: OPEN refusing a detached HEAD, a spec branch with commits not on trunk, a fanout lane in flight and un-ignored sidecars; a lane run finding its spec under --root; the run marker on only during agent steps; a builder-run-file-only change counting as a round; a commit-hook rejection going to REPAIR.
+- spec/scripts/lib/land.js:37 The rebase-and-gate loop gives up re-rebasing after two trunk moves and merges anyway, so under merge-commit or squash a trunk that moved a third time during the gate receives a merge whose tree was never gated (AC-2's promise holds only for the first two moves; ff-only would simply fail and back out).
+- spec/scripts/lib/land.js:29 The bookkeeping `status: done` commit stages the whole worktree with the secrets scan skipped; today it never fires (OPEN writes `done` into the worktree copy, so the status is already done at MERGE), but if that invariant ever slips, a file COMMIT kept out as a secret (`state.keptOut`) would be swept into history here.
+- spec/scripts/run.js:360 D7 and architecture.md name the fix ending `STOPPED {why: 'needs-plan'}`, but the mark ends the run with why `'needs a plan'`; nothing keys on the literal today (fanout and doctor only test `why !== 'after'`), so it is a contract-wording mismatch rather than a behaviour defect.
+- specs/20261107/02-run-and-fanout-match-the-v8-design.md:57 The File Plan row `spec/scripts/lib/{state,git,host,pending,next,queue,report}.js | MODIFY` names next.js and report.js, neither of which changed; the `after` holds ride on the existing lib/next.js blockers and report.js already renders the pins slot, so the rows were unnecessary rather than unmet.
+- spec/commands/migrate.md:22 spec/commands/migrate.md is outside the File Plan; the edit removes `laneFiles` and `askPaths` from its prose, which AC-8 (zero occurrences under spec/) requires and D8/D3 justify, so it is a File Plan omission rather than stray scope.
+- touched outside the File Plan: spec/commands/migrate.md

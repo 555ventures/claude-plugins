@@ -1,6 +1,8 @@
 # 0043. The contract is sentences the build proves
 
 - Status: accepted
+- Amended by: specs/20261107/02-run-and-fanout-match-the-v8-design.md (D2) — the pin tests run in GATE,
+  before REVIEW, against the app the driver boots; the separate pin-test step is gone.
 - Date: 2026-11-05
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (specs/20261105/14-the-prototype-is-pinned-in-chat-and-proved-at-look.md)
@@ -32,8 +34,8 @@ pictures helped once; the look stop's loopback url was its one complaint.
   gap the user named.
 - **Sentences, proved on the production tree** (chosen) — the session records each ruling as a
   sentence the user confirms; the plan cannot lock without an AC per behaviour pin; the builder
-  writes the pin tests on the production tree; a PIN_TESTS step runs them with the host's e2e
-  command; LOOK stops with the app running.
+  writes the pin tests on the production tree; the build runs them with the host's e2e command (a
+  step of their own as first chosen; GATE since the 2026-11-07 amendment); LOOK stops with the app running.
 
 ## Decision
 
@@ -47,8 +49,9 @@ pictures helped once; the look stop's loopback url was its one complaint.
   queued plan item closes when all are covered. Look pins are Decisions listed for LOOK.
 - **The build proves the sentences.** The builder writes one browser test per behaviour pin in
   the host's e2e file, by role and visible text, seeding the given precondition; the reviewer
-  checks each asserts its sentence. They run in a PIN_TESTS step after REVIEW with the host's
-  `prototype.e2eCommand`, never in the gate, so merges stay fast. Red is a repair.
+  checks each asserts its sentence. They run in GATE, after the test command and before REVIEW,
+  with the host's `prototype.e2eCommand` against the app the driver boots from the spec worktree
+  (amended 2026-11-07: they first ran in a step of their own after REVIEW). Red is a repair.
 - **The user looks before the commit.** LOOK starts the app from the spec worktree and prints
   `prototype.publicUrl` or the url; only a literal `close enough` advances; any other reply is a
   FIX round with the reply as the symptom.
@@ -68,7 +71,7 @@ pictures helped once; the look stop's loopback url was its one complaint.
 - The prototype branch is a reference the builder reads; nothing copies from it, and a selector
   from it is a blocking review finding.
 - ADR-0036's note that the build's prototype REPLAY step is unchanged is overtaken: REPLAY is
-  gone; PIN_TESTS and LOOK replace it.
+  gone; the pin tests and LOOK replace it.
 
 ## Applies to
 

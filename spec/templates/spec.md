@@ -16,6 +16,8 @@ breaking: false
   - <3–6 bullets>
 - I will not touch:
   - <bullets>
+- Users will notice: <what changes for the people who use it, in their words>
+- You lose: <what goes away, or nothing>
 - Architecture or behaviour change: no | yes — <what>, needs your yes
 - Client sign-off: none | <what was asked> — <what JJ chose>
 

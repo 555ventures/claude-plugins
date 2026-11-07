@@ -202,20 +202,15 @@ test('AC-20261105-17-10 the oracle fails when the v7 tag is missing: v7Scripts r
   assert.doesNotMatch(src.slice(src.indexOf('function v7Scripts'), src.indexOf('function v1Queue')), /skip/i)
 })
 
-test('AC-20261105-17-11 copyLaneFiles copies the union of laneFiles and the manifest matches byte for byte; skip lines stay; no manifest behaves as before', () => {
-  const { root, g } = includeHost()
-  fs.writeFileSync(path.join(root, 'notes.txt'), Buffer.from([0, 1, 2, 255, 10])) // untracked, not gitignored: laneFiles only
-  fs.writeFileSync(path.join(root, 'tracked.txt'), 't\n'); g('add', 'tracked.txt'); g('commit', '-q', '-m', 't')
+test('copyIncluded copies the manifest matches byte for byte and nothing else; no manifest copies nothing', () => {
+  const { root } = includeHost()
+  fs.writeFileSync(path.join(root, 'notes.txt'), Buffer.from([0, 1, 2, 255, 10])) // untracked, not gitignored: not copied
   const wt = tmpdir('wti-wt')
-  const code = `require(${JSON.stringify(HOST_JS)}).copyLaneFiles(${JSON.stringify(root)}, ${JSON.stringify(wt)}, ['notes.txt', '.env', 'tracked.txt', 'gone.txt'])`
-  const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' })
-  assert.strictEqual(r.status, 0, r.stderr)
-  assert.strictEqual(r.stderr, 'laneFiles: skipped tracked.txt (tracked)\nlaneFiles: skipped gone.txt (missing)\n')
-  for (const f of ['.env', '.env.local', 'infra/db/.env', 'notes.txt']) assert.ok(fs.readFileSync(path.join(wt, f)).equals(fs.readFileSync(path.join(root, f))), f)
-  for (const f of ['.env.example', 'apps/web/.env', '.env.shared', 'tracked.txt', '.claude/worktrees/x/.env']) assert.ok(!fs.existsSync(path.join(wt, f)), f + ' is not copied')
-  // no manifest: only the listed files
+  H.copyIncluded(root, wt)
+  for (const f of ['.env', '.env.local', 'infra/db/.env']) assert.ok(fs.readFileSync(path.join(wt, f)).equals(fs.readFileSync(path.join(root, f))), f)
+  for (const f of ['.env.example', 'apps/web/.env', '.env.shared', 'notes.txt', '.claude/worktrees/x/.env']) assert.ok(!fs.existsSync(path.join(wt, f)), f + ' is not copied')
   fs.rmSync(path.join(root, '.worktreeinclude'))
   const wt2 = tmpdir('wti-wt2')
-  H.copyLaneFiles(root, wt2, ['notes.txt'])
-  assert.deepStrictEqual(fs.readdirSync(wt2), ['notes.txt'])
+  H.copyIncluded(root, wt2)
+  assert.deepStrictEqual(fs.readdirSync(wt2), [])
 })

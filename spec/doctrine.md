@@ -38,21 +38,20 @@ its remedy. Every command ends with one report rendered by `lib/report.js`.
 
 ## When to ask
 
-One test for every stop: would the client need to sign this off? If a developer would take it
-to the client (architecture, behaviour, design, direction), ask; otherwise decide. The real
-forks `/spec:plan` names are asked once, batched, before lock; product facts are asked, never
-derived. Also ask before anything irreversible (production promote, deleting unmerged work,
-destructive git), for a yes on an `architecture: true` Intent (asked once, at
-`plan.js lock --confirmed`), or when a step says to. A builder never improvises on a fork; a
-lane's driver writes the question to `.claude/pending-question.json` and the orchestrator relays
-every lane question verbatim in one AskUserQuestion per RELAY. The orchestrator never answers for
-the user; only `📌 Auto-picked` lines are unrelayed. A lane never edits a spec, and only the user
-waives a Decision (`amend`): an unmet Decision or false Assumption is a question (`unmet`).
-`/spec:fix` asks once, after green, when it authored strings or choices (keep / revert / plan); a fix that needs an architecture or behaviour change is sent to `/spec:plan`, never asked.
-`/spec:run` and `/spec:fix` also ask, once, before a secret-looking file reaches a commit
-(exclude / stage). A dismissed AskUserQuestion stops the run: the answer is never invented, and
-a dismissed promote question promotes nothing.
-Otherwise decide and print `📌 Auto-picked <choice> — <reason> (veto anytime)`.
+One test, three buckets: would the client need to sign this off?
+- **Ask** what a developer would take to the client (architecture, behaviour, design, direction; product
+  facts are asked, never derived), anything irreversible (production promote, deleting unmerged work,
+  destructive git) and the yes on an `architecture: true` Intent (`plan.js lock --confirmed`).
+  `/spec:plan` asks its forks once, batched, before lock; a run asks only a false Assumption, a choice the
+  spec did not make or a Decision it cannot keep, in the agent's own words, and only the user waives a
+  Decision (`amend`). A lane writes its question to `.claude/pending-question.json`; the orchestrator
+  relays each verbatim in one AskUserQuestion per RELAY and never answers for the user. A dismissed
+  AskUserQuestion stops the run, queued as a decide item; a dismissed promote question promotes nothing.
+- **Automate** the mechanical with a rule: a cap stops the run with a fix queued, spec edits revert, a
+  secret stays out of the commit, advisories become one fix item, a fix needing a behaviour change goes to
+  `/spec:plan`. A builder never improvises on a fork; a lane never edits a spec.
+- **Report** each rule's decision as a `📌` line (`📌 Auto-picked <choice> — <reason> (veto anytime)`),
+  after the spec's `Users will notice:` line; rulings go into the commit message, never the spec.
 
 Question style: plain words, every option carrying its consequence, the recommended option first,
 readable cold in ten seconds by someone with no repo context.

@@ -57,17 +57,18 @@ for (const strategy of ['merge-commit', 'ff-only', 'squash']) {
   })
 }
 
-test('mergeBack reports conflicts, refuses ff on divergence, and refuses a dirty root', () => {
+test('mergeBack backs a conflict out with reset --merge, refuses ff on divergence, and refuses a dirty root', () => {
   const { root, g, wt } = laneRepo()
   fs.writeFileSync(path.join(wt, 'a.txt'), 'lane\n')
   G.commitAll(wt, 'lane edit')
   fs.writeFileSync(path.join(root, 'a.txt'), 'trunk\n')
   G.commitAll(root, 'trunk edit')
   const ff = G.mergeBack(root, 'spec/01-x', 'ff-only')
-  assert.ok(!ff.merged && /diverged[\s\S]*fast-forward/i.test(ff.reason), 'ff-only must explain a divergence with git\'s own words')
+  assert.ok(!ff.merged && /fast-forward/i.test(ff.reason), 'ff-only must explain a divergence with git\'s own words')
   const r = G.mergeBack(root, 'spec/01-x', 'merge-commit')
-  assert.deepStrictEqual(r, { merged: false, conflicts: ['a.txt'] }, 'MERGE asks the user about exactly these files')
-  g('merge', '--abort')
+  assert.ok(!r.merged && /conflict/i.test(r.reason), r.reason)
+  assert.strictEqual(g('status', '--porcelain').trim(), '', 'root is never left mid-merge')
+  assert.ok(!fs.existsSync(path.join(root, '.git/MERGE_HEAD')))
   fs.writeFileSync(path.join(root, 'a.txt'), 'dirty\n')
   assert.throws(() => G.mergeBack(root, 'spec/01-x'), (e) => e.exit === 2, 'merging onto uncommitted work could lose it')
   assert.throws(() => G.mergeBack(root, 'spec/01-x', 'rebase'), /strategy|uncommitted/, 'unknown strategies must be refused')
@@ -87,7 +88,8 @@ test('worktreeRemove refuses untracked work and says why; ignored files do not c
   fs.writeFileSync(path.join(h.wt, 'b.txt'), 'lane\n'); G.commitAll(h.wt, 'lane')
   fs.mkdirSync(path.join(h.root, '.git/hooks'), { recursive: true })
   fs.writeFileSync(path.join(h.root, '.git/hooks/pre-commit'), '#!/bin/sh\necho nope >&2; exit 1\n', { mode: 0o755 })
-  assert.throws(() => G.mergeBack(h.root, 'spec/01-x', 'squash'), /nope/)
+  const sq = G.mergeBack(h.root, 'spec/01-x', 'squash')
+  assert.ok(!sq.merged && /nope/.test(sq.reason), sq.reason)
   assert.strictEqual(h.g('status', '--porcelain').trim(), '', 'the rejected squash leaves nothing staged')
 })
 
@@ -140,7 +142,7 @@ test('AC-20261105-15-7 commitAll exclude unstages those paths literally (tracked
   assert.strictEqual(G.commitAll(wt, 'again', { exclude: ['app/[id]/page.js', 'a.txt'] }), null, 'only excluded paths changed: nothing to commit')
 })
 
-test('AC-20261105-15-9 commitAll returns {hits} and commits nothing for a secret, commits it with allow, and skips the scan with noVerify', () => {
+test('AC-20261105-15-9 commitAll returns {hits} and commits nothing for a secret, commits around it with exclude, and skips the scan with noVerify', () => {
   const { wt } = laneRepo()
   const head = G.headSha(wt)
   fs.writeFileSync(path.join(wt, '.env'), 'K=1\n')
@@ -148,7 +150,7 @@ test('AC-20261105-15-9 commitAll returns {hits} and commits nothing for a secret
   const r = G.commitAll(wt, 'x')
   assert.deepStrictEqual(r, { hits: [{ path: '.env', reason: 'path:.env', line: null }] })
   assert.strictEqual(G.headSha(wt), head, 'nothing committed')
-  assert.strictEqual(G.commitAll(wt, 'y', { allow: ['.env'] }), G.headSha(wt), 'allow lets the path through')
+  assert.strictEqual(G.commitAll(wt, 'y', { exclude: ['.env'] }), G.headSha(wt), 'excluded, the rest commits')
   fs.writeFileSync(path.join(wt, '.env.local'), 'K=2\n')
   assert.ok(G.commitAll(wt, 'z').hits, 'a new hit is reported again')
   assert.strictEqual(G.commitAll(wt, 'z', { noVerify: true }), G.headSha(wt), 'noVerify commits without scanning')

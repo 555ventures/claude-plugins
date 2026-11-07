@@ -7,7 +7,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { readJson, readSpec, configPath, readFanout, readConfig, protoV7, protoDir } = require('./lib/state')
+const { readJson, configPath, readFanout, readConfig, protoV7, protoDir } = require('./lib/state')
 const { run, cacheDir, worktreeIncluded } = require('./lib/host')
 const { derive } = require('./lib/next')
 const git = require('./lib/git')
@@ -109,29 +109,25 @@ function check(root, { probe = true } = {}) {
     else if (r.status !== 0) { const ls = (r.tail || '').split('\n').filter((l) => l.trim()); f.push(`testCommand: exited ${r.status} — the suite is not green: ${ls.find((l) => /✖|not ok|^\s*FAIL\b/.test(l)) || ls.pop() || ''}`) }
   }
   if (cfg && typeof cfg === 'object') {
-    const named = [...(Array.isArray(cfg.laneFiles) ? cfg.laneFiles : []), ...worktreeIncluded(root)]
+    const named = worktreeIncluded(root)
     for (const env of ['.env', '.env.local']) {
       if (fs.existsSync(path.join(root, env)) && git.raw(['ls-files', '--error-unmatch', '--', env], root).status !== 0 && !named.includes(env)) {
-        f.push(`laneFiles: the root has ${env} that lanes will not see — add "laneFiles": ["${env}"] to .claude/spec.config.json`)
+        f.push(`lanes: the root has ${env} that lanes will not see — add the line ${env} to .worktreeinclude`)
       }
     }
   }
   for (const e of IGNORE) if (git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e} — run ${cfg && cfg.generatedBy ? '/spec:migrate' : '/spec:init'}`)
   // The roadmap derivation status prints: hygiene anomalies are findings, decide ones are the user's call.
   for (const a of derive(root).anomalies) (a.audience === 'hygiene' ? f : info).push(`roadmap: [${a.kind}] ${a.detail}`)
-  const ENDED = ['DONE', 'PARKED', 'AMENDED']
-  const specStatus = (p) => { try { return readSpec(p).frontmatter.status } catch { return null } }
+  const ended = (run) => run.ended || run.step === 'DONE' || (run.step === 'STOPPED' && run.why !== 'after') // a run waiting for another spec is in flight
   const used = new Set() // worktrees a live run points at
   const fan = readFanout(root)
   if (fan && fan.step && fan.step !== 'PLAN') { info.push(`in flight: fan-out at ${fan.step} — /spec:fanout`); for (const l of fan.batch || []) if (l.worktree) used.add(path.resolve(root, l.worktree)) }
   for (const d of walkRuns(path.join(root, 'specs'), [])) {
     const run = readJson(path.join(d, 'state.json'), null); const rel = path.relative(root, d)
-    if (run && run.step && !ENDED.includes(run.step) && !run.ended) {
+    if (run && run.step && !ended(run)) {
       info.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — ${fan ? '/spec:fanout' : `/spec:run ${rel.replace(/\.run$/, '.md')}`}`)
       if (run.worktree) used.add(path.resolve(root, run.worktree))
-    } else if (run && run.step === 'AMENDED' && ['draft', 'hardened'].includes(specStatus(d.replace(/\.run$/, '.md')))) {
-      // An amended run keeps its .run/ on purpose, until its spec lands or is gone.
-      info.push(`amended: ${rel.replace(/\.run$/, '.md')} — ${rel} keeps the run's evidence; the next /spec:run starts over and keeps it`)
     } else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
   }
   const wt = path.join(root, '.claude', 'worktrees')

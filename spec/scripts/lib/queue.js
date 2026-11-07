@@ -154,6 +154,17 @@ function tick(root, pred) {
   return hit.length
 }
 
+// Holds the open item `pred` admits behind `after` ({spec} or {brief}); with none stored, `fields` are added
+// holding it. Returns the item. A lane that needs another spec done waits on the queue's own gate.
+function hold(root, pred, after, fields) {
+  const q = read(root)
+  const hit = open(q).find(pred)
+  if (!hit) return add(root, { ...fields, after })
+  hit.after = after
+  write(root, q)
+  return hit
+}
+
 // What the item says, as one line: a bound fix reads `specs/x.md — words`.
 const text = (it) => (it.spec ? it.spec + (it.payload ? ' — ' + it.payload : '') : it.payload)
 
@@ -165,4 +176,4 @@ function paste(root, it) {
   return it.type === 'decide' ? '📌 decide: ' + it.payload : text(it)
 }
 
-module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, fill, pending, place, add, tick, text, paste, isSupersededBriefText, v7Briefs, isMain }
+module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, fill, pending, place, add, tick, hold, text, paste, isSupersededBriefText, v7Briefs, isMain }

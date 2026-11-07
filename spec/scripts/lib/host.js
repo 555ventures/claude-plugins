@@ -1,20 +1,10 @@
 'use strict'
-// lib/host.js — run host commands, the test gate with its green-run cache, and test-command
-// detection for init. No CLI.
-//
-// run(cmd, {cwd, env, timeoutMs})  → {status, stdout, stderr, tail}; timeout → status 124
-// gate(root, config)               → {status, cached, runId, tail, tree, failing, lockWaitMs}; green runs
-//                                    cached by tree hash; at most config.gateConcurrency gates run at once
-//                                    on the host (pid files under <git common dir>/spec-gate.lock/)
-// copyLaneFiles(main, wt, files)   copies untracked root files, and the .worktreeinclude matches, into a fresh worktree
-// worktreeIncluded(root)           the gitignored files .worktreeinclude selects (v7's rule); [] with no manifest
-// treeSha(root)                    git tree of the working tree (tracked edits + untracked, not ignored)
-// detectTestCommand(root)          → command string or null
-// firstRedLine(tail)               the line of a red tail worth reading first
-// freePort()                       a port nothing is bound to on 127.0.0.1 (bind 0, read it, close)
-// resolveUrl(url, port)            `{port}` in url replaced
-// listening(url)                   true when anything answers an HTTP request at url within 2 s
-// allocApp(url)                    {appPort, url}: a free port for a `{port}` url; a fixed url must be unanswered (else exit 2)
+// lib/host.js — host commands, the test gate with its green-run cache, the app, test-command detection. No CLI.
+// run(cmd, {cwd, env, timeoutMs}) → {status, stdout, stderr, tail}; timeout → 124. gate(root, config) → {status, cached,
+// runId, tail, tree, failing, lockWaitMs}: green runs cached by tree, at most gateConcurrency at once on the host.
+// copyIncluded(main, wt) copies the .worktreeinclude matches into a fresh worktree; treeSha(root) is the working tree's
+// git tree; withApp(cmd, {cwd, url, port}, fn) runs fn while the host's app answers; detectTestCommand, firstRedLine,
+// freePort, resolveUrl, listening, allocApp.
 
 const fs = require('fs')
 const path = require('path')
@@ -25,10 +15,7 @@ const TAIL_LINES = 40
 // Pipeline files that never count toward the tree a gate ran over.
 const OVERLAY = [':(glob)**/*.run/**', '.claude/pending-question.json']
 
-function tailOf(text, n = TAIL_LINES) {
-  const lines = String(text || '').replace(/\s+$/, '').split('\n')
-  return lines.slice(-n).join('\n')
-}
+const tailOf = (text, n = TAIL_LINES) => String(text || '').replace(/\s+$/, '').split('\n').slice(-n).join('\n')
 
 function run(cmd, { cwd, env, timeoutMs } = {}) {
   const r = spawnSync(cmd, {
@@ -43,9 +30,7 @@ function run(cmd, { cwd, env, timeoutMs } = {}) {
   return { status, stdout, stderr, tail: tailOf(stdout + (stderr ? '\n' + stderr : '')) }
 }
 
-function git(root, args, env) {
-  return spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: env || process.env, maxBuffer: 64 * 1024 * 1024 })
-}
+const git = (root, args, env) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: env || process.env, maxBuffer: 64 * 1024 * 1024 })
 
 function commonDir(root) {
   const r = git(root, ['rev-parse', '--git-common-dir'])
@@ -76,10 +61,7 @@ function treeSha(root) {
   }
 }
 
-function must(r, what) {
-  if (r.status !== 0) throw new Error(`host: git ${what} failed: ${(r.stderr || r.stdout).trim()}`)
-  return r
-}
+const must = (r, what) => { if (r.status !== 0) throw new Error(`host: git ${what} failed: ${(r.stderr || r.stdout).trim()}`); return r }
 
 const keyFor = (cmd, tree) => crypto.createHash('sha256').update(cmd + '\0' + tree).digest('hex')
 
@@ -120,9 +102,7 @@ function slots(config) {
   return Number.isFinite(n) ? Math.max(1, n) : 2
 }
 
-function alive(pid) {
-  try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' }
-}
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 
 const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 
@@ -161,11 +141,7 @@ function takeSlot(root, config) {
 // Runs config.testCommand in root unless this exact tree already ran green under it.
 function gate(root, config, { timeoutMs } = {}) {
   const cmd = config && config.testCommand
-  if (!cmd) {
-    const e = new Error('no testCommand in .claude/spec.config.json — run /spec:init')
-    e.exit = 2
-    throw e
-  }
+  if (!cmd) throw Object.assign(new Error('no testCommand in .claude/spec.config.json — run /spec:init'), { exit: 2 })
   const tree = treeSha(root)
   const hit = lookup(root, cmd, tree)
   if (hit) return { status: 0, cached: true, runId: hit.runId, tail: hit.tail || '', tree, failing: [], lockWaitMs: 0 }
@@ -192,22 +168,12 @@ function worktreeIncluded(root) {
   return r.status === 0 ? r.stdout.split('\0').filter(Boolean) : []
 }
 
-// The union of the named files and the .worktreeinclude matches that exist in the main checkout and are
-// untracked is copied into the same path in the worktree. A tracked or missing named entry is skipped
-// with a stderr line.
-function copyLaneFiles(main, wt, files) {
-  const named = Array.isArray(files) ? files : []
-  for (const p of [...named, ...worktreeIncluded(main).filter((f) => !named.includes(f))]) {
-    const src = path.resolve(main, p)
-    const rel = path.relative(main, src)
-    let why = null
-    if (rel.startsWith('..') || path.isAbsolute(rel)) why = 'missing'
-    else if (!fs.existsSync(src) || !fs.statSync(src).isFile()) why = 'missing'
-    else if (git(main, ['ls-files', '--error-unmatch', '--', rel]).status === 0) why = 'tracked'
-    if (why) { process.stderr.write(`laneFiles: skipped ${p} (${why})\n`); continue }
-    const dst = path.join(wt, rel)
-    fs.mkdirSync(path.dirname(dst), { recursive: true })
-    fs.copyFileSync(src, dst)
+// The .worktreeinclude matches of the main checkout, copied to the same path in a fresh worktree.
+function copyIncluded(main, wt) {
+  for (const rel of worktreeIncluded(main)) {
+    if (!fs.statSync(path.join(main, rel), { throwIfNoEntry: false })?.isFile()) continue
+    fs.mkdirSync(path.dirname(path.join(wt, rel)), { recursive: true })
+    fs.copyFileSync(path.join(main, rel), path.join(wt, rel))
   }
 }
 
@@ -254,6 +220,16 @@ const listening = (url) => spawnSync(process.execPath, ['-e',
   'fetch(process.argv[1], { signal: AbortSignal.timeout(2000) }).then(() => process.exit(0), () => process.exit(1))', url],
 { timeout: 5000 }).status === 0
 
+// Starts the app (PORT set) in its own process group, waits up to 60 s for url to answer, runs fn, then stops it.
+function withApp(cmd, { cwd, url, port }, fn) {
+  const child = require('child_process').spawn('/bin/bash', ['-c', cmd], { cwd, env: { ...process.env, ...(port ? { PORT: String(port) } : {}) }, detached: true, stdio: 'ignore' })
+  child.unref()
+  try {
+    for (const t0 = Date.now(); !listening(url); sleepMs(500)) if (Date.now() - t0 > 60000) return { status: 1, tail: `the app did not answer at ${url} within 60s: ${cmd}` }
+    return fn()
+  } finally { try { process.kill(-child.pid, 'SIGKILL') } catch { /* already gone */ } }
+}
+
 // One port per app: a url with {port} gets a free one; a fixed url keeps appPort null and must not be answered already.
 function allocApp(urlTemplate) {
   if (/\{port\}/.test(urlTemplate)) {
@@ -268,4 +244,4 @@ function allocApp(urlTemplate) {
   return { appPort: null, url: urlTemplate }
 }
 
-module.exports = { freePort, resolveUrl, listening, allocApp, run, gate, treeSha, cacheDir, commonDir, copyLaneFiles, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }
+module.exports = { freePort, resolveUrl, listening, allocApp, withApp, run, gate, treeSha, cacheDir, commonDir, copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine }

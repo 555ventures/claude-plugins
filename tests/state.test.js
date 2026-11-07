@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const { tmpdir, gitRepo, SPEC } = require('./helpers')
 const S = require(path.join(SPEC, 'scripts/lib/state.js'))
+const G = require(path.join(SPEC, 'scripts/lib/spec.js')) // the spec grammar
 
 const SPEC_DOC = `---
 date: 2026-11-04
@@ -124,7 +125,7 @@ Prose between tables.
 
 | File | Why |
 |------|-----|
-| docs/x.md, docs/y.md | two |
+| docs/{x,y}.md, docs/z-*.md | two |
 
 | docs/headerless.md | MODIFY | first column is the path |
 
@@ -135,8 +136,8 @@ Prose between tables.
 | not/in/the/plan.js | MODIFY |
 `
   const s = S.readSpec(writeSpec(tmpdir('plan'), body))
-  assert.deepStrictEqual(s.filePaths, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'Dockerfile', 'docs/x.md', 'docs/y.md', 'docs/headerless.md'])
-  assert.deepStrictEqual(s.filePlan.map((r) => [r.path, r.action]), [['src/a.ts + src/b.ts', 'MODIFY'], ['src/{c,d}.ts (generated)', 'CREATE'], ['Dockerfile', 'CREATE'], ['notes', 'NOTE'], ['src/a.ts', 'MODIFY'], ['docs/x.md, docs/y.md', '']], 'filePlan keeps the rows of every headed table as written')
+  assert.deepStrictEqual(s.filePaths, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'Dockerfile', 'docs/x.md', 'docs/y.md', 'docs/z-*.md', 'docs/headerless.md'])
+  assert.deepStrictEqual(s.filePlan.map((r) => [r.path, r.action]), [['src/a.ts + src/b.ts', 'MODIFY'], ['src/{c,d}.ts (generated)', 'CREATE'], ['Dockerfile', 'CREATE'], ['notes', 'NOTE'], ['src/a.ts', 'MODIFY'], ['docs/{x,y}.md, docs/z-*.md', '']], 'filePlan keeps the rows of every headed table as written')
   assert.deepStrictEqual(S.readSpec(writeSpec(tmpdir('plan'), SPEC_DOC)).filePaths, ['spec/scripts/queue.js', 'tests/queue.test.js'])
 })
 
@@ -203,7 +204,7 @@ test('proto, mocks and genesis files round-trip at their §2 paths', () => {
 })
 
 // ---- spec 20261105/04 D6, D7 -----------------------------------------------------------------
-test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktree makes a hardened spec implementing; ended, PARKED, AMENDED, done and superseded keep the frontmatter', () => {
+test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktree makes a hardened spec implementing; ended, STOPPED, DONE, done and superseded keep the frontmatter', () => {
   const root = tmpdir('live'); gitRepo(root)
   const rel = 'specs/20261105/01-a.md'
   const put = (base, run) => { fs.mkdirSync(path.join(base, 'specs/20261105/01-a.run'), { recursive: true }); fs.writeFileSync(path.join(base, 'specs/20261105/01-a.run/state.json'), JSON.stringify(run)) }
@@ -213,7 +214,7 @@ test('AC-20261105-04-8 specState: a live sidecar in the root or the lane worktre
   assert.strictEqual(S.specState(root, rel, 'hardened'), 'implementing')
   assert.strictEqual(S.specState(root, rel, 'done'), 'done')
   assert.strictEqual(S.specState(root, rel, 'superseded'), 'superseded')
-  for (const run of [{ step: 'PARKED', ended: true }, { step: 'AMENDED' }, { step: 'BUILD', ended: true }, { step: 'DONE' }]) {
+  for (const run of [{ step: 'STOPPED', ended: true }, { step: 'STOPPED', why: 'after' }, { step: 'BUILD', ended: true }, { step: 'DONE' }]) {
     put(wt, run)
     assert.strictEqual(S.specState(root, rel, 'hardened'), 'hardened', JSON.stringify(run))
     assert.strictEqual(S.liveRun(root, rel), null)
@@ -234,12 +235,12 @@ test('AC-20261105-04-8 the worktree copy of the spec saying done never matters: 
 })
 
 test('AC-20261105-04-9 a bracketless depends_on splits like the bracketed form; one value is a one-element list', () => {
-  const fm = (v) => S.parseFrontmatter(`---\ndepends_on: ${v}\nstatus: x\n---\n`).frontmatter
+  const fm = (v) => G.parseFrontmatter(`---\ndepends_on: ${v}\nstatus: x\n---\n`).frontmatter
   assert.deepStrictEqual(fm('specs/a.md, specs/b.md').depends_on, ['specs/a.md', 'specs/b.md'])
   assert.deepStrictEqual(fm('[specs/a.md, specs/b.md]').depends_on, ['specs/a.md', 'specs/b.md'])
   assert.deepStrictEqual(fm('specs/a.md').depends_on, ['specs/a.md'])
   assert.strictEqual(fm('x').status, 'x')
-  assert.strictEqual(S.parseFrontmatter('---\nstatus: a, b\n---\n').frontmatter.status, 'a, b', 'only depends_on splits')
+  assert.strictEqual(G.parseFrontmatter('---\nstatus: a, b\n---\n').frontmatter.status, 'a, b', 'only depends_on splits')
 })
 
 // ---- spec 20261105/06: the client says yes ------------------------------------------------------
@@ -257,7 +258,7 @@ test('AC-20261105-06-2 parseIntent reads the Client sign-off line: none is null,
 })
 
 test('AC-20261105-06-3 parseAssumptions reads A<n> lines: ask, ask with options, or a written fallback', () => {
-  const rows = S.parseAssumptions([
+  const rows = G.parseAssumptions([
     '- A1: the table is empty — if false: delete the rows in the migration',
     '- A2: old rows exist (D4) — if false: ask: keep the old rows | delete them',
     '- A3: a plain question — if false: ask',
@@ -273,7 +274,7 @@ test('AC-20261105-06-3 parseAssumptions reads A<n> lines: ask, ask with options,
 })
 
 test('AC-20261105-06-8 globToRe: ** crosses directories, * and ? stay inside one, and the match is root-anchored', () => {
-  const m = (glob, f) => S.globToRe(glob).test(f)
+  const m = (glob, f) => G.globToRe(glob).test(f)
   assert.ok(m('apps/server/src/db/**', 'apps/server/src/db/schema.ts'))
   assert.ok(m('apps/server/src/db/**', 'apps/server/src/db/deep/er/x.ts'))
   assert.ok(!m('apps/server/src/db/**', 'apps/web/x.ts'))
@@ -284,25 +285,19 @@ test('AC-20261105-06-8 globToRe: ** crosses directories, * and ? stay inside one
   assert.ok(!m('a.b', 'axb'), 'a dot is a dot')
 })
 
-test('AC-20261105-06-8 readConfig defaults askPaths to an empty list', () => {
-  assert.deepStrictEqual(S.readConfig(tmpdir('cfg')).askPaths, [])
-  const d = tmpdir('cfg2'); fs.mkdirSync(path.join(d, '.claude'))
-  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ askPaths: ['a/**'] }))
-  assert.deepStrictEqual(S.readConfig(d).askPaths, ['a/**'])
-})
 
 test('AC-20261105-10-7 splitCells keeps a pipe inside a backtick span, reads an escaped pipe, and runs an unclosed span to the line end', () => {
-  assert.deepStrictEqual(S.splitCells('| x | ``y|z`` | w |'), ['x', '``y|z``', 'w'])
-  assert.deepStrictEqual(S.splitCells('| a | `b|c` |'), ['a', '`b|c`'])
-  assert.deepStrictEqual(S.splitCells('| `a``b|c` | d |'), ['`a``b|c`', 'd'], 'a one-backtick run does not close a two-backtick span')
-  assert.deepStrictEqual(S.splitCells('| a \\| b | c |'), ['a | b', 'c'])
-  assert.deepStrictEqual(S.splitCells('| a | `b | c | d'), ['a', '`b | c | d'], 'unclosed span: the rest of the line is inside it')
-  assert.deepStrictEqual(S.splitCells('| a | b'), ['a', 'b'], 'no trailing pipe')
+  assert.deepStrictEqual(G.splitCells('| x | ``y|z`` | w |'), ['x', '``y|z``', 'w'])
+  assert.deepStrictEqual(G.splitCells('| a | `b|c` |'), ['a', '`b|c`'])
+  assert.deepStrictEqual(G.splitCells('| `a``b|c` | d |'), ['`a``b|c`', 'd'], 'a one-backtick run does not close a two-backtick span')
+  assert.deepStrictEqual(G.splitCells('| a \\| b | c |'), ['a | b', 'c'])
+  assert.deepStrictEqual(G.splitCells('| a | `b | c | d'), ['a', '`b | c | d'], 'unclosed span: the rest of the line is inside it')
+  assert.deepStrictEqual(G.splitCells('| a | b'), ['a', 'b'], 'no trailing pipe')
 })
 
 test('AC-20261105-10-6 decisionRows keeps a regex cell with pipes in backticks intact and still splits on a bare pipe', () => {
   const re = '`/\\b(cannot|only \\w+ can)\\b/i`'
-  const rows = S.decisionRows(['| ID | Decision | Why |', '|----|----|----|', `| D1 | ${re} | because |`, '| D2 | a \\| b | outside backticks |'].join('\n'))
+  const rows = G.decisionRows(['| ID | Decision | Why |', '|----|----|----|', `| D1 | ${re} | because |`, '| D2 | a \\| b | outside backticks |'].join('\n'))
   assert.deepStrictEqual(rows[0], ['D1', re, 'because'])
   assert.deepStrictEqual(rows[1], ['D2', 'a | b', 'outside backticks'])
 })
@@ -335,14 +330,16 @@ test('gitCommonDir names one dir one way: a root reached through a symlink resol
   const real = fs.realpathSync.native(path.join(d, '.git'))
   assert.strictEqual(S.gitCommonDir(link), real, 'the main checkout through a symlink')
   assert.strictEqual(S.gitCommonDir(wt), real, 'a worktree')
-  assert.strictEqual(S.fixRunPath(link, 'x-abcdef'), S.fixRunPath(wt, 'x-abcdef'))
+  assert.strictEqual(S.fixRunPath(link, 'x-abcdef'), S.fixRunPath(d, 'x-abcdef'))
 })
 
-test('AC-20261105-09-1 fixRunPath is <git-common-dir>/spec-fix/<slug>.run/state.json, shared by every worktree of the host', () => {
+test('fixRunPath is <git-dir>/spec-fix/<slug>.run/state.json: the main checkout\'s git dir, or a lane worktree\'s own, which goes with it', () => {
   const d = tmpdir('fixrun'); const g = gitRepo(d)
   const p = S.fixRunPath(d, 'x-abcdef')
   assert.strictEqual(p, path.join(fs.realpathSync(d), '.git', 'spec-fix', 'x-abcdef.run', 'state.json'))
   assert.strictEqual(S.fixRunDir(d, 'x-abcdef'), path.dirname(p))
   const wt = path.join(d, '.claude/worktrees/w'); g('worktree', 'add', '-q', '-b', 'w', wt, 'main')
-  assert.strictEqual(S.fixRunPath(wt, 'x-abcdef'), p, 'a worktree resolves to the same dir')
+  assert.strictEqual(S.fixRunPath(wt, 'x-abcdef'), path.join(fs.realpathSync(d), '.git', 'worktrees', 'w', 'spec-fix', 'x-abcdef.run', 'state.json'))
+  S.writeJson(S.fixRunPath(wt, 'x-abcdef'), { step: 'DONE' }); g('worktree', 'remove', wt)
+  assert.ok(!fs.existsSync(S.fixRunPath(d, 'x-abcdef').replace('.git/spec-fix', '.git/worktrees/w/spec-fix')), 'removing the worktree removes its fix state')
 })

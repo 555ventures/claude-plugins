@@ -379,7 +379,7 @@ test('AC-16: the docs carry the new shape and none of the old', () => {
     'spec/commands/migrate.md', 'README.md', fs.readdirSync(path.join(ROOT, 'docs/adr')).filter((f) => f.startsWith('0035-')).map((f) => 'docs/adr/' + f)[0]]
   assert.ok(files.every((f) => f && !f.startsWith('specs/')))
   const text = files.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n')
-  for (const need of ['PIN_TESTS', 'LOOK', 'pin-tested', 'looked', 'look-failed', 'contracted --confirmed', 'closed [--force]', 'prototype:', 'e2eCommand', 'publicUrl', 'export PORT=<port>', 'Amended by: ADR-0043']) {
+  for (const need of ['LOOK', 'looked', 'look-failed', 'contracted --confirmed', 'closed [--force]', 'prototype:', 'e2eCommand', 'publicUrl', 'export PORT=<port>', 'Amended by: ADR-0043']) {
     assert.ok(text.includes(need), need)
   }
   for (const gone of ['overlay', 'ser' + 've', 'e2eList', 'states.json', 'tests-derived']) assert.ok(!text.toLowerCase().includes(gone.toLowerCase()), gone)

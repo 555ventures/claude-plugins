@@ -115,14 +115,13 @@ function scanFile(cwd, rel) {
 
 // Stages everything and commits; returns the new sha, or null when there was nothing to commit.
 // `exclude` paths are unstaged after `add -A` (they stay on disk, out of this commit). Unless `noVerify`, the
-// staged names minus `allow` pass the secrets scan; hits commit nothing and come back as {hits: [{path, reason, line}]}.
-function commitAll(cwd, message, { noVerify, exclude = [], allow = [] } = {}) {
+// staged names pass the secrets scan; hits commit nothing and come back as {hits: [{path, reason, line}]}.
+function commitAll(cwd, message, { noVerify, exclude = [] } = {}) {
   sh(['add', '-A'], cwd)
   if (exclude.length) sh(['--literal-pathspecs', 'reset', '-q', '--', ...exclude], cwd)
   if (raw(['diff', '--cached', '--quiet'], cwd).status === 0) return null
   if (!noVerify) {
-    const skip = new Set(allow)
-    const hits = sh(['diff', '--cached', '--name-only', '-z', '--diff-filter=d'], cwd).split('\0').filter((f) => f && !skip.has(f)).flatMap((f) => scanFile(cwd, f))
+    const hits = sh(['diff', '--cached', '--name-only', '-z', '--diff-filter=d'], cwd).split('\0').filter(Boolean).flatMap((f) => scanFile(cwd, f))
     if (hits.length) return { hits }
   }
   sh(['commit', '-q', ...(noVerify ? ['--no-verify'] : []), '-m', message], cwd)
@@ -142,42 +141,40 @@ function commitWip(wt, message) {
   return headSha(wt)
 }
 
-// The right words for a dirty checkout: a merge another run left half-done is not "stash it".
-function dirtyMessage(root) {
-  if (raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], root).status === 0) return `${root} is mid-merge (another /spec:run at CONFLICTS?) — finish that run there, then re-run`
-  return `${root} has uncommitted tracked changes — commit or stash them, then re-run`
+// `git ls-files <args> -z` as paths; a failing call is a refusal.
+function lsFiles(cwd, args) {
+  const r = raw(['ls-files', ...args, '-z'], cwd)
+  if (r.status !== 0) throw Object.assign(new Error(`git ls-files failed in ${cwd}: ${(r.stderr || r.stdout).trim()}`), { exit: 2 })
+  return r.stdout.split('\0').filter(Boolean)
 }
+
+// Puts files back as they were at base; a file base lacks is removed.
+function restore(cwd, base, files) {
+  for (const f of files) {
+    if (raw(['cat-file', '-e', `${base}:${f}`], cwd).status === 0) sh(['checkout', base, '--', f], cwd)
+    else { raw(['rm', '-q', '-f', '--cached', '--ignore-unmatch', '--', f], cwd); fs.rmSync(path.join(cwd, f), { force: true }) }
+  }
+}
+
+const dirtyMessage = (root) => `${root} has uncommitted tracked changes — commit or stash them, then re-run`
 
 const conflictsIn = (root) => sh(['diff', '--name-only', '--diff-filter=U'], root).split('\n').filter(Boolean)
 
-// Merges branch into the branch checked out at root. Conflicts are left in the root tree for the
-// session to resolve; the result lists them. A dirty root (tracked changes) is refused.
+// Merges branch into the branch checked out at root. Any failure (a conflict, a hook, ff-only divergence)
+// is backed out with `reset --merge`, so root is never left mid-merge: {merged: false, reason}. A dirty
+// root (tracked changes) or an unknown strategy is refused.
+const MERGE = { 'merge-commit': (b, m) => ['merge', '--no-ff', '--no-edit', ...(m ? ['-m', m] : []), b], 'ff-only': (b) => ['merge', '--ff-only', b], squash: (b) => ['merge', '--squash', b] }
 function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
-  if (sh(['status', '--porcelain', '--untracked-files=no'], root)) {
-    const e = new Error(dirtyMessage(root))
-    e.exit = 2
-    throw e
+  if (!MERGE[strategy]) throw Object.assign(new Error(`unknown merge strategy '${strategy}' (merge-commit | ff-only | squash)`), { exit: 2 })
+  if (sh(['status', '--porcelain', '--untracked-files=no'], root)) throw Object.assign(new Error(dirtyMessage(root)), { exit: 2 })
+  let r = raw(MERGE[strategy](branch, message), root)
+  if (r.status === 0 && strategy === 'squash') {
+    if (raw(['diff', '--cached', '--quiet'], root).status === 0) return { merged: true, sha: headSha(root), empty: true }
+    r = raw(['commit', '-q', '-m', message || `chore(spec): squash ${branch} into ${currentBranch(root)}`], root)
   }
-  const target = currentBranch(root)
-  let r
-  if (strategy === 'merge-commit') r = raw(['merge', '--no-ff', '--no-edit', ...(message ? ['-m', message] : []), branch], root)
-  else if (strategy === 'ff-only') {
-    r = raw(['merge', '--ff-only', branch], root)
-    if (r.status !== 0) return { merged: false, conflicts: [], reason: `${target} has diverged from ${branch} (${(r.stderr || r.stdout).trim()}); use merge-commit or squash` }
-  } else if (strategy === 'squash') {
-    r = raw(['merge', '--squash', branch], root)
-    if (r.status === 0) {
-      if (raw(['diff', '--cached', '--quiet'], root).status === 0) return { merged: true, conflicts: [], sha: headSha(root), empty: true }
-      r = raw(['commit', '-q', '-m', message || `chore(spec): squash ${branch} into ${target}`], root)
-      if (r.status !== 0) raw(['reset', '-q', '--merge'], root) // a hook rejected the squash commit: back it out
-    }
-  } else throw Object.assign(new Error(`unknown merge strategy '${strategy}' (merge-commit | ff-only | squash)`), { exit: 2 })
-  if (r.status === 0) return { merged: true, conflicts: [], sha: headSha(root) }
-  const conflicts = conflictsIn(root)
-  if (conflicts.length) return { merged: false, conflicts }
-  // A merge that a hook rejected is left half-done: back out so the tree is clean for the re-run.
-  if (raw(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], root).status === 0) raw(['merge', '--abort'], root)
-  throw new Error(`merge of ${branch} failed without conflicts: ${(r.stderr || r.stdout).trim()}`)
+  if (r.status === 0) return { merged: true, sha: headSha(root) }
+  raw(['reset', '-q', '--merge'], root)
+  return { merged: false, reason: (r.stderr || r.stdout).trim() }
 }
 
 // Rebases the branch checked out in worktree onto trunk. A conflict leaves the rebase in progress
@@ -213,5 +210,5 @@ const changedFiles = (base, cwd) =>
 module.exports = {
   repoRoot, dirtyMessage,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
-  commitAll, commitWip, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
+  commitAll, commitWip, lsFiles, restore, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
 }

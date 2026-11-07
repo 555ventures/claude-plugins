@@ -71,7 +71,7 @@ function fullHost({ openBrief = false } = {}) {
   w(d, `${A}/05-adhoc-b.md`, specDoc('hardened', {
     files: ['`src/{shared,b}.ts` (generated)', 'src/z.ts, src/y.ts', 'src/x.ts'],
   }))
-  w(d, '.claude/worktrees/spec-05-adhoc-b/specs/20261104/05-adhoc-b.run/state.json', '{"step":"PARKED","ended":true}')
+  w(d, '.claude/worktrees/spec-05-adhoc-b/specs/20261104/05-adhoc-b.run/state.json', '{"step":"STOPPED","ended":true}')
   w(d, `${A}/06-export-a.md`, specDoc('hardened', { brief: '07', deps: `[${A}/09-retired.md]` }))
   w(d, `${A}/07-export-b.md`, specDoc('hardened', { brief: '07', deps: '06-export-a.md, 01-rounds.md' }))
   w(d, `${A}/08-gated.md`, specDoc('hardened'))
@@ -287,7 +287,7 @@ test('AC-20261105-05-8 roadmap heads, supersession, bracketless depends_on, stam
   assert.ok(j.superseded.some((s) => s.path.endsWith('09-retired.md')))
 })
 
-test('AC-20261105-05-9 a spec built in a lane worktree is implementing, first, not done in its bar; PARKED reads the frontmatter', () => {
+test('AC-20261105-05-9 a spec built in a lane worktree is implementing, first, not done in its bar; a STOPPED run reads the frontmatter', () => {
   const d = fullHost()
   const j = json(d)
   const state = (n) => j.specs.find((s) => s.path.endsWith(n)).status

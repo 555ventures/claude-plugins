@@ -3,7 +3,8 @@
 // validates it, locks it and (in a git repo) commits it on the current branch, so lanes branch with it.
 const fs = require('fs')
 const path = require('path')
-const { readSpec, isSpecText, writeStatus, writeText, readText, decisionRows, readProto, specsCiting } = require('./lib/state')
+const { readSpec, writeStatus, writeText, readText, readProto, specsCiting } = require('./lib/state')
+const { isSpecText, decisionRows } = require('./lib/spec')
 const Q = require('./lib/queue')
 const N = require('./lib/next')
 const git = require('./lib/git')

@@ -60,15 +60,14 @@ test('AC-20261105-15-9 commitAll returns the same hits as v7 secrets-scan.js on 
   assert.strictEqual(G.headSha(dir), head, 'nothing was committed')
 })
 
-test('AC-20261105-15-9 a path in allow or exclude is not reported; noVerify commits without scanning', () => {
+test('AC-20261105-15-9 a path in exclude is not reported; noVerify commits without scanning', () => {
   const { dir } = fixture()
   const all = G.commitAll(dir, 'x').hits.map((h) => h.path)
   const some = [...new Set(all)]
-  const allow = some.slice(0, 3)
-  const exclude = some.slice(3, 6)
-  const got = G.commitAll(dir, 'x', { allow, exclude })
+  const exclude = some.slice(0, 6)
+  const got = G.commitAll(dir, 'x', { exclude })
   const paths = new Set(got.hits.map((h) => h.path))
-  for (const p of [...allow, ...exclude]) assert.ok(!paths.has(p), `${p} is not reported`)
+  for (const p of exclude) assert.ok(!paths.has(p), `${p} is not reported`)
   assert.strictEqual(paths.size, some.length - 6, 'the rest are still reported')
   const sha = G.commitAll(dir, 'with secrets', { noVerify: true })
   assert.strictEqual(sha, G.headSha(dir), 'noVerify skips the scan as it skips hooks')

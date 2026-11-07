@@ -106,23 +106,16 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   assert.ok(j2.info.some((x) => /fan-out at WAIT — \/spec:fanout/.test(x)) && j2.info.some((x) => /spec-03-busy.*\/spec:fanout/.test(x)))
 })
 
-test('an amended run keeps its sidecar while its spec is draft or hardened: reported, never stale; once the spec is done or gone it is stale', () => {
+test('a sidecar at DONE or STOPPED is stale, whatever its spec says', () => {
   const d = setup({ testCommand: 'true' })
   runNode('scripts/init.js', ['--root', d])
-  const put = (stem, status) => {
+  for (const [stem, step] of [['01-done', 'DONE'], ['02-stopped', 'STOPPED']]) {
     fs.mkdirSync(path.join(d, `specs/20260101/${stem}.run`), { recursive: true })
-    fs.writeFileSync(path.join(d, `specs/20260101/${stem}.run/state.json`), JSON.stringify({ step: 'AMENDED' }))
-    fs.writeFileSync(path.join(d, `specs/20260101/${stem}.run/evidence.md`), 'kept\n')
-    if (status) fs.writeFileSync(path.join(d, `specs/20260101/${stem}.md`), `---\nstatus: ${status}\n---\n\n# ${stem}\n`)
+    fs.writeFileSync(path.join(d, `specs/20260101/${stem}.run/state.json`), JSON.stringify({ step }))
+    fs.writeFileSync(path.join(d, `specs/20260101/${stem}.md`), '---\nstatus: hardened\n---\n\n# x\n')
   }
-  put('01-draft', 'draft'); put('02-relocked', 'hardened'); put('03-landed', 'done'); put('04-gone', null)
-  const j = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
-  const f = j.findings.join('\n')
-  for (const stem of ['01-draft', '02-relocked']) {
-    assert.ok(!f.includes(stem), `an amended run's evidence is not stale: ${f}`)
-    assert.ok(j.info.some((x) => x.startsWith(`amended: specs/20260101/${stem}.md — `)), j.info.join('\n'))
-  }
-  for (const stem of ['03-landed', '04-gone']) assert.match(f, new RegExp(`stale sidecar: specs/20260101/${stem}\\.run — rm -r`))
+  const f = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout).findings.join('\n')
+  for (const stem of ['01-done', '02-stopped']) assert.match(f, new RegExp(`stale sidecar: specs/20260101/${stem}\\.run — rm -r`))
 })
 
 test('gitignore is judged by git: a broader pattern that covers the sidecars is not missing', () => {
@@ -213,7 +206,7 @@ test('AC-20261105-08-12 a gate over two minutes and a TMPDIR under 2 GB each pri
   assert.ok(!roomy.info.some((x) => x.includes('TMPDIR has')), 'enough room: no TMPDIR advice')
 })
 
-test('AC-20261105-08-13 an untracked .env or .env.local that laneFiles does not name is a finding; a tracked or named one is not', () => {
+test('an untracked .env or .env.local that .worktreeinclude does not name is a finding naming the line to add; a tracked or named one is not', () => {
   const d = setup({ testCommand: 'true' })
   runNode('scripts/init.js', ['--root', d])
   fs.writeFileSync(path.join(d, '.env'), 'K=1\n')
@@ -221,22 +214,13 @@ test('AC-20261105-08-13 an untracked .env or .env.local that laneFiles does not 
   fs.appendFileSync(path.join(d, '.gitignore'), '.env\n.env.local\n')
   execFileSync('git', ['-C', d, 'add', '-A']); execFileSync('git', ['-C', d, 'commit', '-q', '-m', 'ignore env'])
   const f = doctorJson(d).findings
-  assert.ok(f.includes('laneFiles: the root has .env that lanes will not see — add "laneFiles": [".env"] to .claude/spec.config.json'), f.join('\n'))
+  assert.ok(f.includes('lanes: the root has .env that lanes will not see — add the line .env to .worktreeinclude'), f.join('\n'))
   assert.ok(f.some((x) => x.includes('.env.local that lanes will not see')), 'each file is reported')
-  const cfgFile = path.join(d, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
-  fs.writeFileSync(cfgFile, JSON.stringify({ ...cfg, laneFiles: ['.env'] }))
-  const named = doctorJson(d).findings
-  assert.ok(!named.some((x) => x.includes('root has .env that')), 'a named file is not reported')
-  assert.ok(named.some((x) => x.includes('.env.local that')), 'the unnamed sibling still is')
   execFileSync('git', ['-C', d, 'add', '-f', '.env.local'])
-  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
   const tracked = doctorJson(d).findings
   assert.ok(!tracked.some((x) => x.includes('.env.local that')), 'a tracked file is not reported')
   assert.ok(tracked.some((x) => x.includes('root has .env that')), 'the untracked, unnamed one is')
 })
-
-// ---- spec 20261105/14: prototype worktrees and v7 records -------------------------------------------------
 
 test('AC-20261105-14-13 doctor reads prototype worktrees: in flight, leftover, v7 record', () => {
   const d = setup({ testCommand: 'true' })
@@ -313,7 +297,7 @@ test('AC-20261105-17-9 a missing .gitignore entry names its remedy: migrate on a
   assert.deepStrictEqual(require(path.join(SPEC, 'scripts/init.js')).IGNORE, ['specs/**/*.run/', '.claude/worktrees/', '.claude/pending-question.json', '.claude/settings.local.json'])
 })
 
-test('AC-20261105-17-11 a .env that .worktreeinclude matches is named for lanes: no laneFiles finding', () => {
+test('AC-20261105-17-11 a .env that .worktreeinclude matches is named for lanes: no finding', () => {
   const d = setup({ testCommand: 'true' })
   runNode('scripts/init.js', ['--root', d])
   fs.writeFileSync(path.join(d, '.env'), 'K=1\n')

@@ -552,10 +552,8 @@ function builderBrief(state, ctx, kind) {
   const wt = wtOf(state, ctx)
   const specPath = specIn(state, ctx)
   const spec = specPath ? st.readSpec(specPath) : null
+  const briefFile = runFile(ctx, `brief-${kind}-${attempt}.md`)
   const out = [
-    ...(kind === 'build' && state.pin ? [state.pin, ''] : []),
-    `Dispatch ONE \`builder\` agent (spec:builder, ${PLUGIN}/agents/builder.md) — model ${model}, effort ${seat.effort}, attempt ${attempt}, in ${wt}. Give it this brief:`,
-    '',
     `Worktree: ${wt}`,
     ...(spec ? [`Spec: ${specPath}`] : []),
     `Test command: ${cfg.testCommand} (run it in the worktree)`,
@@ -591,7 +589,17 @@ function builderBrief(state, ctx, kind) {
     state.fix ? 'List every file you changed in your final summary.' : 'Do not touch files outside the File Plan without listing them in your final summary.',
     ...(spec ? ['If a Decision cannot be honoured as written, or an Assumption with an `ask` arm proves false, stop and say which in your reply — do not pick.'] : []),
     EVIDENCE(ctx), ...(spec ? [AS_BUILT(ctx)] : []))
-  return out.join('\n')
+  return saveBrief(briefFile, [
+    ...(kind === 'build' && state.pin ? [state.pin, ''] : []),
+    `Dispatch ONE \`builder\` agent (spec:builder, ${PLUGIN}/agents/builder.md) — model ${model}, effort ${seat.effort}, attempt ${attempt}, in ${wt}.`,
+  ], out)
+}
+
+// Lanes run in parallel under one session, so a brief never goes to a file they share (the session scratchpad): the
+// driver saves each one in its own spec's run dir (a fix's, in the git common dir) and prints the path with the text.
+function saveBrief(file, head, body) {
+  st.writeText(file, body.join('\n') + '\n')
+  return [...head, `The brief is saved at ${file} (this spec's own path): hand the agent that path or paste the text below; never save it to a file other lanes share. Give it this brief:`, '', ...body].join('\n')
 }
 
 // A fix's regression test file: the part of fix.json's `test` before ` :: ` (the whole value without one).
@@ -624,9 +632,7 @@ function reviewerBrief(state, ctx) {
   const specPath = specIn(state, ctx)
   const spec = specPath ? st.readSpec(specPath) : null
   const seat = spec && spec.frontmatter.architecture === true ? { model: 'fable', effort: 'high' } : cfg.seats.reviewer
-  return [
-    `Dispatch ONE \`reviewer\` agent (spec:reviewer, ${PLUGIN}/agents/reviewer.md) — model ${seat.model}, effort ${seat.effort}, in ${wtOf(state, ctx)}. Give it this brief:`,
-    '',
+  const body = [
     `Worktree: ${wtOf(state, ctx)}`,
     `Base: ${state.base}`,
     `Diff (working tree vs base): ${runFile(ctx, 'diff.patch')}`,
@@ -649,7 +655,8 @@ function reviewerBrief(state, ctx) {
       ] : []),
       OTHER_SECTIONS,
     ] : []),
-  ].join('\n')
+  ]
+  return saveBrief(runFile(ctx, 'brief-review.md'), [`Dispatch ONE \`reviewer\` agent (spec:reviewer, ${PLUGIN}/agents/reviewer.md) — model ${seat.model}, effort ${seat.effort}, in ${wtOf(state, ctx)}.`], body)
 }
 
 // A lane never asks: it writes the question for the parent session and stops.

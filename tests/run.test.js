@@ -153,6 +153,26 @@ test('briefs: a v7 spec with only ## Goal fills Intent from it; a Decisions row 
   assert.ok(j.body.includes("Files changed outside the File Plan: none\nThe spec's frontmatter status line changes during the run; that is bookkeeping, not a finding."), 'the review brief tells the reviewer the status flip is bookkeeping:\n' + j.body)
 })
 
+test('every brief is saved at its own spec\'s path, so parallel lanes sharing one session scratchpad cannot overwrite each other', () => {
+  const REL2 = 'specs/20261104/02-other.md'
+  const h = fixture({ files: { [REL2]: SPEC_DOC.replace('# Thing', '# Other').replace('AC-20261104-01-1', 'AC-20261104-02-1') } })
+  const other = (...a) => runNode('scripts/run.js', [REL2, '--root', h.dir, ...a], { env: { RUN_COUNTER: h.counter } })
+  const a = ok(h.run())
+  const b = ok(other())
+  const pathOf = (out) => { const m = /saved at (\S+\.md)/.exec(out); assert.ok(m, 'the brief names the file it was saved to:\n' + out); return m[1] }
+  const fa = pathOf(a)
+  const fb = pathOf(b)
+  assert.notStrictEqual(fa, fb, 'two specs never share a brief path')
+  assert.ok(fa.startsWith(path.join(h.dir, 'specs/20261104/01-thing.run')) && fb.startsWith(path.join(h.dir, 'specs/20261104/02-other.run')), 'each brief lives in its own spec\'s run dir')
+  assert.match(fs.readFileSync(fa, 'utf8'), /AC-20261104-01-1/, 'the saved brief is the one printed for that spec')
+  assert.match(fs.readFileSync(fb, 'utf8'), /AC-20261104-02-1/, 'the other spec\'s brief was not overwritten by the first')
+  assert.ok(!/scratchpad/i.test(fa + fb), 'neither lives in a session scratchpad')
+  fs.writeFileSync(path.join(h.wt, 'feature.txt'), 'thing\n')
+  ok(h.run('--mark', 'built'))
+  const review = JSON.parse(ok(h.run('--json'))).body
+  assert.match(fs.readFileSync(pathOf(review), 'utf8'), /Write the findings JSON to/, 'the reviewer brief is saved in the run dir too')
+})
+
 test('red gate: two repairs then ESCALATE; retry bumps to opus with fresh attempts; park queues a fix', () => {
   const h = fixture()
   ok(h.run())

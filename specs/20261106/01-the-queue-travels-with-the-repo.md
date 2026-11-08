@@ -1,6 +1,6 @@
 ---
 date: 2026-11-06
-status: draft
+status: hardened
 area: queue
 depends_on: [specs/20261107/01-a-done-spec-is-a-stub.md, specs/20261107/04-the-gate-keeps-every-cited-criterion.md, specs/20261107/05-a-finished-brief-closes-itself.md]
 brief: n/a

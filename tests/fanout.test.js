@@ -244,7 +244,7 @@ test('AC-20261108-03-6 a lane that picks amend is held on its kept worktree with
   // a fix item bound to the amend-held spec waits on that lane too, rather than going out from trunk without its work
   const q = Q.read(h.dir); Q.write(h.dir, { ...q, items: [...q.items, { id: 'q9', kind: 'prompt', type: 'fix', spec: P('01-alpha'), payload: 'tidy the list', added: 'x' }] })
   const fixPlan = h.ok(); assert.ok(!fixPlan.includes('fix: tidy the list'), 'no fix lane goes out from trunk\n' + fixPlan)
-  assert.ok(fixPlan.includes(`tidy the list waits — its spec's lane is held on .claude/worktrees/spec-01-alpha (amend ${P('01-alpha')})`), fixPlan)
+  assert.ok(fixPlan.includes(`tidy the list waits — its lane waits for the amended spec — /spec:plan ${P('01-alpha')}, then /spec:fanout`), fixPlan)
   Q.write(h.dir, q)
   const spec = path.join(h.dir, P('01-alpha'))
   fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('- You asked: 01-alpha', '- You asked: 01-alpha, amended')); h.g('commit', '-qam', 'lock the amended spec')

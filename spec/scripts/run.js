@@ -276,8 +276,9 @@ function commit(state, ctx) {
   const dirty = new Set(git.sh(['status', '--porcelain', '-z', '--untracked-files=all'], wt).split('\0').filter(Boolean).map((e) => e.slice(3)))
   state.commitWarns = left.some((f) => dirty.has(f)) ? [`left uncommitted: ${left.filter((f) => dirty.has(f)).join(', ')}`] : []
   const adv = ((state.review && state.review.findings) || []).filter((f) => f.severity === 'advisory' && f.summary)
-  if (adv.length && state.spec && !state.fix && !state.advised) { // advisories reach someone: one fix item per run, bound to the spec
-    const item = Q.add(ctx.root, { type: 'fix', spec: s.rel, payload: `advisories of ${s.stem}: ${adv.map((f) => f.summary.trim()).join('; ')}` })
+  if (adv.length && !state.advised) { // advisories reach someone: one fix item per run, bound to the spec if it has one
+    const words = `advisories of ${s.stem}: ${adv.map((f) => f.summary.trim()).join('; ')}`
+    const item = Q.add(ctx.root, { type: 'fix', ...(s.rel ? { spec: s.rel } : {}), payload: words })
     state.advised = true
     if (item) decide(state, `queued the review's advisories as one fix: ${Q.paste(ctx.root, item)}`)
   }

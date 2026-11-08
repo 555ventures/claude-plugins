@@ -89,12 +89,16 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   fs.writeFileSync(path.join(d, 'specs/20260101/02-old.run/state.json'), JSON.stringify({ step: 'DONE', ended: true }))
   fs.mkdirSync(path.join(d, 'specs/fix/the-thing-abcdef.run'), { recursive: true })
   fs.writeFileSync(path.join(d, 'specs/fix/the-thing-abcdef.run/state.json'), JSON.stringify({ step: 'BUILD', fix: { symptom: 'the thing is upside down' } }))
+  const long = 'a fix lane review advisories are dropped and the report that names the run cannot resume it'
+  fs.mkdirSync(path.join(d, 'specs/fix/long-one.run'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'specs/fix/long-one.run/state.json'), JSON.stringify({ step: 'BUILD', fix: { symptom: long } }))
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/03-busy', '.claude/worktrees/spec-03-busy'])
   fs.writeFileSync(path.join(d, '.claude/worktrees/spec-03-busy/wip.txt'), 'x')
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/04-idle', '.claude/worktrees/spec-04-idle'])
   const r = runNode('scripts/doctor.js', ['--root', d, '--json']); const j = JSON.parse(r.stdout); const f = j.findings; const info = j.info
   assert.ok(info.some((x) => /in flight: specs\/20260101\/01-live\.md at BUILD — \/spec:run/.test(x)), info.join('\n'))
-  assert.ok(info.some((x) => x === 'in flight: fix "the thing is upside down" at BUILD — /spec:fix'), 'a spec-less fix is named by its symptom: ' + info.join('\n'))
+  assert.ok(info.some((x) => x === 'in flight: fix "the thing is upside down" at BUILD — /spec:fix the thing is upside down'), 'a spec-less fix is named by its symptom and resumed by all of it: ' + info.join('\n'))
+  assert.ok(info.some((x) => x.endsWith(` — /spec:fix ${long}`)), 'a long symptom is resumed by all of it, the key of its run: ' + info.join('\n'))
   assert.ok(f.some((x) => /stale sidecar: specs\/20260101\/02-old\.run — rm -r/.test(x)))
   assert.ok(info.some((x) => /in flight: \.claude\/worktrees\/spec-03-busy/.test(x)), 'uncommitted work is never a leftover')
   assert.ok(f.some((x) => /leftover worktree: \.claude\/worktrees\/spec-04-idle — git worktree remove/.test(x)))

@@ -14,8 +14,8 @@ Config is `.claude/spec.config.json`; specs are `specs/YYYYMMDD/NN-slug.md`; bri
 design live in `docs/roadmap/`, `docs/adr/`, `design/`. You edit specs, briefs and ADRs. Only
 scripts write state: `<spec>.run/`, the queue, fanout and release (`spec-release.json`, the
 green staging run `/spec:release` promotes from) files in the git common dir, and
-`.claude/pending-question.json`. A done or superseded spec is a stub (frontmatter, title, goal, `text: <sha>`);
-`git show <sha>:<path>` prints its text.
+`.claude/pending-question.json`. A done or superseded spec is a stub (frontmatter, title, goal,
+`text: <sha>`); `git show <sha>:<path>` prints its text.
 
 ## Seats
 

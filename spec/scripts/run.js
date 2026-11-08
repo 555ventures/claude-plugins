@@ -199,22 +199,51 @@ function outsideFiles(state, ctx, doc) {
 
 const fixItem = (state, ctx, words) => (specInfo(ctx).rel ? { type: 'fix', spec: specInfo(ctx).rel, payload: String(words).trim() } : { type: 'fix', payload: state.fix.symptom.replace(/\s+/g, ' ') })
 
-// Ends the run STOPPED {why}: the item (a fix, a plan, a decide) is queued and said in one 📌 line. Amend sets the spec to draft.
+// Ends the run STOPPED {why}: the item (a fix, a plan, a decide) is queued and said in one 📌 line.
 function parkRun(state, ctx, why, item) {
   const s = specInfo(ctx)
-  if (s.abs && !state.fix && (why === 'amend' || state.inPlace)) st.writeStatus(s.abs, why === 'amend' ? 'draft' : 'hardened')
+  if (s.abs && !state.fix && state.inPlace) st.writeStatus(s.abs, 'hardened')
   const queued = item && Q.paste(ctx.root, Q.add(ctx.root, item) || { kind: 'prompt', ...item }) // null from add: the same item is already open
-  decide(state, queued ? `stopped: ${why} — queued ${queued}` : `stopped: ${why} — ${s.rel} is draft again`)
+  decide(state, `stopped: ${why}${queued ? ` — queued ${queued}` : ''}`)
   if (state.lane) pending.consumePending(ctx.root)
   state.report = render({ outcome: `⏸️ ${s.id} stopped — ${why}`, pins: B.pins(state), artifacts: s.rel, queued, next: queued ? '/spec:queue next' : `/spec:plan ${s.rel}` })
   return go(state, 'STOPPED', { why, ended: !state.lane })
 }
 
-// A spec the run waits on is done once trunk says so (a lane's own copy of it predates the landing); the run then goes on.
-const onDone = (state, ctx) => { const r = git.raw(['show', `${cfgOf(ctx).trunk}:${state.on}`], ctx.root); return r.status === 0 && S.parseFrontmatter(r.stdout.replace(/\r\n/g, '\n')).frontmatter.status === 'done' }
+// The user amends the spec: the work stays where it is (a worktree's committed as wip, the spec itself back as the base
+// had it so the rebase onto the re-locked trunk cannot conflict on it) and the run waits, STOPPED like `after`, until
+// plan.js lock lands a changed spec on the branch it builds on. Trunk's spec file is never written.
+function amend(state, ctx) {
+  const s = specInfo(ctx); const wt = wtOf(state, ctx); const own = ownOf(state)
+  decide(state, `amend: /spec:plan ${s.rel} — the build resumes by itself once the amended spec is locked`)
+  const next = `/spec:plan ${s.rel}`
+  state.report = render({ outcome: `⏸️ ${s.id} stopped — amend`, pins: B.pins(state), artifacts: s.rel, next })
+  if (state.inPlace) { // the checkout's own spec, as the branch has it
+    git.restore(wt, 'HEAD', [own]); state.at = git.headSha(wt)
+  }
+  else { git.restore(wt, state.base, [own]); git.commitWip(wt, `wip(spec): ${s.stem} awaits its amended spec`) }
+  return go(state, 'STOPPED', { why: 'amend', on: own, from: state.from })
+}
+
+// A run waits on a spec that lands on `ref`: trunk, or in place the branch it builds on.
+const refOf = (state, ctx) => (state.inPlace ? state.branch : cfgOf(ctx).trunk)
+// An amended spec's locked text comes into the worktree copy: done in a worktree, implementing in place; the criteria
+// check at GATE and the review then read the amended spec.
+function takeSpec(state, ctx) {
+  const own = ownOf(state); const file = specIn(state, ctx)
+  st.writeText(file, git.raw(['show', `${refOf(state, ctx)}:${own}`], wtOf(state, ctx)).stdout)
+  st.writeStatus(file, state.inPlace ? 'implementing' : 'done')
+  state.notice = st.readSpec(file).intent.notice
+  delete state.respec
+}
 function resume(state, ctx) {
-  go(state, state.from, { why: undefined, on: undefined, report: undefined })
-  if (!state.inPlace && git.rebaseOnto(wtOf(state, ctx), cfgOf(ctx).trunk).ok) state.base = git.sh(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wtOf(state, ctx)) // a conflict: the rebase guard prints it
+  const ref = refOf(state, ctx); const wt = wtOf(state, ctx); const amended = state.why === 'amend'
+  const from = amended ? 'GATE' : state.from
+  const fresh = amended ? { review: null, attempts: { repair: 0, fix: 0 } } : {}
+  go(state, from, { why: undefined, on: undefined, at: undefined, report: undefined, ...fresh })
+  const rebased = state.inPlace || git.rebaseOnto(wt, ref).ok // a conflict: the rebase guard prints it
+  if (rebased) state.base = git.sh(['merge-base', ref, 'HEAD'], wt)
+  if (amended) { if (rebased) takeSpec(state, ctx); else state.respec = true }
   return state
 }
 
@@ -299,7 +328,12 @@ const rebaseGuard = (state, ctx) => !state.inPlace && state.worktree && !['STOPP
 function finishRebase(state, ctx) {
   const wt = wtOf(state, ctx)
   git.sh(['add', '-A'], wt); git.raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt) // a later commit may conflict again
-  if (!git.rebasing(wt)) return go(state, 'GATE', { base: git.sh(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt), review: null, attempts: { repair: 0, fix: 0 }, report: undefined })
+  if (!git.rebasing(wt)) {
+    const base = git.sh(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt)
+    go(state, 'GATE', { base, review: null, attempts: { repair: 0, fix: 0 }, report: undefined })
+    if (state.respec) takeSpec(state, ctx) // an amended spec's text, held back while the rebase conflicted
+    return state
+  }
   if (!git.conflictsIn(wt).length) refuse(`the rebase in ${wt} stopped without a conflict — finish it with git rebase --continue or --skip there, then re-run`, 1)
   return state
 }
@@ -327,8 +361,11 @@ function derive(state, ctx) {
     }
     case 'COMMIT': return { name: 'COMMIT', auto: commit }
     case 'MERGE': return { name: 'MERGE', auto: merge }
-    case 'STOPPED': if (state.why === 'after' && onDone(state, ctx)) return { name: 'STOPPED', auto: resume }
-    // falls through: any other ending prints its report
+    case 'STOPPED': {
+      const waits = ['after', 'amend'].includes(state.why) && st.resumes(ctx.root, state, refOf(state, ctx))
+      if (waits) return { name: 'STOPPED', auto: resume }
+      return { name: state.step, body: state.report || '' } // any other ending, or a wait not over, prints its report
+    }
     default: return { name: state.step, body: state.report || '' }
   }
 }
@@ -340,6 +377,15 @@ function unchanged(state, ctx) {
 const why = (flags, what) => { if (typeof flags.why !== 'string' || !flags.why.trim()) refuse(`${what} needs --why "<text>"`); return flags.why.trim() }
 const afterReview = (state) => go(state, state.prototype ? 'LOOK' : 'COMMIT')
 const known = (what, id, list, rel) => refuse(`--${what} ${id === true || id === undefined ? '<id>' : id} is not ${what === 'decision' ? `a row of ${rel}'s Decisions table` : `an Assumption of ${rel}`} — known: ${list.join(', ') || 'none'}`)
+
+// A question with one answer left is a rule, not a question: park is applied and said in a 📌 line.
+function ask(state, ctx, extra) {
+  go(state, 'ESCALATE', extra)
+  if (escalation(state).options.length >= 2) return state
+  decide(state, 'Auto-picked park — the only answer left: a fix has no spec to amend and Opus already ran'
+    + ' (veto anytime)')
+  return steps.escalate(state, { choice: 'park' }, ctx)
+}
 
 const steps = {
   built(state) { return go(state, 'GATE') },
@@ -384,17 +430,20 @@ const steps = {
     if (flags.assumption !== undefined) {
       const all = S.parseAssumptions(S.section(doc.sections, 'Assumptions')); const a = all.find((x) => x.id === flags.assumption) || known('assumption', flags.assumption, all.map((x) => x.id), rel)
       if (!a.arm.ask) refuse(`${a.id} has a written fallback: ${a.arm.text} — apply it`)
-      return go(state, 'ESCALATE', { why: 'assumption', from: state.step, assumption: { id: a.id, text: a.text, options: a.arm.options, note: typeof flags.why === 'string' ? flags.why.trim() : '' } })
+      const note = typeof flags.why === 'string' ? flags.why.trim() : ''
+      const assumption = { id: a.id, text: a.text, options: a.arm.options, note }
+      return ask(state, ctx, { why: 'assumption', from: state.step, assumption })
     }
     const ids = S.decisionRows(S.section(doc.sections, 'Decisions')).map((c) => c[0])
     if (!ids.includes(flags.decision)) known('decision', flags.decision, ids, rel)
-    return go(state, 'ESCALATE', { why: 'unmet', from: state.step, unmet: { decision: flags.decision, text: why(flags, 'unmet') } })
+    const text = why(flags, 'unmet')
+    return ask(state, ctx, { why: 'unmet', from: state.step, unmet: { decision: flags.decision, text } })
   },
   escalate(state, flags, ctx) {
     const e = escalation(state); const c = flags.choice; const labels = e.options.map((o) => o.label)
     if (!labels.includes(c)) refuse(`escalate needs one of ${labels.join(' | ')}, e.g. --mark escalate ${labels[0]}`)
     if (state.lane) pending.consumePending(ctx.root)
-    if (c === 'amend') return parkRun(state, ctx, 'amend', null)
+    if (c === 'amend') return amend(state, ctx)
     if (c === 'park') return parkRun(state, ctx, 'parked', fixItem(state, ctx, e.q))
     if (c === 'fix') return go(state, 'FIX', { fixFor: 'decision' })
     if (c !== 'retry') state.rulings = [...(state.rulings || []), ...(c === 'keep' ? e.q.split('\n').map((x) => `kept: ${x}`) : [`${state.assumption.id}: ${c}`])] // to the commit and the next brief

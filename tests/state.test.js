@@ -344,3 +344,18 @@ test('fixRunPath is <git-dir>/spec-fix/<slug>.run/state.json: the main checkout\
   S.writeJson(S.fixRunPath(wt, 'x-abcdef'), { step: 'DONE' }); g('worktree', 'remove', wt)
   assert.ok(!fs.existsSync(S.fixRunPath(d, 'x-abcdef').replace('.git/spec-fix', '.git/worktrees/w/spec-fix')), 'removing the worktree removes its fix state')
 })
+
+test('AC-20261108-03-7 resumes: an after run needs its spec done at ref, an amend run needs it hardened with a blob unlike the base\'s', () => {
+  const root = tmpdir('resumes'); const g = gitRepo(root)
+  const rel = 'specs/20261108/01-a.md'
+  const write = (status, body) => { fs.mkdirSync(path.join(root, 'specs/20261108'), { recursive: true }); fs.writeFileSync(path.join(root, rel), `---\nstatus: ${status}\n---\n# A\n${body}\n`) }
+  write('hardened', 'one'); g('add', '-A'); g('commit', '-qm', 'lock')
+  const base = g('rev-parse', 'HEAD').trim()
+  const run = (why) => ({ why, on: rel, base })
+  assert.deepStrictEqual([S.resumes(root, run('after'), 'HEAD'), S.resumes(root, run('amend'), 'HEAD')], [false, false], 'hardened as the base had it')
+  write('hardened', 'two'); g('commit', '-qam', 'amended')
+  assert.deepStrictEqual([S.resumes(root, run('after'), 'HEAD'), S.resumes(root, run('amend'), 'HEAD')], [false, true], 'a changed body')
+  write('done', 'two'); g('commit', '-qam', 'done')
+  assert.deepStrictEqual([S.resumes(root, run('after'), 'HEAD'), S.resumes(root, run('amend'), 'HEAD')], [true, false], 'done is not hardened')
+  assert.strictEqual(S.resumes(root, { why: 'after', on: 'specs/none.md', base }, 'HEAD'), false, 'a spec trunk lacks')
+})

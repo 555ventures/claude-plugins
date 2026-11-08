@@ -1,6 +1,6 @@
 ---
 date: 2026-11-08
-status: hardened
+status: done
 area: run
 depends_on: [specs/20261107/01-a-done-spec-is-a-stub.md]
 brief: n/a

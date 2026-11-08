@@ -93,17 +93,23 @@ function reviewer(b) {
 }
 
 // The three questions a run asks, each in the agent's own words: {kind, q, options}; amend only where a spec can be amended.
+// An unmet Decision (or an Assumption with no options) leads with amend; retry only while Opus has not run, park last.
 function escalation(state, amendable) {
-  const amend = { label: 'amend', description: 'set the spec to draft so you can amend it with /spec:plan' }
-  const retry = [{ label: 'retry', description: `re-run ${state.from || 'the step'} on Opus with fresh attempts` }, { label: 'park', description: 'stop here and queue a /spec:fix item' }]
+  const lock = 'with /spec:plan ' + state.spec + '; the build resumes by itself once the amended spec is locked'
+  const amend = { label: 'amend', description: `amend the spec ${lock}` }
+  const retry = { label: 'retry', description: `re-run ${state.from || 'the step'} on Opus with fresh attempts` }
+  const list = (what) => [{ ...amend, description: `amend ${what} ${lock}` }, ...(state.opus ? [] : [retry]),
+    { label: 'park', description: 'stop here and queue a /spec:fix item' }]
   let e
   if (state.why === 'decision') {
     e = { kind: 'decision', q: state.review.findings.filter((f) => f.severity === 'needs-decision').map((f) => f.summary || '').join('\n'),
       options: [{ label: 'keep', description: 'keep what the build did, record your yes in the commit, carry on' }, { label: 'fix', description: 'one more builder round that undoes it and follows the spec' }, amend] }
   } else if (state.why === 'assumption') {
     const a = state.assumption
-    e = { kind: 'assumption', q: a.note || a.text, options: a.options.length ? [...a.options.filter((o) => o !== 'amend').map((o) => ({ label: o, description: `rule "${a.id}: ${o}" and continue at ${state.from} on Opus` })), amend] : [...retry, amend] }
-  } else e = { kind: 'unmet', q: state.unmet.text, options: [...retry, { ...amend, description: `set the spec to draft to amend ${state.unmet.decision}` }] }
+    const rule = (o) => ({ label: o, description: `rule "${a.id}: ${o}" and continue at ${state.from} on Opus` })
+    const own = [...a.options.filter((o) => o !== 'amend').map(rule), amend]
+    e = { kind: 'assumption', q: a.note || a.text, options: a.options.length ? own : list(a.id) }
+  } else e = { kind: 'unmet', q: state.unmet.text, options: list(state.unmet.decision) }
   return { ...e, options: e.options.filter((o) => amendable || o.label !== 'amend') }
 }
 

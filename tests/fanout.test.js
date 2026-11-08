@@ -189,6 +189,10 @@ test('AC-20261107-02-7 AC-20261105-16-8 a dismissed lane question parks the lane
   assert.ok(rep.includes('⚠️ fanout — 0 lane(s) merged, 1 stopped or dismissed') && rep.includes('stopped spec-01-alpha — the question was dismissed') && rep.includes('📌 lane 1 (spec-01-alpha): stopped: the question was dismissed — queued 📌 decide: Which list shape?'), rep)
   h.ok('--mark', 'reported')
   assert.match(h.ok(), new RegExp(`${P('01-alpha')} waits — its lane stopped \\(the question was dismissed\\)`))
+  // a fix item bound to that hardened spec waits with the spec lane's stop reason: its code lives only in the kept spec worktree, not on trunk
+  Q.write(h.dir, { ...Q.read(h.dir), items: [...Q.read(h.dir).items, { id: 'q9', kind: 'prompt', type: 'fix', spec: P('01-alpha'), payload: 'tidy the list', added: 'x' }] })
+  const plan = h.ok(); assert.ok(!plan.includes('fix: tidy the list'), 'no fix lane goes out from trunk\n' + plan)
+  assert.match(plan, /tidy the list waits — its lane stopped \(the question was dismissed\)/, plan)
 })
 
 test('AC-20261107-02-6 a lane that needs spec Y holds on its queue item until Y is done, then goes out again on its kept worktree with no user action', () => {
@@ -203,6 +207,11 @@ test('AC-20261107-02-6 a lane that needs spec Y holds on its queue item until Y 
   h.ok('--mark', 'reported')
   const plan = h.ok(P('01-alpha'))
   assert.ok(plan.includes(`${P('01-alpha')} waits — after ${P('02-beta')} (hardened)`), plan)
+  // a fix item bound to the held spec waits on its lane: the spec's code is only in the kept spec worktree, not on trunk
+  const q = Q.read(h.dir); Q.write(h.dir, { ...q, items: [...q.items, { id: 'q9', kind: 'prompt', type: 'fix', spec: P('01-alpha'), payload: 'tidy the list', added: 'x' }] })
+  const fixPlan = h.ok(); assert.ok(!fixPlan.includes('fix: tidy the list'), 'no fix lane goes out from trunk\n' + fixPlan)
+  assert.ok(fixPlan.includes(`tidy the list waits — its spec's lane is held on .claude/worktrees/spec-01-alpha (after ${P('02-beta')})`), fixPlan)
+  Q.write(h.dir, q)
   st.writeStatus(path.join(h.dir, P('02-beta')), 'done'); h.g('commit', '-qam', 'beta done')
   const again = dispatch(h)
   assert.ok(again.plan.includes('lane 1: ' + P('01-alpha')), again.plan)
@@ -232,6 +241,11 @@ test('AC-20261108-03-6 a lane that picks amend is held on its kept worktree with
   assert.ok(rep.includes('⚠️ fanout — 0 lane(s) merged, 1 held') && rep.includes(`held spec-01-alpha — amend: /spec:plan ${P('01-alpha')}; PLAN re-picks it on its worktree once the amended spec is locked`) && !rep.includes('its lane stopped'), rep)
   h.ok('--mark', 'reported')
   assert.ok(h.ok(P('01-alpha')).includes(`${P('01-alpha')} waits — its lane waits for the amended spec`))
+  // a fix item bound to the amend-held spec waits on that lane too, rather than going out from trunk without its work
+  const q = Q.read(h.dir); Q.write(h.dir, { ...q, items: [...q.items, { id: 'q9', kind: 'prompt', type: 'fix', spec: P('01-alpha'), payload: 'tidy the list', added: 'x' }] })
+  const fixPlan = h.ok(); assert.ok(!fixPlan.includes('fix: tidy the list'), 'no fix lane goes out from trunk\n' + fixPlan)
+  assert.ok(fixPlan.includes(`tidy the list waits — its spec's lane is held on .claude/worktrees/spec-01-alpha (amend ${P('01-alpha')})`), fixPlan)
+  Q.write(h.dir, q)
   const spec = path.join(h.dir, P('01-alpha'))
   fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('- You asked: 01-alpha', '- You asked: 01-alpha, amended')); h.g('commit', '-qam', 'lock the amended spec')
   const again = dispatch(h)

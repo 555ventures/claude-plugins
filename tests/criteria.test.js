@@ -23,12 +23,14 @@ const asObj = (m) => Object.fromEntries([...m].map(([k, v]) => [k, [...v].sort()
 const OLD = '---\nstatus: done\n---\n# Old\n\n## Acceptance Criteria\n\n- **AC-20990101-01-1**: WHEN x THE SYSTEM SHALL y.\n- **AC-20990101-01-2**: z.\n'
 const building = (extra = '') => S.parse(`---\nstatus: done\n---\n# New\n\n## Decisions\n\n| ID | Decision | Why |\n|---|---|---|\n| D1 | drop the old pin | x |\n\n## Acceptance Criteria\n\n- **AC-20990102-01-1**: WHEN a THE SYSTEM SHALL b.\n${extra}`)
 
-test('AC-20261107-04-1 cited maps each AC-ID to the test files naming it: basename rule or testGlobs, -11 is never -1, notes are skipped, a sha reads the commit', () => {
+test('AC-20261107-04-1 cited maps each AC-ID to the test files naming it: basename rule or testGlobs, -11 is never -1, notes are skipped (a testGlobs match too), a sha reads the commit', () => {
   const h = repo({
     'a.test.js': '// AC-20990101-01-1 and AC-20990101-01a-2\n',
     'py/b_spec.py': '# AC-20990101-01-11\n',
     'notes.md': 'AC-20990101-01-3\n',
     'checks/x.sh': '# AC-20990101-01-4\n',
+    'checks/fixture.md': 'AC-20990101-01-5\n',
+    'checks/x.run/evidence.txt': 'AC-20990101-01-6\n',
   })
   const want = { 'AC-20990101-01-1': ['a.test.js'], 'AC-20990101-01a-2': ['a.test.js'], 'AC-20990101-01-11': ['py/b_spec.py'], 'AC-20990101-01-4': ['checks/x.sh'] }
   const cfg = { testGlobs: ['checks/**'] }

@@ -18,13 +18,14 @@ const S = require('./spec')
 const git = require('./git')
 const { readConfig } = require('./state')
 
-// A test file is named by its basename (*.test.*, *.spec.*, *_test.*, *_spec.*, test_*) or matches a `testGlobs` glob.
+// A test file is named by its basename (*.test.*, *.spec.*, *_test.*, *_spec.*, test_*) or matches a `testGlobs` glob;
+// either way a note (*.md) or a run directory's file (.run/) never is.
 const TEST_NAME = /^(?:.+\.(?:test|spec)\..+|.+_(?:test|spec)\..+|test_.+)$/
 const ID = 'AC-\\d{8}-\\d{2}[a-z]?-\\d+(?!\\d)'
 const ONE = new RegExp(`^${ID}$`)
 const globs = (cfg) => [].concat((cfg && cfg.testGlobs) || []).filter((g) => typeof g === 'string' && g)
-const named = (rel) => TEST_NAME.test(path.posix.basename(rel)) && !/\.md$/.test(rel) && !/\.run\//.test(rel)
-const isTest = (rel, cfg) => named(rel) || globs(cfg).some((g) => S.globToRe(g).test(rel))
+const isTest = (rel, cfg) => !/\.md$/.test(rel) && !/\.run\//.test(rel)
+  && (TEST_NAME.test(path.posix.basename(rel)) || globs(cfg).some((g) => S.globToRe(g).test(rel)))
 const idsIn = (text) => [...new Set(String(text).match(new RegExp(ID, 'g')) || [])]
 const isFile = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isFile()
 

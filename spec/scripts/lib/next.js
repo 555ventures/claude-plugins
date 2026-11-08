@@ -62,7 +62,9 @@ function derive(root) {
         if (!byNum.has(num) && !it.done) note({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${num}, which has no docs/roadmap/${num}-*.md — remove it with \`/spec:queue done ${num}\`, reorder it away with \`/spec:queue move ${num} <n>\`, or restore the brief file` })
         const own = byNum.get(num)
         if (own && !it.done && own.status === 'done') {
-          const line = `Brief ${num} (${own.name}) has every spec done but is still queued.`
+          const line = own.open.length
+            ? `Brief ${num} (${own.name}) has every spec done; ${own.open.length} step(s) outside specs are still open.`
+            : `Brief ${num} (${own.name}) has every spec done but is still queued.`
           note({ kind: 'brief-done-queued', detail: line, line, ask: 'Close it?', paste: `/spec:queue done ${num}` })
         }
       } else if (it.kind === 'spec') posSpec.set(it.payload, i)

@@ -15,7 +15,7 @@ const st = require('./lib/state'); const Q = require('./lib/queue'); const git =
 const work = require('./lib/work')
 const { list: queueRows } = require('./lib/queue-rows')
 const { derive: deriveWork } = require('./lib/next')
-const { land } = require('./lib/land')
+const { land, briefClosed, briefOpen } = require('./lib/land')
 const { render } = require('./lib/report')
 
 let EXPLICIT = [] // positional spec paths of this invocation
@@ -219,6 +219,8 @@ function mergeLane(s, ctx, lane) {
     Object.assign(lane, { status: 'sent-back', red: r.red.split('\n').find((x) => /✖|not ok|FAIL|fail|error/i.test(x)) || r.red.split('\n')[0] })
     stamp(s, lane, 'red', lane.red)
   } else { Object.assign(lane, { status: 'merged', landed: r.landed, ...(r.kept ? { kept: `worktree kept at ${lane.worktree}: ${r.kept} — git worktree remove --force ${lane.worktree}` } : {}) }); stamp(s, lane, 'landed', r.landed) }
+  // A closed or still-open brief is a fact about the queue, not about the lane: REPORT says it once.
+  if (r.brief) s.briefs = [...(s.briefs || []), r.brief]
   return s
 }
 
@@ -239,14 +241,19 @@ function deriveReport(s, ctx) {
   const fixes = left.filter((p) => p.symptom !== undefined).length; const opens = Q.pending(ctx.root).length
   const cost = (l) => (l.reruns || l.lockWaitMs >= 1000 ? ` (${l.reruns || 0} rerun(s), ${Math.round((l.lockWaitMs || 0) / 1000)}s slot wait)` : '')
   const paid = merged.filter(cost); const sum = (k) => paid.reduce((n, l) => n + (l[k] || 0), 0)
+  const briefs = [...new Map((s.briefs || []).map((b) => [b.num, b])).values()]
   const trunk = (l) => (specDoc(path.join(ctx.root, l.spec)) || { frontmatter: {} }).frontmatter.status || 'missing' // a dismissed spec lane: what trunk holds
   return {
     name: 'REPORT', mark: 'reported', accepts: ['dismissed'],
     body: render({
       outcome: `${held.length || gone.length ? '⚠️' : '✅'} fanout — ${merged.length} lane(s) merged${gone.length ? `, ${gone.length} stopped or dismissed` : ''}${held.length ? `, ${held.length} held` : ''}`,
       bullets: [...merged.map((l) => `merged ${nameOf(l)} as ${l.landed}; queue item ticked${cost(l)}`), ...(s.answered || []).map((a) => `answered lane ${a.lane} (${a.name}): ${a.question} → ${a.label}`)],
-      pins: s.batch.flatMap((l) => [...(l.status === 'merged' && l.notice ? [`Users will notice: ${l.notice}`] : []), ...(l.decided || [])].map((d) => `📌 lane ${l.id} (${nameOf(l)}): ${d}`)), // a landed lane's notice, then every line its rules decided
+      pins: [ // a landed lane's notice, then every line its rules decided; then each brief the batch closed
+        ...s.batch.flatMap((l) => [...(l.status === 'merged' && l.notice ? [`Users will notice: ${l.notice}`] : []),
+          ...(l.decided || [])].map((d) => `📌 lane ${l.id} (${nameOf(l)}): ${d}`)),
+        ...briefs.filter((b) => b.closed).map((b) => '📌 ' + briefClosed(b))],
       warns: [...(paid.length ? [`load: ${sum('reruns')} rerun(s), ${Math.round(sum('lockWaitMs') / 1000)}s of slot waits across the batch`] : []), ...merged.filter((l) => l.kept).map((l) => l.kept), ...held.map((l) => `held ${nameOf(l)} — after ${l.on}; PLAN re-picks it on its worktree once that is done`),
+        ...briefs.filter((b) => !b.closed && b.open.length).map(briefOpen),
         ...gone.map((l) => `${l.ended ? `stopped ${nameOf(l)} — ${l.ended};` : `dismissed ${nameOf(l)} —`} worktree ${l.discarded ? `and branch removed (wip ${l.wip || 'none'})` : `kept at ${l.worktree}${l.ended || l.symptom !== undefined ? '' : `, spec left hardened in the lane${trunk(l) === 'hardened' ? '' : ` (trunk: ${trunk(l)})`}`}`}`)],
       next: left.length ? `${left.length - fixes} spec(s) and ${fixes} fix(es) left — /clear, then /spec:fanout to continue` : opens ? `nothing runnable — ${opens} open item(s) need you: /spec:queue list` : 'nothing needs you — queue drained',
     }),

@@ -662,3 +662,55 @@ test('AC-20261107-04-9 this repo cites every criterion of spec 20261107/04 but t
   assert.deepStrictEqual(doc.acs.map((a) => a.id).filter((id) => !now.has(id) && !listed.has(id)), [])
   if (doc.acs.length) assert.deepStrictEqual([...listed.keys()], ['AC-20261107-04-10'])
 })
+
+// ---- spec 20261107/05: a finished brief closes itself --------------------------------------------
+const BRIEF03 = 'docs/roadmap/03-rounds.md'
+const AUTO03 = '📌 auto-closed brief 03 (rounds) — its last spec merged and docs/roadmap/03-rounds.md lists no open step (veto anytime)'
+const WARN03 = '⚠️ brief 03 (rounds) has every spec done; 1 step(s) outside specs still open in docs/roadmap/03-rounds.md — tick them there, then /spec:queue done 03'
+function briefFixture({ steps = '', banner = '', stored = true, sibling = false } = {}) {
+  const files = { [REL]: SPEC_DOC.replace('brief: n/a', 'brief: 03'), [BRIEF03]: `# 03 — Rounds\n${banner}\nPhase: P1 · Depends on: —\n\n## Result\n\nx\n${steps}` }
+  if (sibling) files['specs/20261104/02-later.md'] = SPEC_DOC.replace('brief: n/a', 'brief: 03').replace('# Thing', '# Later')
+  const h = fixture({ files })
+  if (stored) Q.write(h.dir, { version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-07' }] })
+  return h
+}
+const briefItem = (h) => Q.read(h.dir).items.find((i) => i.kind === 'brief')
+const listed = (h) => runNode('scripts/queue.js', ['list', '--root', h.dir]).stdout
+
+test('AC-20261107-05-2 a solo run merging the last spec of a brief with no open step ticks its item and prints the 📌 auto-closed line; unstored or superseded alike', () => {
+  const h = briefFixture(); build(h)
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(done.includes(AUTO03 + '\n'), done)
+  assert.ok(briefItem(h).done, 'q1 is ticked')
+  const u = briefFixture({ stored: false })
+  assert.ok(listed(u).includes('brief 03 (rounds)'), 'an in-flight brief is in the fill before the merge')
+  build(u)
+  assert.ok(ok(u.run('--mark', 'reviewed', '--file', u.findings([]))).includes(AUTO03))
+  assert.strictEqual(Q.read(u.dir).items.length, 0, 'nothing is stored or ticked')
+  assert.ok(!listed(u).includes('brief 03'), 'the brief leaves the list')
+  const s = briefFixture({ banner: '\n> **Superseded by 04**\n' }); build(s)
+  assert.ok(ok(s.run('--mark', 'reviewed', '--file', s.findings([]))).includes(AUTO03))
+  assert.ok(briefItem(s).done, 'a stored brief left superseded is ticked')
+})
+
+test('AC-20261107-05-3 an open step keeps the brief queued and warns how many; a merge leaving a sibling spec open ticks no brief', () => {
+  const h = briefFixture({ steps: '\n## Steps outside specs\n\n- [x] buy the domain\n- [ ] cut over DNS\n' }); build(h)
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(!done.includes('auto-closed'), done)
+  assert.ok(done.includes(WARN03 + '\n'), done)
+  assert.ok(!briefItem(h).done, 'q1 stays open')
+  const o = briefFixture({ sibling: true }); build(o)
+  const mid = ok(o.run('--mark', 'reviewed', '--file', o.findings([])))
+  assert.ok(!mid.includes('auto-closed') && !mid.includes('has every spec done'), mid)
+  assert.ok(!briefItem(o).done, 'another spec of brief 03 is open: no brief item ticks')
+})
+
+test('AC-20261107-05-4 an in-place run finishing the last spec of a stored brief ticks no brief item and prints no auto-closed line', () => {
+  const h = briefFixture()
+  ok(h.run('--in-place')); put(h.dir, 'feature.txt', 'thing\n')
+  ok(h.run('--in-place', '--mark', 'built'))
+  const done = ok(h.run('--in-place', '--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(done, /REVIEW → DONE/)
+  assert.ok(!done.includes('auto-closed'), done)
+  assert.ok(!briefItem(h).done, 'no brief item is ticked in place')
+})

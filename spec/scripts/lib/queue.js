@@ -73,7 +73,7 @@ function specStatus(root, p) {
 
 // A spec item whose spec is done (or superseded), or whose file is gone, and not live counts as done; the timestamp is
 // written with the next write. A file is only missed from the main checkout: a lane may predate the spec. A brief item
-// is never ticked here: only `done` closes it.
+// is never ticked here: `done` closes it, or lib/land.js when its last spec merges with no step open.
 function reconcile(root, q) {
   const now = new Date().toISOString(); const main = isMain(root)
   for (const i of q.items) {
@@ -105,7 +105,9 @@ function fill(root, q) {
   if (!isMain(root)) return { ...q, items }
   const specs = work.readSpecs(root); const adds = []
   for (const b of v7Briefs(root, work.readBriefs(root, specs))) {
-    if (b.status !== 'done' && !b.superseded && !seen.has('b' + b.num) && seen.add('b' + b.num)) adds.push({ id: null, kind: 'brief', payload: b.num })
+    const unfinished = (b.status !== 'done' || b.open.length) && !b.superseded // done with an open step: unfinished
+    if (!unfinished || seen.has('b' + b.num)) continue
+    seen.add('b' + b.num); adds.push({ id: null, kind: 'brief', payload: b.num })
   }
   for (const s of specs.filter((x) => !x.brief && !['done', 'superseded'].includes(x.status)).sort((a, b) => (a.path < b.path ? -1 : 1))) {
     if (!seen.has('s' + s.path)) adds.push({ id: null, kind: 'spec', payload: s.path })

@@ -399,3 +399,31 @@ test('AC-20261105-16-7 a brief item\'s unmet after gate holds its hardened specs
   assert.match(h.ok(), /Held \(.*07-wip \(wip\)/)
   assert.ok(host({ specs: [] }).ok().includes('✅ queue drained — nothing queued'))
 })
+
+// spec 20261107/05: a lane landing a brief's last spec closes the brief as a batch line, or warns while a step is open.
+function briefLaneHost(steps = '') {
+  const h = host({ specs: [], lanes: 4 })
+  const w = (rel, text) => { fs.mkdirSync(path.dirname(path.join(h.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(h.dir, rel), text) }
+  w('docs/roadmap/03-alpha.md', `# 03 — alpha\n\nPhase: P1 · Depends on: — · Primary workspaces: app\n\n## Result\n\nx\n${steps}`)
+  w(`${FIX16}/01-a1.md`, specText('01-a1', 'src/a1.js').replace('architecture: false', 'brief: 03\narchitecture: false'))
+  h.g('add', '-A'); h.g('commit', '-q', '-m', 'fixture')
+  Q.write(h.dir, { version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-07' }] })
+  dispatch(h); h.finish('01-a1', 'src/a1.js'); h.ok('--mark', 'returned', '--lane', '1')
+  assert.strictEqual(h.step(), 'REPORT')
+  return h
+}
+
+test('AC-20261107-05-5 a lane landing the last spec of a stored brief ticks it and REPORT pins one auto-closed line with no lane prefix; an open step warns instead', () => {
+  const h = briefLaneHost()
+  const rep = h.ok()
+  assert.ok(Q.read(h.dir).items.find((i) => i.id === 'q1').done, 'the brief item is ticked')
+  assert.strictEqual(rep.split('auto-closed brief 03').length, 2, 'one pin: ' + rep)
+  assert.ok(rep.includes('\n📌 auto-closed brief 03 (alpha) — its last spec merged and docs/roadmap/03-alpha.md lists no open step (veto anytime)\n'), rep)
+  assert.ok(!/📌 lane \d+ \([^)]*\): auto-closed/.test(rep), rep)
+  assert.ok(rep.includes('Next: nothing needs you — queue drained'), rep)
+  const o = briefLaneHost('\n## Steps outside specs\n\n- [ ] load the data\n')
+  const open = o.ok()
+  assert.ok(!Q.read(o.dir).items.find((i) => i.id === 'q1').done && !open.includes('auto-closed'), open)
+  assert.ok(open.includes('\n⚠️ brief 03 (alpha) has every spec done; 1 step(s) outside specs still open in docs/roadmap/03-alpha.md — tick them there, then /spec:queue done 03\n'), open)
+  assert.ok(open.includes('Next: nothing runnable — 1 open item(s) need you: /spec:queue list'), open)
+})

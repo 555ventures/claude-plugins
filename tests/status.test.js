@@ -397,3 +397,12 @@ test('AC-20261105-10-13 a queued brief with every spec done raises a decide line
   assert.strictEqual(a[0].detail, 'Brief 03 (rounds) has every spec done but is still queued.')
   assert.ok(!status(small({ 'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—'), [`${A}/01-rounds.md`]: specDoc('done', { brief: '03' }) })).stdout.includes('still queued'))
 })
+
+test('AC-20261107-05-6 an unstored done brief with an open step raises the decide line with its count; ticking the box clears it', () => {
+  const files = (box) => ({ 'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—', `\n## Steps outside specs\n\n- [${box}] cut over DNS\n`), [`${A}/01-rounds.md`]: specDoc('done', { brief: '03' }) })
+  const out = status(small(files(' '))).stdout
+  assert.ok(out.includes('⚠️ Brief 03 (rounds) has every spec done; 1 step(s) outside specs are still open.\n   Close it?  /spec:queue done 03\n'), out)
+  const a = json(small(files(' '))).anomalies.filter((x) => x.kind === 'brief-done-queued')
+  assert.deepStrictEqual(a.map((x) => x.detail), ['Brief 03 (rounds) has every spec done; 1 step(s) outside specs are still open.'])
+  assert.ok(!status(small(files('x'))).stdout.includes('has every spec done'))
+})

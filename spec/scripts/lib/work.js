@@ -37,6 +37,9 @@ function walkSpecs(dir, out) {
   return out
 }
 
+// A spec's `brief:` frontmatter as a brief number, or null for none (`n/a`, `—`, absent).
+const briefOf = (fm) => (fm.brief === undefined || NONE.test(String(fm.brief).trim()) ? null : normBrief(fm.brief))
+
 function readSpecs(root) {
   const specs = []
   for (const file of walkSpecs(path.join(root, 'specs'), [])) {
@@ -45,7 +48,7 @@ function readSpecs(root) {
     const fm = doc.frontmatter
     if (!fm.status) continue
     const rel = path.relative(root, file).split(path.sep).join('/')
-    const b = fm.brief === undefined || NONE.test(String(fm.brief).trim()) ? null : normBrief(fm.brief)
+    const b = briefOf(fm)
     const dep = fm.depends_on
     specs.push({
       path: rel, status: st.specState(root, rel, String(fm.status)), brief: b,
@@ -82,6 +85,18 @@ function parseDepends(head) {
   return { depends_on, dep_rejects }
 }
 
+// The text of each unchecked box (`- [ ] x`, also `*`, `+` or `1.`) between `## Steps outside specs` (any case) and the
+// next `## ` heading, comments stripped first: the work no spec builds that is still open. No section gives [].
+function openSteps(text) {
+  const lines = text.replace(/<!--[\s\S]*?-->/g, '').split('\n'); const out = []; let inside = false
+  for (const l of lines) {
+    if (/^## /.test(l)) { inside = /^##\s+steps outside specs\s*$/i.test(l); continue }
+    const m = inside && /^\s*(?:[-*+]|\d+\.)\s+\[ \]\s+(.*\S)\s*$/.exec(l)
+    if (m) out.push(m[1])
+  }
+  return out
+}
+
 function readBriefs(root, specs = readSpecs(root)) {
   const dir = path.join(root, 'docs', 'roadmap')
   let names = []
@@ -99,7 +114,7 @@ function readBriefs(root, specs = readSpecs(root)) {
     const done = members.every((s) => s.status === 'done')
     briefs.push({
       num, name: m[2], file: 'docs/roadmap/' + file, phase: (/Phase:\s*(P\d+)/.exec(head) || [])[1] || null,
-      ...parseDepends(head), superseded, specs: members,
+      ...parseDepends(head), superseded, specs: members, open: openSteps(text),
       status: superseded && done ? 'superseded' : !members.length ? 'unplanned' : done ? 'done' : 'in-flight',
     })
   }
@@ -121,4 +136,4 @@ function gateWhy(root, after, cache = {}) {
   return status === 'done' || status === 'superseded' ? null : `${p} (${status})`
 }
 
-module.exports = { normBrief, briefOrd, readSpecs, readBriefs, gateWhy }
+module.exports = { normBrief, briefOrd, briefOf, readSpecs, readBriefs, gateWhy }

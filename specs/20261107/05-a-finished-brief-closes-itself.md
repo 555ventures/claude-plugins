@@ -1,6 +1,6 @@
 ---
 date: 2026-11-07
-status: hardened
+status: done
 area: queue
 depends_on: []
 brief: n/a

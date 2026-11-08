@@ -159,7 +159,7 @@ const steps = {
       outcome: `✅ architected + grounded — scaffold green, ${adrs(ctx.root).length} ADRs, roadmap of ${bs.length} briefs`,
       artifacts: ['.claude/genesis/stack-descriptor.json', '.claude/spec.config.json', 'docs/roadmap/'],
       queued: bs.map((b) => 'docs/roadmap/' + b),
-      next: `/spec:plan docs/roadmap/${bs[0]}`,
+      next: bs.length ? `/spec:plan docs/roadmap/${bs[0]}` : 'write the first brief in docs/roadmap/, then plan it',
     })
     ensureGitignore(ctx.root)
     S.writeGenesis(ctx.root, s) // the committed status already reads GROUNDED

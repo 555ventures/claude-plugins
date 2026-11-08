@@ -28,7 +28,6 @@ const stemOf = (p) => path.basename(p).replace(/\.md$/, '')
 const rel = (root, p) => path.relative(root, path.resolve(root, String(p).replace(/^@/, ''))).split(path.sep).join('/')
 const wtAbs = (root, lane) => path.resolve(root, lane.worktree)
 const nameOf = (lane) => path.basename(lane.worktree)
-const isFile = (p) => !!fs.statSync(p, { throwIfNoEntry: false })?.isFile()
 const specDoc = (file) => { try { return st.readSpec(file) } catch { return null } }
 // A lane's run state: <wt>/<spec>.run, or a spec-less fix's in the worktree's own git dir; null before the worktree exists.
 const runDirOf = (root, lane) => (!fs.existsSync(wtAbs(root, lane)) ? null : lane.spec ? st.runDir(path.join(wtAbs(root, lane), lane.spec)) : st.fixRunDir(wtAbs(root, lane), st.slugOf(lane.symptom)))
@@ -54,14 +53,9 @@ function eligible(root, opts = {}) {
   let stopAt = null
   const wait = (spec, why) => waited.push({ spec, why })
   const ended = (wt, run) => `its lane stopped (${stoppedWhy(run)}) — see the report; remove ${path.relative(root, wt)} to run it again`
-  const unmet = (spec, entry) => {
-    const dep = rel(root, entry)
-    if (dep === spec || !isFile(path.join(root, dep))) return null
-    const status = (specDoc(path.join(root, dep)) || { frontmatter: {} }).frontmatter.status || 'missing'
-    if (status === 'done') return null
-    if (laneOf.has(dep)) return `depends on ${entry} (lane ${laneOf.get(dep)} this batch)`
-    return status === 'draft' ? `depends on ${entry} (draft — it cannot land in this fan-out)` : `depends on ${entry} (${status}, not done)`
-  }
+  // The dependencies a spec still waits on are the derivation's (lib/next.js); fanout only says how each holds it here.
+  const unmet = (dep) => `depends on ${dep.path} (${laneOf.has(dep.path) ? `lane ${laneOf.get(dep.path)} this batch`
+    : dep.status === 'draft' ? 'draft — it cannot land in this fan-out' : `${dep.status}, not done`})`
   const list = EXPLICIT.length ? EXPLICIT : [...d.entries.filter((e) => /^specs\//.test(e.path || '')).map((e) => e.path), ...open.filter((i) => i.kind === 'spec').map((i) => i.payload)]
   for (const spec of [...new Set(list.map((p) => rel(root, p)))]) {
     const doc = specDoc(path.join(root, spec))
@@ -76,9 +70,9 @@ function eligible(root, opts = {}) {
       wait(spec, `its lane waits for the amended spec — /spec:plan ${spec}, then /spec:fanout`); continue
     }
     if (pending.isLane(wt)) { wait(spec, `already in a lane at ${path.relative(root, wt)}`); continue }
-    const deps = [].concat(doc.frontmatter.depends_on || []).map(String)
     const entry = d.entries.find((e) => e.path === spec)
-    const why = deps.map((e) => unmet(spec, e)).find(Boolean) || (entry && entry.blockers.find((b) => b.startsWith('after '))) || null
+    const gate = entry && entry.blockers.find((b) => b.startsWith('after '))
+    const why = (entry && entry.deps.length ? unmet(entry.deps[0]) : gate) || null
     if (why) { wait(spec, why); continue }
     if (stopAt) { wait(spec, `the batch stops before ${stopAt}`); continue }
     const serial = entry && (entry.parallel === false ? entry.parallelReason : d.laneClash.get(entry))

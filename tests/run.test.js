@@ -94,6 +94,20 @@ const newestGateTree = (h, dir = path.join(h.dir, '.git/spec-run-cache')) => {
   return fs.readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))).sort((a, b) => a.ts.localeCompare(b.ts)).pop().tree
 }
 
+test('a merge reports the derivation\'s next pick, not the queue file\'s head: a spec this one unblocks is named', () => {
+  const OTHER = 'specs/20261104/02-other.md'
+  const doc = SPEC_DOC.replace('# Thing', '# Other').replace('depends_on: []', `depends_on: [${REL}]`).replace(/AC-20261104-01-1/g, 'AC-20261104-02-1')
+  const h = fixture({ files: { [OTHER]: doc } }); build(h)
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(done.endsWith(`\nNext: /spec:run @${OTHER}\n`) || done.includes(`Next: /spec:run @${OTHER}`), done)
+  assert.ok(!done.includes('all done'), done)
+  // A top pick that quotes a real error is printed as it is: the merge ends DONE, never crashes after it landed.
+  const q = fixture(); build(q)
+  Q.add(q.dir, { type: 'fix', payload: 'status prints null for a spec-less fix' })
+  const landed = ok(q.run('--mark', 'reviewed', '--file', q.findings([])))
+  assert.match(landed, /\nNext: \/spec:fix status prints null for a spec-less fix\n$/, landed)
+})
+
 test('AC-20261105-14-10 AC-20261105-07-13 the whole loop lands through one path: no port for a spec without prototype:, the worktree gate passes the tree trunk gets, the report lists the notice', () => {
   const h = fixture(); const out = ok(h.run())
   assert.match(out, /^▶ BUILD\n/)
@@ -251,8 +265,9 @@ test('a fix whose cause needs a plan stops with a plan item; a fix offers no unm
   ok(fx())
   assert.strictEqual(fx('--mark', 'needs-plan').status, 2, 'needs --why')
   assert.strictEqual(fx('--mark', 'unmet', '--decision', 'D1', '--why', 'x').status, 2)
-  const stop = ok(fx('--mark', 'needs-plan', '--why', 'the data model changes'))
-  assert.match(stop, /BUILD → STOPPED;[\s\S]*📌 stopped: needs a plan — queued \/spec:plan it breaks — the data model changes/)
+  const stop = ok(fx('--mark', 'needs-plan', '--why', 'the field reads undefined until the data model changes'))
+  assert.match(stop, /BUILD → STOPPED;[\s\S]*📌 stopped: needs a plan — queued \/spec:plan it breaks — the field reads undefined until the data model changes/)
+  assert.ok(stop.endsWith('\nNext: /spec:plan it breaks — the field reads undefined until the data model changes\n'), 'Next is this run\'s own queued line, as written, not the queue head: ' + stop)
   assert.deepStrictEqual(open(h).map((i) => i.type), ['plan'])
   const s = fixture(); ok(s.run())
   assert.strictEqual(s.run('--mark', 'needs-plan', '--why', 'x').status, 2)
@@ -798,6 +813,7 @@ test('AC-20261108-03-2 an unmet Decision on a fix lane after its Opus round has 
   assert.strictEqual(pending.readPending(lane), null, 'no pending question is written')
   const stop = ok(fx())
   assert.ok(stop.includes('📌 Auto-picked park — the only answer left') && stop.includes('📌 stopped: parked — queued'), stop)
+  assert.match(stop, new RegExp(`\\nNext: /spec:fix ${REL.replace(/[./]/g, '\\$&')} — .+\\n$`), 'Next is the fix this run queued')
   assert.strictEqual(fx('--state').stdout.trim(), 'STOPPED')
   assert.deepStrictEqual(open(h).map((i) => i.type), ['fix'])
 })

@@ -31,8 +31,9 @@ function render({ outcome, bullets, pins, warns, blocks, artifacts, queued, next
     out.push('')
     for (const item of items) out.push(line(prefix, item))
   }
-  // A Next: line never ends in a question mark.
-  const n = String(next || 'nothing needs you — all done').trim().replace(/\?+$/, '')
+  // The Next is the caller's fact; a driver with nothing left says so. It never ends in a question mark.
+  const n = String(next == null ? '' : next).trim().replace(/\?+$/, '')
+  if (!n) throw new Error('report: next is required — say what is left')
   out.push('', `Next: ${n}`)
   return out.join('\n') + '\n'
 }
@@ -47,5 +48,9 @@ if (require.main === module) {
   if (!slots || !slots.outcome) {
     process.stderr.write('report: usage: report.js --slots <json file with at least {"outcome": "…"}>\n')
     process.exitCode = 2
-  } else process.stdout.write(render(slots))
+  } else {
+    try { process.stdout.write(render(slots)) } catch (e) {
+      process.stderr.write(`${e.message}\n`); process.exitCode = 2
+    }
+  }
 }

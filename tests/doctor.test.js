@@ -92,6 +92,8 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   const long = 'a fix lane review advisories are dropped and the report that names the run cannot resume it'
   fs.mkdirSync(path.join(d, 'specs/fix/long-one.run'), { recursive: true })
   fs.writeFileSync(path.join(d, 'specs/fix/long-one.run/state.json'), JSON.stringify({ step: 'BUILD', fix: { symptom: long } }))
+  fs.mkdirSync(path.join(d, 'specs/fix/multi-line.run'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'specs/fix/multi-line.run/state.json'), JSON.stringify({ step: 'BUILD', fix: { symptom: 'first line\nsecond line' } }))
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/03-busy', '.claude/worktrees/spec-03-busy'])
   fs.writeFileSync(path.join(d, '.claude/worktrees/spec-03-busy/wip.txt'), 'x')
   execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/04-idle', '.claude/worktrees/spec-04-idle'])
@@ -99,6 +101,7 @@ test('a run in flight is not stale: live sidecars and dirty or marked worktrees 
   assert.ok(info.some((x) => /in flight: specs\/20260101\/01-live\.md at BUILD — \/spec:run/.test(x)), info.join('\n'))
   assert.ok(info.some((x) => x === 'in flight: fix "the thing is upside down" at BUILD — /spec:fix the thing is upside down'), 'a spec-less fix is named by its symptom and resumed by all of it: ' + info.join('\n'))
   assert.ok(info.some((x) => x.endsWith(` — /spec:fix ${long}`)), 'a long symptom is resumed by all of it, the key of its run: ' + info.join('\n'))
+  assert.ok(info.every((x) => !x.includes('\n')) && info.some((x) => x.startsWith('in flight: fix "first line second line"')), 'a symptom with a newline stays on one line: ' + JSON.stringify(info))
   assert.ok(f.some((x) => /stale sidecar: specs\/20260101\/02-old\.run — rm -r/.test(x)))
   assert.ok(info.some((x) => /in flight: \.claude\/worktrees\/spec-03-busy/.test(x)), 'uncommitted work is never a leftover')
   assert.ok(f.some((x) => /leftover worktree: \.claude\/worktrees\/spec-04-idle — git worktree remove/.test(x)))

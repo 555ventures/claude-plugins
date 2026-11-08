@@ -318,6 +318,7 @@ test('AC-20261105-09-2 slugOf is the first six words plus six hex of the whole s
   assert.ok(s.length <= 47)
   assert.notStrictEqual(S.slugOf('one two three four five six seven'), S.slugOf('one two three four five six eight'))
   assert.strictEqual(S.slugOf('  one two three four five six seven '), S.slugOf('one two three four five six seven'), 'surrounding blanks are not part of the symptom')
+  assert.strictEqual(S.slugOf('one two\nthree  four five six seven'), S.slugOf('one two three four five six seven'), 'a newline or a blank run is one blank: the one-line resume command keys the same run')
   const long = S.slugOf('internationalization-misconfiguration characteristically unreasonably overcomplicated extraordinarily x')
   assert.ok(long.length <= 47 && /-[0-9a-f]{6}$/.test(long) && !/--/.test(long), long)
   assert.match(S.slugOf('ログインできない'), /^fix-[0-9a-f]{6}$/, 'a symptom with no ascii words still gets a slug')

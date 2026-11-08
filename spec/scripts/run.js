@@ -278,9 +278,13 @@ function commit(state, ctx) {
   const adv = ((state.review && state.review.findings) || []).filter((f) => f.severity === 'advisory' && f.summary)
   if (adv.length && !state.advised) { // advisories reach someone: one fix item per run, bound to the spec if it has one
     const words = `advisories of ${s.stem}: ${adv.map((f) => f.summary.trim()).join('; ')}`
-    const item = Q.add(ctx.root, { type: 'fix', ...(s.rel ? { spec: s.rel } : {}), payload: words })
     state.advised = true
-    if (item) decide(state, `queued the review's advisories as one fix: ${Q.paste(ctx.root, item)}`)
+    if (state.fix && /^advisories of /.test(state.fix.symptom)) { // queuing again would chain without end
+      decide(state, `this fix is itself advisories, so these queue no more: ${adv.map((f) => f.summary).join('; ')}`)
+    } else {
+      const item = Q.add(ctx.root, { type: 'fix', ...(s.rel ? { spec: s.rel } : {}), payload: words })
+      if (item) decide(state, `queued the review's advisories as one fix: ${Q.paste(ctx.root, item)}`)
+    }
   }
   if (!state.lane) return go(state, 'MERGE')
   state.report = B.report(state, `✅ ${state.fix ? `fixed — ${state.fix.symptom}` : `${s.id} built and reviewed`} — committed on ${state.branch}; fanout lands it`, 'nothing needs you — fanout lands the lane')

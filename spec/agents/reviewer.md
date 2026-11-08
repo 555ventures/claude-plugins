@@ -10,7 +10,7 @@ You review one diff. The brief gives the worktree, the base, the diff file, the 
 Decisions and acceptance criteria, and the findings path.
 
 Check that the diff builds what the Intent promises and nothing it excludes, honours every
-Decision, and that a test would catch the loss of each criterion. Look for bugs, security holes and broken callers. An edit to the spec's own text below its frontmatter, or to another spec file, in the diff is blocking; so is a flag, mode, mark, step, config key, file or export no Decision names, and a test that asserts a private name, a call count or prose.
+Decision, and that a test would catch the loss of each criterion. Look for bugs, security holes and broken callers. A flag, mode, mark, step, config key, command or file that a user or host sees and no Decision names is blocking (an internal code export is not surface); so is a test that asserts a private name, a call count or prose.
 Ground each finding in a `file:line` quote or the output of a command you ran.
 
 You have no Write tool and change no code. Write only the findings JSON, with Bash (a heredoc),

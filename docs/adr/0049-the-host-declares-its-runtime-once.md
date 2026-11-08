@@ -45,6 +45,12 @@ address the admin — was a legitimate environment stage the plugin had no hook 
   trusts the host's dev reload between rounds) or at every GATE (the gated tree is the booted
   tree), and stops it at `closed` and at every ending of a run. A fixed url that already answers
   before the start is refused: it is serving some other tree.
+- **The Claude session owns the app's life** (added 2026-11-08 after the leaked-servers report).
+  The app inherits Claude Code's `CLAUDE_PID` and carries `SPEC_APP=<worktree>`; stop kills
+  every tagged process, so a server that detaches itself still dies. Every start first reaps
+  processes whose owning session is dead: tagged ones anywhere, untagged ones only under this
+  repo. No supervisor, TTL, registry or daemon: the process table is the record, read on entry.
+  Session hooks and worktree removal reuse the same reaper (specs/20261108/04).
 - **An environment stage exists.** A fresh prototype worktree is provisioned like a run
   worktree (`.worktreeinclude` files, `setupCommand`); `runtime.envCommand` runs once per
   worktree before the first boot, with `PORT` in its env and nothing else from the plugin.

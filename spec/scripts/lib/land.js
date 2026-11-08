@@ -3,7 +3,9 @@
 // commit (`status: done`), the rebase onto trunk and the gate; then the merge into the main checkout with the
 // configured strategy. The branch is a descendant of trunk when it merges, so it cannot conflict, and trunk
 // gets exactly the tree the gate passed; any merge failure is backed out (`reset --merge`). A merge that leaves its
-// spec's brief done (or superseded) with no open step outside specs ticks the brief's item too. No CLI.
+// spec's brief done (or superseded) with no open step outside specs ticks the brief's item too. Then every finished
+// spec becomes a stub in one `chore(spec): stub …` commit on the landed sha (lib/stub.js, ADR-0046), ungated:
+// `landed` is the gated tree. An in-place run merges nothing and stubs nothing. No CLI.
 //
 // land(main, {wt, branch, spec?, id, config, message, inPlace?, tick?}) →
 //   {landed: sha, kept?: reason, brief?}  merged, worktree removed (kept names why it stayed), queue ticked;
@@ -18,6 +20,7 @@ const host = require('./host')
 const Q = require('./queue')
 const pending = require('./pending')
 const work = require('./work')
+const stub = require('./stub')
 
 const refusal = (message, exit = 2) => Object.assign(new Error(message), { exit })
 
@@ -48,6 +51,7 @@ function land(main, o) {
       if (!m.merged) throw refusal(`${o.branch} was not merged into ${trunk} (backed out, ${main} is clean): ${m.reason}`, 1)
       landed = m.sha
     }
+    try { stub.sweep(main) } catch { /* never fails the landing: the next one sweeps again */ }
     pending.unmarkLane(o.wt)
     const rm = git.worktreeRemove(main, o.wt, { deleteBranch: o.branch })
     if (!rm.removed) kept = rm.reason

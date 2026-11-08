@@ -10,6 +10,7 @@ const { tmpdir, gitRepo, runNode, runBash, SPEC } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const pending = require(path.join(SPEC, 'scripts/lib/pending.js'))
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
+const stub = require(path.join(SPEC, 'scripts/lib/stub.js'))
 
 const REL = 'specs/20261104/01-thing.md'
 const SPEC_DOC = `---
@@ -108,7 +109,7 @@ test('AC-20261105-14-10 AC-20261105-07-13 the whole loop lands through one path:
   assert.match(done, /REVIEW → DONE[\s\S]*✅ 20261104\/01 built, reviewed and merged/)
   assert.ok(done.includes('📌 Users will notice: a thing appears'), done)
   assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n')
-  assert.strictEqual(h.g('log', '-1', '--format=%B', 'main^2').trim(), 'build(20261104/01): Thing', 'no evidence.md: the subject alone')
+  assert.strictEqual(h.g('log', '-1', '--format=%B', 'main~1^2').trim(), 'build(20261104/01): Thing', 'no evidence.md: the subject alone')
   assert.strictEqual(h.status(), 'done')
   assert.strictEqual(h.g('status', '--porcelain'), '')
   assert.ok(!fs.existsSync(h.wt) && h.state() === null && h.g('branch', '--list', 'spec/01-thing') === '')
@@ -117,15 +118,20 @@ test('AC-20261105-14-10 AC-20261105-07-13 the whole loop lands through one path:
 })
 
 for (const mergeStrategy of ['ff-only', 'merge-commit', 'squash']) {
-  test(`AC-20261107-02-2 under ${mergeStrategy} trunk moved: the worktree is rebased and gated, and trunk gets exactly that tree, no gate on main`, () => {
+  test(`AC-20261107-02-2 AC-20261107-01-6 under ${mergeStrategy} trunk moved: the worktree is rebased and gated, trunk gets exactly that tree, no gate on main, then one stub commit`, () => {
     const h = fixture({ cfg: { mergeStrategy } }); build(h)
     put(h.dir, 'other.txt', 'trunk moved\n'); h.g('add', '-A'); h.g('commit', '-qm', 'trunk moves')
     ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
     assert.strictEqual(h.g('show', 'main:other.txt'), 'trunk moved\n')
     assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n')
-    assert.strictEqual(h.g('rev-parse', 'main^{tree}').trim(), newestGateTree(h), 'the landed tree is the tree the last gate passed')
+    const landed = h.g('rev-parse', 'main~1').trim()
+    assert.strictEqual(h.g('rev-parse', `${landed}^{tree}`).trim(), newestGateTree(h), 'the landed tree is the tree the last gate passed')
     assert.ok(!h.gates().includes(fs.realpathSync(h.dir)), 'no gate ran on the main checkout: ' + h.gates().join(', '))
     assert.strictEqual(h.gates().length, 2, 'the build gate, then the rebased tree in the worktree')
+    assert.strictEqual(h.g('log', '-1', '--format=%s %P', 'main').trim(), `chore(spec): stub 20261104/01 ${landed}`, 'one stub commit on the landed sha')
+    assert.deepStrictEqual(h.g('show', '--name-only', '--format=', 'main').trim().split('\n'), [REL], 'it touches only the finished spec')
+    assert.strictEqual(st.readSpec(path.join(h.dir, REL)).frontmatter.text, landed)
+    assert.strictEqual(h.g('show', `${landed}:${REL}`), SPEC_DOC.replace('status: hardened', 'status: done'), 'the landed sha holds the full text')
     assert.strictEqual(h.g('status', '--porcelain'), '')
   })
 }
@@ -218,6 +224,27 @@ test('AC-20261107-02-5 AC-20261105-09-1 AC-20261105-09-8 AC-20261105-09-9 AC-202
   assert.ok(!fs.existsSync(st.fixRunPath(h.dir, slug)))
 })
 
+test('AC-20261107-01-5 /spec:fix on a stub in place briefs the Decisions and Assumptions of its text: sha, takes unmet --decision D1, edits no spec and commits fix(<id>): <symptom>; /spec:run refuses it as done', () => {
+  const h = fixture({ status: 'done' }); const full = h.g('rev-parse', 'HEAD').trim()
+  assert.strictEqual(stub.sweep(h.dir).paths[0], REL)
+  assert.ok(!fs.readFileSync(path.join(h.dir, REL), 'utf8').includes('## Decisions'), 'the spec on disk is a stub')
+  const symptom = 'the thing is sideways'
+  const fx = (...a) => runNode('scripts/run.js', [REL, '--fix', symptom, '--in-place', '--root', h.dir, ...a])
+  const contract = (out) => out.includes('## Decisions\n- D1: plain text, no JSON | no YAML — ADR-0001') && out.includes('- A1: the thing is small — if false: ask: shrink it | split it')
+  assert.ok(contract(ok(fx())), 'the builder brief carries the text at ' + full)
+  assert.match(ok(fx('--mark', 'unmet', '--decision', 'D1', '--why', 'Plain text cannot hold it.')), /BUILD → ESCALATE;/)
+  assert.match(ok(fx('--mark', 'escalate', 'retry')), /ESCALATE → BUILD;/)
+  put(h.dir, 'a.txt', 'fixed\n')
+  assert.match(ok(fx('--mark', 'built')), /BUILD → REVIEW;/)
+  assert.ok(contract(ok(fx())), 'the reviewer brief too')
+  const done = ok(fx('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(/✅ fixed — the thing is sideways/.test(done) && !done.includes('reverted spec text'), done)
+  assert.strictEqual(h.g('log', '-1', '--format=%s').trim(), `fix(20261104/01): ${symptom}`)
+  assert.deepStrictEqual(h.g('show', '--name-only', '--format=', 'HEAD').trim().split('\n'), ['a.txt'], 'no spec file in the fix')
+  const r = h.run()
+  assert.ok(r.status === 2 && r.stderr.includes('is already done — nothing to run'), r.stderr)
+})
+
 test('a fix whose cause needs a plan stops with a plan item; a fix offers no unmet, a spec run no needs-plan', () => {
   const h = fixture({ status: 'done' })
   const fx = (...a) => runNode('scripts/run.js', ['--fix', 'it breaks', '--in-place', '--root', h.dir, ...a])
@@ -258,7 +285,7 @@ test('AC-20261105-06-6 the three questions only: a needs-decision finding asks i
   put(path.join(h.dir, 'specs/20261104/01-thing.run'), 'evidence.md', 'migrations: 18\n')
   const done = ok(h.run('--mark', 'escalate', 'keep'))
   assert.match(done, /ESCALATE → DONE/)
-  const body = h.g('log', '-1', '--format=%B', 'main^2')
+  const body = h.g('log', '-1', '--format=%B', 'main~1^2')
   assert.ok(body.includes('Rulings:\n- kept: The thing is now shown on the home screen.') && body.includes('As built:\n- used a flat file') && body.includes('migrations: 18'), body)
   const spec = h.g('show', 'main:' + REL)
   assert.ok(!spec.includes('## As built') && !spec.includes('kept:'), 'the driver never writes the spec')
@@ -294,7 +321,7 @@ test('rules decide instead of asking: spec edits are reverted and gated again, a
   assert.ok(!h.g('ls-tree', '-r', '--name-only', 'main').split('\n').includes('.env'))
 })
 
-test('D9 off trunk only --in-place builds, there, and lands nothing on trunk', () => {
+test('D9 AC-20261107-01-6 off trunk only --in-place builds, there, and lands nothing on trunk; it stubs nothing', () => {
   const h = fixture(); h.g('checkout', '-qb', 'feature')
   const r = h.run()
   assert.strictEqual(r.status, 2)
@@ -310,6 +337,7 @@ test('D9 off trunk only --in-place builds, there, and lands nothing on trunk', (
   assert.match(h.g('log', '-1', '--format=%s', 'feature'), /^build\(20261104\/01\): Thing/)
   assert.strictEqual(h.g('rev-parse', 'main').trim(), h.g('rev-parse', 'feature~1').trim(), 'trunk is untouched')
   assert.strictEqual(h.g('status', '--porcelain').trim(), '?? stray.js', 'in place a spec commits its File Plan and the spec only')
+  assert.ok(!h.g('log', '--all', '--format=%s').includes('stub') && !('text' in st.readSpec(path.join(h.dir, REL)).frontmatter), 'no stub commit')
 })
 
 test('AC-20261105-08-5 regate re-runs an unchanged tree once at REPAIR, counting no repair; reviewed refuses malformed findings', () => {

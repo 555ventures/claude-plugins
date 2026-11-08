@@ -11,6 +11,7 @@ const { tmpdir, gitRepo, runNode, SPEC } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
 const pending = require(path.join(SPEC, 'scripts/lib/pending.js'))
+const stub = require(path.join(SPEC, 'scripts/lib/stub.js'))
 
 const SPEC_LIST = [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js'], ['03-gamma', 'src/a.js']]
 const P = (stem) => `specs/20261104/${stem}.md`
@@ -51,7 +52,7 @@ const newestGateTree = (h) => {
   return fs.readdirSync(d).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(d, f), 'utf8'))).sort((a, b) => a.ts.localeCompare(b.ts)).pop().tree
 }
 
-test('AC-20261105-16-23 AC-20261105-02-11 AC-20261105-02-15 AC-20261105-07-1 AC-20261105-10-3 AC-20261105-10-4 AUTO: two lanes go out, each ends DONE in its worktree and lands as it returns; REPORT counts what is left; PLAN picks the third', () => {
+test('AC-20261105-16-23 AC-20261105-02-11 AC-20261105-02-15 AC-20261105-07-1 AC-20261105-10-3 AC-20261105-10-4 AC-20261107-01-7 AUTO: two lanes go out, each ends DONE in its worktree and lands as it returns, a stub commit after it; REPORT counts what is left; PLAN picks the third', () => {
   const h = host({ queue: [...SPEC_LIST.map(([stem], i) => ({ id: 'q' + (i + 1), kind: 'spec', payload: P(stem), added: 'x' })), { id: 'q4', kind: 'prompt', type: 'fix', payload: 'login is slow', added: 'x' }] })
   const { plan, disp } = dispatch(h)
   assert.match(plan, /📌 Auto-picked batch: 2 lane\(s\)/)
@@ -64,7 +65,10 @@ test('AC-20261105-16-23 AC-20261105-02-11 AC-20261105-02-15 AC-20261105-07-1 AC-
   assert.strictEqual(h.run('--mark', 'returned', '--lane', '1').status, 2, 'a lane not at DONE cannot return done')
   assert.match(h.finish('01-alpha', 'src/a.js'), /REVIEW → DONE;[\s\S]*fanout lands it/)
   const sha1 = (/^lane 1 landed as ([0-9a-f]{40})$/m.exec(h.ok('--mark', 'returned', '--lane', '1')) || [])[1]
-  assert.strictEqual(sha1, h.g('rev-parse', 'main').trim(), 'it lands inside its own returned mark, as trunk\'s new head')
+  assert.strictEqual(sha1, h.g('rev-parse', 'main~1').trim(), 'it lands inside its own returned mark, under one stub commit')
+  assert.strictEqual(h.g('log', '-1', '--format=%s', 'main').trim(), 'chore(spec): stub 20261104/01')
+  assert.deepStrictEqual(h.g('show', '--name-only', '--format=', 'main').trim().split('\n'), [P('01-alpha')], 'the stub commit touches only the finished spec')
+  assert.strictEqual(st.readSpec(path.join(h.dir, P('01-alpha'))).frontmatter.text, sha1)
   assert.strictEqual(h.step(), 'WAIT', 'lane 2 is still out')
   h.finish('02-beta', 'src/b.js')
   const two = h.ok('--mark', 'returned', '--lane', '2')
@@ -73,7 +77,7 @@ test('AC-20261105-16-23 AC-20261105-02-11 AC-20261105-02-15 AC-20261105-07-1 AC-
   for (const f of ['src/a.js', 'src/b.js']) assert.ok(fs.existsSync(path.join(h.dir, f)))
   assert.strictEqual(st.readSpec(path.join(h.dir, P('01-alpha'))).frontmatter.status, 'done')
   assert.strictEqual(h.g('status', '--porcelain').trim(), '')
-  assert.strictEqual(h.g('rev-parse', 'main^{tree}').trim(), newestGateTree(h), 'trunk holds the tree the last landing gate passed')
+  assert.strictEqual(h.g('rev-parse', 'main~1^{tree}').trim(), newestGateTree(h), 'the landed sha holds the tree the last landing gate passed')
   assert.deepStrictEqual(Q.read(h.dir).items.map((i) => !!i.done), [true, true, false, false])
   assert.ok(!fs.existsSync(h.wt('01-alpha')) && !fs.existsSync(h.wt('02-beta')))
   const rep = h.ok()
@@ -116,7 +120,7 @@ test('AC-20261107-02-1 AC-20261105-02-12 AC-20261105-10-1 AC-20261105-10-2 AC-20
   assert.strictEqual(h.g('status', '--porcelain').trim(), '')
 })
 
-test('AC-20261105-07-5 AC-20261105-10-3 AC-20261105-10-5 a red rebased tree goes back to the lane\'s own GATE and lands once green; a second conflict against the same trunk stops the lane for the user', () => {
+test('AC-20261105-07-5 AC-20261105-10-3 AC-20261105-10-5 AC-20261107-01-7 a red rebased tree goes back to the lane\'s own GATE and lands once green; a second conflict against the same trunk stops the lane for the user', () => {
   const h = host({ testCommand: 'if test -f src/a.js && test -f src/b.js && test ! -f ok; then echo "FAIL: a and b collide"; exit 1; fi' })
   dispatch(h)
   h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
@@ -127,6 +131,7 @@ test('AC-20261105-07-5 AC-20261105-10-3 AC-20261105-10-5 a red rebased tree goes
   const run2 = st.readRun(path.join(h.wt('02-beta'), P('02-beta')))
   assert.deepStrictEqual([run2.step, run2.base], ['GATE', head], 'back to its own run at GATE on the new base')
   assert.ok(!fs.existsSync(path.join(h.dir, 'src/b.js')) && h.g('rev-parse', 'main').trim() === head, 'red never reaches trunk')
+  assert.strictEqual(h.g('log', '-1', '--format=%s', 'main').trim(), 'chore(spec): stub 20261104/01', 'and makes no stub commit: lane 1\'s is the last')
   assert.match(h.ok(), /lane 2 gate red after rebase: FAIL[\s\S]*lane 2 — spec-02-beta: sent-back · gate red after rebase/)
   h.ok('--mark', 'resent'); fs.writeFileSync(path.join(h.wt('02-beta'), 'ok'), '')
   assert.match(h.lok('02-beta'), /^▶ REVIEW/); h.lok('02-beta', '--mark', 'reviewed', '--file', h.findings())
@@ -211,7 +216,7 @@ test('AC-20261107-02-6 a lane that needs spec Y holds on its queue item until Y 
 
 const FIXQ = (extra) => [{ id: 'q1', kind: 'prompt', type: 'fix', ...extra, added: 'x' }]
 
-test('AC-20261107-02-4 AC-20261107-02-5 AC-20261105-12-8 AC-20261105-07-2 AC-20261105-07-3 AC-20261105-07-4 AC-20261105-09-10 AC-20261105-09-11 a fix item is a lane: the advisories item bound to a done spec, and a spec-less fix, each land as fix(…) with no spec file written; open items left end REPORT nothing runnable', () => {
+test('AC-20261107-02-4 AC-20261107-02-5 AC-20261105-12-8 AC-20261105-07-2 AC-20261105-07-3 AC-20261105-07-4 AC-20261105-09-10 AC-20261105-09-11 AC-20261107-01-7 a fix item is a lane: the advisories item bound to a done spec, and a spec-less fix, each land as fix(…) with no spec file written, a stub commit after the first; open items left end REPORT nothing runnable', () => {
   const h = host({ lanes: 2, status: { '01-alpha': 'done' }, specs: [['01-alpha', 'src/a.js']],
     queue: [...FIXQ({ spec: P('01-alpha'), payload: 'advisories of 01-alpha: tidy it' }), { id: 'q2', kind: 'prompt', type: 'fix', payload: 'login is slow', added: 'x' }] })
   const { plan, disp } = dispatch(h)
@@ -227,7 +232,9 @@ test('AC-20261107-02-4 AC-20261107-02-5 AC-20261105-12-8 AC-20261105-07-2 AC-202
     fs.writeFileSync(path.join(w, path.basename(w) + '.txt'), 'fixed\n')
     fx(w, spec, sym, '--mark', 'built'); fx(w, spec, sym, '--mark', 'reviewed', '--file', h.findings())
   }
-  h.ok('--mark', 'returned', '--lane', '1')
+  const sha1 = (/^lane 1 landed as ([0-9a-f]{40})$/m.exec(h.ok('--mark', 'returned', '--lane', '1')) || [])[1]
+  assert.strictEqual(h.g('log', '-1', '--format=%s %P', 'main').trim(), `chore(spec): stub 20261104/01 ${sha1}`, 'the done spec is stubbed on the landed sha')
+  assert.strictEqual(st.readSpec(path.join(h.dir, P('01-alpha'))).frontmatter.text, sha1)
   assert.ok(!h.ok('--mark', 'returned', '--lane', '2', '--json').includes('landed as'), '--json prints no landing line')
   assert.strictEqual(h.step(), 'REPORT')
   assert.ok(h.ok().includes(`- merged fix-${slug} as ${h.g('rev-parse', 'main').trim()}; queue item ticked`) && !h.g('branch', '--list', 'fix/*').trim())
@@ -235,10 +242,33 @@ test('AC-20261107-02-4 AC-20261107-02-5 AC-20261105-12-8 AC-20261105-07-2 AC-202
   const subjects = h.g('log', '--format=%s', 'main').split('\n')
   assert.ok(subjects.includes('fix(20261104/01): advisories of 01-alpha: tidy it') && subjects.includes(`fix(${slug}): login is slow`), subjects.join('\n'))
   assert.ok(!subjects.some((s) => /done$/.test(s)), 'a fix makes no done commit')
-  assert.strictEqual(h.g('diff', '--name-only', h.g('rev-list', '--max-parents=0', 'main').trim(), 'main', '--', 'specs').trim(), '', 'no spec file written')
+  for (const c of h.g('log', '--format=%H %s', 'main').split('\n').filter((l) => / fix\(/.test(l)).map((l) => l.split(' ')[0])) {
+    assert.ok(!h.g('show', '--name-only', '--format=', c).includes('specs/'), 'no spec file written by ' + c)
+  }
+  assert.strictEqual(h.g('diff', '--name-only', h.g('rev-list', '--max-parents=0', 'main').trim(), sha1, '--', 'specs').trim(), '', 'none up to the landed sha')
   assert.ok(Q.read(h.dir).items.every((i) => i.done) && !fs.existsSync(w1) && !fs.existsSync(w2))
   Q.add(h.dir, { payload: 'pick a database', type: 'decide' }); Q.add(h.dir, { payload: 'remember the footer' }); const rep = h.ok()
   assert.ok(rep.includes('Next: nothing runnable — 2 open item(s) need you: /spec:queue list') && !rep.includes('queue drained'), rep)
+})
+
+test('AC-20261107-01-5 a fix lane bound to a stub briefs the Decisions of its text: sha, takes unmet --decision D1, and lands fix(…) with no spec file and no stub commit', () => {
+  const sym = 'alpha is slow'
+  const h = host({ lanes: 1, status: { '01-alpha': 'done' }, specs: [['01-alpha', 'src/a.js']], queue: FIXQ({ spec: P('01-alpha'), payload: sym }) })
+  assert.deepStrictEqual(stub.sweep(h.dir).paths, [P('01-alpha')])
+  const head = h.g('rev-parse', 'main').trim()
+  dispatch(h)
+  const w = h.wt('01-alpha', 'fix')
+  const fx = (...a) => { const r = runNode('scripts/run.js', [P('01-alpha'), '--fix', sym, '--root', w, ...a]); assert.strictEqual(r.status, 0, r.stderr); return r.stdout }
+  assert.ok(fx().includes('## Decisions\n- D1: plain — simple'), 'the builder brief carries the full text')
+  assert.match(fx('--mark', 'unmet', '--decision', 'D1', '--why', 'Plain is too slow.'), /PENDING_QUESTION/)
+  pending.answerPending(w, 'retry'); assert.match(fx(), /^▶ BUILD/)
+  fs.writeFileSync(path.join(w, 'slow.txt'), 'fixed\n'); fx('--mark', 'built')
+  assert.ok(fx().includes('## Decisions\n- D1: plain — simple'), 'the reviewer brief too')
+  assert.ok(!fx('--mark', 'reviewed', '--file', h.findings()).includes('reverted spec text'))
+  const sha = (/^lane 1 landed as ([0-9a-f]{40})$/m.exec(h.ok('--mark', 'returned', '--lane', '1')) || [])[1]
+  assert.strictEqual(sha, h.g('rev-parse', 'main').trim(), 'nothing left to stub: the landed sha is trunk\'s head')
+  assert.deepStrictEqual(h.g('diff', '--name-only', head, sha).trim().split('\n'), ['slow.txt'])
+  assert.ok(h.g('log', '--format=%s', `${head}..${sha}`).split('\n').includes(`fix(20261104/01): ${sym}`))
 })
 
 test('AC-20261105-14-17 AC-20261105-12-8 AC-20261105-12-7 AC-20261105-16-7 PLAN: dependencies, a prototype spec, an explicit list, an unknown flag, the queue rows when nothing runs, drained, and off trunk', () => {

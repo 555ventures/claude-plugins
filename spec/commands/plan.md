@@ -8,7 +8,8 @@ effort: high
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once. Turn `$ARGUMENTS` into a locked spec; a
 prototype contract's behaviour pins become acceptance criteria.
 
-1. Read the brief and the specs already marked `brief: NN`, then `ls docs/adr` and open every
+1. Read the brief and its specs that are not done yet (a finished spec's text is
+   `git show <text>:<path>`), then `ls docs/adr` and open every
    ADR the brief cites or whose title touches the change, following any `superseded by`. A
    live ADR beats the brief's wording. Then explore the code until you can name, for each
    Decision, the existing function it changes, what it replaces and what it makes dead (a DELETE

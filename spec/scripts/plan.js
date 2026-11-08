@@ -6,6 +6,7 @@ const path = require('path')
 const { readSpec, writeStatus, writeText, readText, readProto, specsCiting } = require('./lib/state')
 const { isSpecText, decisionRows } = require('./lib/spec')
 const { retiredRefusal } = require('./lib/criteria')
+const { isStub } = require('./lib/stub')
 const Q = require('./lib/queue')
 const N = require('./lib/next')
 const git = require('./lib/git')
@@ -32,7 +33,8 @@ function create(root, slug) {
 }
 
 // The behaviour pins of a prototype contract that no AC of this spec, or of an earlier locked spec citing the
-// same stem, ends with `(pin pN)`. Returns {stem, contract, uncovered}; null for a spec with no `prototype:`.
+// same stem, ends with `(pin pN)` — a stub's from its `acs:` entries. Returns {stem, contract, uncovered}; null for a
+// spec with no `prototype:`.
 const CITE = /\(pin (p\d+)\)/g
 function pinCoverage(root, file, s) {
   const stem = s.frontmatter.prototype
@@ -43,7 +45,9 @@ function pinCoverage(root, file, s) {
   const cite = (acs) => { for (const a of acs) for (const m of a.text.matchAll(CITE)) cited.add(m[1]) }
   cite(s.acs)
   for (const c of specsCiting(root, stem)) {
-    if (path.resolve(root, c.rel) !== file && ['hardened', 'implementing', 'done'].includes(c.status)) cite(readSpec(path.resolve(root, c.rel)).acs)
+    if (path.resolve(root, c.rel) === file || !['hardened', 'implementing', 'done'].includes(c.status)) continue
+    const d = readSpec(path.resolve(root, c.rel))
+    cite(isStub(d.frontmatter) ? [].concat(d.frontmatter.acs || []).map((text) => ({ text })) : d.acs)
   }
   const uncovered = (contract.pins || []).filter((p) => p.status === 'active' && p.kind === 'behaviour' && !cited.has(p.id)).map((p) => p.id)
   return { stem, contract, uncovered }

@@ -29,7 +29,9 @@ driver builds only with `--in-place`, and then lands nothing on trunk.
   and mark `escalate <label>`; if the user dismisses it, mark `dismissed` (the run stops and the
   question is queued as a decide item). You record the user's pick; you never choose.
 - **STOPPED**: the run ended by a rule (gate red past the repair cap, blocking past the fix cap,
-  amend, a dismissed question) with its item queued; print the report.
+  a dismissed question) with its item queued; print the report. A run that picked `amend` waits, committed as
+  wip, for the spec: print `/spec:plan <spec>`; once it is locked with changed text on trunk (in place, on the
+  branch), the same `/spec:run <spec>` rebases, takes the amended text and goes on through GATE and REVIEW.
 
 Everything else is decided by a rule and printed as a 📌 line: spec text a build edits is
 reverted and gated again, a file that looks like a secret stays out of the commit, rulings and
@@ -40,5 +42,7 @@ the driver; it gates and reviews the result again. Your main checkout is never l
 When a builder replies that a Decision cannot be honoured, mark `unmet --decision <id> --why <text>`;
 when an Assumption with an `ask` arm proved false, mark `unmet --assumption <id> [--why <text>]`
 (a written fallback is the builder's to apply). A build that needs another spec done first marks
-`after --on <spec>`; it goes on by itself once that spec is done. As a lane, stop and return on
+`after --on <spec>`; it goes on by itself once that spec is done. An unmet Decision asks `amend`
+(first, recommended), `retry` (only until Opus has had its turn) and `park`; a question with one answer left
+is not asked: the run parks and says so in a 📌 line. As a lane, stop and return on
 `PENDING_QUESTION`; a lane ends at DONE in its worktree and fanout lands it.

@@ -5,7 +5,9 @@
 // plans again. One lane shape: {spec | symptom, worktree, prompt}. A lane's own run.js builds, gates, reviews and commits;
 // it ends DONE in its worktree and fanout lands it through lib/land.js, the path a solo run takes. A lane that needs another
 // spec ends STOPPED {why: 'after'}: its queue item holds behind that spec (the queue's own `after`) and PLAN re-picks it
-// on its kept worktree once that spec is done. State: <git-common-dir>/spec-fanout.json. The queue: lib/queue.js only.
+// on its kept worktree once that spec is done; one that picks amend ends STOPPED {why: 'amend'}: held on its kept
+// worktree (its run state is the hold) until the amended spec is locked on trunk.
+// State: <git-common-dir>/spec-fanout.json. The queue: lib/queue.js only.
 
 const fs = require('fs')
 const path = require('path')
@@ -31,7 +33,8 @@ const specDoc = (file) => { try { return st.readSpec(file) } catch { return null
 // A lane's run state: <wt>/<spec>.run, or a spec-less fix's in the worktree's own git dir; null before the worktree exists.
 const runDirOf = (root, lane) => (!fs.existsSync(wtAbs(root, lane)) ? null : lane.spec ? st.runDir(path.join(wtAbs(root, lane), lane.spec)) : st.fixRunDir(wtAbs(root, lane), st.slugOf(lane.symptom)))
 const laneRun = (root, lane) => { const d = runDirOf(root, lane); return d && st.readJson(path.join(d, 'state.json')) }
-const stoppedWhy = (run) => (run && run.step === 'STOPPED' && run.why !== 'after' ? run.why : null) // a lane that ended without landing
+// a lane that ended without landing (after and amend are waits that end by themselves)
+const stoppedWhy = (run) => (run && run.step === 'STOPPED' && !['after', 'amend'].includes(run.why) ? run.why : null)
 
 function findLane(s, flags) {
   const lane = (s.batch || []).find((l) => l.id === String(flags.lane))
@@ -46,6 +49,7 @@ function findLane(s, flags) {
 function eligible(root, opts = {}) {
   const ok = []; const held = []; const waited = []; const laneOf = new Map(); const cache = {}
   const open = Q.pending(root) // an unmigrated queue stops here, exit 2
+  const trunk = st.readConfig(root).trunk
   const d = deriveWork(root)
   let stopAt = null
   const wait = (spec, why) => waited.push({ spec, why })
@@ -68,6 +72,9 @@ function eligible(root, opts = {}) {
     if (status !== 'hardened') { (EXPLICIT.length ? waited : held).push({ spec, why: `status is ${status}, not hardened` }); continue }
     if (doc.frontmatter.prototype) { wait(spec, 'stops at LOOK for you — /spec:run it'); continue } // the app must outlive the agent
     if (stoppedWhy(run)) { wait(spec, ended(wt, run)); continue }
+    if (run && run.step === 'STOPPED' && run.why === 'amend' && !st.resumes(wt, run, trunk)) {
+      wait(spec, `its lane waits for the amended spec — /spec:plan ${spec}, then /spec:fanout`); continue
+    }
     if (pending.isLane(wt)) { wait(spec, `already in a lane at ${path.relative(root, wt)}`); continue }
     const deps = [].concat(doc.frontmatter.depends_on || []).map(String)
     const entry = d.entries.find((e) => e.path === spec)
@@ -232,6 +239,10 @@ function deriveMerge(s, ctx) {
   return { name: 'MERGE', auto: (x) => ({ ...x, step: x.batch.some((l) => l.status === 'stopped') ? 'RELAY' : 'REPORT' }) }
 }
 
+const heldWhy = (l) => (l.why === 'amend'
+  ? `held ${nameOf(l)} — amend: /spec:plan ${l.on}; PLAN re-picks it on its worktree once the amended spec is locked`
+  : `held ${nameOf(l)} — after ${l.on}; PLAN re-picks it on its worktree once that is done`)
+
 function deriveReport(s, ctx) {
   const by = (st0) => s.batch.filter((l) => l.status === st0)
   const merged = by('merged'); const held = by('held'); const gone = by('dismissed')
@@ -241,6 +252,8 @@ function deriveReport(s, ctx) {
   const fixes = left.filter((p) => p.symptom !== undefined).length; const opens = Q.pending(ctx.root).length
   const cost = (l) => (l.reruns || l.lockWaitMs >= 1000 ? ` (${l.reruns || 0} rerun(s), ${Math.round((l.lockWaitMs || 0) / 1000)}s slot wait)` : '')
   const paid = merged.filter(cost); const sum = (k) => paid.reduce((n, l) => n + (l[k] || 0), 0)
+  const waitS = Math.round(sum('lockWaitMs') / 1000)
+  const load = `load: ${sum('reruns')} rerun(s), ${waitS}s of slot waits across the batch`
   const briefs = [...new Map((s.briefs || []).map((b) => [b.num, b])).values()]
   const trunk = (l) => (specDoc(path.join(ctx.root, l.spec)) || { frontmatter: {} }).frontmatter.status || 'missing' // a dismissed spec lane: what trunk holds
   return {
@@ -252,7 +265,8 @@ function deriveReport(s, ctx) {
         ...s.batch.flatMap((l) => [...(l.status === 'merged' && l.notice ? [`Users will notice: ${l.notice}`] : []),
           ...(l.decided || [])].map((d) => `📌 lane ${l.id} (${nameOf(l)}): ${d}`)),
         ...briefs.filter((b) => b.closed).map((b) => '📌 ' + briefClosed(b))],
-      warns: [...(paid.length ? [`load: ${sum('reruns')} rerun(s), ${Math.round(sum('lockWaitMs') / 1000)}s of slot waits across the batch`] : []), ...merged.filter((l) => l.kept).map((l) => l.kept), ...held.map((l) => `held ${nameOf(l)} — after ${l.on}; PLAN re-picks it on its worktree once that is done`),
+      warns: [...(paid.length ? [load] : []),
+        ...merged.filter((l) => l.kept).map((l) => l.kept), ...held.map(heldWhy),
         ...briefs.filter((b) => !b.closed && b.open.length).map(briefOpen),
         ...gone.map((l) => `${l.ended ? `stopped ${nameOf(l)} — ${l.ended};` : `dismissed ${nameOf(l)} —`} worktree ${l.discarded ? `and branch removed (wip ${l.wip || 'none'})` : `kept at ${l.worktree}${l.ended || l.symptom !== undefined ? '' : `, spec left hardened in the lane${trunk(l) === 'hardened' ? '' : ` (trunk: ${trunk(l)})`}`}`}`)],
       next: left.length ? `${left.length - fixes} spec(s) and ${fixes} fix(es) left — /clear, then /spec:fanout to continue` : opens ? `nothing runnable — ${opens} open item(s) need you: /spec:queue list` : 'nothing needs you — queue drained',
@@ -299,11 +313,14 @@ const steps = {
     const q = pending.readPending(wt); const run = laneRun(root, lane) || {}
     lane.decided = run.decided || lane.decided; lane.notice = run.notice || lane.notice
     if (flags.stopped || (q && !q.answer)) return void Object.assign(lane, { status: 'stopped', question: q && !q.answer ? { question: q.question, options: q.options, kind: q.kind } : null, reason: typeof flags.stopped === 'string' ? flags.stopped : null })
-    if (run.step === 'STOPPED' && run.why === 'after') { // its queue item holds behind the spec it needs: PLAN re-picks it once that is done
-      const after = { spec: run.on }
-      if (lane.symptom !== undefined) Q.hold(root, (i) => i.id === lane.item, after); else Q.hold(root, (i) => i.kind === 'spec' && rel(root, i.payload) === lane.spec, after, { payload: lane.spec })
+    if (run.step === 'STOPPED' && ['after', 'amend'].includes(run.why)) { // held on its kept worktree
+      if (run.why === 'after') { // its queue item holds behind the spec it needs
+        const after = { spec: run.on }
+        if (lane.symptom !== undefined) Q.hold(root, (i) => i.id === lane.item, after)
+        else Q.hold(root, (i) => i.kind === 'spec' && rel(root, i.payload) === lane.spec, after, { payload: lane.spec })
+      } // amend: the run state in the worktree is the hold, a queue `after` on its own spec would wait for done
       pending.unmarkLane(wt)
-      return void Object.assign(lane, { status: 'held', on: run.on })
+      return void Object.assign(lane, { status: 'held', on: run.on, ...(run.why === 'amend' ? { why: 'amend' } : {}) })
     }
     if (run.step === 'STOPPED') { pending.unmarkLane(wt); return void Object.assign(lane, { status: 'dismissed', ended: run.why }) }
     if (git.rebasing(wt)) refuse(`lane ${lane.id} (${nameOf(lane)}) still has a rebase in progress — re-dispatch it, or mark dismissed --lane ${lane.id}`)

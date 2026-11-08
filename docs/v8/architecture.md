@@ -123,7 +123,7 @@ same machine on `lib/spec.js` `fixDoc`: no spec file, one reproduce-first criter
 | COMMIT | one build commit in the worktree; its message carries the rulings, the `as-built.md` lines and `evidence.md`; a secret-looking file stays out (📌); advisories become one `type: fix` item bound to the spec (📌); in place a spec commits only its File Plan, a fix only what it touched; a lane ends DONE here | nothing | (auto) |
 | MERGE | `lib/land.js`: status done + commit, `rebaseOnto` trunk, gate the worktree, `mergeBack` per `mergeStrategy` (`reset --merge` on any failure), then `stub.sweep(main)` stubs every finished spec in one `chore(spec): stub …` commit after the landed sha (not in place, never gated: `text:` is that sha), worktree removed, queue ticked; a conflict leaves the rebase in the worktree and the rebase guard prints it; a red rebased tree goes back to GATE | resolves a conflict in the worktree | (auto) |
 | DONE | prints the report: 📌 `Users will notice:` and every decided line | nothing | — |
-| STOPPED `{why}` | a rule's ending: a cap, `amend` (spec to draft), a dismissed question (a `decide` item), `needs-plan` (a fix; a plan item), `after` (waits for another spec, goes on by itself once trunk has it done) | nothing | — |
+| STOPPED `{why}` | a rule's ending: a cap, a dismissed question (a `decide` item), `needs-plan` (a fix; a plan item); a wait that ends by itself: `after` (another spec, once trunk has it done) and `amend` (its own spec, once trunk holds it `hardened` with text unlike the build's base; the run rebases, takes that text and goes to GATE) | nothing | — |
 
 A lane (sub-agent run under fanout) never asks: it writes `pending-question.json`, prints
 `PENDING_QUESTION`, exits 0. The driver never writes the spec beyond its status line.
@@ -145,7 +145,8 @@ DISPATCH makes or attaches each worktree, marks it a lane and prints one Agent c
 once through `lib/land.js` (the solo path: rebase, gate and merge in the worktree); a conflict sends it back
 (`sent-back`, the rebase left for its own run; a second one on the same trunk stops it); a red rebased tree sends
 it back to its own GATE; STOPPED `after` holds it on its queue item (`Q.hold`) for a later PLAN on its kept
-worktree; any other STOPPED ends it. RELAY: the three question kinds, verbatim; `answered --lane --label`, or
+worktree, and STOPPED `amend` holds it on that worktree with no queue gate (PLAN waits it until `resumes`
+says the amended spec is locked); any other STOPPED ends it. RELAY: the three question kinds, verbatim; `answered --lane --label`, or
 `dismissed --lane` (the lane's own run parks with a `decide` item; no label is recorded). REPORT: what merged (a lane's reruns and slot
 waits, summed in one `load:` line), each answered question's text, every lane's 📌 decided lines, and each lane
 that stopped, was held or was dismissed (a dismissed spec lane says what trunk holds).
@@ -314,6 +315,10 @@ Later builders: use these, do not re-derive them.
 - **`after`.** `run.js --mark after --on <spec>` commits the work (`wip(spec):`, folded into the build commit
   later) and ends STOPPED `{why: 'after', on, from}`; fanout's `returned` holds the queue item behind `on`
   (`Q.hold`), and once trunk has `on` done the lane's run rebases onto trunk and goes back to `from` by itself.
+  `amend` is the same shape with `on` = its own spec: the worktree is committed as wip with the spec restored to
+  the base's, trunk's file is never written, and `state.resumes` (`hardened` with a blob unlike the base's) ends the
+  wait; the resume rebases, writes trunk's text into the worktree copy and goes to GATE, so the criteria check and the
+  review read the amended spec.
 - **The turn ends at REPORT.** `reported` clears the state; the next bare run plans.
 - **Discard, applied marks, lost state.** `dismissed --lane N --discard` removes the worktree and branch and prints
   the wip commit. A mark whose effect is already in the state exits 0 (`applied`). With `spec-fanout.json` missing while

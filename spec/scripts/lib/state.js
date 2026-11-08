@@ -106,6 +106,20 @@ function liveRun(root, rel) {
 // `implementing` while a live sidecar says it is being built; every other status is the frontmatter's.
 const specState = (root, rel, status) => (status === 'hardened' && liveRun(root, rel) ? 'implementing' : status)
 
+// Does a STOPPED run's wait end? `ref` is the branch the spec lands on. An `after` run waits for its spec to be `done`
+// there; an `amend` run (on = its own spec) for it to be `hardened` again with a blob unlike the one the build began
+// from (`run.at`, a commit, when the run stopped in place; else `run.base`): the lock commit, not the status alone.
+function resumes(cwd, run, ref) {
+  const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
+  const shown = git('show', `${ref}:${run.on}`)
+  if (shown.status !== 0) return false
+  const status = spec.parseFrontmatter(shown.stdout.replace(/\r\n/g, '\n')).frontmatter.status
+  if (run.why === 'after') return status === 'done'
+  if (run.why !== 'amend' || status !== 'hardened') return false
+  const now = git('rev-parse', `${ref}:${run.on}`); const was = git('rev-parse', `${run.at || run.base}:${run.on}`)
+  return now.status === 0 && (was.status !== 0 || now.stdout.trim() !== was.stdout.trim())
+}
+
 // ---- git common dir files ----------------------------------------------------------------
 
 function gitDirOf(root, which) {
@@ -207,7 +221,7 @@ module.exports = {
   writeText, writeJson, readJson, readText,
   DEFAULTS, readConfig, writeConfig, configPath, bootCommandOf,
   readSpec, writeStatus,
-  runDir, runPath, readRun, writeRun, clearRun, liveRun, specState,
+  runDir, runPath, readRun, writeRun, clearRun, liveRun, specState, resumes,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout, readRelease, writeRelease,
   readProto, writeProto, protoV7, protoDir, specsCiting, readMocks, writeMocks, readGenesis, writeGenesis,
 }

@@ -245,6 +245,22 @@ test('AC-20261105-14-8 a dropped pin needs no AC; an earlier hardened citing spe
   assert.ok(o.stderr.includes('is a v7 file — run /spec:migrate'), o.stderr)
 })
 
+test('AC-20261107-01-10 an earlier done citing spec that is a stub covers a pin through its acs: cites; without the cite the lock refuses naming p3', () => {
+  const { d } = protoHost()
+  const a = protoSpec(d, 'first', ['WHEN x THE SYSTEM SHALL y (pin p3).'])
+  const stubbed = (acs) => fs.writeFileSync(a, `---\ndate: 2026-11-07\nstatus: done\nprototype: inv\ntext: 0123abcd\nacs: ${acs}\n---\n\n# First\n`)
+  stubbed('[AC-X-01-2 (pin p3)]')
+  const b = protoSpec(d, 'second', ['WHEN x THE SYSTEM SHALL z (pin p1).'])
+  const r = plan(d, 'lock', b)
+  assert.strictEqual(r.status, 0, 'the stub covers p3: ' + r.stderr)
+  stubbed('[AC-X-01-2]')
+  const c = protoSpec(d, 'third', ['WHEN x THE SYSTEM SHALL w (pin p1).'])
+  const m = plan(d, 'lock', c)
+  assert.strictEqual(m.status, 2)
+  assert.ok(m.stderr.includes('behaviour pins without an AC: p3 —'), m.stderr)
+  assert.strictEqual(status(c), 'draft')
+})
+
 test('AC-20261105-14-8 a spec without prototype: locks as before', () => {
   const { d } = protoHost()
   assert.strictEqual(plan(d, 'lock', fresh(d, 'plain')).status, 0)

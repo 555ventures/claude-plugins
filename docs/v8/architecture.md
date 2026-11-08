@@ -56,7 +56,7 @@ per file; writes are atomic (tmp + rename).
 | File | API | Notes |
 |---|---|---|
 | `.claude/spec.config.json` | `readConfig(root)` | Keys in §3. Missing file → `{}` with defaults applied. |
-| `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, title, sections, intent, filePlan, acs, markers}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. |
+| `specs/YYYYMMDD/NN-slug.md` | `readSpec(path)` → `{frontmatter, body, title, sections, intent, filePlan, acs, markers}`; `writeStatus(path, status)` | Frontmatter parse is the only markdown parse in the plugin. A done or superseded spec is a stub (`lib/stub.js`): frontmatter plus `text: <sha>` and `acs: [ids (pin pN)]`, title and `## Goal`; `git show <text>:<path>` prints the full text. |
 | `<spec>.run/state.json` | `readRun(spec)`, `writeRun(spec, state)`, `clearRun(spec)` | `<spec>` = spec path minus `.md`. One sidecar per in-flight spec. Gitignored (`specs/**/*.run/`). Shape in §4. |
 | `<git-common-dir>/spec-queue.json` | `lib/queue.js`: `read(root)`, `write(root, q)`, `add`, `tick`, `reconcile`, `paste` — the only owner; `state.js` holds no queue code | `{version: 3, seq, items[]}`; item `{id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?}` (`type` plan\|prototype\|fix\|decide, prompt only, the only carrier of the command; `spec?` only on `type: fix`, the bound spec; `payload` bare text; `after` `{brief: "NN"}` or `{spec: "specs/…md"}`). Strict read: another version is refused, naming `/spec:migrate`. |
 | `<git-common-dir>/spec-fanout.json` | `readFanout`, `writeFanout` | `{step, batch: [{spec, worktree, branch, status, question?}], started}` |
@@ -121,7 +121,7 @@ same machine on `lib/spec.js` `fixDoc`: no spec file, one reproduce-first criter
 | ESCALATE | one of three questions, in the agent's own words: `assumption` (an `ask` arm proved false), `decision` (a `needs-decision` finding), `unmet` (a Decision the build cannot keep); a lane writes it to `pending-question.json` | asks the user | `escalate <label>` / `dismissed` |
 | LOOK | prototype specs only: the boot line, `👀 look — <publicUrl or url>`, the look pins and pictures | prints them, ends the turn | `looked` / `look-failed --why <reply>` |
 | COMMIT | one build commit in the worktree; its message carries the rulings, the `as-built.md` lines and `evidence.md`; a secret-looking file stays out (📌); advisories become one `type: fix` item bound to the spec (📌); in place a spec commits only its File Plan, a fix only what it touched; a lane ends DONE here | nothing | (auto) |
-| MERGE | `lib/land.js`: status done + commit, `rebaseOnto` trunk, gate the worktree, `mergeBack` per `mergeStrategy` (`reset --merge` on any failure), worktree removed, queue ticked; a conflict leaves the rebase in the worktree and the rebase guard prints it; a red rebased tree goes back to GATE | resolves a conflict in the worktree | (auto) |
+| MERGE | `lib/land.js`: status done + commit, `rebaseOnto` trunk, gate the worktree, `mergeBack` per `mergeStrategy` (`reset --merge` on any failure), then `stub.sweep(main)` stubs every finished spec in one `chore(spec): stub …` commit after the landed sha (not in place, never gated: `text:` is that sha), worktree removed, queue ticked; a conflict leaves the rebase in the worktree and the rebase guard prints it; a red rebased tree goes back to GATE | resolves a conflict in the worktree | (auto) |
 | DONE | prints the report: 📌 `Users will notice:` and every decided line | nothing | — |
 | STOPPED `{why}` | a rule's ending: a cap, `amend` (spec to draft), a dismissed question (a `decide` item), `needs-plan` (a fix; a plan item), `after` (waits for another spec, goes on by itself once trunk has it done) | nothing | — |
 
@@ -256,6 +256,7 @@ Later builders: use these, do not re-derive them.
   `planRows`, `inPlan`, `decisionRows`, `parseAssumptions`, `globToRe`, `isSpecText`, and `fixDoc(symptom, spec?)`.
 - `briefs.js`: the text run.js prints — builder, reviewer, question, look and rebase briefs, the report, the commit message.
 - `land.js`: `land(main, {wt, branch, spec?, id, config, message, inPlace?, tick?})` → `{landed}` | `{conflicts}` | `{red, base}`.
+- `stub.js`: the one owner of the stub shape (no CLI): `isStub(frontmatter)` (`text:` of 7–64 hex), `stubOf(text, sha)`, `fullText(cwd, rel, sha)` (`git show <sha>:<rel>`; a sha not in the clone is exit 2), `readFull(cwd, rel)` (the `readSpec` shape of the full text, stub or not), `sweep(root, {dry})` → `{paths, retired, sha}` (done/superseded, tracked, unedited specs; one path-limited `--no-verify` commit).
 - `state.js`: everything in §2 (`readSpec` reads the file, `spec.js` parses it) plus `writeConfig(root, cfg)`, `DEFAULTS`, `gitCommonDir(root)`,
   `writeJson/writeText/readJson/readText` (atomic tmp+rename). `readConfig` merges defaults key by
   key, objects one level deep. `intent` = `{asked, build[], notTouch[], notice, lose, architecture: false | true |

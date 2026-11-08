@@ -13,7 +13,7 @@ const { makeDriver, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state'); const S = require('./lib/spec'); const B = require('./lib/briefs'); const Q = require('./lib/queue')
 const host = require('./lib/host'); const git = require('./lib/git'); const pending = require('./lib/pending')
 const { land, briefClosed, briefOpen } = require('./lib/land'); const { render } = require('./lib/report')
-const criteria = require('./lib/criteria')
+const criteria = require('./lib/criteria'); const stub = require('./lib/stub')
 
 const PLUGIN = path.resolve(__dirname, '..')
 const REPAIR_CAP = 2; const FIX_CAP = 1; const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
@@ -36,7 +36,9 @@ const ownOf = (state) => state.spec && state.spec.split(path.sep).join('/')
 const runFile = (ctx, name) => { const s = specInfo(ctx); return path.join(s.abs ? st.runDir(s.abs) : st.fixRunDir(ctx.root, s.slug), name) }
 const runText = (ctx, name) => st.readText(runFile(ctx, name), '').replace(/\r\n/g, '\n').trim()
 const mainRoot = (root) => git.worktreeList(root)[0]
-const docOf = (state, ctx) => (state.fix ? S.fixDoc(state.fix.symptom, state.spec ? st.readSpec(specIn(state, ctx)) : null) : st.readSpec(specIn(state, ctx)))
+// A fix lends its spec's full text, a stub's from history (ADR-0046); nothing writes the spec.
+const docOf = (state, ctx) => (!state.fix ? st.readSpec(specIn(state, ctx))
+  : S.fixDoc(state.fix.symptom, state.spec ? stub.readFull(wtOf(state, ctx), state.spec) : null))
 const selfCmd = (state, ctx) => ['node', shq(path.join(__dirname, 'run.js')), ...(state.spec ? [shq(state.spec)] : []), ...(state.fix ? ['--fix', shq(state.fix.symptom)] : []), '--root', shq(ctx.root)].join(' ')
 const go = (state, step, extra = {}) => Object.assign(state, extra, { step, history: [...(state.history || []), { step, at: new Date().toISOString() }] })
 
@@ -375,7 +377,7 @@ const steps = {
   },
   'needs-plan'(state, flags, ctx) { return parkRun(state, ctx, 'needs a plan', { type: 'plan', payload: `${state.fix.symptom.replace(/\s+/g, ' ')} — ${why(flags, 'needs-plan')}` }) },
   unmet(state, flags, ctx) {
-    const doc = st.readSpec(specIn(state, ctx)); const rel = specInfo(ctx).rel
+    const doc = docOf(state, ctx); const rel = specInfo(ctx).rel
     if (flags.assumption !== undefined) {
       const all = S.parseAssumptions(S.section(doc.sections, 'Assumptions')); const a = all.find((x) => x.id === flags.assumption) || known('assumption', flags.assumption, all.map((x) => x.id), rel)
       if (!a.arm.ask) refuse(`${a.id} has a written fallback: ${a.arm.text} — apply it`)

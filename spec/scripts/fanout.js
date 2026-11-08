@@ -53,6 +53,11 @@ function eligible(root, opts = {}) {
   let stopAt = null
   const wait = (spec, why) => waited.push({ spec, why })
   const ended = (wt, run) => `its lane stopped (${stoppedWhy(run)}) — see the report; remove ${path.relative(root, wt)} to run it again`
+  // Why a spec's STOPPED lane holds it back, for the spec itself and for a fix bound to it: the lane ended on a stop
+  // to read, or picked amend and the amended spec is not yet locked. `after` and a locked amend resume by themselves.
+  const laneHold = (wt, run, spec) => stoppedWhy(run) ? ended(wt, run)
+    : run && run.step === 'STOPPED' && run.why === 'amend' && !st.resumes(wt, run, trunk)
+      ? `its lane waits for the amended spec — /spec:plan ${spec}, then /spec:fanout` : null
   // The dependencies a spec still waits on are the derivation's (lib/next.js); fanout only says how each holds it here.
   const unmet = (dep) => `depends on ${dep.path} (${laneOf.has(dep.path) ? `lane ${laneOf.get(dep.path)} this batch`
     : dep.status === 'draft' ? 'draft — it cannot land in this fan-out' : `${dep.status}, not done`})`
@@ -65,10 +70,8 @@ function eligible(root, opts = {}) {
     const status = doc.frontmatter.status === 'hardened' && own && own.ended !== true && !['DONE', 'STOPPED'].includes(own.step) ? 'implementing' : doc.frontmatter.status || 'missing'
     if (status !== 'hardened') { (EXPLICIT.length ? waited : held).push({ spec, why: `status is ${status}, not hardened` }); continue }
     if (doc.frontmatter.prototype) { wait(spec, 'stops at LOOK for you — /spec:run it'); continue } // the app must outlive the agent
-    if (stoppedWhy(run)) { wait(spec, ended(wt, run)); continue }
-    if (run && run.step === 'STOPPED' && run.why === 'amend' && !st.resumes(wt, run, trunk)) {
-      wait(spec, `its lane waits for the amended spec — /spec:plan ${spec}, then /spec:fanout`); continue
-    }
+    const hold = laneHold(wt, run, spec)
+    if (hold) { wait(spec, hold); continue }
     if (pending.isLane(wt)) { wait(spec, `already in a lane at ${path.relative(root, wt)}`); continue }
     const entry = d.entries.find((e) => e.path === spec)
     const gate = entry && entry.blockers.find((b) => b.startsWith('after '))
@@ -94,7 +97,7 @@ function eligible(root, opts = {}) {
     const fixRun = fs.existsSync(wt) && laneRun(root, { spec, symptom, worktree: wt })
     const heldOn = own && `its spec's lane is held on ${path.relative(root, specWt)} (${own.why} ${own.on})`
     const kept = own && own.step === 'STOPPED'
-      ? (stoppedWhy(own) ? ended(specWt, own) : heldOn + ' — it goes out once that lane lands')
+      ? laneHold(specWt, own, spec) || heldOn + ' — it goes out once that lane lands'
       : stoppedWhy(fixRun) ? ended(wt, fixRun) : null
     const label = Q.paste(root, item); const doc = spec && specDoc(path.join(root, spec))
     const why = spec && !doc ? 'fix item names no spec on disk'

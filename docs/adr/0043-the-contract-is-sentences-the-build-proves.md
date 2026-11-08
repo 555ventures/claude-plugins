@@ -3,6 +3,9 @@
 - Status: accepted
 - Amended by: specs/20261107/02-run-and-fanout-match-the-v8-design.md (D2) — the pin tests run in GATE,
   before REVIEW, against the app the driver boots; the separate pin-test step is gone.
+- Amended by: ADR-0049 — the host declares its runtime once (`runtime.bootCommand`, `readyCheck`,
+  `url`, `envCommand`) and one lifecycle module owns the app; "A host needs `prototype.url` and
+  `bootCommand`" no longer holds.
 - Date: 2026-11-05
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (specs/20261105/14-the-prototype-is-pinned-in-chat-and-proved-at-look.md)

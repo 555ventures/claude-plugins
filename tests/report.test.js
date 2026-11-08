@@ -21,7 +21,11 @@ test('sections render in the fixed order with their markers', () => {
 test('empty sections are omitted and Next never ends in a question mark', () => {
   const out = render({ outcome: '⚠️ partial', next: 'run it?' })
   assert.strictEqual(out, '**⚠️ partial**\n\nNext: run it\n', 'empty sections must not print and Next must not ask')
-  assert.match(render({ outcome: '✅ x' }), /Next: nothing needs you — /, 'a missing next must still say nothing needs you')
+  for (const next of [undefined, null, '', '  ', '?']) {
+    assert.throws(() => render({ outcome: '✅ x', next }), /next is required/, `a missing next (${next}) is a bug in the driver, not "all done"`)
+  }
+  const quoted = '/spec:fix status prints null — TypeError: cannot read properties of undefined'
+  assert.ok(render({ outcome: '✅ x', next: quoted }).endsWith(`\nNext: ${quoted}\n`), 'a Next that quotes a real error is the fact, printed as it is')
   assert.throws(() => render({}), /outcome/, 'a report without an outcome has no verdict')
 })
 

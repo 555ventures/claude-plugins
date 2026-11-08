@@ -382,6 +382,15 @@ test('AC-20261105-02-1 AC-20261105-02-2 a spec waits for a dependency that is no
   assert.ok(h.ok().includes('lane 1: ' + P('02-beta')))
 })
 
+test('fanout holds a spec on the dependencies the status screen shows: a superseded one holds nothing, one named by file name holds it', () => {
+  const two = [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js']]
+  const h = host({ lanes: 2, specs: two, status: { '01-alpha': 'superseded' }, deps: { '02-beta': [P('01-alpha')] } })
+  assert.ok(h.ok().includes('lane 1: ' + P('02-beta')), 'a retired spec never blocks')
+  const byName = host({ lanes: 2, specs: two, status: { '01-alpha': 'draft' }, deps: { '02-beta': ['01-alpha.md'] } })
+  const plan = byName.ok()
+  assert.ok(!plan.includes('lane 1: ' + P('02-beta')) && plan.includes(`${P('02-beta')} waits — depends on ${P('01-alpha')} (draft — it cannot land in this fan-out)`), plan)
+})
+
 test('AC-20261105-07-2 AC-20261105-09-10 lanes go spec, bound fix, spec-less fix; a fix waits while its spec is in a lane or when it names no spec on disk', () => {
   const fix = (id, extra) => ({ id, kind: 'prompt', type: 'fix', added: 'x', ...extra })
   const h = host({ lanes: 4, specs: [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js']], status: { '02-beta': 'done' },

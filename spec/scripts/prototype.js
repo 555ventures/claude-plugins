@@ -22,6 +22,7 @@ const Q = require('./lib/queue')
 const git = require('./lib/git')
 const host = require('./lib/host')
 const { render } = require('./lib/report')
+const N = require('./lib/next')
 
 const STEM_RE = /^[a-z0-9][a-z0-9._-]*$/
 const KINDS = ['behaviour', 'look']
@@ -186,13 +187,14 @@ function derive(s, ctx) {
       }
     }
     default: {
-      const head = Q.open(Q.read(ctx.root))[0]
+      const d = N.derive(ctx.root)
       const hasContract = fs.existsSync(path.join(ctx.root, contractPath(ctx.stem)))
       return {
         name: 'CLOSED',
         body: render({
           outcome: `✅ prototype closed — ${ctx.stem}`, bullets: s.removed ? 'worktree and branch removed' : [], warns: s.closeWarn,
-          next: head ? Q.paste(ctx.root, head) : hasContract ? 'nothing needs you — the contract carries on' : undefined,
+          next: d.entries.length || !hasContract ? N.topLines(d).join('\n')
+            : 'nothing needs you — the contract carries on',
         }),
       }
     }

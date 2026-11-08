@@ -12,6 +12,7 @@ const { spawnSync } = require('child_process')
 const { makeDriver, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state'); const S = require('./lib/spec'); const B = require('./lib/briefs'); const Q = require('./lib/queue')
 const host = require('./lib/host'); const git = require('./lib/git'); const pending = require('./lib/pending')
+const N = require('./lib/next')
 const { land, briefClosed, briefOpen } = require('./lib/land'); const { render } = require('./lib/report')
 const criteria = require('./lib/criteria'); const stub = require('./lib/stub')
 
@@ -206,7 +207,8 @@ function parkRun(state, ctx, why, item) {
   const queued = item && Q.paste(ctx.root, Q.add(ctx.root, item) || { kind: 'prompt', ...item }) // null from add: the same item is already open
   decide(state, `stopped: ${why}${queued ? ` — queued ${queued}` : ''}`)
   if (state.lane) pending.consumePending(ctx.root)
-  state.report = render({ outcome: `⏸️ ${s.id} stopped — ${why}`, pins: B.pins(state), artifacts: s.rel, queued, next: queued ? '/spec:queue next' : `/spec:plan ${s.rel}` })
+  state.report = render({ outcome: `⏸️ ${s.id} stopped — ${why}`,
+    pins: B.pins(state), artifacts: s.rel, queued, next: queued })
   return go(state, 'STOPPED', { why, ended: !state.lane })
 }
 
@@ -293,8 +295,9 @@ function merge(state, ctx) {
   state.mergeSha = state.inPlace ? null : r.landed
   if (r.brief && r.brief.closed) decide(state, briefClosed(r.brief))
   else if (r.brief && r.brief.open.length) state.commitWarns = [...(state.commitWarns || []), briefOpen(r.brief)]
-  const head = Q.open(Q.read(ctx.root))[0]
-  state.report = B.report(state, state.fix ? `✅ fixed — ${state.fix.symptom}` : state.inPlace ? `✅ ${s.id} built and reviewed on ${state.branch}` : `✅ ${s.id} built, reviewed and merged`, head ? Q.paste(ctx.root, head) : undefined)
+  const done = state.fix ? `✅ fixed — ${state.fix.symptom}`
+    : state.inPlace ? `✅ ${s.id} built and reviewed on ${state.branch}` : `✅ ${s.id} built, reviewed and merged`
+  state.report = B.report(state, done, N.topLines(N.derive(ctx.root)).join('\n'))
   return go(state, 'DONE', { ended: true, marked: false })
 }
 

@@ -132,8 +132,9 @@ function derive(root) {
   const entries = []
   for (const s of specs) {
     if (done(s.status) || !KNOWN.includes(s.status)) continue
-    const blockers = []
-    for (const d of s.depends_on) { const dep = specDep(d); if (dep && !done(dep.status)) blockers.push(`${dep.path} (${dep.status})`) }
+    // `deps`: the live specs this one still waits on, the one dependency rule fanout reads too.
+    const deps = s.depends_on.map(specDep).filter((dep) => dep && !done(dep.status))
+    const blockers = deps.map((dep) => `${dep.path} (${dep.status})`)
     const b = s.brief && byNum.get(s.brief)
     if (s.status === 'draft' && b) {
       for (const d of b.depends_on) {
@@ -143,7 +144,11 @@ function derive(root) {
     }
     if (gateSpec.has(s.path)) blockers.push(gateSpec.get(s.path))
     else if (s.brief && gateBrief.has(s.brief)) blockers.push(gateBrief.get(s.brief))
-    entries.push({ action: s.status === 'draft' ? '/spec:plan' : '/spec:run', path: s.path, status: s.status, brief: s.brief, blockers, rank: RANK[s.status], working: busy([s.status]) })
+    entries.push({
+      action: s.status === 'draft' ? '/spec:plan' : '/spec:run', path: s.path, status: s.status, brief: s.brief,
+      deps: deps.map((dep) => ({ path: dep.path, status: dep.status })), blockers,
+      rank: RANK[s.status], working: busy([s.status]),
+    })
   }
   entries.push(...prompts)
   const pos = (e) => {

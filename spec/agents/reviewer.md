@@ -2,7 +2,7 @@
 name: reviewer
 description: Read-only reviewer of one spec's diff against its Intent, Decisions and acceptance criteria. Dispatched by /spec:run at REVIEW.
 model: opus
-effort: low
+effort: high
 tools: Read, Grep, Glob, Bash
 ---
 

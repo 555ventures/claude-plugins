@@ -360,6 +360,9 @@ const steps = {
     const blocking = doc.findings.filter((f) => f.severity === 'blocking'); const choices = doc.findings.some((f) => f.severity === 'needs-decision')
     if (doc.verdict === 'fix' && !blocking.length) refuse(`${flags.file}: verdict is fix but no finding is blocking — set severity blocking on the finding(s) that must be fixed, or verdict clean`)
     state.review = { findings: doc.findings, verdict: blocking.length ? (state.attempts.fix >= FIX_CAP ? 'stopped' : 'fix') : choices ? 'decision' : 'clean' }
+    const seat = B.reviewSeat(docOf(state, ctx), cfgOf(ctx)) // which seat judged this round, kept in the build commit
+    const round = `${seat.model}/${seat.effort}: ${doc.findings.length} findings, ${blocking.length} blocking`
+    state.reviews = [...(state.reviews || []), round]
     if (state.review.verdict === 'stopped') return parkRun(state, ctx, `still blocking after ${FIX_CAP} fix round`, fixItem(state, ctx, blocking[0].summary || 'blocking review findings'))
     if (blocking.length) return go(state, 'FIX')
     return choices ? go(state, 'ESCALATE', { why: 'decision', from: 'REVIEW' }) : afterReview(state)

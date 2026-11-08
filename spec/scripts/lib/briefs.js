@@ -67,6 +67,10 @@ function builder(b, kind) {
   return { head: `Dispatch ONE \`builder\` agent (spec:builder, ${b.plugin}/agents/builder.md) — model ${model}, effort ${b.cfg.seats.builder.effort}, attempt ${b.attempt}, in ${b.wt}.`, body: out }
 }
 
+// The reviewer seat: an `architecture: true` spec gets Opus at xhigh, every other review the config seat.
+const reviewSeat = (doc, cfg) =>
+  doc.frontmatter.architecture === true ? { model: 'opus', effort: 'xhigh' } : cfg.seats.reviewer
+
 function reviewer(b) {
   const spec = !!b.specPath
   const body = [
@@ -84,7 +88,7 @@ function reviewer(b) {
       ...(b.proto.pictures.length ? ['Pictures of the pinned routes (a reference for the look, never a gate):', ...b.proto.pictures.map((f) => `- ${f}`)] : []), ''] : []),
     ...(spec ? [OTHER_SECTIONS] : []),
   ]
-  const seat = b.doc.frontmatter.architecture === true ? { model: 'fable', effort: 'high' } : b.cfg.seats.reviewer
+  const seat = reviewSeat(b.doc, b.cfg)
   return { head: `Dispatch ONE \`reviewer\` agent (spec:reviewer, ${b.plugin}/agents/reviewer.md) — model ${seat.model}, effort ${seat.effort}, in ${b.wt}.`, body }
 }
 
@@ -152,7 +156,9 @@ function report(state, outcome, next) {
 
 // Rulings and as-built lines live in the commit, never in the spec.
 const block = (title, lines) => (lines.length ? [`${title}:\n` + lines.map((l) => `- ${l}`).join('\n')] : [])
-const commitMessage = (state, subject, asBuilt, evidence) => [subject, ...lookLine(state), ...block('Rulings', state.rulings || []), ...block('As built', asBuilt), ...(evidence ? [evidence] : [])].join('\n\n')
+const commitMessage = (state, subject, asBuilt, evidence) => [subject, ...lookLine(state),
+  ...block('Rulings', state.rulings || []), ...block('Reviews', state.reviews || []),
+  ...block('As built', asBuilt), ...(evidence ? [evidence] : [])].join('\n\n')
 
 // One line under the checkpoint: what the mark led to.
 function checkpoint(verb, state, stopLine) {
@@ -167,4 +173,7 @@ function checkpoint(verb, state, stopLine) {
   return n ? `review: ${n} blocking → ${state.step}` : state.review.verdict === 'decision' ? 'review: needs-decision → ESCALATE' : 'review: clean'
 }
 
-module.exports = { builder, reviewer, escalation, question, look, regate, redCheckLine, rebase, pins, report, commitMessage, checkpoint }
+module.exports = {
+  builder, reviewer, reviewSeat, escalation, question, look, regate, redCheckLine, rebase, pins, report,
+  commitMessage, checkpoint,
+}

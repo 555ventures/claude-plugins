@@ -642,9 +642,9 @@ test('AC-20261105-13-6 the command lists Agent, AskUserQuestion and groom; the d
   const head = cmd.split('---')[1]
   assert.match(head, /^allowed-tools:.*\bAgent\b.*\bAskUserQuestion\b/m)
   assert.match(head, /^argument-hint:.*\bgroom\b/m)
-  for (const w of ['groom` checks before it proposes', 'Agent {model: "haiku"}', '📌 Auto-picked done', 'never tick a keep or ambiguous item without a yes', 'No agent, no proposal', 'show <id> --json', 'queue.js done <ref>']) assert.ok(cmd.includes(w), w)
+  for (const w of ['groom` checks before it proposes', 'Agent {model: "haiku", effort: "medium"}', '📌 Auto-picked done', 'never tick a keep or ambiguous item without a yes', 'No agent, no proposal', 'show <id> --json', 'queue.js done <ref>']) assert.ok(cmd.includes(w), w)
   const doc = fs.readFileSync(path.join(SPEC, 'doctrine.md'), 'utf8')
-  assert.match(doc, /^\| queue groom checks \| haiku \| low \|$/m)
+  assert.match(doc, /^\| queue groom checks \| haiku \| medium \|$/m)
 })
 
 test('AC-20261105-13-7 the contract lists groom in § 1 and the § 7 subcommand table', () => {

@@ -37,7 +37,7 @@ const DEFAULTS = {
   gateConcurrency: 2,
   seats: {
     builder: { model: 'sonnet', effort: 'high' },
-    reviewer: { model: 'opus', effort: 'low' },
+    reviewer: { model: 'opus', effort: 'high' },
     orchestrator: { model: 'opus', effort: 'medium' },
   },
   worktreePerSpec: true,

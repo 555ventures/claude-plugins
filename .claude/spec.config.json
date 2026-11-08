@@ -1,13 +1,7 @@
 {
   "testCommand": "npm test",
-  "testCountPattern": "ℹ tests (\\d+)",
+  "testCountPattern": "\u2139 tests (\\d+)",
   "setupCommand": "npm install",
   "trunk": "main",
-  "forge": "github",
-  "seats": {
-    "builder": {
-      "model": "opus",
-      "effort": "high"
-    }
-  }
+  "forge": "github"
 }

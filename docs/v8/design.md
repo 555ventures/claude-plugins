@@ -16,7 +16,7 @@ Genesis, mocks, prototype, connect, doctor stay, trimmed.
 - One strong model builds a spec end to end in its own worktree; the host test command is
   the gate; green merges. One state file per in-flight spec; a crash resumes from it.
 - One fresh-context reviewer at low effort reads the diff against the spec's intent block.
-  Fable reviews when the spec is flagged `architecture: true`.
+  Opus at xhigh reviews when the spec is flagged `architecture: true`.
 - Fan-out drains the queue N lanes at a time, merges in order, batches lane questions.
 - Three hooks: tests-green-before-merge, no destructive git in lanes, no writes outside the
   lane's worktree. Everything else is one page of doctrine.
@@ -34,11 +34,10 @@ Genesis, mocks, prototype, connect, doctor stay, trimmed.
 | Seat | Model | Effort |
 |---|---|---|
 | genesis, prototype pins, plan | the session's model | the session's effort |
-| architecture review | Fable | high |
 | orchestrator (run / fanout loop) | Opus | medium |
 | builder, one per spec | Sonnet | high; auto-retry on Opus after one red gate |
-| reviewer | Opus | low; Fable when `architecture: true` |
-| mechanical lookups | Haiku | low |
+| reviewer | Opus | high; xhigh when `architecture: true` |
+| mechanical lookups | Haiku | medium |
 
 ## Size budget
 

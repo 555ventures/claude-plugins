@@ -41,7 +41,7 @@ sentence. Never edit the queue file, and never work a row's position out by hand
 in this session, not in the queue, and work for another repo is never queued here.
 
 **`groom` checks before it proposes.** Flags are suspicion, not evidence. Fan out one read-only
-`Agent {model: "haiku"}` per flagged item in one message, each only reading the repo and given the repo root
+`Agent {model: "haiku", effort: "medium"}` per flagged item in one message, each only reading the repo and given the repo root
 and `queue.js show <id> --json` (the id, kind and gate): done (name the file or spec) or live (name what is
 missing)? Flagged = presumed `done`; `keep` only with the missing piece quoted. Hard evidence ticks with
 `queue.js done <ref>` and `📌 Auto-picked done — <evidence> (veto anytime)`; ask only `keep`/ambiguous items

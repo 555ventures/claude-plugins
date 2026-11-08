@@ -30,9 +30,7 @@ breaking: false
 
 ## Preparation
 
-Readers of a done spec after the v8 rewrite (20261107/02): `lib/work.js` `readSpecs`/`readBriefs`/`gateWhy`, `fanout.js` `eligible` (status, `depends_on`, `prototype:`, title), `lib/queue.js` status reads, `lib/next.js`, `status.js`, `doctor.js`, `lib/state.js` `specsCiting` and `lib/land.js` — frontmatter only. Body readers: `plan.js` `pinCoverage` (the `(pin pN)` text of every citing spec's ACs) and a fix on a done spec, where `run.js` `docOf` builds `S.fixDoc(symptom, readSpec(spec))` from its Decisions and Assumptions and the `unmet` mark reads the same two sections. Sibling 04 D2 already accepts an `acs:` line as defining an AC. No test reads this repo's real `specs/`.
-
-This repo: 322 specs, 305 done and 12 superseded, median 24 KB; 439 `[retired: …]` tags in 95 finished specs, nothing writes them any more. After `git.mergeBack`, the main checkout's HEAD (the landed sha under ff-only, merge-commit and squash) holds the full text of every finished spec not yet a stub, the landed one included. Tests that read trunk's head after a landing move by one commit: run.test.js `main^{tree}` against the gate tree, `main^2`, and fanout.test.js `landed as` against `rev-parse main` and the fix lane's `no spec file written` diff. `depends_on`: 03 lifts run.test.js's 500-line cap and run.js's 400-line cap (398 today), 04 edits run.js, plan.js, reviewer.md, plan.md and architecture.md too, and 05 adds its brief tick to the same spot in `land()` (its `readBriefs` reads only frontmatter, so it works on stubs).
+Readers of a done spec after the v8 rewrite (20261107/02): `lib/work.js` `readSpecs`/`readBriefs`/`gateWhy`, `fanout.js` `eligible` (status, `depends_on`, `prototype:`, title), `lib/queue.js` status reads, `lib/next.js`, `status.js`, `doctor.js`, `lib/state.js` `specsCiting` and `lib/land.js` — frontmatter only. Body readers: `plan.js` `pinCoverage` (the `(pin pN)` text of every citing spec's ACs) and a fix on a done spec, where `run.js` `docOf` builds `S.fixDoc(symptom, readSpec(spec))` from its Decisions and Assumptions and the `unmet` mark reads the same two sections. Sibling 04 D2 already accepts an `acs:` line as defining an AC. No test reads this repo's real `specs/`. This repo: 322 specs, 305 done and 12 superseded, median 24 KB; 439 `[retired: …]` tags in 95 finished specs, nothing writes them any more. After `git.mergeBack`, the main checkout's HEAD (the landed sha under ff-only, merge-commit and squash) holds the full text of every finished spec not yet a stub, the landed one included. Tests that read trunk's head after a landing move by one commit: run.test.js `main^{tree}` against the gate tree, `main^2`, and fanout.test.js `landed as` against `rev-parse main` and the fix lane's `no spec file written` diff. `depends_on`: 03 lifts run.test.js's 500-line cap and run.js's 400-line cap (398 today), 04 edits run.js, plan.js, reviewer.md, plan.md and architecture.md too, and 05 adds its brief tick to the same spot in `land()` (its `readBriefs` reads only frontmatter, so it works on stubs).
 
 ## Goal
 
@@ -79,6 +77,10 @@ A finished spec stops being a 24 KB file nothing reads: at the merge it becomes 
 - **AC-20261107-01-8**: WHEN `sweep(root, {dry: true})` runs on this repo at build time THE SYSTEM SHALL list every done and superseded spec (317 at plan time) and count the `[retired:` tags they carry (439); the builder records both numbers in `specs/20261107/01-a-done-spec-is-a-stub.run/evidence.md`; and WHEN fixture specs carrying `[retired:` tags are swept THE SYSTEM SHALL leave `grep -rl "\[retired:" specs/` with zero hits.
 - **AC-20261107-01-9**: WHEN `grep -rn "specs already marked" spec/commands/plan.md` and `grep -rn "belongs to an earlier spec" spec/agents/reviewer.md` run THE SYSTEM SHALL return zero hits, and `spec/doctrine.md`, `docs/v8/interface-contract.md` and `docs/v8/architecture.md` SHALL each name `text:` beside `git show`.
 - **AC-20261107-01-10**: WHEN `plan.js lock` runs on a `prototype:` spec whose only cover for pin `p3` is an earlier done citing spec that is now a stub with `acs: [AC-X-01-2 (pin p3)]` THE SYSTEM SHALL lock, and WHEN that stub's `acs:` lacks the cite THE SYSTEM SHALL refuse naming `p3`.
+
+## Retired criteria
+
+- AC-20261107-01-9 — checked at review: prose and a grep; no test reads prose.
 
 ## Assumptions
 

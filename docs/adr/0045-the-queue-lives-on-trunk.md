@@ -1,6 +1,6 @@
 # 0045. The queue lives on trunk
 
-- Status: accepted
+- Status: superseded by ADR-0050
 - Date: 2026-11-06
 - Deciders: JJ + session (specs/20261106/01-the-queue-travels-with-the-repo.md)
 - Amends: ADR-0042 (the `{version: 3, seq, items[]}` file) and ADR-0044 (what "the file" is), and

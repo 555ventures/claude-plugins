@@ -5,6 +5,7 @@
 - Amends: ADR-0041 §1 (the item shape)
 - Amended by: docs/adr/0044-the-file-holds-what-was-placed.md (the file holds what was placed; readers derive the rest)
 - Amended by: docs/adr/0045-the-queue-lives-on-trunk.md (one tracked file per item on trunk, version 4)
+- Amended by: docs/adr/0050-only-your-queue-commands-commit.md (two stores: tracked items you place, a machine-local file for drivers', version 4)
 - Deciders: JJ + session (specs/20261105/12-the-queue-item-has-one-owner.md)
 
 ## Context

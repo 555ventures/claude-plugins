@@ -857,17 +857,40 @@ test('AC-20261108-03-3 a lane that picks amend stops the same way: wip commit, S
 
 test('AC-20261108-03-5 an --in-place run that picks amend resumes at GATE on its branch once the branch locks the amended spec', () => {
   const h = fixture(); h.g('checkout', '-qb', 'feature')
+  // the branch locked its own text of the spec after the merge-base with trunk: that blob is unlike the base's, yet not an amendment
+  lockAmended(h, AMENDED(h).replace('make a better thing', 'make a first thing'))
   const head0 = h.g('rev-parse', 'HEAD').trim()
   ok(h.run('--in-place')); put(h.dir, 'feature.txt', 'thing\n')
   ok(h.run('--in-place', '--mark', 'unmet', '--decision', 'D1', '--why', 'x'))
   ok(h.run('--in-place', '--mark', 'escalate', 'amend'))
   assert.deepStrictEqual([h.status(), h.state().step, h.g('rev-parse', 'HEAD').trim()], ['hardened', 'STOPPED', head0], 'nothing is committed in place; the spec is back to hardened')
-  assert.ok(ok(h.run('--in-place')).startsWith('▶ STOPPED'))
-  lockAmended(h)
+  assert.ok(ok(h.run('--in-place')).startsWith('▶ STOPPED'), 'the branch\'s earlier lock is no amendment: the wait compares with HEAD at the stop, not the merge-base')
+  lockAmended(h, AMENDED(h).replace('make a first thing', 'make a better thing'))
   assert.ok(ok(h.run('--in-place')).startsWith('▶ REVIEW'))
   const r = h.state()
   assert.deepStrictEqual([r.base, h.status()], [h.g('rev-parse', 'HEAD').trim(), 'implementing'])
   assert.ok(fs.readFileSync(path.join(h.dir, REL), 'utf8').includes('make a better thing') && !(r.decided || []).some((d) => d.includes('reverted spec text')), 'GATE reverts no spec text')
+})
+
+test('AC-20261108-03-4 an amend resume whose rebase conflicts takes the amended text into the worktree copy once the conflict is resolved', () => {
+  const h = fixture(); ok(h.run())
+  put(h.wt, 'feature.txt', 'thing\n')
+  ok(h.run('--mark', 'unmet', '--decision', 'D1', '--why', 'x')); ok(h.run('--mark', 'escalate', 'amend'))
+  put(h.dir, 'feature.txt', 'trunk thing\n'); h.g('add', '-A'); h.g('commit', '-qm', 'trunk takes feature.txt')
+  lockAmended(h)
+  const conflict = ok(h.run())
+  assert.match(conflict, /A rebase onto trunk [0-9a-f]{40} is in progress in .*conflicting in feature\.txt/, conflict)
+  assert.strictEqual(h.g('status', '--porcelain'), '', 'the main checkout is never left mid-merge')
+  assert.strictEqual(h.state().step, 'GATE')
+  put(h.wt, 'feature.txt', 'trunk thing\nthing\n')
+  assert.match(ok(h.run()), /^▶ REVIEW/)
+  const r = h.state()
+  assert.deepStrictEqual([r.base, r.respec, h.status(h.wt)], [h.g('rev-parse', 'main').trim(), undefined, 'done'])
+  assert.ok(fs.readFileSync(path.join(h.wt, REL), 'utf8').includes('make a better thing'), 'the amended text reaches the gated tree')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  const built = h.g('show', `main~1^2:${REL}`)
+  assert.ok(built.includes('make a better thing') && built.includes('status: done'), 'the build commit carries the amended text')
+  assert.strictEqual(h.g('status', '--porcelain'), '')
 })
 
 test('AC-20261108-03-3 no draft write or "is draft again" line is left anywhere the driver, the commands or the v8 docs say it', () => {

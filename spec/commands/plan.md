@@ -1,8 +1,6 @@
 ---
 description: Write a spec with the user and lock it for building
 argument-hint: <description | spec path | roadmap brief | design/prototypes/<stem>/contract.json>
-model: fable
-effort: high
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once. Turn `$ARGUMENTS` into a locked spec; a

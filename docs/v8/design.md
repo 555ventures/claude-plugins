@@ -33,7 +33,8 @@ Genesis, mocks, prototype, connect, doctor stay, trimmed.
 
 | Seat | Model | Effort |
 |---|---|---|
-| genesis, prototype pins, plan, architecture review | Fable | high |
+| genesis, prototype pins, plan | the session's model | the session's effort |
+| architecture review | Fable | high |
 | orchestrator (run / fanout loop) | Opus | medium |
 | builder, one per spec | Sonnet | high; auto-retry on Opus after one red gate |
 | reviewer | Opus | low; Fable when `architecture: true` |

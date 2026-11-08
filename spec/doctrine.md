@@ -21,7 +21,7 @@ green staging run `/spec:release` promotes from) files in the git common dir, an
 
 | Seat | Model | Effort |
 |---|---|---|
-| genesis, prototype, plan | fable | high |
+| genesis, prototype, plan | the session's model | the session's effort |
 | orchestrator (run, fanout) | opus | medium |
 | builder | sonnet; opus from the second attempt | high |
 | reviewer | opus; fable on an `architecture: true` spec | low; high on an `architecture: true` spec |

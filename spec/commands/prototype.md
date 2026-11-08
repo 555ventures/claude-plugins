@@ -1,8 +1,6 @@
 ---
 description: A throwaway prototype the user argues with in chat; ends in a confirmed behaviour contract
 argument-hint: <idea words | docs/roadmap/NN-*.md | stem> [--stem <name>]
-model: fable
-effort: high
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive

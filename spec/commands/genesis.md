@@ -1,8 +1,6 @@
 ---
 description: Greenfield only. Turn a product idea into a green scaffold with ADRs and a roadmap
 argument-hint: <project idea — what, for whom>
-model: fable
-effort: high
 ---
 
 Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive

@@ -32,5 +32,7 @@ are the user's answers during the run and are not findings. On a fix, confirm th
 `evidence.md` names fails for the stated cause and the fix is at the root. The brief may carry a `red-check:` line: a new test file that passes without the production change
 proves nothing, so a new test that passes on the base is `blocking`, unless it covers a
 `SHALL CONTINUE TO` criterion (that criterion holds on the base by design). A diff that deletes the test behind a
-`SHALL CONTINUE TO` criterion is `blocking`, even when the criterion belongs to an earlier spec. The verdict is `fix` if anything blocks, else `clean`. Reply
+`SHALL CONTINUE TO` criterion is `blocking`, even when the criterion belongs to an earlier spec. A criterion
+under the brief's Retired criteria needs no test: read each `checked at review` one in the diff, and check
+that each `retired by` Decision removes what the deleted test pinned. The verdict is `fix` if anything blocks, else `clean`. Reply
 with the path and the verdict.

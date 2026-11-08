@@ -1,6 +1,6 @@
 ---
 date: 2026-11-07
-status: hardened
+status: done
 area: run
 depends_on: [specs/20261107/03-this-repos-size-check-counts-bytes.md]
 brief: n/a

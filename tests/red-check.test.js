@@ -1,7 +1,7 @@
 'use strict'
 // Pins spec/scripts/red-check.js: new tests must be red on base and green on HEAD; a test green on
 // base too is reported as vacuous. Exit 0 always. Only files added since base are checked, named by their
-// basename. run.js runs it once per tree after a GREEN gate and prints its line in the reviewer brief.
+// basename or a testGlobs match (lib/criteria.js). run.js runs it once per tree after a GREEN gate and prints its line in the reviewer brief.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
@@ -111,4 +111,16 @@ test('AC-20261105-15-4 without testFileCommand red-check does not run and the br
   assert.strictEqual(red.state().step, 'REPAIR')
   assert.ok(!fs.existsSync(log), 'a red gate never runs red-check')
   assert.ok(!/red-check/.test(red.state().gate.output_tail), 'and its tail has no verdict')
+})
+
+test('AC-20261107-04-7 testGlobs makes a new file with a plain basename a test red-check runs; without it a new *.test.* file is still checked and the plain one is not', () => {
+  const globbed = repo({ testCommand: 'true', testFileCommand: 'node {file}', testGlobs: ['checks/**'] })
+  fs.mkdirSync(path.join(globbed.dir, 'checks'))
+  fs.writeFileSync(path.join(globbed.dir, 'checks/probe.js'), 'process.exit(0)\n')
+  assert.ok(check(globbed.base, globbed.dir).files.some((f) => f.file === 'checks/probe.js'), 'the glob reaches it')
+  const plain = repo({ testCommand: 'true', testFileCommand: 'node {file}' })
+  fs.mkdirSync(path.join(plain.dir, 'checks'))
+  fs.writeFileSync(path.join(plain.dir, 'checks/probe.js'), 'process.exit(0)\n')
+  const files = check(plain.base, plain.dir).files.map((f) => f.file)
+  assert.ok(files.includes('test/a.test.js') && !files.includes('checks/probe.js'), files.join(', '))
 })

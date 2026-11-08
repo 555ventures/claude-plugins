@@ -41,7 +41,7 @@ spec/
   templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md
   hooks/hooks.json
   scripts/
-    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js  lib/queue.js  lib/queue-rows.js
+    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js  lib/queue.js  lib/queue-rows.js  lib/criteria.js
     run.js fanout.js queue.js status.js plan.js init.js doctor.js migrate.js
     genesis.js mocks.js prototype.js connect.js release.js red-check.js
     state-gate.sh block-worker-git.sh block-cross-worktree-writes.sh merge-back.sh
@@ -76,6 +76,7 @@ per file; writes are atomic (tmp + rename).
   "testCommand": "npm test",              // whole suite; the gate
   "testCountPattern": "",                 // optional, one capture group: a gate that exits 0 counting 0 or nothing is red
   "testFileCommand": "npx vitest {file}", // optional: single-file run used by red-check
+  "testGlobs": ["tests/**"],              // optional: a file matching one is a test file (lib/criteria.js, red-check)
   "setupCommand": "npm ci",               // run once in a fresh worktree
   "trunk": "main",
   "lanes": 4,                             // fanout parallelism
@@ -113,7 +114,7 @@ same machine on `lib/spec.js` `fixDoc`: no spec file, one reproduce-first criter
 |---|---|---|---|
 | OPEN | admits only `hardened` or `implementing`; creates worktree+branch from trunk (off trunk only `--in-place` builds, in that checkout); a fresh worktree gets the `.worktreeinclude` matches (`lib/host.js` `copyIncluded`) and runs setupCommand (a failure removes the worktree it made); the worktree copy of the spec says `done`, the main checkout's is not touched | nothing | (auto) |
 | BUILD | prints the builder brief (`lib/briefs.js`): spec path, Intent, Decisions, the run's rulings, File Plan, criteria, Assumptions, test command | dispatches ONE `builder` (seat from config; Opus from attempt 2) | `built` |
-| GATE | intent-to-add for planned files (ADR-0015); `testCommand` in the worktree (green-run cache by tree, at most `gateConcurrency` at once, a red outside the diff re-run once); a build that changed nothing or a File Plan row not true on disk is red; a `prototype:` spec's pin tests run here against the app the driver boots (ADR-0043 amended); red-check once per tree; spec text the build edited is reverted and gated again (📌) | nothing | (auto) → REVIEW or REPAIR |
+| GATE | intent-to-add for planned files (ADR-0015); `testCommand` in the worktree (green-run cache by tree, at most `gateConcurrency` at once, a red outside the diff re-run once); a build that changed nothing or a File Plan row not true on disk is red; a `prototype:` spec's pin tests run here against the app the driver boots (ADR-0043 amended); red-check once per tree; spec text the build edited is reverted and gated again (📌); after a green `testCommand`, the criteria check (`lib/criteria.js`, ADR-0048) reads the AC-IDs test files cite (a test-shaped basename or a `testGlobs` match) at the base and on disk: a criterion a spec defines that the base cites and nothing cites now is red, and so is a criterion of the spec being built with no citing test where the base cites any (a 📌 note where it cites none); the spec's `## Retired criteria`, as locked at the base, clears either; the red tail names each ID and its exits (restore a test, or mark `unmet`; a fix: `needs-plan`) | nothing | (auto) → REVIEW or REPAIR |
 | REPAIR | prints the failure tail; past cap 2 the run is STOPPED with a fix item queued (📌) | dispatches builder | `repaired`; `regate` (same tree, once) |
 | REVIEW | prints the reviewer brief; seat = reviewer, or Fable when `architecture: true` | dispatches ONE `reviewer` | `reviewed --file <json>` |
 | FIX | `blocking` findings; past cap 1 STOPPED with a fix item queued (📌) | dispatches builder | `fixed` |
@@ -154,7 +155,10 @@ that stopped, was held or was dismissed (a dismissed spec lane says what trunk h
 `/spec:plan` is driven by the session (Fable). The script only: numbers the spec
 (`specs/YYYYMMDD/NN-slug.md`), validates the template sections exist, counts
 `[NEEDS CLARIFICATION:` markers, refuses a File Plan that lists another spec file (a build may never edit
-one, see `specEdits`), and locks (`status: hardened`) when clean. The template
+one, see `specEdits`), refuses an optional `## Retired criteria` line that is neither
+`- AC-… — retired by Dn: …` (Dn a row of its Decisions) nor `- AC-… — checked at review: …` (an AC of this
+spec), and locks (`status: hardened`) when clean. That section, after the Acceptance Criteria, is the only way
+a build may leave a criterion with no citing test (GATE, §4); both briefs print it. The template
 adds one block at the top of the body:
 
 ```
@@ -169,7 +173,7 @@ adds one block at the top of the body:
 
 Frontmatter stays v7-compatible: `date, status (draft|hardened|implementing|done),
 area, depends_on, brief, architecture: true|false`. Sections kept: Intent, Goal, Decisions,
-File Plan, Acceptance Criteria (`AC-YYYYMMDD-NN-k`, WHEN/SHALL), Assumptions. Dropped:
+File Plan, Acceptance Criteria (`AC-YYYYMMDD-NN-k`, WHEN/SHALL), Retired criteria (optional), Assumptions. Dropped:
 tier, Users, Contracts, UI, Data Model, Rationale, Canonical Delta, oracle/pre-green tags.
 
 ## 7. Hooks (`hooks/hooks.json`)
@@ -211,9 +215,10 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   detected (one AskUserQuestion). `gate verified` only when `testCommand` exits 0. ≤ 150 LOC.
 - `doctor.js`: config valid, testCommand runs green (exit 0), worktrees gitignored (a missing entry names
   `/spec:migrate` or `/spec:init`), pending sidecars listed, roadmap hygiene (the anomalies `status` counts, from
-  `lib/next.js`). `.env` files lanes would not see are findings unless `.worktreeinclude` names them.
+  `lib/next.js`). `.env` files lanes would not see are findings unless `.worktreeinclude` names them. One info
+  line says how many test files cite an AC (the criteria check's mode, ADR-0048).
 - `red-check.js`: test files ADDED since base (named `*.test.*`, `*.spec.*`, `*_test.*`, `*_spec.*` or
-  `test_*`) must fail on base and pass on HEAD; a vacuous green is reported. It is information, never a
+  `test_*`, or matching a `testGlobs` glob: `lib/criteria.js` `isTest`) must fail on base and pass on HEAD; a vacuous green is reported. It is information, never a
   block: GATE runs it once per tree after a GREEN gate when `testFileCommand` exists, and the REVIEW brief
   prints its line (`state.redCheck`); a new test that passes without the production change is a blocking
   reviewer finding unless it covers a `SHALL CONTINUE TO` criterion. ≤ 80 LOC.
@@ -260,6 +265,7 @@ Later builders: use these, do not re-derive them.
   `readProto(root, stem)` → `{status, pins, contract}` (each `null` when absent); `writeProto` and
   `writeMocks(root, {status?, seed?})` write only the keys given.
 - `lib/queue.js`: the one owner of the queue (≤ 200 LOC, no CLI): `VERSION`, `TYPES`, `CMD_TYPES`, `queuePath`, `kindOf`, `briefNo`, `parse(text, type)` (the only reader of typed text), `read` (strict: version 3 with an `items` list, or a refusal naming `/spec:migrate`), `write`, `open`, `reconcile`, `fill(root, q)` and `pending(root)` (the in-memory fill), `place(root, q, item, at)` (stores one filled item), `add(root, fields, {top})` (the door; dedupe), `tick(root, pred)`, `text`, `paste`, and the brief helpers `isSupersededBriefText`, `v7Briefs`; groom's v7 row helpers (`promptTokens` … `citesDoneSpec`) live in `lib/queue-rows.js`. `/spec:migrate` is the only converter of older files (ADR-0042).
+- `lib/criteria.js`: the one owner of "what is a test file" and of the criteria tests cite (≤ 250 LOC, no CLI): `isTest(rel, cfg)`, `cited(root, ref?, cfg?)` (AC-ID → test files, at a commit or on disk), `testFiles`, `retiredLines`/`retired`/`retiredRefusal(doc)` (the `## Retired criteria` section), `check({wt, base, cfg, doc})` → `{red, warn}` (GATE, ADR-0048).
 - `lib/work.js`: the one reader of specs and roadmap briefs (≤ 250 LOC, no CLI): `normBrief`, `briefOrd`, `readSpecs(root)`, `readBriefs(root, specs)` (brief status `unplanned|in-flight|done|superseded`, a brief is done when its live specs are done), `gateWhy`. `state.js` adds `liveRun`/`specState`: a run sidecar in the root or the lane worktree makes a spec `implementing`.
 - `driver.js`: `makeDriver({name, specArg, load, save, derive, steps, script?})` returns
   `main(argv) → exit code` (script does `process.exitCode = main()`). `derive(state, ctx)` returns

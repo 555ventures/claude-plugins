@@ -10,6 +10,7 @@
 const S = require('./spec')
 const { render } = require('./report')
 const { firstRedLine, resolveUrl } = require('./host')
+const { retiredLines } = require('./criteria')
 
 const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
 const loc = (f) => `${f.file || ''}${f.file && f.line ? ':' + f.line : ''}`
@@ -35,6 +36,7 @@ function contract(b, { plan }) {
     ...(b.rulings.length ? ['## Rulings (the user\'s answers during this run; they bind like Decisions)', ...b.rulings.map((r) => `- ${r}`), ''] : []),
     ...(plan && !isFix(b.doc) ? ['## File Plan', ...b.doc.filePlan.map((r) => `- ${r.action} ${r.path} — ${r.summary}`), ''] : []),
     '## Acceptance Criteria', ...b.doc.acs.map((a) => `- ${a.id}: ${a.text}`), '',
+    ...(retiredLines(b.doc).length ? ['## Retired criteria', ...retiredLines(b.doc), ''] : []), // ADR-0048
     '## Assumptions', ...assumptions(b.doc), '',
     ...(b.proto ? ['## Pins', ...pinLines(b.proto), ''] : []),
   ]

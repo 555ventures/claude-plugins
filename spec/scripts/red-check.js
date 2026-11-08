@@ -15,19 +15,18 @@ const path = require('path')
 const { readConfig } = require('./lib/state')
 const { run } = require('./lib/host')
 const git = require('./lib/git')
+const { isTest } = require('./lib/criteria') // a test-shaped basename or a testGlobs match
 
 const quote = (s) => "'" + s.replace(/'/g, "'\\''") + "'"
-// A test file is named by its basename: *.test.*, *.spec.*, *_test.*, *_spec.* or test_*.
-const TEST_NAME = /^(?:.+\.(?:test|spec)\..+|.+_(?:test|spec)\..+|test_.+)$/
-const isTest = (f) => TEST_NAME.test(path.basename(f)) && !/\.md$/.test(f) && !/\.run\//.test(f)
 
 function check(base, root) {
   const out = { files: [], vacuousGreen: [] }
-  const cmd = readConfig(root).testFileCommand
+  const cfg = readConfig(root); const cmd = cfg.testFileCommand
   if (!cmd) return { ...out, error: 'no testFileCommand in .claude/spec.config.json' }
   if (!base) return { ...out, error: 'usage: red-check.js --base <sha> --root <worktree>' }
   const added = (f) => git.raw(['cat-file', '-e', `${base}:${f}`], root).status !== 0 // base lacks it
-  const files = git.changedFiles(base, root).filter((f) => isTest(f) && fs.existsSync(path.join(root, f)) && added(f))
+  const files = git.changedFiles(base, root)
+    .filter((f) => isTest(f, cfg) && fs.existsSync(path.join(root, f)) && added(f))
   if (!files.length) return out
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'red-check-'))
   const tree = path.join(tmp, 'base')

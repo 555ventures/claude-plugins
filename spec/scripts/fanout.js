@@ -87,12 +87,21 @@ function eligible(root, opts = {}) {
     const symptom = item.payload || 'repair ' + stemOf(spec)
     const key = spec || st.slugOf(symptom)
     const wt = path.join(root, '.claude', 'worktrees', 'fix-' + (spec ? stemOf(spec) : key))
+    const specWt = spec && path.join(root, '.claude', 'worktrees', 'spec-' + stemOf(spec))
+    // A fix bound to a spec builds on that spec's code: while its own lane run sits STOPPED (ended, or held
+    // after/amend) in spec-<stem>, that code is only in the kept worktree, not on trunk, so the fix waits on that lane.
+    const own = spec && st.readRun(path.join(specWt, spec))
+    const fixRun = fs.existsSync(wt) && laneRun(root, { spec, symptom, worktree: wt })
+    const heldOn = own && `its spec's lane is held on ${path.relative(root, specWt)} (${own.why} ${own.on})`
+    const kept = own && own.step === 'STOPPED'
+      ? (stoppedWhy(own) ? ended(specWt, own) : heldOn + ' — it goes out once that lane lands')
+      : stoppedWhy(fixRun) ? ended(wt, fixRun) : null
     const label = Q.paste(root, item); const doc = spec && specDoc(path.join(root, spec))
     const why = spec && !doc ? 'fix item names no spec on disk'
       : doc && !['done', 'hardened'].includes(doc.frontmatter.status) ? `its spec is ${doc.frontmatter.status || 'missing'}, not done or hardened`
         : doc && doc.frontmatter.prototype ? `stops at LOOK for you — /spec:fix ${spec} — ${symptom}`
-          : spec && (pending.isLane(path.join(root, '.claude', 'worktrees', 'spec-' + stemOf(spec))) || ok.some((o) => o.spec === spec && !o.symptom)) ? 'its spec is in a lane'
-            : stoppedWhy(fs.existsSync(wt) && laneRun(root, { spec, symptom, worktree: wt })) ? ended(wt, laneRun(root, { spec, symptom, worktree: wt }))
+          : spec && (pending.isLane(specWt) || ok.some((o) => o.spec === spec && !o.symptom)) ? 'its spec is in a lane'
+            : kept ? kept
               : pending.isLane(wt) || taken.has(key) ? `already in a lane at ${path.relative(root, wt)}`
                 : work.gateWhy(root, item.after, cache) ? 'after ' + work.gateWhy(root, item.after, cache) : null
     if (why) { wait(label, why); continue }

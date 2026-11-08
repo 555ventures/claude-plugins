@@ -2,7 +2,7 @@
 date: 2026-11-08
 status: hardened
 area: prototype
-depends_on: [specs/20261106/01-the-queue-travels-with-the-repo.md, specs/20261107/01-a-done-spec-is-a-stub.md]
+depends_on: [specs/20261107/01-a-done-spec-is-a-stub.md]
 brief: n/a
 architecture: true
 breaking: true
@@ -79,5 +79,5 @@ On a host whose config says `runtime: {bootCommand, readyCheck}` and nothing und
 ## Assumptions
 
 - A1: Claude Code keeps exporting `CLAUDE_PID` to Bash-tool children (seen 2026-11-08, undocumented) — if false: the owner is the nearest ancestor named `claude`; `tests/reap.test.js` pins the env read, so the loss is a red test, never a silent leak.
-- A2: Spec 20261106/01 (queue on trunk, touches prototype.js/run.js/host.js/migrate.js) lands first; `depends_on` holds this one — if false: rebase onto it, the seams do not overlap in function.
+- A2: Spec 20261106/01 (queue on trunk) was superseded unbuilt, so this no longer waits on it; its successor touches the queue's write path, not the runtime — if false: rebase onto it, the seams do not overlap in function.
 - A3: No host under JJ's projects reads `prototype.url` or `prototype.bootCommand` from anything but this plugin — if false: that host runs `/spec:migrate`, which is the designed path.

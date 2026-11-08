@@ -305,8 +305,8 @@ Later builders: use these, do not re-derive them.
 
 ### fanout.js notes
 
-- **A lane ends DONE in its worktree.** Its run state (`<wt>/<spec>.run/state.json`, a spec-less fix's in the
-  worktree's own git dir) says DONE with the branch committed; fanout lands it with `lib/land.js`, the solo path,
+- **A lane ends DONE in its worktree.** Its run state (`<wt>/<spec>.run/state.json`, a spec-less fix's
+  `<wt>/specs/fix/<slug>.run/`) says DONE with the branch committed; fanout lands it with `lib/land.js`, the solo path,
   so there is one landing and trunk gets the tree its last gate passed. The lane's run dir goes with its worktree.
 - **Rebase guard.** At the top of `derive`, every worktree run whose worktree is mid-rebase (any step but
   STOPPED and ESCALATE) prints the resolve step while a conflicted file carries markers; once none does, `add -A`
@@ -327,7 +327,7 @@ Later builders: use these, do not re-derive them.
 ### run.js notes
 
 - **Where things live.** State, briefs, `diff.patch` and `findings.json` sit in `<spec>.run/` next to the spec
-  under `--root` (the main checkout, or the lane worktree in a lane); a spec-less fix's under the checkout's git dir.
+  under `--root` (the main checkout, or the lane worktree in a lane); a spec-less fix's in `specs/fix/<slug>.run/` of the checkout it runs in.
 - **Where it builds.** A worktree `.claude/worktrees/spec-<stem>` on `spec/<stem>` from trunk; a lane's own
   worktree; or, with `--in-place` only, the checkout it is in (off trunk the run refuses naming `--in-place`).
 - **Rules, not questions.** Every rule calls `decide(state, line)`; the line is a 📌 in the report and in

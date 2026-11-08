@@ -52,7 +52,8 @@ function load(ctx) {
   Q.read(ctx.root) // an unmigrated queue stops the run before it changes anything: exit 2, naming /spec:migrate
   const s = specInfo(ctx)
   const ignored = (p) => git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', p], ctx.root).status !== 1
-  if ((s.abs && !ignored(path.relative(ctx.root, st.runPath(s.abs)))) || (!inPlaceFlag && !ignored('.claude/worktrees/x')))
+  const sidecar = path.relative(ctx.root, runFile(ctx, 'state.json')) // a spec's or a spec-less fix's
+  if (!ignored(sidecar) || (!inPlaceFlag && !ignored('.claude/worktrees/x')))
     refuse('run sidecars and worktrees must be git-ignored — add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore, commit it, then re-run')
   const prior = st.readJson(runFile(ctx, 'state.json'))
   if (fix !== undefined && !prior && !inPlaceFlag && !pending.isFanoutLane(ctx.root)) refuse('--fix works in place (--in-place) or as a fanout lane')
@@ -204,7 +205,8 @@ const fixItem = (state, ctx, words) => (specInfo(ctx).rel ? { type: 'fix', spec:
 function parkRun(state, ctx, why, item) {
   const s = specInfo(ctx)
   if (s.abs && !state.fix && state.inPlace) st.writeStatus(s.abs, 'hardened')
-  const queued = item && Q.paste(ctx.root, Q.add(ctx.root, item) || { kind: 'prompt', ...item }) // null from add: the same item is already open
+  // null from add: the same item is already open
+  const queued = Q.paste(ctx.root, Q.add(ctx.root, item) || { kind: 'prompt', ...item })
   decide(state, `stopped: ${why}${queued ? ` — queued ${queued}` : ''}`)
   if (state.lane) pending.consumePending(ctx.root)
   state.report = render({ outcome: `⏸️ ${s.id} stopped — ${why}`,

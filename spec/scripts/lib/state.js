@@ -131,14 +131,15 @@ function gitDirOf(root, which) {
 }
 const gitCommonDir = (root) => gitDirOf(root, '--git-common-dir')
 
-// A fix with no spec keeps its run state in the checkout's own git dir: never tracked, and a lane's goes
-// with its worktree. slugOf keys it: the first six words of the symptom plus a hash of all of it.
+// A fix with no spec keeps its run state where a spec's is: a `.run` dir the `specs/**/*.run/` ignore line covers,
+// in the checkout it runs in (a lane's goes with its worktree, and the write hook lets an agent write there).
+// slugOf keys it: the first six words of the symptom plus a hash of all of it.
 const slugOf = (symptom) => {
   const s = String(symptom).trim()
   const words = s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 6).join('-').slice(0, 40).replace(/-+$/, '')
   return `${words || 'fix'}-${crypto.createHash('sha1').update(s).digest('hex').slice(0, 6)}`
 }
-const fixRunDir = (root, slug) => path.join(gitDirOf(root, '--git-dir'), 'spec-fix', slug + '.run')
+const fixRunDir = (root, slug) => path.join(root, 'specs', 'fix', slug + '.run')
 const fixRunPath = (root, slug) => path.join(fixRunDir(root, slug), 'state.json')
 
 // The green staging run /spec:release promotes from: {sha, note}. release.js is the only caller; null clears it.

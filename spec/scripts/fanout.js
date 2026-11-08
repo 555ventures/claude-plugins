@@ -29,7 +29,7 @@ const rel = (root, p) => path.relative(root, path.resolve(root, String(p).replac
 const wtAbs = (root, lane) => path.resolve(root, lane.worktree)
 const nameOf = (lane) => path.basename(lane.worktree)
 const specDoc = (file) => { try { return st.readSpec(file) } catch { return null } }
-// A lane's run state: <wt>/<spec>.run, or a spec-less fix's in the worktree's own git dir; null before the worktree exists.
+// A lane's run state: <wt>/<spec>.run, or a spec-less fix's in <wt>/specs/fix/; null before the worktree exists.
 const runDirOf = (root, lane) => (!fs.existsSync(wtAbs(root, lane)) ? null : lane.spec ? st.runDir(path.join(wtAbs(root, lane), lane.spec)) : st.fixRunDir(wtAbs(root, lane), st.slugOf(lane.symptom)))
 const laneRun = (root, lane) => { const d = runDirOf(root, lane); return d && st.readJson(path.join(d, 'state.json')) }
 // a lane that ended without landing (after and amend are waits that end by themselves)

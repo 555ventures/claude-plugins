@@ -331,18 +331,17 @@ test('gitCommonDir names one dir one way: a root reached through a symlink resol
   const real = fs.realpathSync.native(path.join(d, '.git'))
   assert.strictEqual(S.gitCommonDir(link), real, 'the main checkout through a symlink')
   assert.strictEqual(S.gitCommonDir(wt), real, 'a worktree')
-  assert.strictEqual(S.fixRunPath(link, 'x-abcdef'), S.fixRunPath(d, 'x-abcdef'))
 })
 
-test('fixRunPath is <git-dir>/spec-fix/<slug>.run/state.json: the main checkout\'s git dir, or a lane worktree\'s own, which goes with it', () => {
+test('fixRunPath is <checkout>/specs/fix/<slug>.run/state.json: inside the checkout it runs in, so a lane\'s goes with its worktree and no git dir holds it', () => {
   const d = tmpdir('fixrun'); const g = gitRepo(d)
   const p = S.fixRunPath(d, 'x-abcdef')
-  assert.strictEqual(p, path.join(fs.realpathSync(d), '.git', 'spec-fix', 'x-abcdef.run', 'state.json'))
+  assert.strictEqual(p, path.join(d, 'specs', 'fix', 'x-abcdef.run', 'state.json'))
   assert.strictEqual(S.fixRunDir(d, 'x-abcdef'), path.dirname(p))
   const wt = path.join(d, '.claude/worktrees/w'); g('worktree', 'add', '-q', '-b', 'w', wt, 'main')
-  assert.strictEqual(S.fixRunPath(wt, 'x-abcdef'), path.join(fs.realpathSync(d), '.git', 'worktrees', 'w', 'spec-fix', 'x-abcdef.run', 'state.json'))
-  S.writeJson(S.fixRunPath(wt, 'x-abcdef'), { step: 'DONE' }); g('worktree', 'remove', wt)
-  assert.ok(!fs.existsSync(S.fixRunPath(d, 'x-abcdef').replace('.git/spec-fix', '.git/worktrees/w/spec-fix')), 'removing the worktree removes its fix state')
+  assert.strictEqual(S.fixRunPath(wt, 'x-abcdef'), path.join(wt, 'specs', 'fix', 'x-abcdef.run', 'state.json'))
+  S.writeJson(S.fixRunPath(wt, 'x-abcdef'), { step: 'DONE' }); g('worktree', 'remove', '--force', wt)
+  assert.ok(!fs.existsSync(wt), 'removing the worktree removes its fix state')
 })
 
 test('AC-20261108-03-7 resumes: an after run needs its spec done at ref, an amend run needs it hardened with a blob unlike the base\'s', () => {

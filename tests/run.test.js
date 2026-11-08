@@ -253,12 +253,23 @@ test('AC-20261107-01-5 /spec:fix on a stub in place briefs the Decisions and Ass
   put(h.dir, 'a.txt', 'fixed\n')
   assert.match(ok(fx('--mark', 'built')), /BUILD → REVIEW;/)
   assert.ok(contract(ok(fx())), 'the reviewer brief too')
-  const done = ok(fx('--mark', 'reviewed', '--file', h.findings([])))
+  const done = ok(fx('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', summary: 'name it better' }])))
   assert.ok(/✅ fixed — the thing is sideways/.test(done) && !done.includes('reverted spec text'), done)
+  assert.deepStrictEqual(open(h).map((i) => ({ type: i.type, spec: i.spec, payload: i.payload })), [{ type: 'fix', spec: REL, payload: 'advisories of 01-thing: name it better' }], 'a spec-bound fix queues its advisories bound to its spec')
   assert.strictEqual(h.g('log', '-1', '--format=%s').trim(), `fix(20261104/01): ${symptom}`)
   assert.deepStrictEqual(h.g('show', '--name-only', '--format=', 'HEAD').trim().split('\n'), ['a.txt'], 'no spec file in the fix')
   const r = h.run()
   assert.ok(r.status === 2 && r.stderr.includes('is already done — nothing to run'), r.stderr)
+})
+
+test('a fix that is itself the advisories of an earlier run queues no further advisories: they print as 📌 lines, so fanout drains', () => {
+  const h = fixture({ status: 'done' })
+  const symptom = 'advisories of 01-thing: name it better'
+  const fx = (...a) => runNode('scripts/run.js', ['--fix', symptom, '--in-place', '--root', h.dir, ...a])
+  ok(fx()); put(h.dir, 'a.txt', 'fixed\n'); ok(fx('--mark', 'built'))
+  const done = ok(fx('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', summary: 'rename the helper' }])))
+  assert.deepStrictEqual(open(h), [], 'no advisories-of-advisories item: ' + JSON.stringify(open(h)))
+  assert.ok(done.includes('📌') && done.includes('rename the helper') && !done.includes('queued the review'), done)
 })
 
 test('a fix whose cause needs a plan stops with a plan item; a fix offers no unmet, a spec run no needs-plan', () => {

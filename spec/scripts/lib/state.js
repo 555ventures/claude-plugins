@@ -133,9 +133,10 @@ const gitCommonDir = (root) => gitDirOf(root, '--git-common-dir')
 
 // A fix with no spec keeps its run state where a spec's is: a `.run` dir the `specs/**/*.run/` ignore line covers,
 // in the checkout it runs in (a lane's goes with its worktree, and the write hook lets an agent write there).
-// slugOf keys it: the first six words of the symptom plus a hash of all of it.
+// slugOf keys it: the first six words of the symptom plus a hash of all of it, whitespace runs as one blank
+// (every line that prints a symptom for resuming is one line, so a newline in it cannot be part of the key).
 const slugOf = (symptom) => {
-  const s = String(symptom).trim()
+  const s = String(symptom).trim().replace(/\s+/g, ' ')
   const words = s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 6).join('-').slice(0, 40).replace(/-+$/, '')
   return `${words || 'fix'}-${crypto.createHash('sha1').update(s).digest('hex').slice(0, 6)}`
 }

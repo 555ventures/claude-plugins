@@ -325,6 +325,20 @@ test('AC-6: a clean contracted close reports the removal and that the contract c
   assert.strictEqual(h.g('status', '--porcelain').trim(), '')
 })
 
+test('AC-6: a close takes its Next from the derivation: a hardened spec the queue file never held is named', async (t) => {
+  const h = host()
+  await approved(t, h)
+  ok(mark(h.root, STEM, 'contracted', '--confirmed'))
+  fs.writeFileSync(path.join(h.root, '.git/spec-queue.json'), JSON.stringify({ version: 3, seq: 0, items: [] }))
+  const spec = 'specs/20261108/01-unqueued.md'
+  fs.mkdirSync(path.join(h.root, 'specs/20261108'), { recursive: true })
+  fs.writeFileSync(path.join(h.root, spec), '---\nstatus: hardened\n---\n\n# x\n')
+  h.g('add', '-A'); h.g('commit', '-q', '-m', 'lock')
+  const out = ok(mark(h.root, STEM, 'closed'))
+  assert.match(out, /Next: \/spec:run @specs\/20261108\/01-unqueued\.md/, out)
+  assert.ok(!out.includes('nothing needs you'), out)
+})
+
 test('AC-7: idea words that auto-derive another idea\'s stem are refused', () => {
   const h = host()
   ok(drive(h.root, ['invoice', 'list', 'page', 'redesign', 'alpha']))

@@ -222,7 +222,7 @@ test('AC-20261107-02-5 AC-20261105-09-1 AC-20261105-09-8 AC-20261105-09-9 AC-202
   assert.ok(b.includes('- Fix: the thing is upside down') && b.includes('Reproduce it') && b.includes('- FIX-1: WHEN the symptom is reproduced'), b)
   assert.ok(!b.includes('## File Plan') && !b.includes('needsPlan'), b)
   const slug = st.slugOf(symptom)
-  assert.ok(fs.existsSync(st.fixRunPath(h.dir, slug)), 'the state lives under the git dir')
+  assert.ok(fs.existsSync(st.fixRunPath(h.dir, slug)), 'the state lives in the checkout\'s specs/fix/')
   put(h.dir, 'a.txt', 'fixed\n')
   put(path.dirname(st.fixRunPath(h.dir, slug)), 'evidence.md', 'Root cause: it was flipped\nRegression test: check.js :: ok\n')
   assert.match(ok(fx('--mark', 'built')), /BUILD → REVIEW/)
@@ -580,6 +580,10 @@ test('AC-20261107-03-5 run sidecars git does not ignore are refused with the ign
   const r = h.run()
   assert.ok(r.status === 2 && r.stderr.includes('add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore'), r.stderr)
   assert.ok(h.state() === null && !fs.existsSync(h.wt))
+  // A spec-less fix's run dir sits in the checkout too: unignored, its sidecars would ride in the reviewed diff and the commit.
+  const fx = runNode('scripts/run.js', ['--fix', 'it breaks', '--in-place', '--root', h.dir])
+  assert.ok(fx.status === 2 && fx.stderr.includes('add the lines `specs/**/*.run/` and `.claude/worktrees/` to .gitignore'), 'a spec-less fix is refused the same way: ' + fx.status + fx.stderr + fx.stdout)
+  assert.ok(!fs.existsSync(st.fixRunDir(h.dir, st.slugOf('it breaks'))), 'and writes no run state')
 })
 
 test('AC-20261107-03-6 a lane run started from the main checkout finds its spec under --root, not the shell directory', () => {

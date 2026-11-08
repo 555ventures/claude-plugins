@@ -128,7 +128,11 @@ function check(root, { probe = true } = {}) {
   for (const d of walkRuns(path.join(root, 'specs'), [])) {
     const run = readJson(path.join(d, 'state.json'), null); const rel = path.relative(root, d)
     if (run && run.step && !ended(run)) {
-      info.push(`in flight: ${rel.replace(/\.run$/, '.md')} at ${run.step} — ${fan ? '/spec:fanout' : `/spec:run ${rel.replace(/\.run$/, '.md')}`}`)
+      const fixOnly = run.fix && !run.spec // specs/fix/<slug>.run names a symptom, not a spec file
+      const symptom = fixOnly ? String(run.fix.symptom).replace(/\s+/g, ' ').slice(0, 60) : ''
+      const what = fixOnly ? `fix "${symptom}"` : rel.replace(/\.run$/, '.md')
+      const cmd = fan ? '/spec:fanout' : fixOnly ? '/spec:fix' : `/spec:run ${what}`
+      info.push(`in flight: ${what} at ${run.step} — ${cmd}`)
       if (run.worktree) used.add(path.resolve(root, run.worktree))
     } else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
   }

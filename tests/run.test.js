@@ -247,6 +247,8 @@ test('AC-20261107-01-5 /spec:fix on a stub in place briefs the Decisions and Ass
   assert.strictEqual(stub.sweep(h.dir).paths[0], REL)
   assert.ok(!fs.readFileSync(path.join(h.dir, REL), 'utf8').includes('## Decisions'), 'the spec on disk is a stub')
   const symptom = 'the thing is sideways'
+  Q.add(h.dir, { type: 'fix', spec: REL, payload: 'the thing  is\n sideways ' }) // the queued item, its whitespace reflowed: still this fix
+  Q.add(h.dir, { type: 'fix', spec: REL, payload: 'the thing is upside down' }) // another fix on the same spec stays queued
   const fx = (...a) => runNode('scripts/run.js', [REL, '--fix', symptom, '--in-place', '--root', h.dir, ...a])
   const contract = (out) => out.includes('## Decisions\n- D1: plain text, no JSON | no YAML — ADR-0001') && out.includes('- A1: the thing is small — if false: ask: shrink it | split it')
   assert.ok(contract(ok(fx())), 'the builder brief carries the text at ' + full)
@@ -257,7 +259,7 @@ test('AC-20261107-01-5 /spec:fix on a stub in place briefs the Decisions and Ass
   assert.ok(contract(ok(fx())), 'the reviewer brief too')
   const done = ok(fx('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', summary: 'name it better' }])))
   assert.ok(/✅ fixed — the thing is sideways/.test(done) && !done.includes('reverted spec text'), done)
-  assert.deepStrictEqual(open(h).map((i) => ({ type: i.type, spec: i.spec, payload: i.payload })), [{ type: 'fix', spec: REL, payload: 'advisories of 01-thing: name it better' }], 'a spec-bound fix queues its advisories bound to its spec')
+  assert.deepStrictEqual(open(h).map((i) => ({ type: i.type, spec: i.spec, payload: i.payload })), [{ type: 'fix', spec: REL, payload: 'the thing is upside down' }, { type: 'fix', spec: REL, payload: 'advisories of 01-thing: name it better' }], 'a spec-bound fix ticks its own queued item, whatever its whitespace, queues its advisories bound to its spec, and leaves another fix alone')
   assert.strictEqual(h.g('log', '-1', '--format=%s').trim(), `fix(20261104/01): ${symptom}`)
   assert.deepStrictEqual(h.g('show', '--name-only', '--format=', 'HEAD').trim().split('\n'), ['a.txt'], 'no spec file in the fix')
   const r = h.run()

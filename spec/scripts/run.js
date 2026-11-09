@@ -17,7 +17,7 @@ const { land, briefClosed, briefOpen } = require('./lib/land'); const { render }
 const criteria = require('./lib/criteria'); const stub = require('./lib/stub')
 
 const PLUGIN = path.resolve(__dirname, '..')
-const REPAIR_CAP = 2; const FIX_CAP = 1; const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
+const REPAIR_CAP = 2; const FIX_CAP = 2; const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
 const AGENT_STEPS = ['BUILD', 'REPAIR', 'FIX', 'REVIEW'] // only then is a non-lane checkout marked for block-worker-git.sh
 let inPlaceFlag = false
 
@@ -434,7 +434,10 @@ const steps = {
     const seat = B.reviewSeat(docOf(state, ctx), cfgOf(ctx)) // which seat judged this round, kept in the build commit
     const round = `${seat.model}/${seat.effort}: ${doc.findings.length} findings, ${blocking.length} blocking`
     state.reviews = [...(state.reviews || []), round]
-    if (state.review.verdict === 'stopped') return parkRun(state, ctx, `still blocking after ${FIX_CAP} fix round`, fixItem(state, ctx, blocking[0].summary || 'blocking review findings'))
+    if (state.review.verdict === 'stopped') {
+      const why = `still blocking after ${FIX_CAP} fix round${FIX_CAP === 1 ? '' : 's'}`
+      return parkRun(state, ctx, why, fixItem(state, ctx, blocking[0].summary || 'blocking review findings'))
+    }
     if (blocking.length) return go(state, 'FIX')
     return choices ? go(state, 'ESCALATE', { why: 'decision', from: 'REVIEW' }) : afterReview(state)
   },

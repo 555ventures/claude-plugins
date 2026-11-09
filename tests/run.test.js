@@ -197,8 +197,10 @@ test('AC-20261107-02-3 AC-20261105-08-4 AC-20261105-06-7 a gate red past the rep
   const fixedSame = r.run('--mark', 'fixed')
   assert.ok(fixedSame.status === 2 && fixedSame.stderr.includes('nothing changed since the last gate — dispatch a builder') && r.state().attempts.fix === 0, fixedSame.stderr)
   bump(r.wt); ok(r.run('--mark', 'fixed'))
+  assert.match(ok(r.run('--mark', 'reviewed', '--file', r.findings(BLOCKING))), /REVIEW → FIX;/, 'a fix round writes tests that seed new blockers: one round is not enough to converge')
+  bump(r.wt); ok(r.run('--mark', 'fixed'))
   const stop2 = ok(r.run('--mark', 'reviewed', '--file', r.findings(BLOCKING)))
-  assert.match(stop2, /REVIEW → STOPPED;[\s\S]*📌 stopped: still blocking after 1 fix round — queued \/spec:fix specs\/20261104\/01-thing\.md — wrong thing/)
+  assert.match(stop2, /REVIEW → STOPPED;[\s\S]*📌 stopped: still blocking after 2 fix rounds — queued \/spec:fix specs\/20261104\/01-thing\.md — wrong thing/)
   assert.deepStrictEqual(open(r).map((i) => i.payload), ['wrong thing'])
 })
 

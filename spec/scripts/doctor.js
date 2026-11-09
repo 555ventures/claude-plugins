@@ -88,7 +88,8 @@ const pluginVersion = () => versionOf(PLUGIN)
 // probe:false skips the testCommand run (status counts hygiene findings and must stay fast).
 function check(root, { probe = true } = {}) {
   const f = []; const info = [] // info: runs in flight, printed but not a finding
-  const stale = staleNote(PLUGIN) // a long-lived Claude Code keeps the plugin it loaded: only a restart reloads it
+  // a long-lived Claude Code keeps the plugin it loaded: only a restart reloads it
+  const stale = staleNote(PLUGIN, root)
   if (stale) f.push('plugin: ' + stale.replace(/^⚠️ /, ''))
   // Every check below reads git state; outside a repository they would crash, so refuse and name the remedy.
   if (spawnSync('git', ['-C', root, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).status !== 0) {

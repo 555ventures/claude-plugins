@@ -752,3 +752,21 @@ test('AC-20261108-02-6 a brief path with no file is refused and creates nothing;
   assert.ok(fs.existsSync(path.join(h.root, 'design/prototypes/login-pin/status.json')))
   assert.match(ok(drive(h.root, ['login', 'drop', 'p1'])), /Auto-picked stem login-drop-p1 /)
 })
+
+test('AC-20261108-02-6 a line carrying pin or drop flags that is not a pin or drop line is refused, listing the known stems, and opens nothing', (t) => {
+  const h = guard(t, host())
+  const typo = drive(h.root, ['logn', 'pin', '--kind', 'look', '--route', '/', '--note', 'n'])
+  assert.strictEqual(typo.status, 2, typo.stdout)
+  assert.ok(typo.stderr.includes("'logn pin' is neither") && typo.stderr.includes('known prototypes: none'), typo.stderr)
+  assert.ok(!fs.existsSync(path.join(h.root, 'design')) && !fs.existsSync(path.join(h.root, '.claude/worktrees')), 'nothing was created')
+  ok(drive(h.root, ['login', 'pin']))
+  const prototypes = () => fs.readdirSync(path.join(h.root, 'design/prototypes')).sort()
+  const drop = drive(h.root, ['logn', 'drop', 'p1', '--why', 'x'])
+  assert.strictEqual(drop.status, 2, drop.stdout)
+  assert.ok(drop.stderr.includes("'logn drop p1' is neither") && drop.stderr.includes('known prototypes: login-pin'), drop.stderr)
+  // a known stem with a mistyped pin id: still not a drop line, so it opens nothing either
+  const known = drive(h.root, ['login-pin', 'drop', '1', '--why', 'x'])
+  assert.strictEqual(known.status, 2, known.stdout)
+  assert.ok(known.stderr.includes("'login-pin drop 1' is neither") && known.stderr.includes('known prototypes: login-pin'), known.stderr)
+  assert.deepStrictEqual(prototypes(), ['login-pin'], 'no prototype was opened')
+})

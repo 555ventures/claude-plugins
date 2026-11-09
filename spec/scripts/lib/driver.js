@@ -98,13 +98,13 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const lines = [`▶ ${step.name}${version ? ' · spec ' + version : ''}`]
     if (step.body) lines.push('', step.body.trimEnd())
     if (step.mark) lines.push('', '▶ when done: ' + markLine(ctx, step.mark))
-    const stale = warn && plugin.staleNote(PLUGIN_ROOT)
+    const stale = warn && plugin.staleNote(PLUGIN_ROOT, ctx.root)
     if (stale) lines.push('', stale)
     return lines.join('\n') + '\n'
   }
 
-  const checkpoint = (text) => {
-    const stale = plugin.staleNote(PLUGIN_ROOT)
+  const checkpoint = (text, ctx) => {
+    const stale = plugin.staleNote(PLUGIN_ROOT, ctx.root)
     writeOut(1, text + '\n' + (stale ? stale + '\n' : ''))
   }
 
@@ -126,7 +126,7 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const alreadyApplied = () => {
       const rerun = `/spec:${name}${ctx.arg ? ' ' + ctx.arg : ''}`
       const move = `${cur.from.name} → ${cur.step.name}`
-      checkpoint(`✅ checkpoint — ${move}; mark ${verb} was already applied; safe to /clear and re-run ${rerun}`)
+      checkpoint(`✅ checkpoint — ${move}; mark ${verb} was already applied; safe to /clear and re-run ${rerun}`, ctx)
     }
     if (!allowed.includes(verb)) {
       if (applied && applied(verb, state, a.flags, ctx)) return alreadyApplied()
@@ -143,7 +143,7 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const settled = settle(state, ctx)
     const next = settled.step
     const arg = ctx.arg ? ' ' + ctx.arg : ''
-    checkpoint(`✅ checkpoint — ${cur.step.name} → ${next.name}; safe to /clear and re-run /spec:${name}${arg}`)
+    checkpoint(`✅ checkpoint — ${cur.step.name} → ${next.name}; safe to /clear and re-run /spec:${name}${arg}`, ctx)
     const extra = after && !ctx.json && after(verb, settled.state, ctx)
     if (extra) writeOut(1, extra + '\n')
     // A terminal step (no mark) is shown now: its state may already be cleared, so a re-run cannot.

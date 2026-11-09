@@ -84,30 +84,34 @@ const pluginVersion = (pluginRoot) => {
   return (readJson(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), {}) || {}).version || null
 }
 
-// The version Claude Code has installed for the plugin whose cache folder holds pluginRoot (its registry's entries
-// whose installPath sits in the same folder), the highest when several scopes list one; null for a dev checkout or a
-// registry that cannot be read. A registry of another shape is never a refusal.
-function installedVersion(pluginRoot) {
+// The version Claude Code has installed for this session of the plugin whose cache folder holds pluginRoot: among the
+// registry's entries whose installPath sits in that folder, the project or local entry whose projectPath is root (or
+// holds it, as for a worktree inside the project), else the user entry. Another project's pin is not this session's
+// install. null for a dev checkout or a registry that cannot be read; a registry of another shape is never a refusal.
+function installedVersion(pluginRoot, root) {
   const home = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
   const reg = readJson(path.join(home, 'plugins', 'installed_plugins.json'))
   const real = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
   const cache = real(path.dirname(path.resolve(pluginRoot)))
   const mine = Object.values(isObj(reg) && isObj(reg.plugins) ? reg.plugins : {}).flat()
     .filter((e) => isObj(e) && typeof e.installPath === 'string' && typeof e.version === 'string' && e.version &&
-      real(path.dirname(path.resolve(e.installPath))) === cache).map((e) => e.version)
-  const parts = (v) => v.split('.').map((n) => Number(n) || 0)
-  const newer = (a, b) => {
-    const [x, y] = [parts(a), parts(b)]
-    for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0)
-    return false
+      real(path.dirname(path.resolve(e.installPath))) === cache)
+  const here = root ? real(root) : null
+  const holds = (e) => {
+    if (!here) return false
+    const rel = path.relative(real(e.projectPath), here)
+    return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel))
   }
-  return mine.reduce((best, v) => (best === null || newer(v, best) ? v : best), null)
+  const pinned = mine.filter((e) => typeof e.projectPath === 'string' && e.projectPath && holds(e))
+    .sort((a, b) => b.projectPath.length - a.projectPath.length)[0]
+  const user = mine.find((e) => !e.projectPath && (e.scope === undefined || e.scope === 'user'))
+  return (pinned || user || {}).version || null
 }
 
-// The line a step prints when this process runs an older plugin than the one installed, else null.
-function staleNote(pluginRoot) {
+// The line a step prints when this session runs another plugin version than the one installed for root, else null.
+function staleNote(pluginRoot, root) {
   const running = pluginVersion(pluginRoot)
-  const installed = installedVersion(pluginRoot)
+  const installed = installedVersion(pluginRoot, root)
   if (!running || !installed || running === installed) return null
   return `⚠️ spec ${running} is running but ${installed} is installed — ` +
     'restart Claude Code (/clear does not reload plugins)'

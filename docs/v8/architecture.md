@@ -186,6 +186,10 @@ tier, Users, Contracts, UI, Data Model, Rationale, Canonical Delta, oracle/pre-g
 | UserPromptSubmit | `state-gate.sh` | `/spec:run <spec>` on a `draft` spec or one with `[NEEDS CLARIFICATION:` markers → exit 2 with the remedy. |
 | PreToolUse Bash | `block-worker-git.sh` | inside a lane worktree, builder/reviewer agents run only v7's read-only allowlist (`status diff log show rev-parse ls-files ls-tree blame grep describe cat-file name-rev shortlog rev-list merge-base show-ref diff-tree version help`), `git add` and `git rebase --continue`; every other verb exits 2. In any checkout of the repo while a lane is open, `reset checkout restore clean stash switch branch worktree` stay blocked (harmless list forms pass); a `git fetch` there is free. Marker: `<git-dir>/spec-lane-open`. |
 | PreToolUse Write\|Edit | `block-cross-worktree-writes.sh` | copy-trim from v7. |
+| SessionStart | `reap.js session-start` | Sweeps the repo the session opens in (`lib/reap.js` `sweep`): stops every process a dead session left under it, prints `🧹 stopped <n> process(es) a closed session left in this repo` only when n > 0. The crash path: SessionEnd cannot fire on SIGKILL. `timeout: 5`, always exit 0. |
+| SessionEnd | `reap.js session-end` | Stops every process carrying this session's `CLAUDE_PID` (else the nearest ancestor named `claude`), TERM then KILL after 1 s; `reason` `clear` and `resume` stop nothing (the process lives on). `timeout: 5`, always exit 0. |
+
+`reap.js` (`scripts/reap.js`) is one CLI over `lib/reap.js`, the reaper `lib/app.js` shares. A worktree's removal goes through `host.release` (every process tagged `SPEC_APP=<wt>` or started by any session with its cwd inside, then `git.worktreeRemove`, which no other file calls); `land.js`, `run.js`, `prototype.js`, `fanout.js` and `red-check.js` all call it. A process with no `CLAUDE_PID` is the user's own and is never stopped.
 
 ## 8. Report (`lib/report.js`)
 

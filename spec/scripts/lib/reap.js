@@ -8,8 +8,10 @@
 //   members(pgids) → the live pids in those process groups (a member ps shows no environment for is found here)
 //   tagOf(pid) → the SPEC_APP one process carries      tagged(wt)   pids carrying SPEC_APP=wt
 //   ownerAlive(pid)   the process is alive and is named `claude`
-//   cwdUnder(pids, dir) → pids whose cwd is dir or below              kill(pids)   TERM, 5 s, KILL
-//   sweep(root) → n   kills what a dead session left under root: every SPEC_APP process and every untagged one
+//   cwdUnder(pids, dir) → pids whose cwd is dir or below              kill(pids, graceMs = 5000)   TERM, grace, KILL
+//   lineage() → this process and its ancestors, nearest first (never ours to kill)
+//   sweep(root, graceMs = 5000) → n   kills what a dead session left under root: every SPEC_APP process and every
+//                                      untagged one
 
 const fs = require('fs')
 const path = require('path')
@@ -113,11 +115,11 @@ function cwdUnder(pids, dir) {
 
 const signal = (pids, sig) => { for (const pid of pids) { try { process.kill(pid, sig) } catch { /* gone */ } } }
 
-function kill(pids) {
+function kill(pids, graceMs = 5000) {
   const list = [...new Set(pids)].filter((p) => Number.isInteger(p) && p > 1 && p !== process.pid)
   if (!list.length) return 0
   signal(list, 'SIGTERM')
-  for (const t0 = Date.now(); Date.now() - t0 < 5000 && list.some(running); sleepMs(100));
+  for (const t0 = Date.now(); Date.now() - t0 < graceMs && list.some(running); sleepMs(100));
   signal(list.filter(running), 'SIGKILL')
   return list.length
 }
@@ -137,7 +139,8 @@ function lineage() {
 // Among processes whose CLAUDE_PID owner is dead: every one tagged SPEC_APP with a path under root, and every untagged
 // one whose cwd is under root. Never touched: this process and its ancestors, anything carrying this driver's own
 // CLAUDE_PID, a live owner's process, a process with no owner recorded, and anything tagged or running outside root.
-function sweep(root) {
+// graceMs is kill's TERM-to-KILL wait: a caller under a time budget (a hook) passes a shorter one.
+function sweep(root, graceMs = 5000) {
   const dir = real(root)
   const self = lineage()
   const mine = Number(process.env.CLAUDE_PID) || null
@@ -147,7 +150,7 @@ function sweep(root) {
     dead(p.CLAUDE_PID))
   const tags = orphans.filter((p) => p.SPEC_APP && under(real(p.SPEC_APP), dir)).map((p) => p.pid)
   const here = cwdUnder(orphans.filter((p) => !p.SPEC_APP).map((p) => p.pid), dir)
-  return kill([...tags, ...here])
+  return kill([...tags, ...here], graceMs)
 }
 
-module.exports = { procs, tagOf, info, running, members, ownerAlive, tagged, cwdUnder, kill, sweep }
+module.exports = { procs, tagOf, info, running, members, ownerAlive, tagged, cwdUnder, kill, lineage, sweep }

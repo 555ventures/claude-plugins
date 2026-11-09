@@ -1,12 +1,13 @@
 'use strict'
-// Pins the three hooks by exit code: state-gate.sh (UserPromptSubmit), block-worker-git.sh and
-// block-cross-worktree-writes.sh (PreToolUse). 0 = allow, 2 = block; parse errors fail open.
+// Pins the hooks: state-gate.sh (UserPromptSubmit), block-worker-git.sh and block-cross-worktree-writes.sh
+// (PreToolUse) by exit code (0 = allow, 2 = block; parse errors fail open), and reap.js (SessionStart, SessionEnd) by
+// the processes it stops (it always exits 0).
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
-const { execFileSync, spawnSync } = require('child_process')
-const { tmpdir, gitRepo, runBash, SPEC } = require('./helpers')
+const { execFileSync, spawn, spawnSync } = require('child_process')
+const { tmpdir, gitRepo, runBash, runNode, SPEC } = require('./helpers')
 const S = require(path.join(SPEC, 'scripts/lib/state'))
 
 const hook = (script, payload) => runBash('scripts/' + script, [], { input: typeof payload === 'string' ? payload : JSON.stringify(payload) })
@@ -120,4 +121,115 @@ test('AC-20261105-15-10 inside a marked lane only v7\'s read-only allowlist, git
   assert.strictEqual(inMain('git reset --hard'), 2, 'a reset there still is')
   for (const c of ['git checkout .', 'git restore .', 'git clean -fd', 'git stash', 'git switch x', 'git branch -D x', 'git worktree remove x']) assert.strictEqual(inMain(c), 2, `${c} is blocked in the main checkout while a lane is open`)
   assert.strictEqual(inMain('git branch --list'), 0, 'a harmless form is not')
+})
+
+// ---- reap.js: SessionStart sweeps this repo, SessionEnd stops what the session started (spec 20261108/04) ----
+// Every process killed here is a stand-in this test spawned: node idlers carrying CLAUDE_PID / SPEC_APP, `sleep` owners.
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+const gone = async (pid, ms = 3000) => { for (let t0 = Date.now(); alive(pid) && Date.now() - t0 < ms;) await new Promise((r) => setTimeout(r, 50)); return !alive(pid) }
+const settle = (ms = 800) => new Promise((r) => setTimeout(r, ms)) // a fresh process shows its parent's env until it execs
+const STUBBORN = "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)" // ignores TERM: only KILL stops it
+function idle(t, env, cwd, code = 'setInterval(() => {}, 1000)') {
+  const child = spawn(process.execPath, ['-e', code], { cwd, env: { ...process.env, CLAUDE_PID: undefined, SPEC_APP: undefined, ...env }, stdio: 'ignore' })
+  t.after(() => child.kill('SIGKILL'))
+  return child
+}
+const owner = (t, name = 'sleep') => {
+  const child = spawn('bash', ['-c', `exec -a ${name} sleep 300`], { stdio: 'ignore' })
+  t.after(() => child.kill('SIGKILL'))
+  return child
+}
+const reap = (arg, payload, env = {}) => runNode('scripts/reap.js', [arg], { input: typeof payload === 'string' ? payload : JSON.stringify(payload), env: { CLAUDE_PID: undefined, ...env } })
+
+test('AC-20261108-04-3 session-start stops what a SIGKILLed session left under this repo, prints one line, and spares a live owner\'s and an outside process', async (t) => {
+  const repo = fs.realpathSync(tmpdir('reap-start'))
+  gitRepo(repo)
+  const outside = fs.realpathSync(tmpdir('reap-outside'))
+  const dying = owner(t)
+  const live = owner(t, 'claude')
+  await settle(300)
+  const deadPid = dying.pid
+  dying.kill('SIGKILL')
+  await new Promise((r) => dying.once('exit', r))
+  const tagged = idle(t, { CLAUDE_PID: String(deadPid), SPEC_APP: path.join(repo, '.claude/worktrees/spec-x') }, outside)
+  const here = idle(t, { CLAUDE_PID: String(deadPid) }, repo)
+  const away = idle(t, { CLAUDE_PID: String(deadPid) }, outside)
+  const theirs = idle(t, { CLAUDE_PID: String(live.pid) }, repo)
+  await settle()
+  const r = reap('session-start', { cwd: repo, hook_event_name: 'SessionStart' })
+  assert.strictEqual(r.status, 0)
+  assert.match(r.stdout, /^🧹 stopped 2 process\(es\) a closed session left in this repo\n$/)
+  assert.ok(await gone(tagged.pid) && await gone(here.pid), 'the SPEC_APP process and the untagged one under the repo are stopped')
+  assert.ok(alive(away.pid), 'a process with its cwd outside the repo stays')
+  assert.ok(alive(theirs.pid), 'a live session\'s process stays')
+  const again = reap('session-start', { cwd: repo })
+  assert.deepStrictEqual([again.status, again.stdout], [0, ''], 'nothing left to reap prints nothing')
+  assert.deepStrictEqual([reap('session-start', { cwd: outside }).status, reap('session-start', { cwd: outside }).stdout], [0, ''], 'no repo: exit 0, silent')
+  assert.strictEqual(reap('session-start', 'not json').status, 0, 'a parse error never blocks a session')
+  assert.strictEqual(reap('session-start', {}).status, 0)
+})
+
+test('AC-20261108-04-3 session-start stops a SIGTERM-ignoring orphan and returns inside the hook\'s 5 s timeout', async (t) => {
+  const repo = fs.realpathSync(tmpdir('reap-stubborn'))
+  gitRepo(repo)
+  const dying = owner(t)
+  await settle(300)
+  const deadPid = dying.pid
+  dying.kill('SIGKILL')
+  await new Promise((r) => dying.once('exit', r))
+  const stubborn = idle(t, { CLAUDE_PID: String(deadPid) }, repo, STUBBORN)
+  await settle()
+  const t0 = Date.now()
+  const r = reap('session-start', { cwd: repo })
+  const ms = Date.now() - t0
+  assert.strictEqual(r.status, 0)
+  assert.match(r.stdout, /^🧹 stopped 1 process\(es\)/)
+  assert.ok(ms < 5000, `session-start took ${ms} ms; the hook is killed at 5 s, before its SIGKILL is sent`)
+  assert.ok(await gone(stubborn.pid, 1000), 'the TERM-ignoring orphan is killed')
+})
+
+test('AC-20261108-04-4 session-end stops every process carrying the session\'s CLAUDE_PID within 2 s and no other; clear and resume stop nothing', async (t) => {
+  const me = owner(t)
+  const other = owner(t)
+  const mine = [idle(t, { CLAUDE_PID: String(me.pid) }, tmpdir('a')), idle(t, { CLAUDE_PID: String(me.pid), SPEC_APP: tmpdir('b') }, tmpdir('c'))]
+  mine.push(idle(t, { CLAUDE_PID: String(me.pid) }, tmpdir('e'), STUBBORN))
+  const theirs = idle(t, { CLAUDE_PID: String(other.pid) }, tmpdir('d'))
+  await settle()
+  for (const reason of ['clear', 'resume']) {
+    const r = reap('session-end', { reason }, { CLAUDE_PID: String(me.pid) })
+    assert.deepStrictEqual([r.status, r.stdout], [0, ''])
+    assert.ok(mine.every((c) => alive(c.pid)), `${reason} keeps the process alive, so its servers stay`)
+  }
+  const t0 = Date.now()
+  const r = reap('session-end', { reason: 'prompt_input_exit' }, { CLAUDE_PID: String(me.pid) })
+  assert.strictEqual(r.status, 0)
+  for (const c of mine) assert.ok(await gone(c.pid, 2000), 'every process carrying the session\'s CLAUDE_PID is stopped')
+  const ms = Date.now() - t0
+  assert.ok(ms < 2000, `the last one, which ignores SIGTERM, is gone ${ms} ms after session-end started; the bound is 2 s`)
+  assert.ok(alive(theirs.pid) && alive(me.pid) && alive(other.pid), 'another session\'s process and the owners themselves stay')
+  assert.strictEqual(reap('session-end', 'not json', { CLAUDE_PID: String(me.pid) }).status, 0)
+})
+
+test('AC-20261108-04-4 session-end without CLAUDE_PID takes the nearest ancestor named claude as the owner', async (t) => {
+  const reapJs = path.join(SPEC, 'scripts/reap.js')
+  const session = spawn('bash', ['-c', `exec -a claude bash -c 'node "$0" session-end; true' "${reapJs}"`], { env: { ...process.env, CLAUDE_PID: undefined }, stdio: ['pipe', 'ignore', 'ignore'] })
+  t.after(() => session.kill('SIGKILL'))
+  const child = idle(t, { CLAUDE_PID: String(session.pid) }, tmpdir('walk'))
+  const bystander = idle(t, { CLAUDE_PID: String(owner(t).pid) }, tmpdir('walk2'))
+  await settle()
+  session.stdin.end(JSON.stringify({ reason: 'other' }))
+  assert.ok(await gone(child.pid, 3000), 'the process carrying the claude ancestor\'s pid is stopped')
+  assert.ok(alive(bystander.pid))
+})
+
+test('AC-20261108-04-5 hooks.json carries one SessionStart and one SessionEnd arm calling reap.js with timeout 5, and the three existing arms stay', () => {
+  const h = JSON.parse(fs.readFileSync(path.join(SPEC, 'hooks/hooks.json'), 'utf8')).hooks
+  for (const [ev, arg] of [['SessionStart', 'session-start'], ['SessionEnd', 'session-end']]) {
+    assert.strictEqual(h[ev].length, 1, ev)
+    assert.deepStrictEqual(h[ev][0].hooks, [{ type: 'command', command: `node "\${CLAUDE_PLUGIN_ROOT}/scripts/reap.js" ${arg}`, timeout: 5 }])
+  }
+  assert.deepStrictEqual(Object.keys(h).sort(), ['PreToolUse', 'SessionEnd', 'SessionStart', 'UserPromptSubmit'])
+  assert.deepStrictEqual(h.UserPromptSubmit[0].hooks.map((x) => x.command), ['"${CLAUDE_PLUGIN_ROOT}/scripts/state-gate.sh"'])
+  assert.deepStrictEqual(h.PreToolUse.map((a) => [a.matcher, a.hooks.map((x) => x.command)]),
+    [['Bash', ['"${CLAUDE_PLUGIN_ROOT}/scripts/block-worker-git.sh"']], ['Write|Edit', ['"${CLAUDE_PLUGIN_ROOT}/scripts/block-cross-worktree-writes.sh"']]])
 })

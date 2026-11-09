@@ -13,7 +13,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { readConfig } = require('./lib/state')
-const { run } = require('./lib/host')
+const { run, release } = require('./lib/host')
 const git = require('./lib/git')
 const { isTest } = require('./lib/criteria') // a test-shaped basename or a testGlobs match
 
@@ -48,8 +48,7 @@ function check(base, root) {
       if (!redOnBase && greenOnHead) out.vacuousGreen.push(file)
     }
   } finally {
-    git.raw(['worktree', 'remove', '--force', tree], root)
-    git.raw(['worktree', 'prune'], root)
+    release(root, tree, { force: true }) // its test run may have booted servers
     fs.rmSync(tmp, { recursive: true, force: true })
   }
   return out

@@ -53,7 +53,7 @@ function land(main, o) {
     }
     try { stub.sweep(main) } catch { /* never fails the landing: the next one sweeps again */ }
     pending.unmarkLane(o.wt)
-    const rm = git.worktreeRemove(main, o.wt, { deleteBranch: o.branch })
+    const rm = host.release(main, o.wt, { deleteBranch: o.branch })
     if (!rm.removed) kept = rm.reason
   }
   if (o.tick) Q.tick(main, o.tick)

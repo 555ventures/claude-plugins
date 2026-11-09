@@ -1,6 +1,6 @@
 ---
 date: 2026-11-08
-status: hardened
+status: done
 area: host
 depends_on: [specs/20261108/01-the-host-declares-its-runtime-once.md]
 brief: n/a

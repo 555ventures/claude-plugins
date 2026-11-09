@@ -262,14 +262,34 @@ test('AC-20261107-01-5 /spec:fix on a stub in place briefs the Decisions and Ass
   assert.ok(r.status === 2 && r.stderr.includes('is already done — nothing to run'), r.stderr)
 })
 
-test('a fix that is itself the advisories of an earlier run queues no further advisories: they print as 📌 lines, so fanout drains', () => {
+test('a fix that is itself a queued advisories item queues no further advisories, whatever its symptom says; a typed symptom that only reads like one still queues', () => {
+  const adv = h => h.findings([{ severity: 'advisory', summary: 'rename the helper' }])
+  // in place: the open advisories item the typed symptom is
   const h = fixture({ status: 'done' })
   const symptom = 'advisories of 01-thing: name it better'
+  Q.add(h.dir, { type: 'fix', payload: symptom, advisories: true })
   const fx = (...a) => runNode('scripts/run.js', ['--fix', symptom, '--in-place', '--root', h.dir, ...a])
   ok(fx()); put(h.dir, 'a.txt', 'fixed\n'); ok(fx('--mark', 'built'))
-  const done = ok(fx('--mark', 'reviewed', '--file', h.findings([{ severity: 'advisory', summary: 'rename the helper' }])))
-  assert.deepStrictEqual(open(h), [], 'no advisories-of-advisories item: ' + JSON.stringify(open(h)))
-  assert.ok(done.includes('📌') && done.includes('rename the helper') && !done.includes('queued the review'), done)
+  const done = ok(fx('--mark', 'reviewed', '--file', adv(h)))
+  assert.deepStrictEqual(open(h).map((i) => i.payload), [symptom], 'only the item it came from: nothing new queued')
+  assert.ok(done.includes('📌') && done.includes('rename the helper'), done)
+  // a hand-typed symptom that begins with those words is no advisories item: it queues its own
+  const t = fixture({ status: 'done' })
+  const typed = (...a) => runNode('scripts/run.js', ['--fix', 'advisories of the moon are wrong', '--in-place', '--root', t.dir, ...a])
+  ok(typed()); put(t.dir, 'a.txt', 'fixed\n'); ok(typed('--mark', 'built')); ok(typed('--mark', 'reviewed', '--file', adv(t)))
+  assert.deepStrictEqual(open(t).map((i) => i.advisories), [true], 'a hand-typed symptom queues its advisories')
+  // a fanout lane: the batch names the item, so a symptom the agent reworded still finds it — and a lane ahead of it
+  // that already landed (its worktree removed) does not stop it finding its own
+  const l = fixture({ status: 'done' })
+  const lane = path.join(l.dir, '.claude/worktrees/fix-lane')
+  l.g('worktree', 'add', '-q', '-b', 'fix/lane', lane); pending.markLane(lane, 'fanout')
+  const item = Q.add(l.dir, { type: 'fix', payload: symptom, advisories: true })
+  st.writeFanout(l.dir, { step: 'WAIT', batch: [
+    { id: '0', symptom: 'landed earlier', worktree: '.claude/worktrees/spec-landed-and-removed', status: 'merged' },
+    { id: '1', symptom, item: item.id, worktree: '.claude/worktrees/fix-lane', status: 'dispatched' }] })
+  const lx = (...a) => runNode('scripts/run.js', ['--fix', 'tidy up the naming please', '--root', lane, ...a])
+  ok(lx()); put(lane, 'a.txt', 'fixed\n'); ok(lx('--mark', 'built')); ok(lx('--mark', 'reviewed', '--file', adv(l)))
+  assert.deepStrictEqual(open(l).map((i) => i.payload), [symptom], 'a reworded lane symptom queues nothing')
 })
 
 test('a fix whose cause needs a plan stops with a plan item; a fix offers no unmet, a spec run no needs-plan', () => {

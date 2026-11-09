@@ -208,7 +208,7 @@ const changedFiles = (base, cwd) =>
   withWorkingIndex(cwd, (env) => sh(['diff', '--cached', '--name-only', base], cwd, env)).split('\n').filter(Boolean)
 
 module.exports = {
-  repoRoot, dirtyMessage,
+  repoRoot, dirtyMessage, real,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
   commitAll, commitWip, lsFiles, restore, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
 }

@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 'use strict'
-// connect.js [--root <dir>] [--project <id>] [--name <text>] [--base-url <url>]
+// connect.js [--root <dir>] [--project <id>] [--name <text>] [--base-url <url>] [--allow-temp-root]
 // Links the project to the hosted review service: creates (or joins) the project through
 // `npx walkthrough-cli`, stores the minted token as env.<tokenEnv> in the git-ignored
 // .claude/settings.local.json, proves the link with one call, writes config.walkthrough, and
 // prints `connected <id> → <url>/p/<id>` plus `next: /spec:mocks`. The token is never printed.
+// A root under the OS temp dir (realpath) is refused with exit 2 unless --allow-temp-root is passed: a scratch
+// folder is never a real project, and connecting one registers a live project on the hosted service.
 // Exit: 0 connected · 1 refused · 2 usage/config · 3 service silent. A connected project costs zero tool calls.
 
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 const { spawnSync } = require('child_process')
 const { writeJson, configPath } = require('./lib/state')
 const wt = require('./lib/walkthrough')
@@ -22,12 +25,25 @@ function parse(argv) {
   const f = {}
   for (let i = 0; i < argv.length; i += 2) {
     const k = argv[i].replace(/^--/, '')
+    if (argv[i] === '--allow-temp-root') { f[k] = true; i -= 1; continue }
     if (!argv[i].startsWith('--') || !['root', 'project', 'name', 'base-url'].includes(k) || argv[i + 1] === undefined) {
-      throw stop('usage', `bad argument ${JSON.stringify(argv[i])}`, 'use: --project <id> --name <text> --base-url <url> --root <dir>', 2)
+      throw stop('usage', `bad argument ${JSON.stringify(argv[i])}`,
+        'use: --project <id> --name <text> --base-url <url> --root <dir> --allow-temp-root', 2)
     }
     f[k] = argv[i + 1]
   }
   return f
+}
+
+const real = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
+function refuseTempRoot(root) {
+  const tmp = real(os.tmpdir())
+  const r = real(root)
+  if (r === tmp || r.startsWith(tmp.endsWith(path.sep) ? tmp : tmp + path.sep)) {
+    throw stop('temp-root',
+      `${r} is under the OS temp dir, so it is a scratch folder and connecting it would register a live project`,
+      'run it from the real project folder, or pass --allow-temp-root if this temp folder is meant to be a project', 2)
+  }
 }
 
 // Runs walkthrough-cli with the plugin token removed from its env; returns {status, stdout, stderr}.
@@ -92,6 +108,7 @@ function storeToken(root, cur, tokenEnv, token) {
 async function main(argv) {
   const f = parse(argv)
   const root = path.resolve(f.root || process.cwd())
+  if (!f['allow-temp-root']) refuseTempRoot(root)
   const cfg = readStrict(root, '.claude/spec.config.json', 'bad-config') || {}
   const have = cfg.walkthrough && cfg.walkthrough.baseUrl ? cfg.walkthrough : null
   const tokenEnv = have ? have.tokenEnv || TOKEN_ENV : TOKEN_ENV

@@ -12,6 +12,7 @@ Decisions and acceptance criteria, and the findings path.
 Check that the diff builds what the Intent promises and nothing it excludes, honours every
 Decision, and that a test would catch the loss of each criterion. Look for bugs, security holes and broken callers. A flag, mode, mark, step, config key, command or file that a user or host sees and no Decision names is blocking (an internal code export is not surface); so is a test that asserts a private name, a call count or prose.
 Ground each finding in a `file:line` quote or the output of a command you ran.
+A probe you run never contacts a network service: never run a command that reaches one (`connect.js`, `npx walkthrough-cli`, `curl`), and never run a script on a scratch folder to see what it does.
 
 You have no Write tool and change no code. Write only the findings JSON, with Bash (a heredoc),
 to the printed path:

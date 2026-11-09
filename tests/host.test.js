@@ -239,3 +239,36 @@ test('AC-20261108-01-1 provision makes the worktree, copies the .worktreeinclude
   assert.strictEqual(bad.setup.status, 3)
   assert.match(bad.setup.tail, /boom/)
 })
+
+// A node process idling with `env` and cwd, killed when the test ends (only ever a stand-in this test spawned).
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+const dead = async (pid) => { for (let i = 0; i < 100 && alive(pid); i++) await new Promise((r) => setTimeout(r, 50)); return !alive(pid) }
+function idle(t, env, cwd) {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd, env: { ...process.env, CLAUDE_PID: undefined, SPEC_APP: undefined, ...env }, stdio: 'ignore' })
+  t.after(() => child.kill('SIGKILL'))
+  return child
+}
+
+test('AC-20261108-04-1 release kills what is tagged with the worktree and what any session started from it, leaves an untagged process there alone, and removes the worktree', async (t) => {
+  const root = tmpdir('release'); gitRepo(root)
+  const wt = path.join(fs.realpathSync(root), '.claude/worktrees/spec-r')
+  spawnSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', 'spec/r', wt])
+  const tagged = idle(t, { SPEC_APP: wt }, tmpdir('elsewhere'))
+  const owned = idle(t, { CLAUDE_PID: '4242' }, wt)
+  const plain = idle(t, {}, wt)
+  await new Promise((r) => setTimeout(r, 800)) // a fresh process shows its parent's environment until it execs
+  const r = H.release(root, wt, { deleteBranch: 'spec/r', force: true })
+  assert.strictEqual(r.removed, true, 'the worktree goes')
+  assert.ok(!fs.existsSync(wt), 'the directory is gone')
+  assert.notStrictEqual(spawnSync('git', ['-C', root, 'rev-parse', '--verify', '-q', 'spec/r']).status, 0, 'and its branch')
+  assert.ok(await dead(tagged.pid), 'the SPEC_APP-tagged process is stopped')
+  assert.ok(await dead(owned.pid), 'a process with a CLAUDE_PID and its cwd in the worktree is stopped')
+  assert.ok(alive(plain.pid), 'a process with neither tag is the user\'s own and stays')
+})
+
+test('AC-20261108-04-2 worktreeRemove( is called only in lib/git.js and lib/host.js', () => {
+  const hits = []
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/worktreeRemove\(/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(path.join(SPEC, 'scripts'), f)) } }
+  walk(path.join(SPEC, 'scripts'))
+  assert.deepStrictEqual(hits.sort(), ['lib/git.js', 'lib/host.js'])
+})

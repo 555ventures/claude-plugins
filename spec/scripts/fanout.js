@@ -14,6 +14,7 @@ const path = require('path')
 const { spawnSync } = require('child_process')
 const { makeDriver, parseArgv, refuse, shq } = require('./lib/driver')
 const st = require('./lib/state'); const Q = require('./lib/queue'); const git = require('./lib/git'); const pending = require('./lib/pending')
+const host = require('./lib/host')
 const work = require('./lib/work')
 const { list: queueRows } = require('./lib/queue-rows')
 const { derive: deriveWork } = require('./lib/next')
@@ -361,7 +362,7 @@ const steps = {
     lane.status = 'dismissed'
     if (!flags.discard) return
     lane.wip = fs.existsSync(wt) ? git.commitWip(wt, `wip(spec): ${nameOf(lane)}`) || git.headSha(wt) : null // recoverable for a while via git reflog
-    git.worktreeRemove(ctx.root, lane.worktree, { deleteBranch: lane.branch, force: true })
+    host.release(ctx.root, lane.worktree, { deleteBranch: lane.branch, force: true })
     lane.discarded = true
   },
   reported() { return { step: 'PLAN' } },

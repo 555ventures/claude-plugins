@@ -6,12 +6,13 @@
 // copyIncluded(main, wt) copies the .worktreeinclude matches into a fresh worktree; treeSha(root) is the working tree's
 // git tree; provision(root, {rel, branch, from, config}) → {wt, fresh, setup} makes a worktree as every driver does
 // (the .worktreeinclude files and setupCommand on a fresh one; prepare is that second half); detectTestCommand,
-// firstRedLine, freePort, resolveUrl, listening. The host's app is lib/app.js.
+// firstRedLine, freePort, resolveUrl, listening, release. The host's app is lib/app.js.
 
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const G = require('./git')
+const reap = require('./reap')
 const { spawnSync } = require('child_process')
 
 const TAIL_LINES = 40
@@ -215,6 +216,17 @@ function provision(root, { rel, branch, from, config }) {
   return { wt, fresh, setup: prepare(G.worktreeList(root)[0], wt, config, fresh) }
 }
 
+// The one way a driver removes a worktree: first stops what runs for or from it (every process tagged SPEC_APP=<wt>,
+// and any process a session started — one carrying a CLAUDE_PID — whose cwd is inside; never this process or its
+// ancestors, and never a process with no CLAUDE_PID, which is the user's own), then G.worktreeRemove.
+function release(root, wt, opts) {
+  const abs = path.resolve(root, wt)
+  const skip = reap.lineage()
+  const owned = fs.existsSync(abs) ? reap.procs().filter((p) => p.CLAUDE_PID != null).map((p) => p.pid) : []
+  reap.kill([...reap.tagged(abs), ...reap.cwdUnder(owned, abs)].filter((p) => !skip.has(p)))
+  return G.worktreeRemove(root, abs, opts)
+}
+
 // The line of a red tail worth reading first: a failure marker, else an error word, else the first line.
 const firstRedLine = (tail) => {
   const ls = (tail || '').split('\n').filter((l) => l.trim() && !/^\s*(✔|✓|ok\b|PASS\b)/.test(l))
@@ -258,6 +270,6 @@ const listening = (url) => spawnSync(process.execPath, ['-e',
   'fetch(process.argv[1], { signal: AbortSignal.timeout(2000) }).then(() => process.exit(0), () => process.exit(1))', url],
 { timeout: 5000 }).status === 0
 
-module.exports = { freePort, resolveUrl, listening, provision, prepare, run, gate, treeSha, cacheDir, commonDir,
-  copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine,
-  testsExecuted, COUNT_PATTERNS }
+module.exports = { freePort, resolveUrl, listening, provision, prepare, release, run, gate, treeSha, cacheDir,
+  commonDir, copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf,
+  firstRedLine, testsExecuted, COUNT_PATTERNS }

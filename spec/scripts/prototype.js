@@ -110,7 +110,7 @@ function setup(s, ctx) {
   const had = git.branchExists(ctx.root, s.branch) // a branch it did not create is never deleted
   const made = host.provision(ctx.root, { rel: s.worktree, branch: s.branch, from, config: ctx.config })
   const drop = had ? {} : { deleteBranch: s.branch }
-  const undo = () => { if (made.fresh) git.worktreeRemove(ctx.root, made.wt, { force: true, ...drop }) }
+  const undo = () => { if (made.fresh) host.release(ctx.root, made.wt, { force: true, ...drop }) }
   try {
     if (made.setup.status !== 0) {
       const msg = `setupCommand failed in ${made.wt}:\n${made.setup.tail}\nfix setupCommand in .claude/spec.config.json`
@@ -364,7 +364,7 @@ const steps = {
     const prev = copy(s)
     app.stop(app.recOf(ctx.root, s))
     s.app = null
-    const rm = git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch, force: true }) // a throwaway prototype
+    const rm = host.release(ctx.root, s.worktree, { deleteBranch: s.branch, force: true }) // a throwaway prototype
     if (!rm.removed) warns.push(`worktree kept at ${s.worktree}: ${rm.reason} — git worktree remove --force ${s.worktree}`)
     s.marks.closed = now()
     s.removed = rm.removed

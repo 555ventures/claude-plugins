@@ -95,7 +95,7 @@ function open(state, ctx) {
     ;({ wt, setup } = host.provision(ctx.root, { rel, branch, from: cfg.trunk, config: cfg }))
   } else if (lane) setup = host.prepare(mainRoot(ctx.root), wt, cfg, true)
   if (setup.status !== 0) {
-    if (!lane) git.worktreeRemove(ctx.root, wt, { force: true, deleteBranch: branch }) // the re-run provisions afresh
+    if (!lane) host.release(ctx.root, wt, { force: true, deleteBranch: branch }) // the re-run provisions afresh
     refuse(`setupCommand failed in ${wt}:\n${setup.tail}\nfix setupCommand in .claude/spec.config.json, then re-run`, 1)
   }
   if (spec && !state.fix) { // the worktree copy says done from the start, so the gated tree is the tree that lands

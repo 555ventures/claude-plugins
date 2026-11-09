@@ -7,7 +7,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/prototype.js $ARGUMENTS`. The prototype lives on
 `proto/<stem>`, never merged; only `design/prototypes/<stem>/` on trunk carries forward.
 Needs a `runtime` block in `.claude/spec.config.json`: `bootCommand` (no default), `readyCheck`,
-`url`, optional `publicUrl`, `envCommand`, `readySeconds`. The driver owns the app (`lib/app.js`); the
+`url`, optional `publicUrl`, `envCommand`, `readySeconds`, `stopCommand` (the command that stops an app its boot left
+running, e.g. `docker compose down`). The driver owns the app (`lib/app.js`); the
 session never starts or stops it, and no step prints a boot line. Without `runtime.bootCommand` OPEN
 refuses before it makes a worktree; a config still holding the old `prototype` boot keys is refused too:
 run `/spec:migrate`.

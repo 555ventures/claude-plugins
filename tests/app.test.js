@@ -92,19 +92,95 @@ test('AC-20261108-01-8 a ready check that never passes kills the app, throws exi
   assert.throws(() => app.start({ url: 'http://127.0.0.1:{port}' }, { cwd: h.root, port, log: h.log }), (e) => e.exit === 2 && /runtime\.bootCommand/.test(e.message))
 })
 
-test('AC-20261108-01-2 a boot command that exits 0 leaving nothing tagged (a daemon: `docker compose up -d`) keeps the wait; once the daemon answers, start refuses (exit 2) naming runtime.stopCommand and adopts nothing', async (t) => {
-  // the daemon drops SPEC_APP and serves after 2 s; it records its pid under pids/ the moment it starts so the test kills it
-  const h = host(t, { 'daemon.js': "require('fs').writeFileSync('pids/' + process.pid, '')\nsetTimeout(() => require('http').createServer((q, s) => s.end('d')).listen(process.env.PORT, '127.0.0.1'), 2000)\n" })
-  fs.mkdirSync(path.join(h.root, 'pids'))
-  t.after(() => { for (const p of fs.readdirSync(path.join(h.root, 'pids'))) { try { process.kill(Number(p), 'SIGKILL') } catch { /* gone */ } } })
+// The daemon stub (`docker compose up -d`): the boot runs launch.js and exits 0; the server it left is its own session
+// under a tmp dir outside the repo, with no SPEC_APP and no CLAUDE_PID, and serves after 1 s. It writes its pid to DPID.
+const DAEMON = "const fs = require('fs')\nfs.writeFileSync(process.env.DPID, String(process.pid))\n" +
+  "setTimeout(() => require('http').createServer((q, s) => s.end('d')).listen(process.env.PORT, '127.0.0.1'), 1000)\n"
+const LAUNCH = "const { spawn } = require('child_process')\nconst env = { ...process.env }\ndelete env.SPEC_APP\ndelete env.CLAUDE_PID\n" +
+  "spawn(process.execPath, [require('path').join(__dirname, 'daemon.js')], { detached: true, stdio: 'ignore', cwd: require('os').tmpdir(), env }).unref()\n"
+function daemonHost(t, stopCommand) {
+  const h = host(t, { 'daemon.js': DAEMON, 'launch.js': LAUNCH })
+  const dpid = path.join(tmpdir('dpid'), 'pid')
+  const pidOf = () => Number(fs.readFileSync(dpid, 'utf8'))
+  t.after(() => { try { process.kill(pidOf(), 'SIGKILL') } catch { /* gone */ } })
+  const rt = { ...RT, bootCommand: `DPID=${dpid} node launch.js`, readySeconds: 15 }
+  if (stopCommand !== undefined) rt.stopCommand = stopCommand === true ? `kill $(cat ${dpid})` : stopCommand
+  return { ...h, rt, dpid, pidOf }
+}
+const gone = async (url) => { for (let i = 0; i < 50 && await answers(url); i++) await new Promise((r) => setTimeout(r, 100)); return !(await answers(url)) }
+
+test('AC-20261108-01-2 AC-20261109-01-1 a daemon boot (exit 0, nothing tagged) keeps the wait; with runtime.stopCommand start returns once it answers with the command on the record; alive and up; ensure keeps it, restart runs the command and boots a new daemon; stop leaves nothing answering', async (t) => {
+  const d = daemonHost(t, true)
   const port = await freePort()
-  const rt = { ...RT, bootCommand: 'env -u SPEC_APP node daemon.js >/dev/null 2>&1 & exit 0', readySeconds: 15 }
-  assert.throws(() => app.start(rt, { cwd: h.root, port, log: h.log }),
-    (e) => e.exit === 2 && e.message.includes('the boot handed its server to a daemon this driver cannot stop — add runtime.stopCommand (spec 20261109/01)'))
-  assert.ok(await answers(`http://127.0.0.1:${port}`), 'start kept waiting until the daemon answered')
-  assert.deepStrictEqual(reap.tagged(h.wt), [], 'nothing of it carries the tag, so nothing is adopted')
-  // adopted nowhere: the next start refuses the url as one this driver did not start
-  assert.throws(() => app.start(rt, { cwd: h.root, port, log: h.log }), (e) => e.exit === 2 && e.message.includes('this driver did not start it'))
+  const opts = { cwd: d.root, port, log: d.log }
+  const rec = app.start(d.rt, opts)
+  assert.strictEqual(rec.stopCommand, d.rt.stopCommand)
+  assert.ok(await answers(rec.url) && app.alive(rec) && app.up(d.rt, rec))
+  assert.deepStrictEqual(reap.tagged(d.wt), [], 'the daemon carries no tag: the record is the only tie')
+  assert.strictEqual(app.ensure(d.rt, rec, { ...opts, restart: false }), rec)
+  const first = d.pidOf()
+  const next = app.ensure(d.rt, rec, { ...opts, restart: true })
+  assert.notStrictEqual(d.pidOf(), first, 'a new daemon pid')
+  assert.ok(!alive(first) && await answers(next.url) && app.alive(next))
+  app.stop(next)
+  assert.ok(await gone(next.url), 'nothing answers after stop')
+  assert.ok(!app.alive(next))
+})
+
+test('AC-20261109-01-1 AC-20261109-01-2 a readyCheck that passes before the url answers, with runtime.stopCommand set: start never refuses as unstoppable — it returns once the url answers, or times out and runs stopCommand', async (t) => {
+  const d = daemonHost(t, true)
+  const port = await freePort()
+  const rt = { ...d.rt, readyCheck: `test -f ${d.dpid}` }
+  const rec = app.start(rt, { cwd: d.root, port, log: d.log })
+  assert.strictEqual(rec.stopCommand, rt.stopCommand)
+  assert.ok(await answers(rec.url) && app.alive(rec))
+  app.stop(rec)
+  assert.ok(await gone(rec.url), 'nothing answers after stop')
+
+  const h = host(t)
+  const never = await freePort()
+  const marker = path.join(h.root, 'marker')
+  const rt2 = { url: `http://127.0.0.1:${never}`, bootCommand: 'touch marker; exit 0', readyCheck: 'test -f marker',
+    stopCommand: 'echo STOPCMD-RAN; rm -f marker', readySeconds: 2 }
+  assert.throws(() => app.start(rt2, { cwd: h.root, port: null, log: h.log }),
+    (e) => e.exit === 1 && e.message.includes('did not get ready in 2s') && !e.message.includes('set runtime.stopCommand'))
+  assert.ok(fs.readFileSync(h.log, 'utf8').includes('STOPCMD-RAN') && !fs.existsSync(marker), 'stopCommand ran on the timeout')
+})
+
+test('AC-20261109-01-2 the same daemon boot with no runtime.stopCommand: start throws exit 2 naming runtime.stopCommand and the worktree, only after the url answers', async (t) => {
+  const d = daemonHost(t)
+  const port = await freePort()
+  const t0 = Date.now()
+  assert.throws(() => app.start(d.rt, { cwd: d.root, port, log: d.log }),
+    (e) => e.exit === 2 && e.message.includes('runtime.stopCommand') && e.message.includes(d.wt) && e.message.includes(`http://127.0.0.1:${port}`))
+  assert.ok(Date.now() - t0 >= 900, 'start kept waiting for the daemon to answer')
+  assert.ok(await answers(`http://127.0.0.1:${port}`), 'the url answered before the refusal')
+  assert.deepStrictEqual(reap.tagged(d.wt), [], 'nothing is adopted')
+})
+
+test('AC-20261109-01-3 a runtime.stopCommand that exits 1: stop returns without throwing and writes a line naming runtime.stopCommand and the log to stderr', async (t) => {
+  const d = daemonHost(t, 'echo nope; exit 1')
+  const port = await freePort()
+  const rec = app.start(d.rt, { cwd: d.root, port, log: d.log })
+  let err = ''
+  const write = process.stderr.write
+  process.stderr.write = (c) => { err += c; return true }
+  try { app.stop(rec) } finally { process.stderr.write = write }
+  assert.ok(err.includes('runtime.stopCommand exited 1') && err.includes(d.log) && err.includes(d.wt), err)
+  assert.ok(fs.readFileSync(d.log, 'utf8').includes('nope'), 'its output is appended to the log')
+})
+
+test('AC-20261109-01-4 a fixed url that already answers before the boot: start throws exit 2 with `this driver did not start it` and runtime.stopCommand, with and without the key set', async (t) => {
+  const h = host(t)
+  const port = await freePort()
+  const other = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('o')).listen(${port}, '127.0.0.1')`], { stdio: 'ignore' })
+  t.after(() => other.kill('SIGKILL'))
+  for (let i = 0; i < 50 && !(await answers(`http://127.0.0.1:${port}`)); i++) await new Promise((r) => setTimeout(r, 100))
+  for (const key of [undefined, 'docker compose down']) {
+    const rt = { url: `http://127.0.0.1:${port}`, bootCommand: 'node app.js', readySeconds: 5, ...(key ? { stopCommand: key } : {}) }
+    assert.throws(() => app.start(rt, { cwd: h.root, port: null, log: h.log }),
+      (e) => e.exit === 2 && e.message.includes('this driver did not start it') && e.message.includes('runtime.stopCommand'), String(key))
+  }
 })
 
 test('AC-20261108-01-2 a boot command that exits non-zero, or an exec of a server that dies, with nothing tagged left fails at once with the log tail', async (t) => {

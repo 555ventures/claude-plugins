@@ -4,6 +4,7 @@
 - Date: 2026-11-08
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (specs/20261108/01-the-host-declares-its-runtime-once.md)
+- Amended: 2026-11-09, specs/20261109/01-a-daemon-boot-declares-how-it-stops.md (`runtime.stopCommand`; a daemon is stopped through its record)
 - Amends: ADR-0043 — the consequence "A host needs `prototype.url` and `bootCommand` to open";
   the "the app the driver boots" wording of its Decision now names one owner. Everything else in
   ADR-0043 (sentences, lock coverage, pin tests in GATE, LOOK's literal, pictures, close, one
@@ -37,7 +38,8 @@ address the admin — was a legitimate environment stage the plugin had no hook 
 ## Decision
 
 - **The host declares its runtime once**, in config `runtime`: `bootCommand`, `readyCheck` (a
-  list of urls or a command), `url`, optional `publicUrl`, `envCommand`, `readySeconds`. The
+  list of urls or a command), `url`, optional `publicUrl`, `envCommand`, `readySeconds`, `stopCommand`
+  (the host's own command that stops the app its boot left running, for a boot that exits 0). The
   plugin names no language, tool, database or default command. `prototype` keeps only
   `picture`, `e2eFile`, `e2eCommand`.
 - **One owner of the app.** `lib/app.js` starts the app detached, waits on the host's ready
@@ -50,7 +52,9 @@ address the admin — was a legitimate environment stage the plugin had no hook 
   every tagged process, so a server that detaches itself still dies. Every start first reaps
   processes whose owning session is dead: tagged ones under this repo, untagged ones only by a
   working directory under this repo. No supervisor, TTL, registry or daemon: the process table is the record, read on entry.
-  Session hooks and worktree removal reuse the same reaper (specs/20261108/04).
+  Session hooks and worktree removal reuse the same reaper (specs/20261108/04). A daemon is stopped
+  through its record, never by the reaper: the reaper cannot see a daemon's processes under the repo,
+  so `runtime.stopCommand` is recorded on the app record at start and `app.stop` runs it.
 - **An environment stage exists.** A fresh prototype worktree is provisioned like a run
   worktree (`.worktreeinclude` files, `setupCommand`); `runtime.envCommand` runs once per
   worktree before the first boot, with `PORT` in its env and nothing else from the plugin.
@@ -65,8 +69,10 @@ address the admin — was a legitimate environment stage the plugin had no hook 
   and both boot-line builders are gone.
 - A monorepo with several fixed-port apps opens; its `readyCheck` names every url.
 - A boot command that exits 0 (`docker compose up -d`) keeps the wait; once the ready check passes with
-  no tagged process alive the server is a daemon's this driver cannot stop, so the start is refused
-  naming `runtime.stopCommand` (specs/20261109/01) and nothing is adopted.
+  no tagged process alive the app is the driver's only while its record carries `runtime.stopCommand`
+  (alive = its url answers); without the key the start is refused naming it and nothing is adopted. A
+  daemon boot needs `runtime.stopCommand`, and a daemon outlives a session that ends without `closed`
+  or a run ending: the next open, GATE or `closed` stops it through the saved record (specs/20261109/01).
 - The environment command is the host's own and may be slow or destructive on its side; the
   plugin runs it only where an app runs, never per lane open.
 

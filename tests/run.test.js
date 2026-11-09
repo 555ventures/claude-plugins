@@ -268,10 +268,12 @@ test('a fix that is itself a queued advisories item queues no further advisories
   const h = fixture({ status: 'done' })
   const symptom = 'advisories of 01-thing: name it better'
   Q.add(h.dir, { type: 'fix', payload: symptom, advisories: true })
-  const fx = (...a) => runNode('scripts/run.js', ['--fix', symptom, '--in-place', '--root', h.dir, ...a])
+  // typed back as pasted and reflowed: the words match, the whitespace does not
+  const reflowed = 'advisories of 01-thing:\n  name  it better '
+  const fx = (...a) => runNode('scripts/run.js', ['--fix', reflowed, '--in-place', '--root', h.dir, ...a])
   ok(fx()); put(h.dir, 'a.txt', 'fixed\n'); ok(fx('--mark', 'built'))
   const done = ok(fx('--mark', 'reviewed', '--file', adv(h)))
-  assert.deepStrictEqual(open(h).map((i) => i.payload), [symptom], 'only the item it came from: nothing new queued')
+  assert.deepStrictEqual(open(h).map((i) => i.payload), [symptom], 'only the item it came from: nothing new queued, even when its whitespace was edited')
   assert.ok(done.includes('📌') && done.includes('rename the helper'), done)
   // a hand-typed symptom that begins with those words is no advisories item: it queues its own
   const t = fixture({ status: 'done' })

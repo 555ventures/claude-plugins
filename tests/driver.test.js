@@ -130,4 +130,17 @@ test('AC-20261108-02-1 a newer installed plugin beside the running one is warned
   const other = toyDriver({ lib, env: registry([{ installPath: path.join(tmpdir('elsewhere'), 'spec', '9.9.9'), version: '9.9.9' }]) })
   assert.doesNotMatch(other.run().stdout, /⚠️/, 'no entry shares the plugin root\'s parent')
   assert.doesNotMatch(other.run('--mark', 'go').stdout, /⚠️/)
+  // two scopes in one cache: user 2.0.0 and a project pin of 1.2.3. The entry for this session's root binds the comparison.
+  const scopes = (projectPath) => registry([
+    { scope: 'user', installPath: path.join(cache, 'spec', '2.0.0'), version: '2.0.0' },
+    { scope: 'project', projectPath, installPath: path.join(cache, 'spec', '1.2.3'), version: '1.2.3' },
+  ])
+  const env = {}
+  const here = toyDriver({ lib, env })
+  Object.assign(env, scopes(here.dir))
+  assert.doesNotMatch(here.run().stdout, /⚠️/, 'this project pins the running version: not stale')
+  assert.doesNotMatch(here.run('--mark', 'go').stdout, /⚠️/)
+  const there = toyDriver({ lib, env: scopes(tmpdir('other-project')) })
+  assert.ok(there.run().stdout.includes(warn), 'another project\'s pin is not this session\'s install: the user scope binds')
+  assert.ok(there.run('--mark', 'go').stdout.includes(warn))
 })

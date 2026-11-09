@@ -286,7 +286,7 @@ Later builders: use these, do not re-derive them.
   `auto(state, ctx) → state` is a driver-only step (OPEN, GATE, COMMIT, MERGE…) run, saved and
   re-derived without the session — after a mark too, so the checkpoint names the next session step.
   `ctx = {root, arg, json, flags, script}`. Printed block: `▶ <STEP> · spec <version>`, body, `▶ when done: node
-  <script> <arg> --root <root> --mark <mark>`, then a `⚠️ … restart Claude Code` line when `state.installedVersion` (the plugin registry's entry in the running plugin's cache folder; `doctor.js` reuses it) names a newer one; the same line follows every checkpoint. `--json` → `{step, version, body, mark}`. Refuse with
+  <script> <arg> --root <root> --mark <mark>`, then a `⚠️ … restart Claude Code` line when `state.installedVersion` (the plugin registry's entry in the running plugin's cache folder that applies to `--root`: a project or local entry whose `projectPath` holds it, else the user entry; `doctor.js` reuses it) names another one; the same line follows every checkpoint. `--json` → `{step, version, body, mark}`. Refuse with
   `refuse(msg)` (or throw `{exit: 2, message}`); stderr is `<name>: <msg>`. Also `die`, `writeOut`.
 - `host.js`: `run(cmd, {cwd, env, timeoutMs})` runs under bash, timeout → status 124, `tail` = last
   40 lines of stdout+stderr. `gate(root, config)` → `{status, cached, runId, tail}`; throws

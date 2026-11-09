@@ -454,6 +454,15 @@ function main(argv) {
     const known = fs.existsSync(statusFile(a.root, a.pos[0] || ''))
     if (known && a.pos[1] === 'pin' && a.pos.length === 2) return void pinCmd(a)
     if (known && a.pos[1] === 'drop' && a.pos.length === 3 && /^p\d+$/.test(a.pos[2])) return void dropCmd(a)
+    // Only pin and drop read these flags; any other line would hand them to a driver that drops them without a word.
+    const ruling = ['kind', 'route', 'note', 'given', 'why'].filter((k) => k in a.flags)
+    if (ruling.length) {
+      const dir = path.join(a.root, 'design', 'prototypes')
+      const stems = (fs.existsSync(dir) ? fs.readdirSync(dir) : []).filter((s) => fs.existsSync(statusFile(a.root, s)))
+      const given = ruling.map((k) => '--' + k).join(' ')
+      refuse(`${given} belong to a pin or drop line, and '${a.pos.join(' ')}' is neither — ` +
+        `known prototypes: ${stems.join(', ') || 'none'}; copy the pin or drop line the step printed`)
+    }
     // `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
     const joined = a.pos.join(' ')
     const out = [joined, '--root', a.root].filter(Boolean)

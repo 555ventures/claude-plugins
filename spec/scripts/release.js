@@ -46,7 +46,11 @@ function main(argv) {
     } else words.push(flags[i])
   }
   if (cut >= 0) words.push(...argv.slice(cut + 1))
-  const rel = readConfig(root).release || {}
+  let rel
+  try { rel = readConfig(root).release || {} } catch (e) { // a refused config (an unmigrated shape) is exit 2
+    if (typeof e.exit !== 'number') throw e
+    process.stderr.write(`release: ${e.message}\n`); return e.exit
+  }
   const need = promote ? ['promoteCommand', 'productionUrl'] : ['deployCommand', 'stagingUrl', 'e2eCommand']
   const missing = need.filter((k) => !rel[k])
   if (missing.length) {

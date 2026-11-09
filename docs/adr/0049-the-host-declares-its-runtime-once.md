@@ -48,8 +48,8 @@ address the admin — was a legitimate environment stage the plugin had no hook 
 - **The Claude session owns the app's life** (added 2026-11-08 after the leaked-servers report).
   The app inherits Claude Code's `CLAUDE_PID` and carries `SPEC_APP=<worktree>`; stop kills
   every tagged process, so a server that detaches itself still dies. Every start first reaps
-  processes whose owning session is dead: tagged ones anywhere, untagged ones only under this
-  repo. No supervisor, TTL, registry or daemon: the process table is the record, read on entry.
+  processes whose owning session is dead: tagged ones under this repo, untagged ones only by a
+  working directory under this repo. No supervisor, TTL, registry or daemon: the process table is the record, read on entry.
   Session hooks and worktree removal reuse the same reaper (specs/20261108/04).
 - **An environment stage exists.** A fresh prototype worktree is provisioned like a run
   worktree (`.worktreeinclude` files, `setupCommand`); `runtime.envCommand` runs once per
@@ -64,6 +64,9 @@ address the admin — was a legitimate environment stage the plugin had no hook 
 - The session never types a boot line; `host.withApp`, `host.allocApp`, `state.bootCommandOf`
   and both boot-line builders are gone.
 - A monorepo with several fixed-port apps opens; its `readyCheck` names every url.
+- A boot command that exits 0 (`docker compose up -d`) keeps the wait; once the ready check passes with
+  no tagged process alive the server is a daemon's this driver cannot stop, so the start is refused
+  naming `runtime.stopCommand` (specs/20261109/01) and nothing is adopted.
 - The environment command is the host's own and may be slow or destructive on its side; the
   plugin runs it only where an app runs, never per lane open.
 

@@ -4,12 +4,14 @@
 // runId, tail, tree, failing, lockWaitMs}: green runs cached by tree, at most gateConcurrency at once on the host;
 // testsExecuted(output, pattern) reads a test count.
 // copyIncluded(main, wt) copies the .worktreeinclude matches into a fresh worktree; treeSha(root) is the working tree's
-// git tree; withApp(cmd, {cwd, url, port}, fn) runs fn while the host's app answers; detectTestCommand, firstRedLine,
-// freePort, resolveUrl, listening, allocApp.
+// git tree; provision(root, {rel, branch, from, config}) → {wt, fresh, setup} makes a worktree as every driver does
+// (the .worktreeinclude files and setupCommand on a fresh one; prepare is that second half); detectTestCommand,
+// firstRedLine, freePort, resolveUrl, listening. The host's app is lib/app.js.
 
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
+const G = require('./git')
 const { spawnSync } = require('child_process')
 
 const TAIL_LINES = 40
@@ -197,6 +199,22 @@ function copyIncluded(main, wt) {
   }
 }
 
+// What a fresh worktree gets before anything runs in it: the .worktreeinclude files of the main checkout, then the
+// host's setupCommand. Returns the setupCommand's result ({status: 0} when there is none or the worktree is not fresh);
+// a non-zero status is for the caller to refuse.
+function prepare(main, wt, config, fresh) {
+  if (!fresh) return { status: 0 }
+  copyIncluded(main, wt)
+  return config && config.setupCommand ? run(config.setupCommand, { cwd: wt }) : { status: 0 }
+}
+
+// The one way a driver makes a worktree at `rel` on `branch`: git.worktreeAdd, then prepare on a fresh one.
+function provision(root, { rel, branch, from, config }) {
+  const fresh = !fs.existsSync(path.resolve(root, rel))
+  const wt = G.worktreeAdd(root, rel, branch, from)
+  return { wt, fresh, setup: prepare(G.worktreeList(root)[0], wt, config, fresh) }
+}
+
 // The line of a red tail worth reading first: a failure marker, else an error word, else the first line.
 const firstRedLine = (tail) => {
   const ls = (tail || '').split('\n').filter((l) => l.trim() && !/^\s*(✔|✓|ok\b|PASS\b)/.test(l))
@@ -240,30 +258,6 @@ const listening = (url) => spawnSync(process.execPath, ['-e',
   'fetch(process.argv[1], { signal: AbortSignal.timeout(2000) }).then(() => process.exit(0), () => process.exit(1))', url],
 { timeout: 5000 }).status === 0
 
-// Starts the app (PORT set) in its own process group, waits up to 60 s for url to answer, runs fn, then stops it.
-function withApp(cmd, { cwd, url, port }, fn) {
-  const child = require('child_process').spawn('/bin/bash', ['-c', cmd], { cwd, env: { ...process.env, ...(port ? { PORT: String(port) } : {}) }, detached: true, stdio: 'ignore' })
-  child.unref()
-  try {
-    for (const t0 = Date.now(); !listening(url); sleepMs(500)) if (Date.now() - t0 > 60000) return { status: 1, tail: `the app did not answer at ${url} within 60s: ${cmd}` }
-    return fn()
-  } finally { try { process.kill(-child.pid, 'SIGKILL') } catch { /* already gone */ } }
-}
-
-// One port per app: a url with {port} gets a free one; a fixed url keeps appPort null and must not be answered already.
-function allocApp(urlTemplate) {
-  if (/\{port\}/.test(urlTemplate)) {
-    const port = freePort()
-    return { appPort: port, url: resolveUrl(urlTemplate, port) }
-  }
-  if (listening(urlTemplate)) {
-    const e = new Error(`something already answers at ${urlTemplate} and it is not this app — stop it, or put {port} in prototype.url`)
-    e.exit = 2
-    throw e
-  }
-  return { appPort: null, url: urlTemplate }
-}
-
-module.exports = { freePort, resolveUrl, listening, allocApp, withApp, run, gate, treeSha, cacheDir, commonDir,
+module.exports = { freePort, resolveUrl, listening, provision, prepare, run, gate, treeSha, cacheDir, commonDir,
   copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf, firstRedLine,
   testsExecuted, COUNT_PATTERNS }

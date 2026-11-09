@@ -220,3 +220,22 @@ test('copyIncluded copies the manifest matches byte for byte and nothing else; n
   H.copyIncluded(root, wt2)
   assert.deepStrictEqual(fs.readdirSync(wt2), [])
 })
+
+test('AC-20261108-01-1 provision makes the worktree, copies the .worktreeinclude matches and runs setupCommand on a fresh one only; a failing setup is returned for the caller to refuse', () => {
+  const { root } = includeHost()
+  const config = { setupCommand: 'echo ready > marker.txt' }
+  const made = H.provision(root, { rel: '.claude/worktrees/proto-x', branch: 'proto/x', from: 'main', config })
+  assert.strictEqual(made.fresh, true)
+  assert.strictEqual(made.wt, path.join(fs.realpathSync(root), '.claude/worktrees/proto-x'))
+  assert.strictEqual(made.setup.status, 0)
+  assert.ok(fs.readFileSync(path.join(made.wt, '.env')).equals(fs.readFileSync(path.join(root, '.env'))), 'the .worktreeinclude match is copied')
+  assert.strictEqual(fs.readFileSync(path.join(made.wt, 'marker.txt'), 'utf8'), 'ready\n')
+  fs.rmSync(path.join(made.wt, 'marker.txt'))
+  const again = H.provision(root, { rel: '.claude/worktrees/proto-x', branch: 'proto/x', from: 'main', config })
+  assert.deepStrictEqual([again.fresh, again.setup.status], [false, 0])
+  assert.ok(!fs.existsSync(path.join(made.wt, 'marker.txt')), 'an existing worktree is not set up again')
+  const bad = H.provision(root, { rel: '.claude/worktrees/proto-y', branch: 'proto/y', from: 'main', config: { setupCommand: 'echo boom >&2; exit 3' } })
+  assert.strictEqual(bad.fresh, true)
+  assert.strictEqual(bad.setup.status, 3)
+  assert.match(bad.setup.tail, /boom/)
+})

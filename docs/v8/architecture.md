@@ -41,7 +41,7 @@ spec/
   templates/spec.md, roadmap-brief.md, roadmap-overview.md, adr.md
   hooks/hooks.json
   scripts/
-    lib/state.js  lib/driver.js  lib/host.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js  lib/queue.js  lib/queue-rows.js  lib/criteria.js
+    lib/state.js  lib/driver.js  lib/host.js  lib/app.js  lib/reap.js  lib/git.js  lib/report.js  lib/pending.js  lib/work.js  lib/next.js  lib/queue.js  lib/queue-rows.js  lib/criteria.js
     run.js fanout.js queue.js status.js plan.js init.js doctor.js migrate.js
     genesis.js mocks.js prototype.js connect.js release.js red-check.js
     state-gate.sh block-worker-git.sh block-cross-worktree-writes.sh merge-back.sh
@@ -87,7 +87,9 @@ per file; writes are atomic (tmp + rename).
   "worktreePerSpec": true,
   "mergeStrategy": "merge-commit",        // or ff-only | squash
   "walkthrough": { "baseUrl": "", "project": "", "tokenEnv": "WALKTHROUGH_TOKEN" },
-  "prototype": { "url": "http://localhost:{port}" },   // bootCommand has no default: the plugin assumes no language
+  "runtime": { "url": "http://localhost:{port}" },     // bootCommand has no default: the plugin assumes no language
+                                          // also: bootCommand, readyCheck (urls | command), publicUrl, envCommand, readySeconds
+  "prototype": {},                        // picture, e2eFile, e2eCommand (the old url/bootCommand/publicUrl: /spec:migrate)
   "release": { "deployCommand": "", "stagingUrl": "", "e2eCommand": "", "promoteCommand": "",
                "productionUrl": "",      // --promote needs it: production must answer after the promote
                "healthPath": "",         // appended to stagingUrl and productionUrl for the ready check
@@ -114,12 +116,12 @@ same machine on `lib/spec.js` `fixDoc`: no spec file, one reproduce-first criter
 |---|---|---|---|
 | OPEN | admits only `hardened` or `implementing`; creates worktree+branch from trunk (off trunk only `--in-place` builds, in that checkout); a fresh worktree gets the `.worktreeinclude` matches (`lib/host.js` `copyIncluded`) and runs setupCommand (a failure removes the worktree it made); the worktree copy of the spec says `done`, the main checkout's is not touched | nothing | (auto) |
 | BUILD | prints the builder brief (`lib/briefs.js`): spec path, Intent, Decisions, the run's rulings, File Plan, criteria, Assumptions, test command | dispatches ONE `builder` (seat from config; Opus from attempt 2) | `built` |
-| GATE | intent-to-add for planned files (ADR-0015); `testCommand` in the worktree (green-run cache by tree, at most `gateConcurrency` at once, a red outside the diff re-run once); a build that changed nothing or a File Plan row not true on disk is red; a `prototype:` spec's pin tests run here against the app the driver boots (ADR-0043 amended); red-check once per tree; spec text the build edited is reverted and gated again (📌); after a green `testCommand`, the criteria check (`lib/criteria.js`, ADR-0048) reads the AC-IDs test files cite (a test-shaped basename or a `testGlobs` match) at the base and on disk: a criterion a spec defines that the base cites and nothing cites now is red, and so is a criterion of the spec being built with no citing test where the base cites any (a 📌 note where it cites none); the spec's `## Retired criteria`, as locked at the base, clears either; the red tail names each ID and its exits (restore a test, or mark `unmet`; a fix: `needs-plan`) | nothing | (auto) → REVIEW or REPAIR |
+| GATE | intent-to-add for planned files (ADR-0015); `testCommand` in the worktree (green-run cache by tree, at most `gateConcurrency` at once, a red outside the diff re-run once); a build that changed nothing or a File Plan row not true on disk is red; a `prototype:` spec's pin tests run here against the app `lib/app.js` boots from `runtime`, restarted on the gated tree (ADR-0043, ADR-0049); red-check once per tree; spec text the build edited is reverted and gated again (📌); after a green `testCommand`, the criteria check (`lib/criteria.js`, ADR-0048) reads the AC-IDs test files cite (a test-shaped basename or a `testGlobs` match) at the base and on disk: a criterion a spec defines that the base cites and nothing cites now is red, and so is a criterion of the spec being built with no citing test where the base cites any (a 📌 note where it cites none); the spec's `## Retired criteria`, as locked at the base, clears either; the red tail names each ID and its exits (restore a test, or mark `unmet`; a fix: `needs-plan`) | nothing | (auto) → REVIEW or REPAIR |
 | REPAIR | prints the failure tail; past cap 2 the run is STOPPED with a fix item queued (📌) | dispatches builder | `repaired`; `regate` (same tree, once) |
 | REVIEW | prints the reviewer brief; seat = reviewer, or Fable when `architecture: true` | dispatches ONE `reviewer` | `reviewed --file <json>` |
 | FIX | `blocking` findings; past cap 2 STOPPED with a fix item queued (📌) | dispatches builder | `fixed` |
 | ESCALATE | one of three questions, in the agent's own words: `assumption` (an `ask` arm proved false), `decision` (a `needs-decision` finding), `unmet` (a Decision the build cannot keep); a lane writes it to `pending-question.json` | asks the user | `escalate <label>` / `dismissed` |
-| LOOK | prototype specs only: the boot line, `👀 look — <publicUrl or url>`, the look pins and pictures | prints them, ends the turn | `looked` / `look-failed --why <reply>` |
+| LOOK | prototype specs only: `👀 look — <publicUrl or url>` (the app GATE booted, still up; one not up is booted first, one that cannot come up goes back to GATE), the look pins and pictures | prints them, ends the turn | `looked` / `look-failed --why <reply>` |
 | COMMIT | one build commit in the worktree; its message carries the rulings, the `as-built.md` lines and `evidence.md`; a secret-looking file stays out (📌); advisories become one `type: fix` item, bound to the spec if the run has one and never queued by a fix that is itself an advisories item (📌); in place a spec commits only its File Plan, a fix only what it touched; a lane ends DONE here | nothing | (auto) |
 | MERGE | `lib/land.js`: status done + commit, `rebaseOnto` trunk, gate the worktree, `mergeBack` per `mergeStrategy` (`reset --merge` on any failure), then `stub.sweep(main)` stubs every finished spec in one `chore(spec): stub …` commit after the landed sha (not in place, never gated: `text:` is that sha), worktree removed, queue ticked; a conflict leaves the rebase in the worktree and the rebase guard prints it; a red rebased tree goes back to GATE | resolves a conflict in the worktree | (auto) |
 | DONE | prints the report: 📌 `Users will notice:` and every decided line | nothing | — |
@@ -228,8 +230,9 @@ the v7 fixed order. `next` is a command or `nothing needs you — <reason>`. ≤
   `.claude/genesis/stack-descriptor.json` + ADRs. ROADMAP writes briefs + queue entries.
   HANDOFF runs init. ≤ 400 LOC.
 - `mocks.js`: SEED → SCREENS → APPROVED, walkthrough service or terminal mode. ≤ 250 LOC.
-- `prototype.js`: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED. OPEN makes the worktree, runs
-  `setupCommand` and allocates one free app port; the session records each ruling with
+- `prototype.js`: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED. OPEN provisions the worktree (`host.provision`),
+  allocates one free app port when `runtime.url` holds `{port}` and boots the app through `lib/app.js`; ROUND
+  restarts it when dead, `closed` stops it; the session records each ruling with
   `prototype.js <stem> pin …` (`drop pN --why …` amends). `contracted --confirmed` needs the
   user's yes on the printed sentences, writes `contract.json` (every pin as a sentence), commits
   it before the mark is durable and queues `/spec:plan <contract>`. No entry file and no browser
@@ -256,6 +259,9 @@ Later builders: use these, do not re-derive them.
 - `spec.js`: the spec grammar, text in and objects out: `parse` (what `readSpec` returns), `section`, `splitCells`,
   `planRows`, `inPlan`, `decisionRows`, `parseAssumptions`, `globToRe`, `isSpecText`, and `fixDoc(symptom, spec?)`.
 - `briefs.js`: the text run.js prints — builder, reviewer, question, look and rebase briefs, the report, the commit message.
+- `app.js` and `reap.js` (ADR-0049, no CLI): `app.js` is the one owner of the host's app — `start`, `ready`, `alive`, `stop`,
+  `ensure` over config `runtime`, the pid kept in `status.json` / `state.json`; `reap.js` is the one process reader
+  (`procs`, `tagged`, `ownerAlive`, `cwdUnder`, `kill`, `sweep`): every start first reaps what a dead session left.
 - `land.js`: `land(main, {wt, branch, spec?, id, config, message, inPlace?, tick?})` → `{landed}` | `{conflicts}` | `{red, base}`.
 - `stub.js`: the one owner of the stub shape (no CLI): `isStub(frontmatter)` (`text:` of 7–64 hex), `stubOf(text, sha)`, `fullText(cwd, rel, sha)` (`git show <sha>:<rel>`; a sha not in the clone is exit 2), `readFull(cwd, rel)` (the `readSpec` shape of the full text, stub or not), `sweep(root, {dry})` → `{paths, retired, sha}` (done/superseded, tracked, unedited specs; one path-limited `--no-verify` commit).
 - `state.js`: everything in §2 (`readSpec` reads the file, `spec.js` parses it) plus `writeConfig(root, cfg)`, `DEFAULTS`, `gitCommonDir(root)`,

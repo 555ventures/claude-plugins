@@ -59,6 +59,27 @@ test('missing config exits 2 naming the keys; --promote needs promoteCommand and
   assert.deepStrictEqual(h.log(), [], 'nothing ran')
 })
 
+test('AC-20261108-01-6 an unmigrated config (prototype.url) makes release.js refuse with exit 2 and the migrate remedy, running nothing', () => {
+  const h = setup()
+  const f = path.join(h.d, '.claude/spec.config.json')
+  fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), prototype: { url: 'http://x' } }))
+  for (const r of [h.run(), h.run('--promote')]) {
+    assert.strictEqual(r.status, 2, r.stderr)
+    assert.match(r.stderr, /still has prototype\.url — run \/spec:migrate/)
+    assert.doesNotMatch(r.stderr, /\n\s+at /, 'no stack trace')
+  }
+  assert.deepStrictEqual(h.log(), [])
+})
+
+test('AC-20261108-01-6 doctor.js exits 2 on an unmigrated config, naming /spec:migrate', () => {
+  const h = setup()
+  const f = path.join(h.d, '.claude/spec.config.json')
+  fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), prototype: { bootCommand: 'node app.js' } }))
+  const r = runNode(path.join(SPEC, 'scripts/doctor.js'), ['--root', h.d])
+  assert.strictEqual(r.status, 2, r.stdout + r.stderr)
+  assert.match(r.stdout, /still has prototype\.bootCommand — run \/spec:migrate/)
+})
+
 test('AC-20261105-15-17 --promote without productionUrl exits 2 and runs no promoteCommand, even after green staging', () => {
   const h = setup({ productionUrl: '' })
   assert.strictEqual(h.run().status, 0)

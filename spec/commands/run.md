@@ -17,13 +17,15 @@ driver builds only with `--in-place`, and then lands nothing on trunk.
   timeout or test outside its diff changed nothing: mark `regate` (REPAIR, once per tree);
   `repaired` or `fixed` on an unchanged tree and unchanged `evidence.md` and `as-built.md` is refused.
   GATE also runs the pin tests of a spec with `prototype: <stem>` (the host's `prototype.e2eCommand`
-  against the app it boots); red is a REPAIR.
+  against the app the driver boots from `runtime`, restarted at every GATE; the cited prototype's own app is
+  stopped first only when it holds the run's url, a fixed-port host, and otherwise runs on until `closed`); red is a REPAIR. `runtime.envCommand` runs once per worktree.
 - **REVIEW**: dispatch one `spec:reviewer`, then mark `reviewed --file <findings path>`; a clean
   review runs through to DONE itself. Advisories become one queued fix item.
-- **LOOK** (a `prototype:` spec, after a clean review): start the app in the background with the
-  printed boot line (`cd <worktree> && export PORT=<port> && <bootCommand>`), print the url and the
-  look lines, end the turn. A literal `close enough` → stop the app and mark `looked`; anything
-  else → mark `look-failed --why "<the reply verbatim>"` (a FIX round with the reply as the symptom).
+- **LOOK** (a `prototype:` spec, after a clean review): the app GATE booted is still up (one that is not —
+  a run resumed after a wait, or a dead app — the driver boots first; one that cannot come up goes back to
+  GATE, which says why); print the url and the look lines, end the turn. A literal `close enough` → mark `looked`; anything else → mark
+  `look-failed --why "<the reply verbatim>"` (a FIX round with the reply as the symptom). The driver
+  stops the app at both marks and at every ending of the run.
 - **ESCALATE**: one of three questions, in the agent's own words — a false Assumption, a choice
   the reviewer says the spec did not make, a Decision the build cannot keep. Ask it as printed
   and mark `escalate <label>`; if the user dismisses it, mark `dismissed` (the run stops and the

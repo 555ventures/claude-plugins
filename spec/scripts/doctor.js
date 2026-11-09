@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 // doctor.js — health check of the host. node doctor.js [--root <dir>] [--json]
-// Exit 0 clean, 1 with findings, 2 a refusal (not inside a git repository).
+// Exit 0 clean, 1 with findings, 2 a refusal (not inside a git repository, or a config /spec:migrate must move).
 
 const fs = require('fs')
 const os = require('os')
@@ -89,6 +89,9 @@ function check(root, { probe = true } = {}) {
   // Every check below reads git state; outside a repository they would crash, so refuse and name the remedy.
   if (spawnSync('git', ['-C', root, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).status !== 0) {
     return { findings: [`git: ${root} is not inside a git repository — run git init`], info, version: pluginVersion(), refusal: true }
+  }
+  try { readConfig(root) } catch (e) { // a config the strict readers refuse (ADR-0049): a refusal naming the migration
+    return { findings: [`config: ${e.message}`], info, version: pluginVersion(), refusal: true }
   }
   let cfg = null
   if (!fs.existsSync(configPath(root))) f.push('config: .claude/spec.config.json is missing — run /spec:init')
@@ -180,7 +183,7 @@ function main(argv) {
   const { findings, info, version, refusal } = check(root)
   if (argv.includes('--json')) process.stdout.write(JSON.stringify({ ok: !findings.length, version, findings, info }) + '\n')
   else process.stdout.write([...info.map((x) => '· ' + x), ...findings.map((x) => '- ' + x)].join('\n') + (findings.length ? `\n${findings.length} finding(s)\n` : `${info.length ? '\n' : ''}✅ healthy — spec ${version || ''}\n`))
-  return refusal ? 2 : findings.length ? 1 : 0 // 2: a refusal naming its remedy (not a repository), 1: findings
+  return refusal ? 2 : findings.length ? 1 : 0 // 2: a refusal naming its remedy, 1: findings
 }
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))

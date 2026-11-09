@@ -169,6 +169,10 @@ function main(argv) {
   if (pos.length > 1) { console.error(USAGE); return 2 }
   if (pos.length && flags.all) { console.error('usage: --all cannot combine with NN'); return 2 }
   const root = path.resolve(rootArg || require('./lib/git').repoRoot(process.cwd()))
+  try { require('./lib/state').readConfig(root) } catch (e) { // a config the readers refuse stops the screen too
+    console.error(`status: ${e.message}`)
+    return typeof e.exit === 'number' ? e.exit : 1
+  }
   if (pos.length) {
     const r = briefReady(root, pos[0], flags.json)
     if (r.err) console.error(r.err); else console.log(r.out)

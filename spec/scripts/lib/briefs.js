@@ -119,14 +119,14 @@ const question = (q, options) => [`Ask the user ONE question (AskUserQuestion), 
   'If the user dismisses the question, mark `dismissed` instead: the run stops and the question is queued as a decide item; nothing is answered for them.'].join('\n')
 
 function look({ state, wt, cfg, contract, pictures, looked, failed }) {
-  const p = cfg.prototype; const url = p.publicUrl ? resolveUrl(p.publicUrl, state.appPort) : state.appUrl
+  const rt = cfg.runtime; const url = rt.publicUrl ? resolveUrl(rt.publicUrl, state.appPort) : state.app.url
   const pins = ((contract || {}).pins || []).filter((x) => x.status === 'active' && x.kind === 'look')
-  const boot = `cd ${wt} && ${state.appPort ? `export PORT=${state.appPort} && ` : ''}${p.bootCommand.trim()}`
   return [
-    'Start the app from the spec worktree in the background:', `  ${boot}`, '',
     `👀 look — ${url}`, ...(pins.length ? pins.map((x) => `- ${x.id}: ${x.sentence}`) : ['(no look pins)']),
     ...(pictures.length ? ['Pictures:', ...pictures.map((f) => `- ${wt}/${f}`)] : []), '',
-    `Print the url and these lines, then END YOUR TURN. A literal \`close enough\` → stop the app, then ${looked}. Anything else → ${failed} --why "<the reply verbatim>"`,
+    'Print the url and these lines, then END YOUR TURN.',
+    `A literal \`close enough\` → ${looked} (the driver stops the app).`,
+    `Anything else → ${failed} --why "<the reply verbatim>"`,
   ].join('\n')
 }
 

@@ -300,7 +300,8 @@ test('AC-20261108-01-2 a daemon boot (`docker compose up -d`) with no runtime.st
   const h = daemonHost(t, false)
   const r = drive(h.root, ['invoice', 'list', 'page'])
   assert.strictEqual(r.status, 2, r.stderr + r.stdout)
-  assert.ok(r.stderr.includes('runtime.stopCommand'), r.stderr)
+  assert.ok(r.stderr.includes('left the app at') && r.stderr.includes('no process this driver can stop') && r.stderr.includes('runtime.stopCommand') &&
+    !r.stderr.includes('did not start it'), r.stderr)
   assert.ok(!fs.existsSync(path.join(h.root, 'design/prototypes', STEM, 'status.json')), 'no status is written')
   assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees/proto-' + STEM)), 'the worktree it made is removed')
 })

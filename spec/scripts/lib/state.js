@@ -43,9 +43,14 @@ const DEFAULTS = {
   worktreePerSpec: true,
   mergeStrategy: 'merge-commit',
   walkthrough: { baseUrl: '', project: '', tokenEnv: 'WALKTHROUGH_TOKEN' },
-  prototype: { url: 'http://localhost:{port}' }, // bootCommand has no default: the plugin assumes no language
+  prototype: {},
+  runtime: { url: 'http://localhost:{port}' }, // bootCommand has no default: the plugin assumes no language (ADR-0049)
   release: { deployCommand: '', stagingUrl: '', e2eCommand: '', promoteCommand: '' },
 }
+
+// Every key a v8 config may hold (architecture §3): the defaulted ones and the optional ones with no default.
+// `/spec:migrate` keeps exactly these, so a key v8 reads is added here or a migration deletes it.
+const CONFIG_KEYS = [...Object.keys(DEFAULTS), 'testCountPattern', 'testGlobs', 'doctorProbeMs', 'design', 'forge']
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v)
 
@@ -59,10 +64,18 @@ function merge(def, over) {
 }
 
 const configPath = (root) => path.join(root, '.claude', 'spec.config.json')
-const readConfig = (root) => merge(DEFAULTS, readJson(configPath(root), {}))
+// Strict: the keys that moved to `runtime` stop every reader, naming the one migration. No tolerant read.
+const MOVED = ['bootCommand', 'url', 'publicUrl']
+function readConfig(root) {
+  const raw = readJson(configPath(root), {})
+  const old = isObj(raw) && isObj(raw.prototype) && MOVED.find((k) => k in raw.prototype)
+  if (old) {
+    const msg = `.claude/spec.config.json still has prototype.${old} — run /spec:migrate`
+    throw Object.assign(new Error(msg), { exit: 2 })
+  }
+  return merge(DEFAULTS, raw)
+}
 const writeConfig = (root, cfg) => writeJson(configPath(root), cfg)
-// The host's own command that starts its app, or null when unset or blank — never defaulted.
-const bootCommandOf = (cfg) => { const c = cfg && cfg.prototype && cfg.prototype.bootCommand; return typeof c === 'string' && c.trim() ? c.trim() : null }
 
 // ---- spec documents -----------------------------------------------------------------------
 
@@ -148,6 +161,9 @@ const releasePath = (root) => path.join(gitCommonDir(root), 'spec-release.json')
 const readRelease = (root) => readJson(releasePath(root))
 const writeRelease = (root, rec) => (rec == null ? fs.rmSync(releasePath(root), { force: true }) : writeJson(releasePath(root), rec))
 
+// The log of a host's app (lib/app.js), kept in the git common dir beside the other driver files.
+const appLog = (root, name) => path.join(gitCommonDir(root), 'spec-app', name + '.log')
+
 const fanoutPath = (root) => path.join(gitCommonDir(root), 'spec-fanout.json')
 const readFanout = (root) => readJson(fanoutPath(root))
 const writeFanout = (root, f) => writeJson(fanoutPath(root), f)
@@ -221,7 +237,7 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 
 module.exports = {
   writeText, writeJson, readJson, readText,
-  DEFAULTS, readConfig, writeConfig, configPath, bootCommandOf,
+  DEFAULTS, CONFIG_KEYS, readConfig, writeConfig, configPath, appLog,
   readSpec, writeStatus,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState, resumes,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout, readRelease, writeRelease,

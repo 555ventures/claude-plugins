@@ -6,7 +6,7 @@ const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
-const { tmpdir, gitRepo, runNode, runBash, SPEC } = require('./helpers')
+const { tmpdir, gitRepo, runNode, runBash, freePort, killStrays, SPEC } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const pending = require(path.join(SPEC, 'scripts/lib/pending.js'))
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
@@ -119,6 +119,7 @@ test('AC-20261105-14-10 AC-20261105-07-13 the whole loop lands through one path:
   put(h.wt, 'feature.txt', 'thing\n')
   assert.match(ok(h.run('--mark', 'built')), /BUILD → REVIEW;.*\ngate: green/)
   assert.strictEqual(h.state().appPort, undefined, 'a spec without prototype: allocates no port')
+  assert.strictEqual(h.state().app, undefined, 'AC-20261108-01-5 and starts no app')
   const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.match(done, /REVIEW → DONE[\s\S]*✅ 20261104\/01 built, reviewed and merged/)
   assert.ok(done.includes('📌 Users will notice: a thing appears'), done)
@@ -557,20 +558,28 @@ test('AC-20261105-08-16 a gate that waited for a slot says so on the gate line a
 
 const APP = 'require(\'http\').createServer((q, s) => s.end(\'app\')).listen(process.env.PORT, \'127.0.0.1\')\n'
 const E2E = `const fs = require('fs')
+fs.appendFileSync(process.env.RUN_COUNTER + '.urls', process.env.APP_URL + '\\n')
 fetch(process.env.APP_URL).then(() => { console.log('e2e ' + process.argv[2]); if (fs.existsSync('PINRED')) { console.error('FAIL pin p1'); process.exit(1) } },
   (e) => { console.error('no app: ' + e.message); process.exit(1) })
 `
 const PINS = [{ id: 'p1', kind: 'behaviour', sentence: 'On /x: Delete asks first', status: 'active' }, { id: 'p2', kind: 'look', sentence: 'On /x: Bigger title', status: 'active' }, { id: 'p3', kind: 'behaviour', sentence: 'On /x: Gone', status: 'dropped' }]
-const protoFixture = (proto = {}) => fixture({
-  cfg: { prototype: { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js', e2eFile: 'e2e/{stem}.spec.js', e2eCommand: 'node e2e.js {file}', ...proto } },
-  files: { [REL]: SPEC_DOC.replace('depends_on: []', 'depends_on: []\nprototype: inv'), 'app.js': APP, 'e2e.js': E2E, 'design/prototypes/inv/contract.json': JSON.stringify({ pins: PINS }) },
+const protoFixture = (proto = {}, rt = {}, more = {}) => fixture({
+  cfg: { runtime: { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js', readySeconds: 20, ...rt }, prototype: { e2eFile: 'e2e/{stem}.spec.js', e2eCommand: 'node e2e.js {file}', ...proto } },
+  files: { [REL]: SPEC_DOC.replace('depends_on: []', 'depends_on: []\nprototype: inv'), 'app.js': APP, 'e2e.js': E2E, 'design/prototypes/inv/contract.json': JSON.stringify({ pins: PINS }), ...more },
 })
 
-test('AC-20261105-14-9 a prototype spec: GATE runs the pin tests against the booted app (red is a repair), then REVIEW, LOOK and the user\'s words', () => {
-  assert.match(protoFixture({ bootCommand: '' }).run().stderr, /prototype\.bootCommand/)
+// The processes a fixture's runs tagged (SPEC_APP under its directory), killed when the test ends.
+const reap = require(path.join(SPEC, 'scripts/lib/reap.js'))
+const tagged = (h) => { const r = fs.realpathSync(h.dir); return reap.procs().filter((p) => p.SPEC_APP && (p.SPEC_APP === r || p.SPEC_APP.startsWith(r + path.sep))) }
+const guard = (t, h) => { t.after(() => { for (const p of tagged(h)) { try { process.kill(p.pid, 'SIGKILL') } catch { /* gone */ } } killStrays(h.dir) }); return h }
+const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+const urls = (h) => fs.readFileSync(h.counter + '.urls', 'utf8').trim().split('\n')
+
+test('AC-20261105-14-9 AC-20261108-01-5 a prototype spec: GATE boots the app through the driver and runs the pin tests against it (red is a repair), then REVIEW, LOOK and the user\'s words', (t) => {
+  assert.match(protoFixture({}, { bootCommand: '' }).run().stderr, /runtime\.bootCommand/)
   const bare = protoFixture({ e2eFile: '' }); const r = bare.run()
   assert.ok(r.status === 2 && r.stderr.includes('prototype.e2eFile') && r.stderr.includes('prototype.e2eCommand') && !fs.existsSync(bare.wt), r.stderr)
-  const h = protoFixture()
+  const h = guard(t, protoFixture())
   const pins = '## Pins\n- p1 (behaviour): On /x: Delete asks first\n- p2 (look): On /x: Bigger title\n\n'
   const b = ok(h.run())
   assert.ok(b.includes(pins) && b.includes('e2e/inv.spec.js') && b.includes('`pin pN: <sentence>`') && b.includes('role and visible text') && b.includes('APP_URL'), b)
@@ -583,12 +592,195 @@ test('AC-20261105-14-9 a prototype spec: GATE runs the pin tests against the boo
   assert.ok(rv.includes(pins) && /open its test in e2e\/inv\.spec\.js: .*pin pN:.*is blocking/.test(rv), rv)
   const look = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.match(look, /REVIEW → LOOK;/)
+  const url = `http://127.0.0.1:${h.state().appPort}`
+  assert.strictEqual(h.state().app.url, url)
+  assert.ok(urls(h).length > 0 && urls(h).every((u) => u === url), 'every pin-test run got the booted app\'s url: ' + urls(h).join(' '))
+  const pid = h.state().app.pid
+  assert.ok(alive(pid), 'the app is left up into LOOK')
   const body = ok(h.run())
-  assert.ok(body.includes(`cd ${h.wt} && export PORT=${h.state().appPort} && node app.js`) && body.includes(`👀 look — ${h.state().appUrl}`) && body.includes('- p2: On /x: Bigger title'), body)
+  assert.ok(body.includes(`👀 look — ${url}`) && body.includes('- p2: On /x: Bigger title'), body)
+  assert.doesNotMatch(body, /cd |export PORT|Start the app/, 'no boot line for the session to type')
+  assert.strictEqual(h.state().app.pid, pid, 'LOOK does not restart a live app')
   assert.match(ok(h.run('--mark', 'look-failed', '--why', 'the title is small')), /LOOK → FIX;/)
+  assert.ok(!alive(pid) && h.state().app === null, 'look-failed stops the app')
   assert.ok(ok(h.run()).includes('The user looked at the running app and said: the title is small.'))
-  bump(h.wt); ok(h.run('--mark', 'fixed')); ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  bump(h.wt); ok(h.run('--mark', 'fixed'))
+  const again = h.state().app.pid
+  assert.notStrictEqual(again, pid, 'GATE restarted the app on the fixed tree')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(alive(h.state().app.pid))
   assert.match(ok(h.run('--mark', 'looked')), /LOOK → DONE;[\s\S]*look accepted after 2 round\(s\)/)
+  assert.ok(!alive(h.state() ? h.state().app.pid : again) && !tagged(h).length, 'looked stops the app: no process of it is left')
+})
+
+test('AC-20261108-01-5 LOOK over an app whose boot leader exited while its tagged server serves shows the url and does not restart it', (t) => {
+  const h = guard(t, protoFixture({}, { bootCommand: 'node app.js & exit 0' }))
+  build(h)
+  assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → LOOK;/)
+  const url = `http://127.0.0.1:${h.state().appPort}`
+  const pid = h.state().app.pid
+  for (let i = 0; i < 2; i++) assert.ok(ok(h.run()).includes(`👀 look — ${url}`))
+  assert.strictEqual(h.state().app.pid, pid, 'LOOK does not restart an app that is up')
+  assert.ok(tagged(h).length > 0, 'its server still runs')
+})
+
+test('AC-20261108-01-5 AC-20261108-01-2 a boot command that hands its app to a daemon and exits 0 is refused at GATE (exit 2, runtime.stopCommand named): the pin tests never run against it', (t) => {
+  const pids = tmpdir('daemon')
+  // every daemon records its pid the moment it starts, so the test kills each one
+  const daemon = `require('fs').writeFileSync(require('path').join(${JSON.stringify(pids)}, String(process.pid)), '')\nrequire('http').createServer((q, s) => s.end('d')).listen(process.env.PORT, '127.0.0.1')\n`
+  const h = guard(t, protoFixture({}, { bootCommand: 'env -u SPEC_APP node daemon.js >/dev/null 2>&1 & exit 0' }, { 'daemon.js': daemon }))
+  t.after(() => { for (const p of fs.readdirSync(pids)) { try { process.kill(Number(p), 'SIGKILL') } catch { /* gone */ } } })
+  ok(h.run())
+  put(h.wt, 'feature.txt', 'thing\n')
+  const r = h.run('--mark', 'built')
+  assert.strictEqual(r.status, 2, r.stderr + r.stdout)
+  assert.ok(r.stderr.includes('the boot handed its server to a daemon this driver cannot stop — add runtime.stopCommand'), r.stderr)
+  assert.ok(!fs.existsSync(h.counter + '.urls'), 'the pin tests never ran')
+})
+
+test('AC-20261108-01-5 AC-20261108-01-2 on a fixed url, a foreign server that takes the url after look-failed stopped the run\'s app is refused at GATE (exit 2), never handed to the pin tests', async (t) => {
+  const port = await freePort()
+  const url = `http://127.0.0.1:${port}`
+  const h = guard(t, protoFixture({}, { url }, { 'app.js': `require('http').createServer((q, s) => s.end('app')).listen(${port}, '127.0.0.1')\n` }))
+  build(h)
+  assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → LOOK;/)
+  assert.match(ok(h.run('--mark', 'look-failed', '--why', 'the title is small')), /LOOK → FIX;/)
+  const foreign = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('other')).listen(${port}, '127.0.0.1', () => console.log('up'))`], { stdio: ['ignore', 'pipe', 'inherit'] })
+  t.after(() => foreign.kill('SIGKILL'))
+  await new Promise((r) => foreign.stdout.once('data', r))
+  const before = urls(h).length
+  bump(h.wt)
+  const r = h.run('--mark', 'fixed')
+  assert.ok(r.status === 2 && r.stderr.includes(`something already answers at ${url} and this driver did not start it`), r.stderr + r.stdout)
+  assert.strictEqual(urls(h).length, before, 'the pin tests never ran against the foreign server')
+  assert.ok(alive(foreign.pid), 'the foreign server was left alone')
+})
+
+test('AC-20261108-01-5 a prototype run parked at the repair cap stops its app', (t) => {
+  const h = guard(t, protoFixture())
+  ok(h.run())
+  put(h.wt, 'feature.txt', 'thing\n'); put(h.wt, 'PINRED', '')
+  ok(h.run('--mark', 'built'))
+  const pids = []
+  for (let i = 0; i < 2; i++) { pids.push(h.state().app.pid); bump(h.wt); ok(h.run('--mark', 'repaired')) }
+  assert.strictEqual(h.state(), null, 'the run ended (its sidecar is gone)')
+  assert.notStrictEqual(pids[0], pids[1], 'GATE restarted the app on the repaired tree: a new pid')
+  assert.ok(pids.length === 2 && pids.every((p) => !alive(p)) && !tagged(h).length, 'every ending stops the app')
+})
+
+const OTHER = 'specs/20261104/02-other.md'
+const lines = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim().split('\n') : [])
+
+test('AC-20261108-01-5 runtime.envCommand runs once in the run\'s worktree: not again when GATE restarts the app after look-failed, nor when LOOK boots it after a wait', (t) => {
+  const envLog = path.join(tmpdir('envlog'), 'env.txt')
+  const h = guard(t, protoFixture({}, { envCommand: `echo "$PORT" >> ${envLog}` }))
+  put(h.dir, OTHER, SPEC_DOC.replace('# Thing', '# Other').replace(/AC-20261104-01/g, 'AC-20261104-02')); h.g('add', '-A'); h.g('commit', '-qm', 'other')
+  build(h)
+  assert.deepStrictEqual(lines(envLog), [String(h.state().appPort)], 'the first boot ran it, with PORT')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  ok(h.run('--mark', 'look-failed', '--why', 'too small'))
+  bump(h.wt); ok(h.run('--mark', 'fixed'))
+  assert.strictEqual(h.state().step, 'REVIEW')
+  ok(h.run('--mark', 'after', '--on', OTHER))
+  put(h.dir, OTHER, fs.readFileSync(path.join(h.dir, OTHER), 'utf8').replace('status: hardened', 'status: done')); h.g('commit', '-qam', 'other done')
+  ok(h.run())
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(ok(h.run()).includes('👀 look —'))
+  assert.strictEqual(lines(envLog).length, 1, 'the env command ran once across three boots of one worktree')
+})
+
+test('AC-20261108-01-5 LOOK boots an app that is not up (a run resumed after a wait, or one that died) and never shows a url nothing answers', (t) => {
+  const h = guard(t, protoFixture())
+  put(h.dir, OTHER, SPEC_DOC.replace('# Thing', '# Other').replace(/AC-20261104-01/g, 'AC-20261104-02')); h.g('add', '-A'); h.g('commit', '-qm', 'other')
+  build(h)
+  ok(h.run('--mark', 'after', '--on', OTHER))
+  assert.strictEqual(h.state().app, null, 'a wait stops the app')
+  put(h.dir, OTHER, fs.readFileSync(path.join(h.dir, OTHER), 'utf8').replace('status: hardened', 'status: done')); h.g('commit', '-qam', 'other done')
+  ok(h.run())
+  assert.strictEqual(h.state().step, 'REVIEW')
+  assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → LOOK;/)
+  const url = `http://127.0.0.1:${h.state().appPort}`
+  const first = h.state().app.pid
+  assert.ok(alive(first), 'LOOK brought the app up')
+  assert.ok(ok(h.run()).includes(`👀 look — ${url}`))
+  process.kill(-first, 'SIGKILL')
+  for (const p of tagged(h)) { try { process.kill(p.pid, 'SIGKILL') } catch { /* gone */ } }
+  assert.ok(ok(h.run()).includes(`👀 look — ${url}`))
+  assert.ok(h.state().app.pid !== first && alive(h.state().app.pid), 'a dead app is restarted at LOOK')
+  for (const p of tagged(h)) { try { process.kill(p.pid, 'SIGKILL') } catch { /* gone */ } }
+  fs.renameSync(path.join(h.wt, 'app.js'), path.join(h.wt, 'gone.js'))
+  const down = ok(h.run())
+  assert.ok(!down.includes('👀 look —') && h.state().step === 'REPAIR', down)
+  assert.ok(h.state().gate.output_tail, 'an app that cannot come up at LOOK goes back to GATE, which carries the reason')
+  const refused = h.run('--mark', 'looked')
+  assert.ok(refused.status === 2 && /not accepted at REPAIR/.test(refused.stderr), refused.stderr)
+})
+
+test('AC-20261108-01-5 LOOK over an app whose boot process lives but whose server died restarts it: a url is printed only once a restarted app answers', async (t) => {
+  const h = guard(t, protoFixture({}, { bootCommand: 'node app.js & exec sleep 300' }))
+  build(h)
+  assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings([]))), /REVIEW → LOOK;/)
+  const first = h.state().app
+  const url = `http://127.0.0.1:${h.state().appPort}`
+  const answers = () => fetch(url, { signal: AbortSignal.timeout(2000) }).then(() => true, () => false)
+  const answersSoon = async () => { // a loaded host answers late, never wrongly
+    for (let i = 0; i < 20; i++) { if (await answers()) return true; await new Promise((r) => setTimeout(r, 250)) }
+    return false
+  }
+  assert.ok(await answersSoon())
+  for (const p of tagged(h)) if (p.pid !== first.pid) process.kill(p.pid, 'SIGKILL') // only the server
+  assert.ok(alive(first.pid) && !(await answers()), 'the boot process lives over a url nothing answers')
+  const body = ok(h.run())
+  assert.ok(body.includes(`👀 look — ${url}`), body)
+  assert.ok(h.state().app.pid !== first.pid && (await answersSoon()), 'the look url was printed over a restarted app that answers')
+})
+
+test('AC-20261108-01-5 AC-20261108-01-2 on a fixed url GATE stops the app of the prototype its spec cites, boots its own, and the prototype closes once the run is done', async (t) => {
+  const port = await freePort()
+  const url = `http://127.0.0.1:${port}`
+  const h = guard(t, fixture({
+    cfg: { runtime: { url, bootCommand: 'node app.js', readySeconds: 20 }, prototype: { e2eFile: 'e2e/{stem}.spec.js', e2eCommand: 'node e2e.js {file}' } },
+    files: { [REL]: SPEC_DOC.replace('depends_on: []', 'depends_on: []\nprototype: inv'), 'e2e.js': E2E,
+      'app.js': `require('http').createServer((q, s) => s.end('app')).listen(${port}, '127.0.0.1')\n` },
+  }))
+  const P = (...a) => ok(runNode('scripts/prototype.js', [...a, '--root', h.dir]))
+  P('some', 'idea', '--stem', 'inv'); P('inv', '--mark', 'opened')
+  P('inv', 'pin', '--kind', 'look', '--route', '/x', '--note', 'Bigger title')
+  P('inv', '--mark', 'approved'); P('inv', '--mark', 'contracted', '--confirmed')
+  assert.strictEqual(st.readProto(h.dir, 'inv').status.app, null, 'the committed status holds no pid')
+  const proto = Math.min(...tagged(h).map((p) => p.pid))
+  assert.ok(alive(proto), 'the prototype app runs into CONTRACTED')
+  build(h)
+  assert.strictEqual(h.state().step, 'REVIEW')
+  assert.ok(!alive(proto), 'GATE stopped the prototype\'s app')
+  assert.ok(alive(h.state().app.pid) && h.state().app.url === url && urls(h).includes(url), 'the run booted its own on the fixed url')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(ok(h.run('--mark', 'looked')), /LOOK → DONE;/)
+  assert.match(P('inv', '--mark', 'closed'), /prototype closed — inv/)
+  assert.strictEqual(tagged(h).length, 0)
+})
+
+test('AC-20261108-01-5 when the cited prototype\'s app runs at a url other than the run\'s, GATE leaves it running until the prototype closes', (t) => {
+  const h = guard(t, fixture({
+    cfg: { runtime: { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js', readySeconds: 20 }, prototype: { e2eFile: 'e2e/{stem}.spec.js', e2eCommand: 'node e2e.js {file}' } },
+    files: { [REL]: SPEC_DOC.replace('depends_on: []', 'depends_on: []\nprototype: inv'), 'e2e.js': E2E, 'app.js': APP },
+  }))
+  const P = (...a) => ok(runNode('scripts/prototype.js', [...a, '--root', h.dir]))
+  P('some', 'idea', '--stem', 'inv'); P('inv', '--mark', 'opened')
+  P('inv', 'pin', '--kind', 'look', '--route', '/x', '--note', 'Bigger title')
+  P('inv', '--mark', 'approved'); P('inv', '--mark', 'contracted', '--confirmed')
+  const proto = { pid: Math.min(...tagged(h).map((p) => p.pid)), url: st.readProto(h.dir, 'inv').status.url }
+  assert.ok(alive(proto.pid), 'the prototype app runs into CONTRACTED')
+  build(h)
+  assert.strictEqual(h.state().step, 'REVIEW')
+  const own = h.state().app
+  assert.ok(own.url !== proto.url && alive(own.pid) && urls(h).includes(own.url), 'the run booted its own app at its own url')
+  assert.ok(alive(proto.pid), 'GATE left the prototype\'s app running: the urls differ')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  ok(h.run('--mark', 'looked'))
+  assert.ok(alive(proto.pid), 'the run\'s ending stops only its own app')
+  assert.match(P('inv', '--mark', 'closed'), /prototype closed — inv/)
+  assert.ok(!alive(proto.pid) && tagged(h).length === 0, 'closing the prototype stops its app')
 })
 
 // ---- spec 20261107/03: the start-up refusals, the marker, builder-written files and the commit hook come back -----

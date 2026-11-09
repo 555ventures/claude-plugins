@@ -7,7 +7,7 @@
 const fs = require('fs')
 const path = require('path')
 const git = require('./lib/git')
-const { readJson, writeJson, configPath, gitCommonDir, protoV7, DEFAULTS } = require('./lib/state')
+const { readJson, writeJson, configPath, gitCommonDir, protoV7, DEFAULTS, CONFIG_KEYS: KEYS } = require('./lib/state')
 const { parse, VERSION } = require('./lib/queue')
 const { normBrief } = require('./lib/work')
 const { detectTestCommand, resolveUrl } = require('./lib/host')
@@ -15,9 +15,10 @@ const { render } = require('./lib/report')
 const { ensureGitignore, IGNORE } = require('./init')
 
 const ARCH = 'docs/archive/v7'
-const KEYS = ['testCommand', 'testFileCommand', 'setupCommand', 'trunk', 'lanes', 'seats', 'worktreePerSpec', 'mergeStrategy', 'walkthrough', 'prototype', 'release', 'design',
-  'gateConcurrency', 'doctorProbeMs', 'testCountPattern'] // the last three are v8's own: a v8 re-run keeps them
 const MERGE = ['merge-commit', 'ff-only', 'squash'] // v7's `derived` and `rebase-ff` have no v8 meaning: git.mergeBack throws on them
+const RUNTIME = ['bootCommand', 'readyCheck', 'url', 'publicUrl', 'envCommand', 'readySeconds'] // ADR-0049
+const MOVED = ['bootCommand', 'url', 'publicUrl'] // the `prototype` keys that moved there
+const RENAMED = { readyTimeout: 'readySeconds', seedCommand: 'envCommand' } // v7's runtime keys, by their v8 names
 const V7_CONFIG = ['generatedBy', 'contractHash', 'policy', 'gateCommand'] // config keys only v7 wrote: trimConfig drops them, so they mark a host not yet migrated
 const ARCHIVE = ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-runs.stopped.jsonl', '.claude/spec-session.json',
   '.claude/spec-preimage', '.claude/spec-manifest.json', '.claude/release-manifest.json', '.claude/rules/enforcement.json',
@@ -40,7 +41,7 @@ function walk(dir, fn, depth = 0) {
 }
 
 // ---- config ---------------------------------------------------------------------------------
-function trimConfig(root, cfg) {
+function trimConfig(root, cfg, notes = []) {
   const out = {}
   const pol = cfg.policy || {}
   const models = pol.models || {}
@@ -62,25 +63,51 @@ function trimConfig(root, cfg) {
   const tcp = cfg.capabilities && cfg.capabilities.testCountPattern
   const rel = cfg.release && typeof cfg.release === 'object' && !Array.isArray(cfg.release) ? cfg.release : {}
   const merge = [cfg.mergeStrategy, pol.mergeStrategy].find((m) => MERGE.includes(m))
+  const rt = trimRuntime(cfg.prototype, cfg.runtime, notes)
   const src = { ...cfg, testCommand: test, seats: Object.keys(seats).length ? seats : undefined,
     release: tcp != null ? { ...rel, testCountPattern: tcp } : cfg.release,
     mergeStrategy: merge, worktreePerSpec: cfg.worktreePerSpec ?? pol.worktreePerSpec,
-    setupCommand: cfg.setupCommand }
+    setupCommand: cfg.setupCommand, runtime: Object.keys(rt).length ? rt : undefined,
+    forge: cfg.forge || (cfg.capabilities && cfg.capabilities.forge) || undefined }
   for (const k of KEYS) if (src[k] != null) out[k] = src[k]
-  if (out.prototype && typeof out.prototype === 'object') out.prototype = trimPrototype(out.prototype, cfg.runtime)
-  if (cfg.runtime && cfg.runtime.bootCommand) out.runtime = cfg.runtime
-  if (cfg.capabilities && cfg.capabilities.forge) out.forge = cfg.capabilities.forge
-  if (cfg.forge) out.forge = cfg.forge
+  if (out.prototype && typeof out.prototype === 'object') out.prototype = trimPrototype(out.prototype)
+  if (out.prototype && !Object.keys(out.prototype).length) delete out.prototype
   return out
 }
 
-// The v8 prototype block: overlay, e2eList, dbCreate and dbDestroy are gone, e2eRun is e2eCommand, and the
-// host's runtime boot command fills a missing bootCommand.
-function trimPrototype(proto, runtime) {
-  const { overlay, e2eList, dbCreate, dbDestroy, e2eRun, ...rest } = proto
+// The v8 prototype block: overlay, e2eList, dbCreate and dbDestroy are gone, e2eRun is e2eCommand, and what moved to
+// `runtime` (bootCommand, url, publicUrl) is left there.
+function trimPrototype(proto) {
+  const { overlay, e2eList, dbCreate, dbDestroy, e2eRun, bootCommand, url, publicUrl, ...rest } = proto
   const out = { ...rest }
   if (e2eRun !== undefined && out.e2eCommand === undefined) out.e2eCommand = e2eRun
-  if (out.bootCommand === undefined && runtime && runtime.bootCommand) out.bootCommand = runtime.bootCommand
+  return out
+}
+
+// The v8 runtime block: the host's runtime keys as it wrote them; the `prototype` ones that moved fill what `runtime`
+// lacks (a key `runtime` already holds wins, and the plan says the other was dropped). Other keys are dropped, listed.
+function trimRuntime(proto, runtime, notes) {
+  const rt = runtime && typeof runtime === 'object' && !Array.isArray(runtime) ? runtime : {}
+  const old = proto && typeof proto === 'object' ? proto : {}
+  const out = {}
+  for (const k of Object.keys(rt)) if (RUNTIME.includes(k) && rt[k] !== undefined) out[k] = rt[k]
+  for (const [from, to] of Object.entries(RENAMED)) {
+    if (rt[from] !== undefined && out[to] === undefined) out[to] = rt[from]
+  }
+  for (const k of MOVED) {
+    if (old[k] === undefined) continue
+    if (out[k] === undefined) out[k] = old[k]; else notes.push(`prototype.${k} dropped — runtime.${k} already holds it`)
+  }
+  // A command readyCheck must read $PORT exactly when the url is a {port} one: otherwise it checks the wrong thing.
+  const reads = typeof out.readyCheck === 'string' && /\$\{?PORT\b/.test(out.readyCheck)
+  const templated = /\{port\}/.test(out.url === undefined ? DEFAULTS.runtime.url : out.url)
+  if (typeof out.readyCheck === 'string' && reads !== templated) {
+    delete out.readyCheck
+    const why = reads ? 'reads $PORT under a fixed url' : 'reads no $PORT under a {port} url'
+    notes.push(`runtime.readyCheck dropped — it ${why}; the check is the url`)
+  }
+  const extra = Object.keys(rt).filter((k) => !RUNTIME.includes(k) && !(k in RENAMED))
+  if (extra.length) notes.push(`runtime keys dropped: ${extra.join(', ')}`)
   return out
 }
 
@@ -209,11 +236,18 @@ function plan(root) {
   const cfg = readJson(cfgFile, null)
   const dropped = []
   let testCommand = null // the gate v8 gets, printed beside the dropped keys so the user sees it
+  const notes = []
   if (cfg) {
-    const trimmed = trimConfig(root, cfg)
+    const trimmed = trimConfig(root, cfg, notes)
     if (!same(trimmed, cfg)) {
       testCommand = trimmed.testCommand || null
-      for (const k of Object.keys(cfg)) if (!(k in trimmed) && cfg[k] != null && !['generatedBy', 'contractHash'].includes(k)) dropped.push(k)
+      const quiet = ['generatedBy', 'contractHash', 'prototype']
+      for (const k of Object.keys(cfg)) if (!(k in trimmed) && cfg[k] != null && !quiet.includes(k)) dropped.push(k)
+      // prototype keys are listed one by one: the ones that moved to runtime or were renamed are not dropped
+      const proto = cfg.prototype && typeof cfg.prototype === 'object' ? cfg.prototype : {}
+      const kept = trimmed.prototype || {}
+      const gone = (k) => !(k in kept) && !MOVED.includes(k) && k !== 'e2eRun'
+      for (const k of Object.keys(proto)) if (gone(k)) dropped.push(`prototype.${k}`)
       add('config', '.claude/spec.config.json', null, 'trim to v8 keys')
     }
   }
@@ -231,7 +265,8 @@ function plan(root) {
     add('queue', qf, null, `${(q.items || []).length} items -> v${VERSION}`)
   }
   // prototype records v8's readers would refuse
-  const protoUrl = (cfg && cfg.prototype && cfg.prototype.url) || DEFAULTS.prototype.url
+  const rtUrl = cfg && cfg.runtime && cfg.runtime.url
+  const protoUrl = rtUrl || (cfg && cfg.prototype && cfg.prototype.url) || DEFAULTS.runtime.url
   const protoDir = path.join(root, 'design/prototypes')
   if (exists(protoDir)) for (const e of fs.readdirSync(protoDir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
     if (e.isDirectory() && protoV7(root, e.name).length) add('prototype', 'design/prototypes/' + e.name, null, `${e.name}: v7 → v8`)
@@ -303,7 +338,7 @@ function plan(root) {
   if (exists(wt)) for (const n of fs.readdirSync(wt)) listed.push('worktree .claude/worktrees/' + n)
   const br = git.raw(['for-each-ref', '--format=%(refname:short)', 'refs/heads/worktree-agent-*', 'refs/heads/plan/*', 'refs/heads/fix/*'], root).stdout.split('\n').filter(Boolean)
   for (const b of br) listed.push('branch ' + b)
-  const warns = []
+  const warns = [...notes]
   const pc = (cfg && cfg.prototype) || {}
   if (/PROTO_URL/.test(String(pc.e2eRun || '') + String(pc.e2eCommand || ''))) warns.push('prototype.e2eCommand reads PROTO_URL — the run sets APP_URL')
   if (/\{(width|height)\}/.test(String(pc.picture || ''))) warns.push('prototype.picture uses {width}/{height} — v8 fills only {url} and {out}')

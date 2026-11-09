@@ -69,7 +69,7 @@ Lost? Run `/spec:status`.
 | `/spec:connect [--project <id>] [--name <text>] [--base-url <url>]` | Links the project to the hosted walkthrough review service |
 | `/spec:genesis <idea>` | Greenfield only. Covers discovery, a researched stack, ADRs, a green scaffold and roadmap briefs |
 | `/spec:mocks` | Gray wireframes of each journey, approved before genesis |
-| `/spec:prototype <idea \| brief \| stem> [--stem <name>]` | A throwaway app you argue with in chat; each ruling becomes a pin sentence you confirm. It ends in a behaviour contract that `/spec:plan` turns into ACs and `/spec:run` proves with pin tests before you look at it |
+| `/spec:prototype <idea \| brief \| stem> [--stem <name>]` | A throwaway app you argue with in chat (booted from your `runtime` config and stopped when it closes); each ruling becomes a pin sentence you confirm. It ends in a behaviour contract that `/spec:plan` turns into ACs and `/spec:run` proves with pin tests before you look at it |
 | `/spec:plan <description \| spec \| brief \| contract.json>` | Writes a spec with an Intent block, asks only the real forks, then locks and queues it |
 | `/spec:run <spec> [--in-place]` | Builds, gates, reviews and merges one spec in its own worktree |
 | `/spec:fanout [<spec>…] [--pick]` | Drains the queue as parallel lanes. Bare picks the batch for you; `--pick` lets you tick it. Each lane rebases onto main as it lands, with the gate green after each |

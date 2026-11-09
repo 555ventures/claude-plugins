@@ -1,22 +1,27 @@
 'use strict'
-// Pins spec/scripts/prototype.js: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED on tmp hosts with a
-// stub app (a node http server on the port OPEN allocated). Spec 20261105/14, AC-1 to AC-7.
+// Pins spec/scripts/prototype.js: OPEN → ROUND → APPROVED → CONTRACTED → CLOSED on tmp hosts with a stub app
+// the driver boots itself from config `runtime` (lib/app.js). Spec 20261105/14 (the loop) and spec 20261108/01 (the runtime).
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const net = require('node:net')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
-const { tmpdir, gitRepo, runNode, SPEC } = require('./helpers')
+const { tmpdir, gitRepo, runNode, freePort, killStrays, SPEC } = require('./helpers')
+const reap = require(path.join(SPEC, 'scripts/lib/reap.js'))
 
 const SCRIPT = path.join(SPEC, 'scripts/prototype.js')
 const STEM = 'invoice-list-page'
+// The stub app: an http server bound to $PORT.
+const APP = "require('http').createServer((q, s) => s.end('app')).listen(process.env.PORT, '127.0.0.1')\n"
 
-// A host with no src/, no index.html: only the url and the boot command.
-function host(extra = {}, proto = {}) {
+// A host with no src/, no index.html: only the runtime block and a stub app. `rt` overrides runtime keys, `proto` the prototype block.
+function host(extra = {}, proto = {}, rt = {}, files = {}) {
   const root = tmpdir('proto')
   fs.mkdirSync(path.join(root, '.claude'))
-  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({ prototype: { url: 'http://127.0.0.1:{port}', bootCommand: 'node app.js', ...proto }, ...extra }))
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({ runtime: { bootCommand: 'node app.js', url: 'http://127.0.0.1:{port}', readySeconds: 20, ...rt }, prototype: proto, ...extra }))
+  fs.writeFileSync(path.join(root, 'app.js'), APP)
+  for (const [f, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), text) }
   const g = gitRepo(root) // a non-empty dir is seeded and committed as it stands
   return { root, g }
 }
@@ -28,27 +33,27 @@ const read = (root, rel) => JSON.parse(fs.readFileSync(path.join(root, rel), 'ut
 const statusOf = (root, stem = STEM) => read(root, `design/prototypes/${stem}/status.json`)
 const ok = (r) => { assert.strictEqual(r.status, 0, r.stderr + r.stdout); return r.stdout }
 
-// A stub app on the port OPEN allocated; resolves once it answers. stop() frees the port.
-async function startApp(t, port) {
-  const child = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('app')).listen(${port}, '127.0.0.1', () => console.log('up'))`], { stdio: ['ignore', 'pipe', 'inherit'] })
+// Every process the driver tagged for a host's worktrees; a test's apps are killed when it ends, whatever it asserted.
+const tagged = (root) => { const r = fs.realpathSync(root); return reap.procs().filter((p) => p.SPEC_APP && (p.SPEC_APP === r || p.SPEC_APP.startsWith(r + path.sep))) }
+const guard = (t, h) => { t.after(() => { for (const p of tagged(h.root)) { try { process.kill(p.pid, 'SIGKILL') } catch { /* gone */ } } killStrays(h.root) }); return h }
+const groupGone = (pid) => { try { process.kill(-pid, 0); return false } catch (e) { return e.code === 'ESRCH' } }
+const answers = (url) => fetch(url, { signal: AbortSignal.timeout(2000) }).then(() => true, () => false)
+
+// A server some other tree runs, on a port of the test's choosing: a child process (the driver is run synchronously).
+async function foreign(t, port) {
+  const child = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('other')).listen(${port}, '127.0.0.1', () => console.log('up'))`], { stdio: ['ignore', 'pipe', 'inherit'] })
   t.after(() => child.kill('SIGKILL'))
   await new Promise((resolve) => child.stdout.on('data', resolve))
   return { stop: () => new Promise((resolve) => { child.once('exit', resolve); child.kill('SIGKILL') }) }
 }
 
-const canBind = (port) => new Promise((resolve) => {
-  const s = net.createServer()
-  s.on('error', () => resolve(false))
-  s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)))
-})
-
-// Idea words → OPEN → stub app up → opened. Returns the app handle and the port.
+// Idea words → OPEN (the driver boots the app) → opened. Returns the url and the port.
 async function opened(t, h) {
+  guard(t, h)
   ok(drive(h.root, ['invoice', 'list', 'page']))
   const st = statusOf(h.root)
-  const app = await startApp(t, st.appPort)
   ok(mark(h.root, STEM, 'opened'))
-  return { app, port: st.appPort, url: st.url }
+  return { port: st.appPort, url: st.url, pid: st.app.pid }
 }
 
 // Two pins on /invoices and one on /invoices/new, then approved at round 2.
@@ -62,80 +67,230 @@ async function approved(t, h) {
   return o
 }
 
-test('AC-1: OPEN needs no entry file: auto stem, one free port, boot line, worktree with the setup marker', async (t) => {
-  const h = host({ setupCommand: 'echo ready > marker.txt' })
+test('AC-20261108-01-1 OPEN provisions the worktree (.worktreeinclude match, setup marker), boots the app itself and prints no boot line; opened starts nothing', async (t) => {
+  const h = guard(t, host({ setupCommand: 'echo ready > marker.txt' }, {}, {}, { '.worktreeinclude': '.env.local\n', '.gitignore': '.claude/worktrees/\n.env.local\n' }))
+  fs.writeFileSync(path.join(h.root, '.env.local'), 'SECRET=1\n')
   assert.ok(!fs.existsSync(path.join(h.root, 'src')) && !fs.existsSync(path.join(h.root, 'index.html')))
-  const r = drive(h.root, ['invoice', 'list', 'page'])
-  const out = ok(r)
+  const out = ok(drive(h.root, ['invoice', 'list', 'page']))
   assert.match(out, /^▶ OPEN/)
   assert.match(out, new RegExp(`📌 Auto-picked stem ${STEM} `))
   assert.doesNotMatch(out, /overlay|entry/i, 'no line about an entry file or overlay')
-  const boot = /cd \.claude\/worktrees\/proto-invoice-list-page && export PORT=(\d+) && node app\.js/.exec(out)
-  assert.ok(boot, out)
-  const port = Number(boot[1])
-  assert.ok(await canBind(port), 'a port nothing was bound to')
+  const st = statusOf(h.root)
+  assert.ok(Number.isInteger(st.appPort) && st.appPort > 0)
+  assert.strictEqual(st.url, `http://127.0.0.1:${st.appPort}`)
+  assert.ok(out.includes(`app up at http://127.0.0.1:${st.appPort}`), out)
+  assert.doesNotMatch(out, /cd |export PORT|start the app|bootCommand/i, 'the session is never handed a boot line')
   assert.match(out, /Build a throwaway prototype of invoice list page/)
   const wt = path.join(h.root, '.claude/worktrees/proto-' + STEM)
   assert.match(h.g('branch', '--list', 'proto/' + STEM), /proto\//)
   assert.strictEqual(fs.readFileSync(path.join(wt, 'marker.txt'), 'utf8'), 'ready\n', 'setupCommand ran in the worktree')
-  const st = statusOf(h.root)
-  assert.strictEqual(st.appPort, port)
-  assert.strictEqual(st.url, `http://127.0.0.1:${port}`)
+  assert.strictEqual(fs.readFileSync(path.join(wt, '.env.local'), 'utf8'), 'SECRET=1\n', 'the .worktreeinclude match was copied')
   assert.strictEqual('pinsPort' in st, false)
+  assert.ok(st.app.pid > 0 && st.app.url === st.url && st.app.port === st.appPort, JSON.stringify(st.app))
+  assert.doesNotThrow(() => process.kill(st.app.pid, 0), 'app.pid is alive')
+  assert.ok(await answers(st.url), 'the app answers at the url')
+  assert.ok(tagged(h.root).length >= 1, 'the app carries the SPEC_APP tag')
 
-  const refused = mark(h.root, STEM, 'opened')
-  assert.strictEqual(refused.status, 2)
-  assert.ok(refused.stderr.includes(`nothing answers at http://127.0.0.1:${port}`), refused.stderr)
-  await startApp(t, port)
+  const before = tagged(h.root).map((p) => p.pid)
   assert.match(ok(mark(h.root, STEM, 'opened')), /OPEN → ROUND/)
+  assert.deepStrictEqual(tagged(h.root).map((p) => p.pid), before, 'opened started nothing')
+  assert.strictEqual(statusOf(h.root).app.pid, st.app.pid)
 })
 
-test('AC-1: the printed boot line, run by sh from the repo root, expands $PORT in bootCommand', async () => {
-  const h = host({}, { bootCommand: 'echo "--port $PORT" > port.txt' })
-  const out = ok(drive(h.root, ['invoice', 'list', 'page']))
-  const line = out.split('\n').map((l) => l.trim()).find((l) => l.includes('export PORT='))
-  assert.ok(line, out)
-  const cmd = /(cd \.claude\/worktrees\/\S+ && export PORT=\d+ && echo "--port \$PORT" > port\.txt)/.exec(line)
-  assert.ok(cmd, line)
-  const r = require('node:child_process').spawnSync('sh', ['-c', cmd[1]], { cwd: h.root, encoding: 'utf8' })
-  assert.strictEqual(r.status, 0, r.stderr)
-  const port = statusOf(h.root).appPort
-  assert.strictEqual(fs.readFileSync(path.join(h.root, '.claude/worktrees/proto-' + STEM, 'port.txt'), 'utf8'), `--port ${port}\n`)
-})
-
-test('AC-1: a failing setupCommand refuses with the tail; a fixed url that already answers is refused', async (t) => {
-  let h = host({ setupCommand: 'echo boom >&2; exit 3' })
-  let r = drive(h.root, ['some', 'idea'])
+test('AC-20261108-01-1 a failing setupCommand refuses with the tail and removes the worktree it made', async (t) => {
+  const h = guard(t, host({ setupCommand: 'echo boom >&2; exit 3' }))
+  const r = drive(h.root, ['some', 'idea'])
   assert.strictEqual(r.status, 1)
   assert.match(r.stderr, /setupCommand failed[\s\S]*boom/)
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees/proto-some-idea')), 'the re-run provisions afresh')
+  assert.strictEqual(h.g('branch', '--list', 'proto/some-idea').trim(), '')
+  assert.deepStrictEqual(tagged(h.root), [], 'no app was started')
+})
 
-  const port = await new Promise((resolve) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)) }) })
-  const other = await startApp(t, port) // JJ's unrelated app on a fixed port
-  h = host({}, { url: `http://127.0.0.1:${port}` })
-  r = drive(h.root, ['some', 'idea'])
+test('AC-20261108-01-1 no runtime.bootCommand: OPEN refuses naming it, makes no worktree and prints no boot line', () => {
+  const h = host({}, {}, { bootCommand: undefined })
+  const r = drive(h.root, ['invoice', 'list', 'page'])
+  assert.strictEqual(r.status, 2, r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('runtime.bootCommand') && r.stderr.includes('.claude/spec.config.json'), r.stderr)
+  assert.doesNotMatch(r.stdout + r.stderr, /undefined|cd \.claude/)
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees')), 'no worktree is made before the command is known')
+})
+
+test('AC-20261108-01-2 two fixed-port apps from one command: OPEN prints only after both answer, appPort is null; a foreign server on the url is refused', async (t) => {
+  const [a, b] = [await freePort(), await freePort()]
+  const two = `const http = require('http'); const up = (p, ms) => setTimeout(() => http.createServer((q, s) => s.end('app')).listen(p, '127.0.0.1'), ms)\nup(${a}, 0); up(${b}, 1200)\n`
+  const h = guard(t, host({}, {}, { url: `http://127.0.0.1:${a}`, readyCheck: [`http://127.0.0.1:${a}`, `http://127.0.0.1:${b}`], bootCommand: 'node two.js' }, { 'two.js': two }))
+  const out = ok(drive(h.root, ['two', 'apps']))
+  assert.match(out, /^▶ OPEN/)
+  assert.ok(await answers(`http://127.0.0.1:${a}`) && await answers(`http://127.0.0.1:${b}`), 'both answered by the time OPEN printed')
+  assert.ok(out.includes(`app up at http://127.0.0.1:${a}`), out)
+  const st = statusOf(h.root, 'two-apps')
+  assert.strictEqual(st.appPort, null)
+  assert.strictEqual(st.url, `http://127.0.0.1:${a}`)
+
+  // the apps now answer on the fixed url, and a second prototype's driver did not start them
+  const second = await foreignHost(t, h)
+  assert.strictEqual(second.status, 2, second.stderr)
+  assert.ok(second.stderr.includes('this driver did not start it'), second.stderr)
+})
+
+// A second prototype on the same fixed url while the first one's app is up: something already answers there.
+async function foreignHost(t, h) {
+  const cfg = read(h.root, '.claude/spec.config.json')
+  const other = host({}, {}, { url: cfg.runtime.url, readyCheck: cfg.runtime.readyCheck, bootCommand: 'node app.js' })
+  guard(t, other)
+  return drive(other.root, ['some', 'idea'])
+}
+
+test('AC-20261108-01-2 a ready check command is waited for; one that never passes exits 1 naming the log, leaves no process and no opened mark', async (t) => {
+  let h = guard(t, host({}, {}, { readyCheck: 'test -f ready.flag', bootCommand: '(sleep 1.5; touch ready.flag) & exec node app.js' }))
+  const t0 = Date.now()
+  ok(drive(h.root, ['flag', 'idea']))
+  assert.ok(Date.now() - t0 >= 1000, 'OPEN waited for the flag')
+  assert.ok(fs.existsSync(path.join(h.root, '.claude/worktrees/proto-flag-idea/ready.flag')))
+
+  h = guard(t, host({}, {}, { readyCheck: 'exit 1', readySeconds: 2 }))
+  const r = drive(h.root, ['never', 'ready'])
+  assert.strictEqual(r.status, 1, r.stderr)
+  assert.match(r.stderr, /did not get ready in 2s — see \S*spec-app\S*\.log/)
+  assert.deepStrictEqual(tagged(h.root), [], 'no process of the app is left')
+  assert.ok(!fs.existsSync(path.join(h.root, 'design/prototypes/never-ready/status.json')), 'no marks.opened, no status')
+})
+
+test('AC-20261108-01-2 a foreign server already answering at a fixed url is refused: exit 2, nothing started', async (t) => {
+  const port = await freePort()
+  const other = await foreign(t, port)
+  const h = guard(t, host({}, {}, { url: `http://127.0.0.1:${port}`, bootCommand: `PORT=${port} node app.js` })) // a fixed url: the app binds its own port
+  const r = drive(h.root, ['some', 'idea'])
   assert.strictEqual(r.status, 2)
-  assert.ok(r.stderr.includes(`something already answers at http://127.0.0.1:${port} and it is not this app — stop it, or put {port} in prototype.url`), r.stderr)
+  assert.ok(r.stderr.includes(`something already answers at http://127.0.0.1:${port} and this driver did not start it`), r.stderr)
+  assert.deepStrictEqual(tagged(h.root), [])
   await other.stop()
   const out = ok(drive(h.root, ['some', 'idea']))
-  assert.ok(out.includes(`cd .claude/worktrees/proto-some-idea && node app.js`) && !out.includes('PORT='), 'a fixed url carries no PORT=')
+  assert.ok(out.includes(`app up at http://127.0.0.1:${port}`), out)
   assert.strictEqual(statusOf(h.root, 'some-idea').appPort, null)
 })
 
-test('AC-2: ROUND prints the ready line only when the app answers', async (t) => {
-  const h = host()
-  const { app, url, port } = await opened(t, h)
-  await app.stop()
+test('AC-20261108-01-3 runtime.envCommand runs once per worktree, before the first boot, with PORT set; a failing one refuses and removes the worktree', async (t) => {
+  const h = guard(t, host({}, {}, { envCommand: 'echo "$PORT" >> env-runs.txt', bootCommand: 'cp env-runs.txt boot-saw.txt && exec node app.js' }))
+  const out = ok(drive(h.root, ['env', 'idea']))
+  const wt = path.join(h.root, '.claude/worktrees/proto-env-idea')
+  const st = statusOf(h.root, 'env-idea')
+  assert.ok(out.includes('app up at'), out)
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'env-runs.txt'), 'utf8'), `${st.appPort}\n`, 'PORT = appPort')
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'boot-saw.txt'), 'utf8'), `${st.appPort}\n`, 'the env command ran before the boot')
+  assert.ok(st.app.envAt, 'the run is recorded')
+  ok(mark(h.root, 'env-idea', 'opened'))
+  for (let i = 0; i < 3; i++) ok(drive(h.root, ['env-idea']))
+  process.kill(-statusOf(h.root, 'env-idea').app.pid, 'SIGKILL')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  assert.match(ok(drive(h.root, ['env-idea'])), /ready for pins/) // a restart: the env command is not run again
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'env-runs.txt'), 'utf8'), `${st.appPort}\n`, 'exactly once across OPEN and the ROUND re-derives')
+
+  const bad = guard(t, host({}, {}, { envCommand: 'echo no db >&2; exit 1' }))
+  const r = drive(bad.root, ['env', 'broken'])
+  assert.strictEqual(r.status, 1)
+  assert.ok(r.stderr.includes('runtime.envCommand') && r.stderr.includes('no db'), r.stderr)
+  assert.deepStrictEqual(tagged(bad.root), [], 'no app was started')
+  assert.ok(!fs.existsSync(path.join(bad.root, '.claude/worktrees/proto-env-broken')), 'the worktree it made is removed')
+  assert.strictEqual(bad.g('branch', '--list', 'proto/env-broken').trim(), '')
+
+  // a proto/<stem> branch that was there before is not this run's to delete when its OPEN fails
+  const kept = guard(t, host({}, {}, { envCommand: 'exit 1' }))
+  kept.g('branch', 'proto/env-kept')
+  assert.strictEqual(drive(kept.root, ['env', 'kept', '--stem', 'env-kept']).status, 1)
+  assert.ok(!fs.existsSync(path.join(kept.root, '.claude/worktrees/proto-env-kept')), 'the worktree it made is removed')
+  assert.match(kept.g('branch', '--list', 'proto/env-kept'), /proto\/env-kept/, 'the branch that was already there stays')
+})
+
+test('AC-20261108-01-4 a dead app is restarted at the next ROUND (new pid, ready line); a restart that fails prints the warning and no ready line', async (t) => {
+  const h = guard(t, host())
+  const { url, pid } = await opened(t, h)
   let out = ok(drive(h.root, [STEM]))
-  assert.ok(out.includes(`⚠️ nothing answers at ${url}`), out)
-  assert.ok(out.includes(`cd .claude/worktrees/proto-${STEM} && export PORT=${port} && node app.js`))
-  assert.ok(!out.includes('🎨 ready for pins'))
-  await startApp(t, port)
+  assert.ok(out.split('\n').some((l) => l.includes(`🎨 ready for pins — ${url}`)))
+  assert.strictEqual(statusOf(h.root).app.pid, pid, 'a live app is never restarted')
+  process.kill(-pid, 'SIGKILL')
+  await new Promise((resolve) => setTimeout(resolve, 300))
   out = ok(drive(h.root, [STEM]))
   assert.match(out, /Round 1\./)
   assert.match(out, /none yet/)
-  assert.ok(out.split('\n').some((l) => l.includes(`🎨 ready for pins — ${url}`)))
+  assert.ok(out.split('\n').some((l) => l.includes(`🎨 ready for pins — ${url}`)), out)
+  const next = statusOf(h.root).app.pid
+  assert.notStrictEqual(next, pid, 'a new app.pid')
   assert.ok(out.includes('--kind') && out.includes('--route') && out.includes('--given') && out.includes('--note'))
   assert.match(out, /END YOUR TURN/)
+
+  process.kill(-next, 'SIGKILL')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const cfgFile = path.join(h.root, '.claude/spec.config.json')
+  const cfg = read(h.root, '.claude/spec.config.json')
+  fs.writeFileSync(cfgFile, JSON.stringify({ ...cfg, runtime: { ...cfg.runtime, bootCommand: 'echo cannot start >&2; exit 1' } }))
+  out = ok(drive(h.root, [STEM]))
+  assert.ok(out.includes('⚠️ the app did not come up'), out)
+  assert.ok(!out.includes('🎨 ready for pins'))
+  assert.strictEqual(mark(h.root, STEM, 'round-done').status, 2, 'a round is not done over a dead app')
+  assert.strictEqual(mark(h.root, STEM, 'approved').status, 2, 'nor approved over one')
+})
+
+test('AC-20261108-01-4 --mark closed --force over a dead app stops what is left and never boots it first', async (t) => {
+  const boots = path.join(tmpdir('boots'), 'boots.txt')
+  const h = host({}, {}, { bootCommand: `echo boot >> ${boots}; exec node app.js` })
+  const { pid } = await opened(t, h)
+  process.kill(-pid, 'SIGKILL')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  ok(mark(h.root, STEM, 'closed', '--force'))
+  assert.strictEqual(fs.readFileSync(boots, 'utf8'), 'boot\n', 'the app was booted once, at OPEN, and not again to be closed')
+  assert.ok(!tagged(h.root).length)
+})
+
+test('AC-20261108-01-4 an OPEN re-derive after setup goes through the same revive: a dead app is restarted before the opened mark', async (t) => {
+  const h = guard(t, host())
+  ok(drive(h.root, ['invoice', 'list', 'page']))
+  const { app, url } = statusOf(h.root)
+  process.kill(-app.pid, 'SIGKILL')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const out = ok(drive(h.root, [STEM]))
+  assert.ok(out.includes(`app up at ${url}`), out)
+  const next = statusOf(h.root).app
+  assert.notStrictEqual(next.pid, app.pid, 'a new app.pid')
+  assert.ok(await answers(url), 'the restarted app answers')
+  ok(mark(h.root, STEM, 'opened'))
+})
+
+test('AC-20261108-01-4 an app whose process lives but whose url nothing answers is restarted at the next ROUND: no ready line until it answers', async (t) => {
+  const h = guard(t, host({}, {}, { bootCommand: 'node app.js & exec sleep 300' })) // the runner outlives its server
+  const { url, pid } = await opened(t, h)
+  for (const p of tagged(h.root)) if (p.pid !== pid) process.kill(p.pid, 'SIGKILL') // the server dies, the pid lives
+  for (let i = 0; i < 50 && await answers(url); i++) await new Promise((resolve) => setTimeout(resolve, 100))
+  assert.doesNotThrow(() => process.kill(pid, 0), 'the recorded pid still lives')
+  assert.ok(!(await answers(url)), 'and nothing answers')
+  const out = ok(drive(h.root, [STEM]))
+  assert.ok(out.split('\n').some((l) => l.includes(`🎨 ready for pins — ${url}`)), out)
+  assert.ok(await answers(url), 'the restarted app answers')
+  assert.notStrictEqual(statusOf(h.root).app.pid, pid, 'a new app.pid')
+})
+
+test('AC-20261108-01-4 a boot command whose leader exits while its server serves (`node app.js & exit 0`) is up: opened, ROUND and re-derives never restart it', async (t) => {
+  const h = guard(t, host({}, {}, { bootCommand: 'node app.js & exit 0' }))
+  const { url, pid } = await opened(t, h)
+  const t0 = Date.now()
+  for (let i = 0; i < 2; i++) assert.ok(ok(drive(h.root, [STEM])).split('\n').some((l) => l.includes(`🎨 ready for pins — ${url}`)))
+  assert.ok(Date.now() - t0 < 15000, 'no restart loop')
+  assert.strictEqual(statusOf(h.root).app.pid, pid, 'the app is never restarted')
+  assert.ok(await answers(url))
+})
+
+test('AC-20261108-01-2 a boot command that hands its app to a daemon and exits 0 (`docker compose up -d`) is waited for, then refused at OPEN (exit 2, runtime.stopCommand named): nothing is opened or adopted', async (t) => {
+  // every daemon records its pid the moment it starts, so the test kills each one
+  const daemon = "require('fs').writeFileSync(require('path').join(process.env.HOME_DIR, String(process.pid)), '')\n" + APP
+  const pids = tmpdir('daemon')
+  const h = guard(t, host({}, {}, { bootCommand: `HOME_DIR=${pids} env -u SPEC_APP node daemon.js >/dev/null 2>&1 & exit 0` }, { 'daemon.js': daemon }))
+  t.after(() => { for (const p of fs.readdirSync(pids)) { try { process.kill(Number(p), 'SIGKILL') } catch { /* gone */ } } })
+  const r = drive(h.root, ['invoice', 'list', 'page'])
+  assert.strictEqual(r.status, 2, r.stderr + r.stdout)
+  assert.ok(r.stderr.includes('the boot handed its server to a daemon this driver cannot stop — add runtime.stopCommand'), r.stderr)
+  assert.ok(!fs.existsSync(path.join(h.root, 'design/prototypes', STEM, 'status.json')), 'no status is written')
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees/proto-' + STEM)), 'the worktree it made is removed')
 })
 
 test('AC-3: pin writes the array, refuses bad input, round-done records handled', async (t) => {
@@ -248,7 +403,6 @@ test('AC-5: prototype.picture writes one picture per pinned route and commits th
   fs.writeFileSync(pic, "const [url, out] = process.argv.slice(2)\nif (url.endsWith('/invoices/new')) { console.error('screenshot failed'); process.exit(1) }\nrequire('fs').writeFileSync(out, 'PNG ' + url)\n")
   let h = host({}, { picture: `node ${pic} {url} {out}` })
   await approved(t, h)
-  assert.match(ok(drive(h.root, [STEM])), /Pictures need the app at http:\/\/127\.0\.0\.1:\d+: cd \.claude\/worktrees\/proto-invoice-list-page && export PORT=\d+ && node app\.js/)
   const out = ok(mark(h.root, STEM, 'contracted', '--confirmed'))
   assert.match(out, /⚠️ no picture for \/invoices\/new/)
   assert.match(out, /committed on trunk/)
@@ -268,19 +422,21 @@ test('AC-5: prototype.picture writes one picture per pinned route and commits th
 
 test('AC-6: closed refuses unmerged work without --force; --force discards it and frees the stem', async (t) => {
   const h = host()
-  await opened(t, h)
+  const { pid } = await opened(t, h)
   const wt = path.join(h.root, '.claude/worktrees/proto-' + STEM)
   const tip = h.g('rev-parse', '--short', 'proto/' + STEM).trim()
   const r = mark(h.root, STEM, 'closed')
   assert.strictEqual(r.status, 2)
   assert.ok(r.stderr.includes('--force') && r.stderr.includes(tip), r.stderr)
   assert.ok(fs.existsSync(wt) && fs.existsSync(path.join(h.root, `design/prototypes/${STEM}/status.json`)), 'nothing changed')
+  assert.deepStrictEqual(tagged(h.root).length > 0, true, 'the refused close left the app up')
   assert.match(ok(mark(h.root, STEM, 'closed', '--force')), /prototype closed/)
+  assert.ok(groupGone(pid) && !tagged(h.root).length, 'closed stopped the app')
   assert.ok(!fs.existsSync(wt))
   assert.strictEqual(h.g('branch', '--list', 'proto/' + STEM).trim(), '')
   assert.ok(!fs.existsSync(path.join(h.root, `design/prototypes/${STEM}`)))
   assert.strictEqual(h.g('status', '--porcelain').trim(), '')
-  ok(drive(h.root, ['invoice', 'list', 'page'])) // the stem is free again
+  ok(drive(h.root, ['invoice', 'list', 'page'])) // the stem is free again, and boots a new app
 })
 
 test('AC-6: closed names a spec that is mid-run from this prototype', async (t) => {
@@ -339,8 +495,8 @@ test('AC-6: a close takes its Next from the derivation: a hardened spec the queu
   assert.ok(!out.includes('nothing needs you'), out)
 })
 
-test('AC-7: idea words that auto-derive another idea\'s stem are refused', () => {
-  const h = host()
+test('AC-7: idea words that auto-derive another idea\'s stem are refused', (t) => {
+  const h = guard(t, host())
   ok(drive(h.root, ['invoice', 'list', 'page', 'redesign', 'alpha']))
   const r = drive(h.root, ['invoice', 'list', 'page', 'redesign', 'beta'])
   assert.strictEqual(r.status, 2)
@@ -370,16 +526,16 @@ test('AC-7: a v7 record stops every invocation, naming /spec:migrate', () => {
   assert.ok(drive(h.root, ['old', '--state']).stderr.includes('contract.json is a v7 file'))
 })
 
-test('--stem overrides the derived stem, a bad stem is refused, the auto stem takes four significant words', () => {
-  const { root } = host()
+test('--stem overrides the derived stem, a bad stem is refused, the auto stem takes four significant words', (t) => {
+  const { root } = guard(t, host())
   assert.match(ok(drive(root, ['some', 'idea', '--stem', 'mine'])), /▶ OPEN/)
   assert.ok(fs.existsSync(path.join(root, 'design/prototypes/mine/status.json')))
   assert.strictEqual(drive(root, ['x', '--stem', 'Bad Stem']).status, 2)
   assert.match(ok(drive(root, ['a', 'page', 'for', 'the', 'invoices', 'with', 'a', 'delete', 'button', 'and', 'totals'])), /Auto-picked stem page-invoices-delete-button /)
 })
 
-test('a roadmap brief path gives the stem', () => {
-  const { root } = host()
+test('a roadmap brief path gives the stem', (t) => {
+  const { root } = guard(t, host())
   fs.mkdirSync(path.join(root, 'docs/roadmap'), { recursive: true })
   fs.writeFileSync(path.join(root, 'docs/roadmap/03-invoices.md'), '# 03\n')
   const out = ok(drive(root, ['docs/roadmap/03-invoices.md']))
@@ -393,48 +549,65 @@ test('AC-16: the docs carry the new shape and none of the old', () => {
     'spec/commands/migrate.md', 'README.md', fs.readdirSync(path.join(ROOT, 'docs/adr')).filter((f) => f.startsWith('0035-')).map((f) => 'docs/adr/' + f)[0]]
   assert.ok(files.every((f) => f && !f.startsWith('specs/')))
   const text = files.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n')
-  for (const need of ['LOOK', 'looked', 'look-failed', 'contracted --confirmed', 'closed [--force]', 'prototype:', 'e2eCommand', 'publicUrl', 'export PORT=<port>', 'Amended by: ADR-0043']) {
+  for (const need of ['LOOK', 'looked', 'look-failed', 'contracted --confirmed', 'closed [--force]', 'prototype:', 'e2eCommand', 'publicUrl', 'runtime', 'Amended by: ADR-0043']) {
     assert.ok(text.includes(need), need)
   }
-  for (const gone of ['overlay', 'ser' + 've', 'e2eList', 'states.json', 'tests-derived']) assert.ok(!text.toLowerCase().includes(gone.toLowerCase()), gone)
+  for (const gone of ['overlay', 'ser' + 've', 'e2eList', 'states.json', 'tests-derived', 'export PORT=<port>']) assert.ok(!text.toLowerCase().includes(gone.toLowerCase()), gone)
 })
 
-// ---- prototype.bootCommand has no default: the plugin assumes no language ---------------------------
+test('AC-20261108-01-4 closed stops the app before the worktree goes, with and without --force; CONTRACTED too', async (t) => {
+  const out = path.join(tmpdir('order'), 'order.txt')
+  // bash is the group leader and traps TERM: it records whether the worktree was still there when the stop came
+  const boot = `trap 'test -d "$PWD" && echo present >> ${out}' TERM; node app.js & wait`
+  let h = host({}, {}, { bootCommand: boot })
+  const { pid } = await opened(t, h)
+  ok(mark(h.root, STEM, 'closed', '--force'))
+  assert.ok(groupGone(pid) && !tagged(h.root).length, 'no process of the app is left')
+  assert.match(fs.readFileSync(out, 'utf8'), /^present\n/, 'the app was stopped while its worktree still existed')
 
-test('no bootCommand: the shipped defaults carry none, and OPEN asks for the start command instead of printing a boot line', () => {
-  const { DEFAULTS } = require(path.join(SPEC, 'scripts/lib/state.js'))
-  assert.ok(!('bootCommand' in DEFAULTS.prototype), 'DEFAULTS.prototype.bootCommand must not exist')
-
-  const h = host()
-  const cfgFile = path.join(h.root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
-  delete cfg.prototype.bootCommand
-  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
-  const r = drive(h.root, ['invoice', 'list', 'page'])
-  const all = r.stdout + r.stderr
-  assert.ok(!/undefined|npm|node/i.test(all.replace(/prototype\.js/g, '')), all)
-  assert.ok(all.includes('AskUserQuestion') && all.includes('prototype.bootCommand') && all.includes('.claude/spec.config.json') && all.includes('re-run'), all)
-  assert.ok(!all.includes('cd .claude/worktrees'), 'no boot line is printed')
-  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees')), 'no worktree is made before the command is known')
-
-  // the session sets it and re-runs: OPEN proceeds with that command
-  cfg.prototype.bootCommand = 'make serve'
-  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
-  const out = ok(drive(h.root, ['invoice', 'list', 'page']))
-  assert.ok(out.includes('cd .claude/worktrees/proto-invoice-list-page && export PORT=') && out.includes('&& make serve'), out)
+  // a restart loop: its bash outlives each server and shows ps no environment, so only its group or its pid reach it
+  h = host({}, {}, { bootCommand: 'while true; do node app.js; sleep 0.3; done' })
+  const { pid: live, url } = await approved(t, h)
+  ok(mark(h.root, STEM, 'contracted', '--confirmed'))
+  assert.strictEqual(statusOf(h.root).app, null, 'the committed status holds no pid')
+  assert.strictEqual(JSON.parse(h.g('show', `HEAD:design/prototypes/${STEM}/status.json`)).app, null)
+  assert.ok(tagged(h.root).length > 0 && await answers(url), 'the app runs into CONTRACTED')
+  ok(mark(h.root, STEM, 'closed'))
+  await new Promise((r) => setTimeout(r, 1000)) // past the loop's 0.3 s respawn
+  assert.ok(groupGone(live) && !tagged(h.root).length && !(await answers(url)), 'closed at CONTRACTED stops it too')
+  assert.strictEqual(statusOf(h.root).app, null, 'status.app is cleared')
 })
 
-test('a boot line refuses (never prints undefined) once the host has dropped bootCommand', async (t) => {
+test('AC-20261108-01-6 a config still holding prototype.bootCommand stops --state with the migration named', () => {
   const h = host()
-  ok(drive(h.root, ['invoice', 'list', 'page'])) // OPEN with a command
-  const cfgFile = path.join(h.root, '.claude/spec.config.json')
-  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
-  const app = await startApp(t, statusOf(h.root).appPort)
-  ok(mark(h.root, STEM, 'opened'))
-  await app.stop()
-  delete cfg.prototype.bootCommand
-  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
-  const r = drive(h.root, [STEM]) // ROUND, nothing answering: the boot line would print
+  const file = path.join(h.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(file, 'utf8'))
+  fs.writeFileSync(file, JSON.stringify({ ...cfg, prototype: { bootCommand: 'node app.js' } }))
+  const r = drive(h.root, ['invoice', 'list', 'page', '--state'])
   assert.strictEqual(r.status, 2, r.stdout + r.stderr)
-  assert.ok(r.stderr.includes('prototype.bootCommand') && !(r.stdout + r.stderr).includes('undefined'), r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('still has prototype.bootCommand — run /spec:migrate'), r.stderr)
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees')))
+})
+
+test('AC-20261108-01-7 spec/ and the v8 docs name none of the retired boot machinery; ADR-0043 is amended by ADR-0049', () => {
+  const { ROOT } = require('./helpers')
+  const v8 = path.join('docs', 'v8')
+  const files = []
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name)
+      if (e.isDirectory()) { if (rel !== path.join(v8, 'comparison')) walk(rel) } else files.push(rel) // comparison/: another project's diffs
+    }
+  }
+  walk('spec'); walk(v8)
+  const retired = ['withApp', 'allocApp', 'bootCommandOf', 'bootLine', 'export PORT=', 'appUrl', 'prototype.bootCommand']
+  const hits = []
+  for (const f of files) {
+    if (['migrate.js', 'migrate.md'].includes(path.basename(f))) continue // the migration's own text names what it moves
+    const text = fs.readFileSync(path.join(ROOT, f), 'utf8')
+    for (const w of retired) if (text.includes(w)) hits.push(`${f}: ${w}`)
+  }
+  assert.deepStrictEqual(hits, [])
+  const adr = fs.readdirSync(path.join(ROOT, 'docs/adr')).find((f) => f.startsWith('0043-'))
+  assert.ok(fs.readFileSync(path.join(ROOT, 'docs/adr', adr), 'utf8').includes('Amended by: ADR-0049'))
 })

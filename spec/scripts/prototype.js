@@ -11,8 +11,8 @@
 //
 // States OPEN → ROUND (×N) → APPROVED → CONTRACTED → CLOSED. Marks: opened, round-done, approved,
 // contracted --confirmed, closed [--force]. State: design/prototypes/<stem>/status.json (marks, rounds,
-// handled pin ids, branch, worktree, appPort, url); pins.json is the pin list (a plain array); contract.json is
-// written and the stem's dir committed on trunk at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
+// handled pin ids, branch, worktree, app {pid, …}, appPort, url); pins.json is the pin list (a plain array);
+// contract.json is written and the stem's dir committed on trunk at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
 const path = require('path')
@@ -21,6 +21,7 @@ const state = require('./lib/state')
 const Q = require('./lib/queue')
 const git = require('./lib/git')
 const host = require('./lib/host')
+const app = require('./lib/app')
 const { render } = require('./lib/report')
 const N = require('./lib/next')
 
@@ -38,7 +39,7 @@ const sentenceOf = (p) => `On ${p.route}${p.given ? `, given ${p.given}` : ''}: 
 const picSlug = (route) => (route === '/' ? 'root' : route.replace(/\//g, '_').replace(/^_+/, '').replace(/[^\w.-]/g, '_'))
 const copy = (o) => JSON.parse(JSON.stringify(o))
 // Fields that live only for the invocation that set them: the report reads them, status.json never holds them.
-const TRANSIENT = ['closeWarn', 'removed', 'discarded', 'pictureWarns']
+const TRANSIENT = ['closeWarn', 'removed', 'discarded', 'pictureWarns', 'appError']
 
 // ---- input: brief path | existing stem | idea words ---------------------------------------
 
@@ -68,7 +69,8 @@ function load(ctx) {
   }
   return saved || {
     stem: r.stem, brief: r.brief, idea: r.idea, stemAuto: r.auto, branch: 'proto/' + r.stem,
-    worktree: `.claude/worktrees/proto-${r.stem}`, appPort: null, url: null, rounds: 0, ready: false, marks: {}, handled: [],
+    worktree: `.claude/worktrees/proto-${r.stem}`, app: null, appPort: null, url: null, rounds: 0, ready: false,
+    marks: {}, handled: [],
   }
 }
 
@@ -86,26 +88,53 @@ function phase(s) {
   return m.contracted ? 'CONTRACTED' : 'APPROVED'
 }
 
-// Worktree on proto/<stem> from trunk, the host's setupCommand there, one free port for the app.
+// The app's options: the worktree it runs in, its port and its log (lib/app.js owns the rest).
+const appOpts = (s, ctx) => ({
+  cwd: path.resolve(ctx.root, s.worktree), port: s.appPort, root: ctx.root,
+  log: state.appLog(ctx.root, 'proto-' + ctx.stem),
+})
+
+// Worktree on proto/<stem> from trunk, provisioned as a run's is (the .worktreeinclude files, the host's setupCommand),
+// one free port when the url holds {port}, then the app booted (runtime.envCommand first). A refusal removes the
+// worktree this call made, so the re-run provisions afresh.
 function setup(s, ctx) {
-  const wt = git.worktreeAdd(ctx.root, s.worktree, s.branch, git.trunk(ctx.config))
-  if (ctx.config.setupCommand) {
-    const r = host.run(ctx.config.setupCommand, { cwd: wt })
-    if (r.status !== 0) refuse(`setupCommand failed in ${wt}:\n${r.tail}\nfix setupCommand in .claude/spec.config.json, then re-run`, 1)
-  }
-  if (s.url == null) Object.assign(s, host.allocApp(ctx.config.prototype.url))
+  const rt = ctx.config.runtime
+  if (!app.bootOf(rt)) refuse(app.BOOT_MISSING)
+  const from = git.trunk(ctx.config)
+  const had = git.branchExists(ctx.root, s.branch) // a branch it did not create is never deleted
+  const made = host.provision(ctx.root, { rel: s.worktree, branch: s.branch, from, config: ctx.config })
+  const drop = had ? {} : { deleteBranch: s.branch }
+  const undo = () => { if (made.fresh) git.worktreeRemove(ctx.root, made.wt, { force: true, ...drop }) }
+  try {
+    if (made.setup.status !== 0) {
+      const msg = `setupCommand failed in ${made.wt}:\n${made.setup.tail}\nfix setupCommand in .claude/spec.config.json`
+      refuse(msg + ', then re-run', 1)
+    }
+    if (s.url == null) {
+      s.appPort = /\{port\}/.test(rt.url) ? host.freePort() : null
+      s.url = host.resolveUrl(rt.url, s.appPort)
+    }
+    s.app = app.start(rt, appOpts(s, ctx))
+  } catch (e) { undo(); throw e }
   s.ready = true
+  revived = true // just booted: trusted until the next invocation
+}
+
+// OPEN (after setup) and ROUND over an app not up (dead, or answering nothing): restarted (a restart failure is the
+// step's warning), never restarted while it is up, and at most once per invocation (the restarted app is trusted until
+// the next one).
+let revived = false
+function revive(s, ctx) {
+  delete s.appError
+  revived = true
+  try {
+    s.app = app.ensure(ctx.config.runtime, s.app, { ...appOpts(s, ctx), restart: false })
+  } catch (e) { s.appError = e.message }
 }
 
 const docs = (ctx) => state.readProto(ctx.root, ctx.stem)
 const pinsOf = (ctx) => docs(ctx).pins || []
 const active = (pins) => pins.filter((p) => p.status === 'active')
-const NO_BOOT = 'no prototype.bootCommand in .claude/spec.config.json — set it to the command that starts this app (it should serve on $PORT), then re-run'
-const bootLine = (s, ctx) => {
-  const cmd = state.bootCommandOf(ctx.config)
-  if (!cmd) refuse(NO_BOOT)
-  return `cd ${s.worktree} && ${s.appPort ? `export PORT=${s.appPort} && ` : ''}${cmd}`
-}
 const pinLine = (ctx) => `node ${shq(ctx.script)} ${shq(ctx.stem)} pin --kind behaviour|look --route </route> [--given "<precondition in words>"] --note "<note>" --root ${shq(ctx.root)}`
 const markCmd = (ctx, mark) => `node ${shq(ctx.script)} ${shq(ctx.stem)} --root ${shq(ctx.root)} --mark ${mark}`
 const pinBullet = (p) => `- ${p.id} (${p.kind}): ${sentenceOf(p)}`
@@ -119,41 +148,30 @@ function approvedBody(s, ctx) {
     '',
     `Show the user these sentences. On a yes: ${markCmd(ctx, 'contracted --confirmed')}. To change one: drop it and pin it again, then re-run.`,
     `  drop: node ${shq(ctx.script)} ${shq(ctx.stem)} drop pN --why "<reason>" --root ${shq(ctx.root)}`,
-    ...(ctx.config.prototype.picture ? ['', `Pictures need the app at ${s.url}: ${bootLine(s, ctx)}`] : []),
+    ...(ctx.config.prototype.picture ? ['', `Pictures are taken from the running app at ${s.url}.`] : []),
   ].join('\n')
 }
 
 function derive(s, ctx) {
-  const p = ctx.config.prototype
   const cmd = (mark) => markCmd(ctx, mark)
   switch (phase(s)) {
     case 'OPEN':
-      if (!state.bootCommandOf(ctx.config)) {
-        return {
-          name: 'OPEN', accepts: ['closed'],
-          body: [
-            'The app\'s start command is not set yet.',
-            'Ask the user once (AskUserQuestion, free text): "What command starts your app? It should serve on the port in $PORT."',
-            'Set their answer as prototype.bootCommand in .claude/spec.config.json, then re-run this command.',
-          ].join('\n'),
-        }
-      }
       if (!s.ready) return { name: 'OPEN', auto: setup }
+      if (!revived && !s.appError && !app.up(ctx.config.runtime, s.app)) return { name: 'OPEN', auto: revive }
+      if (s.appError) return { name: 'OPEN', accepts: ['closed'], body: `⚠️ the app did not come up — ${s.appError}` }
       return {
         name: 'OPEN', mark: 'opened', accepts: ['closed'],
         body: [
           s.stemAuto ? `📌 Auto-picked stem ${ctx.stem} (veto anytime: re-run with --stem <name>)` : '',
           `Prototype worktree ${s.worktree} on ${s.branch}, from ${git.trunk(ctx.config)}.`,
-          `Start the app in the background: ${bootLine(s, ctx)}  — it should answer at ${s.url}`,
+          `app up at ${s.url}`,
           s.brief ? `Build a throwaway prototype of ${s.brief}` : `Build a throwaway prototype of ${s.idea || ctx.stem}`,
         ].filter(Boolean).join('\n'),
       }
     case 'ROUND': {
-      if (!host.listening(s.url)) {
-        return {
-          name: 'ROUND', accepts: ['approved', 'closed'],
-          body: `⚠️ nothing answers at ${s.url} — start the app in the background: ${bootLine(s, ctx)}, then re-run`,
-        }
+      if (!revived && !s.appError && !app.up(ctx.config.runtime, s.app)) return { name: 'ROUND', auto: revive }
+      if (s.appError) {
+        return { name: 'ROUND', accepts: ['closed'], body: `⚠️ the app did not come up — ${s.appError}` }
       }
       const round = s.rounds + 1
       const made = active(pinsOf(ctx)).filter((x) => x.round === round)
@@ -225,6 +243,8 @@ function commitDir(ctx, message) {
 function takePictures(s, ctx, pins) {
   const cmd = ctx.config.prototype.picture
   if (!cmd) return []
+  revive(s, ctx) // the pictures are of the running app
+  if (s.appError) return [`no pictures — the app did not come up: ${s.appError.split('\n')[0]}`]
   const warns = []
   const wt = path.resolve(ctx.root, s.worktree)
   const dir = path.join(ctx.root, designDir(ctx.stem), 'pictures')
@@ -239,10 +259,7 @@ function takePictures(s, ctx, pins) {
 }
 
 const steps = {
-  opened(s, _f, ctx) {
-    if (!host.listening(s.url)) refuse(`nothing answers at ${s.url} — start the app from ${s.worktree}: ${bootLine(s, ctx)}, then mark opened`)
-    s.marks.opened = now()
-  },
+  opened(s) { s.marks.opened = now() },
   'round-done'(s, _f, ctx) {
     s.rounds += 1
     s.handled = pinsOf(ctx).filter((p) => p.round <= s.rounds).map((p) => p.id)
@@ -255,12 +272,13 @@ const steps = {
     onTrunk(ctx, 'contracted')
     const pins = pinsOf(ctx)
     if (!active(pins).length) refuse('nothing to contract — drop was the last word')
-    const prev = copy(s)
     const rec = ({ id, kind, route, given, note, round, status, why }) => ({
       id, kind, route, ...(given ? { given } : {}), note, sentence: sentenceOf({ route, given, note }), round, status, ...(status === 'dropped' ? { why } : {}),
     })
     state.writeProto(ctx.root, ctx.stem, { contract: { stem: ctx.stem, rounds: s.rounds, pins: pins.map(rec) } })
     s.pictureWarns = takePictures(s, ctx, pins)
+    const prev = copy(s)
+    s.app = null // a pid is no record for trunk: the app runs on, its rec kept in the worktree's git dir (app.recOf)
     // The committed status.json already carries the contracted mark; a rejected commit puts the old one back.
     s.marks.contracted = now()
     save(s, ctx)
@@ -285,6 +303,8 @@ const steps = {
     const warns = []
     if (queued) warns.push(`${Q.paste(ctx.root, queued)} is still pending in the queue (${queued.id}) — plan it, or drop it with /spec:queue done ${queued.id}`)
     const prev = copy(s)
+    app.stop(app.recOf(ctx.root, s))
+    s.app = null
     const rm = git.worktreeRemove(ctx.root, s.worktree, { deleteBranch: s.branch, force: true }) // a throwaway prototype
     if (!rm.removed) warns.push(`worktree kept at ${s.worktree}: ${rm.reason} — git worktree remove --force ${s.worktree}`)
     s.marks.closed = now()
@@ -373,6 +393,7 @@ function dropCmd(a) {
 function main(argv) {
   try {
     const a = parseArgv(argv)
+    if (a.mark === 'closed') revived = true // closing never starts the app it is about to stop
     if (a.pos[1] === 'pin' && a.pos.length === 2) return void pinCmd(a)
     if (a.pos[1] === 'drop' && a.pos.length === 3 && /^p\d+$/.test(a.pos[2])) return void dropCmd(a)
     // `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.

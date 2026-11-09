@@ -11,5 +11,5 @@
     "dbCreate": "docker exec db psql -c \"create database $PROTO_BRANCH\"",
     "dbDestroy": "docker exec db psql -c \"drop database $PROTO_BRANCH\""
   },
-  "runtime": { "bootCommand": "pnpm --filter web dev --port $PORT" }
+  "runtime": { "bootCommand": "pnpm --filter web dev --port $PORT", "readyCheck": ["http://127.0.0.1:{port}/healthz"], "seedCommand": "pnpm db:seed" }
 }

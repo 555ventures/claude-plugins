@@ -75,6 +75,28 @@ test('readConfig applies defaults key by key and merges nested objects one level
   assert.deepStrictEqual(c.seats.reviewer, S.DEFAULTS.seats.reviewer, 'an untouched seat must keep its defaults')
 })
 
+test('AC-20261108-01-1 DEFAULTS.runtime holds only the url template; readConfig merges the host runtime over it and the log lives in the git common dir', () => {
+  assert.deepStrictEqual(S.DEFAULTS.runtime, { url: 'http://localhost:{port}' }, 'no boot command default: the plugin names no language')
+  assert.deepStrictEqual(S.DEFAULTS.prototype, {})
+  const root = tmpdir('cfg-rt')
+  gitRepo(root)
+  S.writeConfig(root, { runtime: { bootCommand: 'make serve', readyCheck: ['http://localhost:3100'] }, prototype: { e2eFile: 'e2e/{stem}.ts' } })
+  const c = S.readConfig(root)
+  assert.deepStrictEqual(c.runtime, { url: 'http://localhost:{port}', bootCommand: 'make serve', readyCheck: ['http://localhost:3100'] })
+  assert.strictEqual(c.prototype.e2eFile, 'e2e/{stem}.ts')
+  assert.strictEqual(S.appLog(root, 'proto-x'), path.join(fs.realpathSync.native(root), '.git', 'spec-app', 'proto-x.log'))
+})
+
+test('AC-20261108-01-6 readConfig refuses prototype.bootCommand, url and publicUrl with exit 2, naming the migration', () => {
+  const root = tmpdir('cfg-old')
+  for (const key of ['bootCommand', 'url', 'publicUrl']) {
+    S.writeConfig(root, { testCommand: 'npm test', prototype: { [key]: 'x', e2eFile: 'f' } })
+    assert.throws(() => S.readConfig(root), (e) => e.exit === 2 && e.message === `.claude/spec.config.json still has prototype.${key} — run /spec:migrate`)
+  }
+  S.writeConfig(root, { prototype: { picture: 'p', e2eFile: 'f', e2eCommand: 'c' }, runtime: { bootCommand: 'b' } })
+  assert.doesNotThrow(() => S.readConfig(root))
+})
+
 test('readSpec parses frontmatter, sections, intent, file plan, ACs and markers', () => {
   const s = S.readSpec(writeSpec(tmpdir('spec')))
   assert.strictEqual(s.frontmatter.status, 'draft', 'lifecycle reads the status from frontmatter')

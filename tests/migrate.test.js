@@ -507,6 +507,7 @@ test('AC-20261105-14-12 one prototype op per v7 record; apply rewrites status, p
   assert.ok(p.ops.some((o) => o.op === 'config'))
   for (const left of ['states.json', 'captures', 'tests', 'e2e.log']) assert.ok(p.owned.includes(`design/prototypes/03-admin-rounds/${left}`), left)
   assert.ok(p.warns.includes('prototype.e2eCommand reads PROTO_URL — the run sets APP_URL'), p.warns.join('|'))
+  assert.ok(!p.warns.some((w) => w.includes('seedCommand')), 'seedCommand is renamed, not dropped: ' + p.warns.join('|'))
   const before = g('status', '--porcelain')
   assert.strictEqual(before, '', 'planning changes nothing')
   const text = runNode('scripts/migrate.js', ['--root', d])
@@ -544,9 +545,9 @@ test('AC-20261105-14-12 one prototype op per v7 record; apply rewrites status, p
   const cfg = rj(d, '.claude/spec.config.json')
   const old = rj(FIX, 'config.json').prototype
   assert.strictEqual(cfg.prototype.e2eCommand, old.e2eRun)
-  assert.strictEqual(cfg.prototype.bootCommand, 'pnpm --filter web dev --port $PORT')
-  assert.deepStrictEqual(['url', 'picture', 'e2eFile'].map((k) => cfg.prototype[k]), [old.url, old.picture, old.e2eFile])
-  for (const k of ['overlay', 'e2eList', 'e2eRun', 'dbCreate', 'dbDestroy']) assert.ok(!(k in cfg.prototype), k)
+  assert.deepStrictEqual(cfg.runtime, { bootCommand: 'pnpm --filter web dev --port $PORT', readyCheck: ['http://127.0.0.1:{port}/healthz'], envCommand: 'pnpm db:seed', url: old.url }, 'the runtime block: the v7 one trimmed to the keys of ADR-0049, seedCommand renamed, the prototype url moved in')
+  assert.deepStrictEqual(['picture', 'e2eFile'].map((k) => cfg.prototype[k]), [old.picture, old.e2eFile])
+  for (const k of ['overlay', 'e2eList', 'e2eRun', 'dbCreate', 'dbDestroy', 'bootCommand', 'url']) assert.ok(!(k in cfg.prototype), k)
   assert.strictEqual(g('status', '--porcelain'), '', 'the migration commit holds it all')
 
   const again = runNode('scripts/migrate.js', ['--root', d, '--apply'])
@@ -560,11 +561,93 @@ test('AC-20261105-14-12 one prototype op per v7 record; apply rewrites status, p
 
 test('AC-20261105-14-12 a v8 host with a v7 record only plans the prototype op; the v7 tag is not made for it', () => {
   const { d } = protoHostV7()
-  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', prototype: { url: 'http://localhost:{port}', bootCommand: 'npm run dev' } }))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', runtime: { url: 'http://localhost:{port}', bootCommand: 'npm run dev' } }))
   execFileSync('git', ['-C', d, 'commit', '-qam', 'v8 config'])
   const p = mig(d)
   assert.ok(p.ops.some((o) => o.op === 'prototype'))
   assert.ok(!p.ops.some((o) => o.op === 'tag' || o.op === 'config'))
+})
+
+test('AC-20261108-01-6 prototype.bootCommand/url/publicUrl move to runtime (an existing runtime key wins, the plan says so), readyCheck stays, prototype keeps only its own keys, a second apply plans nothing', () => {
+  const d = tmpdir('mig-rt')
+  fs.mkdirSync(path.join(d, '.claude'))
+  const cfg = {
+    testCommand: 'true', trunk: 'main',
+    prototype: { bootCommand: 'pnpm dev', url: 'http://127.0.0.1:{port}', publicUrl: 'https://p.example.com', picture: 'shot {url} {out}', e2eFile: 'e2e/{stem}.ts', e2eCommand: 'pw {file}' },
+    runtime: { readyCheck: ['http://127.0.0.1:{port}'], envCommand: 'pnpm db:copy', readySeconds: 90, url: 'http://localhost:4321' },
+  }
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify(cfg))
+  const g = gitRepo(d)
+  const p = mig(d)
+  assert.ok(p.ops.some((o) => o.op === 'config'), 'a config op is listed')
+  assert.ok(p.warns.some((w) => w.includes('prototype.url')), 'the plan names the dropped prototype.url: ' + p.warns.join('|'))
+  mig(d, '--apply')
+  const out = rj(d, '.claude/spec.config.json')
+  assert.deepStrictEqual(out.runtime, { bootCommand: 'pnpm dev', readyCheck: ['http://127.0.0.1:{port}'], url: 'http://localhost:4321', publicUrl: 'https://p.example.com', envCommand: 'pnpm db:copy', readySeconds: 90 })
+  assert.deepStrictEqual(out.prototype, { picture: 'shot {url} {out}', e2eFile: 'e2e/{stem}.ts', e2eCommand: 'pw {file}' })
+  assert.strictEqual(g('status', '--porcelain'), '')
+  const again = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(again.status, 0)
+  assert.match(again.stdout, /✅ nothing to migrate/)
+
+  // zubu-web's shape: a runtime block and no prototype block is already current
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', trunk: 'main', runtime: { bootCommand: 'pnpm dev', readyCheck: ['http://127.0.0.1:3100', 'http://127.0.0.1:4321'] } }))
+  g('commit', '-qam', 'zubu')
+  assert.match(runNode('scripts/migrate.js', ['--root', d]).stdout, /✅ nothing to migrate/)
+})
+
+test('AC-20261108-01-6 a v8 host moving prototype.bootCommand/url to runtime keeps every other v8 key it holds, and the plan drops nothing that moved', () => {
+  const d = tmpdir('mig-rt-v8')
+  fs.mkdirSync(path.join(d, '.claude'))
+  const own = { testCommand: 'npm test', trunk: 'main', testGlobs: ['e2e/**'], testCountPattern: '(\\d+) passed', testFileCommand: 'npx vitest {file}',
+    setupCommand: 'npm ci', lanes: 3, gateConcurrency: 1, doctorProbeMs: 5000, worktreePerSpec: false, mergeStrategy: 'squash',
+    seats: { builder: { model: 'sonnet', effort: 'high' } }, walkthrough: { baseUrl: 'https://w', project: 'p', tokenEnv: 'T' },
+    release: { deployCommand: 'd', stagingUrl: 's', e2eCommand: 'e' }, design: { picture: 'x' }, forge: 'github' }
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ ...own, prototype: { url: 'http://localhost:{port}', bootCommand: 'npm run dev' } }))
+  gitRepo(d)
+  const p = mig(d)
+  assert.ok(p.ops.some((o) => o.op === 'config'), 'a config op is listed')
+  assert.deepStrictEqual(p.dropped, [], 'nothing is dropped: the v8 keys stay and the prototype keys moved')
+  const plan = runNode('scripts/migrate.js', ['--root', d])
+  assert.ok(!/dropped config keys/.test(plan.stdout), plan.stdout)
+  mig(d, '--apply')
+  assert.deepStrictEqual(rj(d, '.claude/spec.config.json'), { ...own, runtime: { bootCommand: 'npm run dev', url: 'http://localhost:{port}' } })
+  assert.match(runNode('scripts/migrate.js', ['--root', d]).stdout, /✅ nothing to migrate/)
+})
+
+test('AC-20261108-01-6 v7 runtime keys keep their meaning: readyTimeout is readySeconds, seedCommand is envCommand; a command readyCheck that reads $PORT under a fixed url, or none under a {port} url, is dropped with a warn', () => {
+  const run = (runtime) => {
+    const d = tmpdir('mig-rt-keys')
+    fs.mkdirSync(path.join(d, '.claude'))
+    fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', trunk: 'main', runtime }))
+    gitRepo(d)
+    const p = mig(d)
+    mig(d, '--apply')
+    return { warns: p.warns, rt: rj(d, '.claude/spec.config.json').runtime }
+  }
+  const kept = run({ bootCommand: 'pnpm dev', url: 'http://127.0.0.1:{port}', readyCheck: 'curl -sf localhost:$PORT/up', readyTimeout: 90, seedCommand: 'pnpm db:copy' })
+  assert.deepStrictEqual(kept.rt, { bootCommand: 'pnpm dev', url: 'http://127.0.0.1:{port}', readyCheck: 'curl -sf localhost:$PORT/up', readySeconds: 90, envCommand: 'pnpm db:copy' })
+  assert.deepStrictEqual(kept.warns, [])
+  const fixed = run({ bootCommand: 'pnpm dev', url: 'http://127.0.0.1:4321', readyCheck: 'curl -sf localhost:$PORT/up' })
+  assert.deepStrictEqual(fixed.rt, { bootCommand: 'pnpm dev', url: 'http://127.0.0.1:4321' })
+  assert.ok(fixed.warns.some((w) => w.includes('readyCheck')), fixed.warns.join('|'))
+  const bare = run({ bootCommand: 'pnpm dev', readyCheck: 'curl -sf localhost:3000/up' })
+  assert.deepStrictEqual(bare.rt, { bootCommand: 'pnpm dev' })
+  assert.ok(bare.warns.some((w) => w.includes('readyCheck')), bare.warns.join('|'))
+})
+
+test('AC-20261108-01-6 every strict reader refuses a config that still holds prototype.bootCommand: prototype.js --state, run.js, status.js', () => {
+  const d = tmpdir('mig-old')
+  fs.mkdirSync(path.join(d, '.claude'))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', prototype: { bootCommand: 'pnpm dev' } }))
+  gitRepo(d)
+  for (const [script, argv] of [['scripts/prototype.js', ['some idea', '--state']], ['scripts/run.js', ['specs/x/01-a.md']], ['scripts/status.js', []]]) {
+    const r = runNode(script, [...argv, '--root', d])
+    assert.strictEqual(r.status, 2, script + r.stdout + r.stderr)
+    assert.ok(r.stderr.includes('still has prototype.bootCommand — run /spec:migrate'), script + r.stderr)
+  }
+  const doctor = runNode('scripts/doctor.js', ['--root', d])
+  assert.ok(doctor.stdout.includes('config: .claude/spec.config.json still has prototype.bootCommand — run /spec:migrate'), doctor.stdout + doctor.stderr)
 })
 
 // ---- spec 20261105/17: what migrate keeps -----------------------------------------------------------------

@@ -10,6 +10,10 @@ Show the plan and ask the user once whether to apply it. On a yes, run
 
 It also converts the queue file to the current queue version (3); until it has run, the queue commands, `/spec:run` and `/spec:fanout` refuse with `queue file is version <n> — run /spec:migrate`.
 
+It also moves the `prototype` keys `bootCommand`, `url` and `publicUrl` into the `runtime` block (an
+existing `runtime` key wins, and the plan says so; `runtime` keeps `readyCheck`, `envCommand` and
+`readySeconds`); until it has run, every reader refuses with `still has prototype.<key> — run /spec:migrate`.
+
 It also rewrites every v7 prototype record under `design/prototypes/<stem>/` (`status.json`,
 `pins.json`, `contract.json`) to the sentence shape and trims the `prototype` config block
 (`e2eRun` becomes `e2eCommand`; the browser hook, the test-listing command and the database hooks

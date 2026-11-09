@@ -147,4 +147,13 @@ function v1Queue(root) {
   return twin
 }
 
-module.exports = { ROOT, SPEC, RUN_ROOT, tmpdir, runNode, runBash, freePort, gitRepo, v7Scripts, v1Queue }
+// Ends every process whose working directory is under dir: what a test's app leaves that a SPEC_APP read cannot see
+// (a SIP-protected binary such as `sleep` shows ps no environment).
+function killStrays(dir) {
+  const reap = require(path.join(SPEC, 'scripts/lib/reap.js'))
+  for (const pid of reap.cwdUnder(reap.procs().map((p) => p.pid).filter((p) => p !== process.pid), dir)) {
+    try { process.kill(pid, 'SIGKILL') } catch { /* gone */ }
+  }
+}
+
+module.exports = { ROOT, SPEC, RUN_ROOT, tmpdir, runNode, runBash, freePort, gitRepo, v7Scripts, v1Queue, killStrays }

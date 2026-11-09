@@ -16,7 +16,8 @@ const { ensureGitignore, IGNORE } = require('./init')
 
 const ARCH = 'docs/archive/v7'
 const MERGE = ['merge-commit', 'ff-only', 'squash'] // v7's `derived` and `rebase-ff` have no v8 meaning: git.mergeBack throws on them
-const RUNTIME = ['bootCommand', 'readyCheck', 'url', 'publicUrl', 'envCommand', 'readySeconds'] // ADR-0049
+// ADR-0049
+const RUNTIME = ['bootCommand', 'readyCheck', 'url', 'publicUrl', 'envCommand', 'readySeconds', 'stopCommand']
 const MOVED = ['bootCommand', 'url', 'publicUrl'] // the `prototype` keys that moved there
 const RENAMED = { readyTimeout: 'readySeconds', seedCommand: 'envCommand' } // v7's runtime keys, by their v8 names
 const V7_CONFIG = ['generatedBy', 'contractHash', 'policy', 'gateCommand'] // config keys only v7 wrote: trimConfig drops them, so they mark a host not yet migrated

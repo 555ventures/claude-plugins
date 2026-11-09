@@ -596,6 +596,23 @@ test('AC-20261108-01-6 prototype.bootCommand/url/publicUrl move to runtime (an e
   assert.match(runNode('scripts/migrate.js', ['--root', d]).stdout, /✅ nothing to migrate/)
 })
 
+test('AC-20261109-01-6 migrate --apply keeps runtime.stopCommand and prints no `runtime keys dropped` line naming it', () => {
+  const d = tmpdir('mig-stop')
+  fs.mkdirSync(path.join(d, '.claude'))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({
+    testCommand: 'true', trunk: 'main', prototype: { bootCommand: 'docker compose up -d', url: 'http://127.0.0.1:{port}' },
+    runtime: { stopCommand: 'docker compose down' },
+  }))
+  gitRepo(d)
+  const p = mig(d)
+  assert.ok(!p.warns.some((w) => w.includes('stopCommand')), 'the plan drops nothing: ' + p.warns.join('|'))
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.ok(!/runtime keys dropped[^\n]*stopCommand/.test(r.stdout + r.stderr), r.stdout)
+  assert.deepStrictEqual(rj(d, '.claude/spec.config.json').runtime,
+    { stopCommand: 'docker compose down', bootCommand: 'docker compose up -d', url: 'http://127.0.0.1:{port}' })
+})
+
 test('AC-20261108-01-6 a v8 host moving prototype.bootCommand/url to runtime keeps every other v8 key it holds, and the plan drops nothing that moved', () => {
   const d = tmpdir('mig-rt-v8')
   fs.mkdirSync(path.join(d, '.claude'))

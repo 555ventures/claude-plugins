@@ -280,17 +280,38 @@ test('AC-20261108-01-4 a boot command whose leader exits while its server serves
   assert.ok(await answers(url))
 })
 
-test('AC-20261108-01-2 a boot command that hands its app to a daemon and exits 0 (`docker compose up -d`) is waited for, then refused at OPEN (exit 2, runtime.stopCommand named): nothing is opened or adopted', async (t) => {
-  // every daemon records its pid the moment it starts, so the test kills each one
-  const daemon = "require('fs').writeFileSync(require('path').join(process.env.HOME_DIR, String(process.pid)), '')\n" + APP
-  const pids = tmpdir('daemon')
-  const h = guard(t, host({}, {}, { bootCommand: `HOME_DIR=${pids} env -u SPEC_APP node daemon.js >/dev/null 2>&1 & exit 0` }, { 'daemon.js': daemon }))
-  t.after(() => { for (const p of fs.readdirSync(pids)) { try { process.kill(Number(p), 'SIGKILL') } catch { /* gone */ } } })
+// The daemon stub (`docker compose up -d`): the boot runs launch.js and exits 0; the server it leaves is its own session
+// under a tmp dir outside the repo, with no SPEC_APP and no CLAUDE_PID, and serves after 1 s; it writes its pid to DPID.
+const DAEMON = "require('fs').writeFileSync(process.env.DPID, String(process.pid))\nsetTimeout(() => { " + APP.trim() + " }, 1000)\n"
+const LAUNCH = "const { spawn } = require('child_process')\nconst env = { ...process.env }\ndelete env.SPEC_APP\ndelete env.CLAUDE_PID\n" +
+  "spawn(process.execPath, [require('path').join(__dirname, 'daemon.js')], { detached: true, stdio: 'ignore', cwd: require('os').tmpdir(), env }).unref()\n"
+function daemonHost(t, stopCommand) {
+  const dpid = path.join(tmpdir('dpid'), 'pid')
+  const rt = { bootCommand: `DPID=${dpid} node launch.js` }
+  if (stopCommand) rt.stopCommand = `kill $(cat ${dpid})`
+  const h = guard(t, host({}, {}, rt, { 'daemon.js': DAEMON, 'launch.js': LAUNCH }))
+  t.after(() => { try { process.kill(Number(fs.readFileSync(dpid, 'utf8')), 'SIGKILL') } catch { /* gone */ } })
+  return h
+}
+
+test('AC-20261108-01-2 a daemon boot (`docker compose up -d`) with no runtime.stopCommand is waited for, then refused at OPEN (exit 2, runtime.stopCommand named): nothing is opened or adopted', async (t) => {
+  const h = daemonHost(t, false)
   const r = drive(h.root, ['invoice', 'list', 'page'])
   assert.strictEqual(r.status, 2, r.stderr + r.stdout)
-  assert.ok(r.stderr.includes('the boot handed its server to a daemon this driver cannot stop — add runtime.stopCommand'), r.stderr)
+  assert.ok(r.stderr.includes('runtime.stopCommand'), r.stderr)
   assert.ok(!fs.existsSync(path.join(h.root, 'design/prototypes', STEM, 'status.json')), 'no status is written')
   assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees/proto-' + STEM)), 'the worktree it made is removed')
+})
+
+test('AC-20261109-01-5 a prototype on a daemon host reaches ROUND; --mark closed --force runs runtime.stopCommand before the worktree goes: nothing answers at the url, the worktree is gone', async (t) => {
+  const h = daemonHost(t, true)
+  const { url } = await opened(t, h)
+  assert.ok(await answers(url), 'the daemon runs at ROUND')
+  assert.ok(ok(drive(h.root, [STEM])).includes(`🎨 ready for pins — ${url}`), 'a re-derive keeps the same daemon')
+  ok(mark(h.root, STEM, 'closed', '--force'))
+  for (let i = 0; i < 50 && await answers(url); i++) await new Promise((r) => setTimeout(r, 100))
+  assert.ok(!(await answers(url)), 'nothing answers at the url')
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees/proto-' + STEM)), 'the worktree is gone')
 })
 
 test('AC-3: pin writes the array, refuses bad input, round-done records handled', async (t) => {

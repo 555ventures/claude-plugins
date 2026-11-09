@@ -1,16 +1,18 @@
 'use strict'
 // lib/app.js — the one owner of the host's app (ADR-0049). The host declares it once in config `runtime`
-// ({bootCommand, readyCheck, url, publicUrl?, envCommand?, readySeconds?}); prototype.js and run.js drive it here.
+// ({bootCommand, readyCheck, url, publicUrl?, envCommand?, readySeconds?, stopCommand?}); prototype.js and run.js drive
+// it here.
 //   start(rt, {cwd, port, log, root}) → rec {pid, port, url, startedAt, log, wt, envAt?}
 //     reaps what a dead session left in root, refuses a url something else already answers, runs runtime.envCommand
 //     once per worktree (recorded in the worktree's own git dir, so it outlives a stopped app and goes with the
 //     worktree; a changed command runs again), spawns bootCommand detached in its own process group
 //     (stdout+stderr to log, SPEC_APP=<wt> and PORT in env), then waits for the ready check. A boot command that
 //     exits 0 keeps the wait (`docker compose up -d`); once the ready check passes with nothing SPEC_APP-tagged
-//     alive, the server is a daemon's this driver cannot stop: a refusal, nothing adopted
+//     alive the server is a daemon's: the rec carries runtime.stopCommand (the host's own command that stops it) or
+//     start refuses, nothing adopted
 //   ready(rt, port, cwd)   up(rt, rec) = alive and ready
-//   alive(rec) = its leader or a SPEC_APP-tagged process lives
-//   stop(rec) (idempotent; its group and every tagged process's group)
+//   alive(rec) = its leader or a SPEC_APP-tagged process lives, or rec.stopCommand is set and its url answers
+//   stop(rec) (idempotent; its group and every tagged process's group, then rec.stopCommand in the worktree)
 //   stopIfAt(rec, url) → stopped it when it is alive at url
 //   recOf(root, protoStatus) → the prototype's app record (status.app, else the one start kept in the git dir)
 //   ensure(rt, rec, {…, restart}) → rec: kept when up and not restart, else stopped and started
@@ -74,8 +76,10 @@ function leaderAlive(rec) {
 }
 
 // The app lives while its leader does or while any process carrying its SPEC_APP tag does (a boot command that
-// backgrounds its server and exits, `node app.js & exit 0`, leaves only tagged children — the same set stop kills).
-const alive = (rec) => leaderAlive(rec) || !!(rec && rec.wt && reap.tagged(rec.wt).length)
+// backgrounds its server and exits, `node app.js & exit 0`, leaves only tagged children — the same set stop kills), or,
+// for a daemon the boot left (`docker compose up -d`, a rec that carries stopCommand), while its url answers.
+const alive = (rec) => leaderAlive(rec) || !!(rec && rec.wt && reap.tagged(rec.wt).length) ||
+  !!(rec && rec.stopCommand && rec.url && host.listening(rec.url))
 
 // The boot runs in a subshell of a wrapper that logs how it ended (`--- boot exited <n>`), so start knows a boot that
 // exited non-zero from one that exited 0; `exec` keeps working, the subshell is the one replaced.
@@ -93,6 +97,8 @@ const up = (rt, rec) => alive(rec) && ready(rt, rec.port, rec.wt)
 // TERM, 5 s, KILL: our leader's process group, every SPEC_APP-tagged process and the process group of each (a group
 // member macOS shows no environment for — the bash of a `while true; do node app.js; done` loop — is reached through
 // its tagged child, so a record with no pid still stops the whole app). The driver's own group is never signalled.
+// Then the record's stopCommand, the host's own, in the worktree (PORT when the rec has one): its failure, a timeout or
+// a url still answering is a warning on stderr, never a throw (stop runs after a merge and at a park).
 function stop(rec) {
   if (!rec || !(rec.pid || rec.wt)) return
   const self = (reap.info(process.pid) || {}).pgid
@@ -112,8 +118,24 @@ function stop(rec) {
   for (const t0 = Date.now(); list.some(reap.running) && Date.now() - t0 < 5000; sleepMs(100));
   const left = [...new Set([...list, ...find()])].filter(reap.running)
   if (left.length) send('SIGKILL', left)
+  if (rec.stopCommand) runStop(rec)
   const file = rec.wt && recFile(rec.wt)
   if (file) fs.rmSync(file, { force: true })
+}
+
+function runStop(rec) {
+  const env = rec.port == null ? {} : { PORT: String(rec.port) }
+  const r = host.run(rec.stopCommand, { cwd: rec.wt, env, timeoutMs: 60000 })
+  const note = `--- runtime.stopCommand ${rec.stopCommand} exited ${r.status}\n${r.stdout}${r.stderr}`
+  try { fs.appendFileSync(rec.log, note) } catch { /* no log */ }
+  let up = false
+  if (r.status === 0) {
+    for (const t0 = Date.now(); (up = host.listening(rec.url)) && Date.now() - t0 < 5000; sleepMs(250));
+  }
+  if (r.status !== 0 || up) {
+    process.stderr.write(`⚠️ runtime.stopCommand exited ${r.status} in ${rec.wt} — the app at ${rec.url} ` +
+      `may still run; see ${rec.log}\n`)
+  }
 }
 
 // The app a prototype's status names: its record; or, when `contracted` committed the status without one, the record
@@ -141,8 +163,11 @@ function start(rt, { cwd, port, log, root }) {
   reap.sweep(root || path.resolve(host.commonDir(cwd), '..'))
   const url = host.resolveUrl(rt.url, port)
   if (ready(rt, port, wt)) {
+    const remedy = typeof rt.stopCommand === 'string' && rt.stopCommand.trim()
+      ? '; if an earlier boot left it running, run runtime.stopCommand where it was booted'
+      : '; a boot that leaves its app running after it exits needs runtime.stopCommand'
     const msg = `something already answers at ${url} and this driver did not start it — stop it, then re-run`
-    throw fail(msg, 2, 'foreign')
+    throw fail(msg + remedy, 2, 'foreign')
   }
   const env = port == null ? {} : { PORT: String(port) }
   const envCmd = typeof rt.envCommand === 'string' && rt.envCommand.trim() ? rt.envCommand.trim() : null
@@ -172,6 +197,8 @@ function start(rt, { cwd, port, log, root }) {
   if (!child.pid) throw fail(`could not start the app in ${wt} — see ${log}`, 1, 'ready')
   const rec = { pid: child.pid, port: port == null ? null : port, url, startedAt: new Date().toISOString(), log, wt }
   if (at) rec.envAt = at
+  const stopCmd = typeof rt.stopCommand === 'string' && rt.stopCommand.trim() ? rt.stopCommand.trim() : null
+  if (stopCmd) rec.stopCommand = stopCmd
   const secs = Number(rt.readySeconds) > 0 ? Number(rt.readySeconds) : 60
   for (const t0 = Date.now(); ; sleepMs(500)) {
     if (ready(rt, port, wt)) {
@@ -180,8 +207,14 @@ function start(rt, { cwd, port, log, root }) {
         if (file) fs.writeFileSync(file, JSON.stringify(rec) + '\n')
         return rec
       }
-      throw fail('the boot handed its server to a daemon this driver cannot stop — add runtime.stopCommand ' +
-        `(spec 20261109/01); it answers at ${url}`, 2, 'handoff')
+      // a record carrying stopCommand keeps the wait (its url may answer after the ready check passes): the timeout
+      // below stops it through the command
+      if (!rec.stopCommand && bootStatus(log, from) === 0) {
+        throw fail(`the boot command exited and left the app at ${url} running with no process this driver ` +
+          'can stop — ' +
+          'set runtime.stopCommand in .claude/spec.config.json to the command that stops it, run that command once ' +
+          `in ${wt}, then re-run`, 2, 'handoff')
+      }
     }
     // the boot command exited non-zero (or was killed) and left nothing behind: fail at once; one that exits 0 keeps
     // the wait

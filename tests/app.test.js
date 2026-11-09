@@ -152,7 +152,9 @@ test('AC-20261109-01-2 the same daemon boot with no runtime.stopCommand: start t
   const port = await freePort()
   const t0 = Date.now()
   assert.throws(() => app.start(d.rt, { cwd: d.root, port, log: d.log }),
-    (e) => e.exit === 2 && e.message.includes('runtime.stopCommand') && e.message.includes(d.wt) && e.message.includes(`http://127.0.0.1:${port}`))
+    (e) => e.exit === 2 && e.message.includes('left the app at') && e.message.includes('no process this driver can stop') &&
+      e.message.includes('runtime.stopCommand') && e.message.includes(d.wt) && e.message.includes(`http://127.0.0.1:${port}`) &&
+      !e.message.includes('did not start it'))
   assert.ok(Date.now() - t0 >= 900, 'start kept waiting for the daemon to answer')
   assert.ok(await answers(`http://127.0.0.1:${port}`), 'the url answered before the refusal')
   assert.deepStrictEqual(reap.tagged(d.wt), [], 'nothing is adopted')
@@ -176,10 +178,14 @@ test('AC-20261109-01-4 a fixed url that already answers before the boot: start t
   const other = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('o')).listen(${port}, '127.0.0.1')`], { stdio: 'ignore' })
   t.after(() => other.kill('SIGKILL'))
   for (let i = 0; i < 50 && !(await answers(`http://127.0.0.1:${port}`)); i++) await new Promise((r) => setTimeout(r, 100))
-  for (const key of [undefined, 'docker compose down']) {
+  // the two remedies are told apart: unset names the key a daemon boot needs, set says where to run it
+  const UNSET = '; a boot that leaves its app running after it exits needs runtime.stopCommand'
+  const SET = '; if an earlier boot left it running, run runtime.stopCommand where it was booted'
+  for (const [key, want, other] of [[undefined, UNSET, SET], ['docker compose down', SET, UNSET]]) {
     const rt = { url: `http://127.0.0.1:${port}`, bootCommand: 'node app.js', readySeconds: 5, ...(key ? { stopCommand: key } : {}) }
     assert.throws(() => app.start(rt, { cwd: h.root, port: null, log: h.log }),
-      (e) => e.exit === 2 && e.message.includes('this driver did not start it') && e.message.includes('runtime.stopCommand'), String(key))
+      (e) => e.exit === 2 && e.message.includes('this driver did not start it') && e.message.endsWith(want) &&
+        !e.message.includes(other) && !e.message.includes('left the app at'), String(key))
   }
 })
 

@@ -634,7 +634,8 @@ test('AC-20261108-01-5 AC-20261108-01-2 a boot command that hands its app to a d
   put(h.wt, 'feature.txt', 'thing\n')
   const r = h.run('--mark', 'built')
   assert.strictEqual(r.status, 2, r.stderr + r.stdout)
-  assert.ok(r.stderr.includes('runtime.stopCommand'), r.stderr)
+  assert.ok(r.stderr.includes('left the app at') && r.stderr.includes('no process this driver can stop') && r.stderr.includes('runtime.stopCommand') &&
+    !r.stderr.includes('did not start it'), r.stderr)
   assert.ok(!fs.existsSync(h.counter + '.urls'), 'the pin tests never ran')
 })
 

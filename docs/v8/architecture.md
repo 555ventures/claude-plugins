@@ -281,8 +281,8 @@ Later builders: use these, do not re-derive them.
   (`'reviewed --file <json>'`); its first word plus `accepts[]` are the verbs allowed at that step;
   `auto(state, ctx) → state` is a driver-only step (OPEN, GATE, COMMIT, MERGE…) run, saved and
   re-derived without the session — after a mark too, so the checkpoint names the next session step.
-  `ctx = {root, arg, json, flags, script}`. Printed block: `▶ <STEP>`, body, `▶ when done: node
-  <script> <arg> --root <root> --mark <mark>`. `--json` → `{step, body, mark}`. Refuse with
+  `ctx = {root, arg, json, flags, script}`. Printed block: `▶ <STEP> · spec <version>`, body, `▶ when done: node
+  <script> <arg> --root <root> --mark <mark>`, then a `⚠️ … restart Claude Code` line when `state.installedVersion` (the plugin registry's entry in the running plugin's cache folder; `doctor.js` reuses it) names a newer one; the same line follows every checkpoint. `--json` → `{step, version, body, mark}`. Refuse with
   `refuse(msg)` (or throw `{exit: 2, message}`); stderr is `<name>: <msg>`. Also `die`, `writeOut`.
 - `host.js`: `run(cmd, {cwd, env, timeoutMs})` runs under bash, timeout → status 124, `tail` = last
   40 lines of stdout+stderr. `gate(root, config)` → `{status, cached, runId, tail}`; throws

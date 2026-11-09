@@ -342,3 +342,23 @@ test('AC-20261107-04-8 doctor says how many test files cite an AC as info, never
   assert.ok(k.info.includes('criteria: no test file cites an AC — new criteria are warned about, never refused'), k.info.join('\n'))
   assert.strictEqual(k.ok, true)
 })
+
+test('AC-20261108-02-1 doctor lists the stale-plugin finding when a newer plugin is installed beside the running one, and none when no entry shares its parent', () => {
+  const reg = (installPath) => {
+    const cfg = tmpdir('cfg')
+    fs.mkdirSync(path.join(cfg, 'plugins'))
+    fs.writeFileSync(path.join(cfg, 'plugins/installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'spec@tools': [{ installPath, version: '999.0.0' }] } }))
+    return { CLAUDE_CONFIG_DIR: cfg }
+  }
+  const d = inited({ testCommand: 'true' })
+  const beside = runNode('scripts/doctor.js', ['--root', d, '--json'], { env: reg(path.join(path.dirname(SPEC), '999.0.0')) })
+  const found = JSON.parse(beside.stdout).findings.find((x) => /is running but 999\.0\.0 is installed — restart Claude Code/.test(x))
+  assert.ok(found && /^plugin: spec \d/.test(found), beside.stdout)
+  assert.strictEqual(beside.status, 1)
+  // the not-a-repository refusal keeps it: a stale plugin may be why the session is lost
+  const bare = runNode('scripts/doctor.js', ['--root', tmpdir('bare'), '--json'], { env: reg(path.join(path.dirname(SPEC), '999.0.0')) })
+  assert.ok(JSON.parse(bare.stdout).findings.some((x) => /restart Claude Code/.test(x)), bare.stdout)
+  const away = runNode('scripts/doctor.js', ['--root', d, '--json'], { env: reg(path.join(tmpdir('elsewhere'), 'spec', '999.0.0')) })
+  assert.deepStrictEqual(JSON.parse(away.stdout).findings, [])
+  assert.strictEqual(away.status, 0)
+})

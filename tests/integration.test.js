@@ -48,7 +48,7 @@ test('init → plan → lock → queue → status → run --in-place → DONE', 
 
   // run in place: BUILD → (GATE) → REVIEW → (COMMIT, MERGE) → DONE.
   const run = (...a) => runNode('scripts/run.js', [rel, '--in-place', '--root', dir, ...a])
-  assert.match(ok(run()), /^▶ BUILD\n[\s\S]*📌 Auto-picked in place — --in-place/)
+  assert.match(ok(run()), /^▶ BUILD · spec \S+\n[\s\S]*📌 Auto-picked in place — --in-place/)
   fs.writeFileSync(path.join(dir, 'feature.txt'), 'thing\n')
   fs.writeFileSync(path.join(dir, 'stray.js'), '// outside the plan\n')
   assert.match(ok(run('--mark', 'built')), /BUILD → REVIEW/)

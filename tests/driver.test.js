@@ -7,12 +7,12 @@ const path = require('path')
 const { tmpdir, runNode, SPEC } = require('./helpers')
 
 // A three-step toy driver: A (mark go [--n v]) → B (auto) → C (mark finish) → END.
-function toyDriver({ applied } = {}) {
+function toyDriver({ applied, lib = path.join(SPEC, 'scripts/lib'), env } = {}) {
   const dir = tmpdir('drv')
   const file = path.join(dir, 'toy.js')
   fs.writeFileSync(file, `'use strict'
 const fs = require('fs'), path = require('path')
-const { makeDriver, refuse } = require(${JSON.stringify(path.join(SPEC, 'scripts/lib/driver.js'))})
+const { makeDriver, refuse } = require(${JSON.stringify(path.join(lib, 'driver.js'))})
 const sp = (ctx) => path.join(ctx.root, 'toy-state.json')
 const main = makeDriver({
   name: 'toy', specArg: 'thing',
@@ -32,14 +32,14 @@ const main = makeDriver({
 })
 process.exitCode = main()
 `)
-  return { dir, run: (...a) => runNode(file, ['x', '--root', dir, ...a]), state: () => JSON.parse(fs.readFileSync(path.join(dir, 'toy-state.json'), 'utf8')) }
+  return { dir, run: (...a) => runNode(file, ['x', '--root', dir, ...a], { env }), state: () => JSON.parse(fs.readFileSync(path.join(dir, 'toy-state.json'), 'utf8')) }
 }
 
 test('a bare run prints the step header, body and the mark line', () => {
   const d = toyDriver()
   const r = d.run()
   assert.strictEqual(r.status, 0, r.stderr)
-  assert.match(r.stdout, /^▶ A\n/, 'the session finds its step by the ▶ header')
+  assert.match(r.stdout, /^▶ A · spec \d+\.\d+\.\d+\n/, 'the session finds its step by the ▶ header, which names the running version')
   assert.ok(r.stdout.includes('do the A thing'), 'the step body is the session\'s instruction')
   assert.match(r.stdout, /--root \S+ --mark go/, 'the session needs a runnable mark line')
   const s = d.run('--state')
@@ -87,4 +87,47 @@ test('AC-20261105-07-10 a mark the step refuses is a checkpoint when applied say
   const plain = toyDriver()
   plain.run('--mark', 'go')
   assert.strictEqual(plain.run('--mark', 'go').status, 2, 'a driver with no hook refuses as before')
+})
+
+// A plugin cache the way Claude Code lays one out: <cache>/spec/<version>/ holding scripts/lib and .claude-plugin/plugin.json.
+function cachedPlugin(version) {
+  const cache = tmpdir('cache')
+  const root = path.join(cache, 'spec', version)
+  fs.mkdirSync(path.join(root, '.claude-plugin'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'spec', version }))
+  fs.cpSync(path.join(SPEC, 'scripts/lib'), path.join(root, 'scripts/lib'), { recursive: true })
+  return { cache, lib: path.join(root, 'scripts/lib') }
+}
+const registry = (entries) => {
+  const cfg = tmpdir('cfg')
+  fs.mkdirSync(path.join(cfg, 'plugins'))
+  fs.writeFileSync(path.join(cfg, 'plugins/installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'spec@tools': entries } }))
+  return { CLAUDE_CONFIG_DIR: cfg }
+}
+
+test('AC-20261108-02-1 every step prints the running version in its header and --json carries it', () => {
+  const { lib } = cachedPlugin('1.2.3')
+  const d = toyDriver({ lib, env: registry([]) })
+  assert.match(d.run().stdout, /^▶ A · spec 1\.2\.3\n/)
+  assert.doesNotMatch(d.run().stdout, /⚠️/, 'an empty registry warns nothing')
+  assert.strictEqual(JSON.parse(d.run('--json').stdout).version, '1.2.3')
+  assert.strictEqual(d.run('--state').stdout, 'A\n', '--state stays the bare step name')
+})
+
+test('AC-20261108-02-1 a newer installed plugin beside the running one is warned under the step and the checkpoint; one elsewhere is not', () => {
+  const { cache, lib } = cachedPlugin('1.2.3')
+  const warn = '⚠️ spec 1.2.3 is running but 2.0.0 is installed — restart Claude Code'
+  const stale = toyDriver({ lib, env: registry([{ installPath: path.join(cache, 'spec', '2.0.0'), version: '2.0.0' }]) })
+  const step = stale.run()
+  assert.ok(step.stdout.includes(warn), step.stdout)
+  assert.match(step.stdout, /^▶ A · spec 1\.2\.3\n/)
+  assert.ok(!step.stdout.slice(0, step.stdout.indexOf(warn)).includes('✅'), 'the warning follows the step')
+  const cp = stale.run('--mark', 'go')
+  assert.match(cp.stdout, /✅ checkpoint — A → C; safe to \/clear and re-run \/spec:toy x\n⚠️ spec 1\.2\.3 is running but 2\.0\.0 is installed/, cp.stdout)
+  assert.strictEqual(stale.run('--json').stdout.includes('⚠️'), false, '--json carries the version, not the prose')
+  const same = toyDriver({ lib, env: registry([{ installPath: path.join(cache, 'spec', '1.2.3'), version: '1.2.3' }]) })
+  assert.doesNotMatch(same.run().stdout, /⚠️/, 'the installed version is the running one')
+  const other = toyDriver({ lib, env: registry([{ installPath: path.join(tmpdir('elsewhere'), 'spec', '9.9.9'), version: '9.9.9' }]) })
+  assert.doesNotMatch(other.run().stdout, /⚠️/, 'no entry shares the plugin root\'s parent')
+  assert.doesNotMatch(other.run('--mark', 'go').stdout, /⚠️/)
 })

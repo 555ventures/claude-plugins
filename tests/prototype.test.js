@@ -15,11 +15,12 @@ const STEM = 'invoice-list-page'
 // The stub app: an http server bound to $PORT.
 const APP = "require('http').createServer((q, s) => s.end('app')).listen(process.env.PORT, '127.0.0.1')\n"
 
-// A host with no src/, no index.html: only the runtime block and a stub app. `rt` overrides runtime keys, `proto` the prototype block.
+// A host with no src/, no index.html: only the runtime block, the pin-test pair and a stub app. `rt` overrides runtime keys,
+// `proto` the prototype block (a key set to undefined is left out).
 function host(extra = {}, proto = {}, rt = {}, files = {}) {
   const root = tmpdir('proto')
   fs.mkdirSync(path.join(root, '.claude'))
-  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({ runtime: { bootCommand: 'node app.js', url: 'http://127.0.0.1:{port}', readySeconds: 20, ...rt }, prototype: proto, ...extra }))
+  fs.writeFileSync(path.join(root, '.claude/spec.config.json'), JSON.stringify({ runtime: { bootCommand: 'node app.js', url: 'http://127.0.0.1:{port}', readySeconds: 20, ...rt }, prototype: { e2eFile: 'e2e/{stem}.spec.js', e2eCommand: 'node e2e.js {file}', ...proto }, ...extra }))
   fs.writeFileSync(path.join(root, 'app.js'), APP)
   for (const [f, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), text) }
   const g = gitRepo(root) // a non-empty dir is seeded and committed as it stands
@@ -107,11 +108,12 @@ test('AC-20261108-01-1 a failing setupCommand refuses with the tail and removes 
   assert.deepStrictEqual(tagged(h.root), [], 'no app was started')
 })
 
-test('AC-20261108-01-1 no runtime.bootCommand: OPEN refuses naming it, makes no worktree and prints no boot line', () => {
+test('AC-20261108-02-2 no runtime.bootCommand: OPEN asks for it once, makes no worktree and prints no boot line', () => {
   const h = host({}, {}, { bootCommand: undefined })
   const r = drive(h.root, ['invoice', 'list', 'page'])
-  assert.strictEqual(r.status, 2, r.stdout + r.stderr)
-  assert.ok(r.stderr.includes('runtime.bootCommand') && r.stderr.includes('.claude/spec.config.json'), r.stderr)
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr)
+  assert.ok(r.stdout.includes('runtime.bootCommand') && r.stdout.includes('.claude/spec.config.json'), r.stdout)
+  assert.ok(!r.stdout.includes('prototype.e2eFile'), 'only what is missing is asked')
   assert.doesNotMatch(r.stdout + r.stderr, /undefined|cd \.claude/)
   assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees')), 'no worktree is made before the command is known')
 })
@@ -337,7 +339,6 @@ test('AC-3: pin writes the array, refuses bad input, round-done records handled'
     assert.strictEqual(f.status, 2, bad.join(' '))
   }
   assert.strictEqual(read(h.root, `design/prototypes/${STEM}/pins.json`).length, 2, 'refusals write nothing')
-  assert.strictEqual(drive(h.root, ['ghost', 'pin', '--kind', 'look', '--route', '/x', '--note', 'n']).status, 2, 'an unknown stem')
 
   ok(mark(h.root, STEM, 'round-done'))
   const st = statusOf(h.root)
@@ -390,8 +391,8 @@ test('AC-4: contracting with no active pin is refused; pin is refused after CONT
   const h = host()
   await opened(t, h)
   ok(pin(h.root, STEM, '--kind', 'look', '--route', '/', '--note', 'Wider'))
-  ok(drive(h.root, [STEM, 'drop', 'p1', '--why', 'changed my mind']))
   ok(mark(h.root, STEM, 'approved'))
+  ok(drive(h.root, [STEM, 'drop', 'p1', '--why', 'changed my mind']))
   const r = mark(h.root, STEM, 'contracted', '--confirmed')
   assert.strictEqual(r.status, 2)
   assert.match(r.stderr, /nothing to contract — drop was the last word/)
@@ -631,4 +632,122 @@ test('AC-20261108-01-7 spec/ and the v8 docs name none of the retired boot machi
   assert.deepStrictEqual(hits, [])
   const adr = fs.readdirSync(path.join(ROOT, 'docs/adr')).find((f) => f.startsWith('0043-'))
   assert.ok(fs.readFileSync(path.join(ROOT, 'docs/adr', adr), 'utf8').includes('Amended by: ADR-0049'))
+})
+
+// ---- spec 20261108/02: every mark proves its claim -----------------------------------------
+
+const wtOf = (root, stem = STEM) => path.join(root, '.claude/worktrees/proto-' + stem)
+const gitIn = (dir, ...a) => require('node:child_process').execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' })
+const PIN = ['--kind', 'behaviour', '--route', '/invoices', '--note', 'Delete asks for confirmation']
+
+test('AC-20261108-02-2 a host missing the pin-test pair is asked for it once at OPEN; all three missing are asked together; nothing is made and only closed is accepted', () => {
+  let h = host({}, { e2eFile: undefined, e2eCommand: undefined })
+  let r = drive(h.root, ['invoice', 'list', 'page'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout, /^▶ OPEN/)
+  assert.ok(r.stdout.includes('prototype.e2eFile') && r.stdout.includes('prototype.e2eCommand'), r.stdout)
+  assert.ok(!r.stdout.includes('runtime.bootCommand'), 'bootCommand is set: it is not asked')
+  assert.ok(r.stdout.includes('The host\'s runtime is not declared yet.') && r.stdout.includes('AskUserQuestion'), r.stdout)
+  assert.doesNotMatch(r.stdout, /▶ when done/, 'no mark is offered')
+  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees')) && h.g('branch', '--list', 'proto/*').trim() === '', 'no worktree, no branch')
+  assert.strictEqual(mark(h.root, STEM, 'opened').status, 2, 'only closed is accepted')
+  assert.strictEqual(drive(h.root, ['invoice', 'list', 'page', '--state']).stdout.trim(), 'OPEN')
+  // closed, the one mark it accepts, closes it without --force: nothing was made, so nothing is claimed removed
+  const closed = mark(h.root, STEM, 'closed')
+  assert.strictEqual(closed.status, 0, closed.stdout + closed.stderr)
+  assert.match(closed.stdout, /prototype closed/)
+  assert.doesNotMatch(closed.stdout, /removed/, 'no worktree or branch to report removed')
+  assert.ok(!fs.existsSync(path.join(h.root, 'design/prototypes', STEM)) && h.g('branch', '--list', 'proto/*').trim() === '')
+
+  h = host({}, { e2eFile: undefined }) // one of the pair set: the pair is missing
+  assert.ok(drive(h.root, ['invoice', 'list', 'page']).stdout.includes('prototype.e2eFile'))
+
+  h = host({}, { e2eFile: undefined, e2eCommand: undefined }, { bootCommand: undefined })
+  r = drive(h.root, ['invoice', 'list', 'page'])
+  for (const k of ['runtime.bootCommand', 'prototype.e2eFile', 'prototype.e2eCommand']) assert.ok(r.stdout.includes(k), k)
+  assert.strictEqual(r.stdout.match(/Ask the user once/g).length, 1, 'one question')
+})
+
+test('AC-20261108-02-2 contracted refuses naming both keys while the pin-test pair is missing, and writes no contract', async (t) => {
+  const h = host()
+  await approved(t, h)
+  const file = path.join(h.root, '.claude/spec.config.json')
+  const cfg = read(h.root, '.claude/spec.config.json')
+  fs.writeFileSync(file, JSON.stringify({ ...cfg, prototype: {} }))
+  const r = mark(h.root, STEM, 'contracted', '--confirmed')
+  assert.strictEqual(r.status, 2, r.stdout + r.stderr)
+  assert.ok(r.stderr.includes('prototype.e2eFile') && r.stderr.includes('prototype.e2eCommand'), r.stderr)
+  assert.ok(!fs.existsSync(path.join(h.root, `design/prototypes/${STEM}/contract.json`)))
+  fs.writeFileSync(file, JSON.stringify(cfg))
+  ok(mark(h.root, STEM, 'contracted', '--confirmed'))
+})
+
+test('AC-20261108-02-3 round-done needs a pin made this round and a committed worktree', async (t) => {
+  const h = host()
+  await opened(t, h)
+  const none = mark(h.root, STEM, 'round-done')
+  assert.strictEqual(none.status, 2)
+  assert.ok(none.stderr.includes('no pin this round'), none.stderr)
+  assert.deepStrictEqual([statusOf(h.root).rounds, statusOf(h.root).handled], [0, []], 'nothing moved')
+
+  ok(pin(h.root, STEM, ...PIN))
+  fs.writeFileSync(path.join(wtOf(h.root), 'wip.txt'), 'not committed\n')
+  const dirty = mark(h.root, STEM, 'round-done')
+  assert.strictEqual(dirty.status, 2)
+  assert.ok(dirty.stderr.includes(`.claude/worktrees/proto-${STEM}`) && dirty.stderr.includes(`proto/${STEM}`), dirty.stderr)
+  assert.deepStrictEqual([statusOf(h.root).rounds, statusOf(h.root).handled], [0, []], 'nothing moved')
+
+  gitIn(wtOf(h.root), 'add', '-A'); gitIn(wtOf(h.root), 'commit', '-q', '-m', 'the ruling')
+  ok(mark(h.root, STEM, 'round-done'))
+  assert.deepStrictEqual([statusOf(h.root).rounds, statusOf(h.root).handled], [1, ['p1']])
+  assert.strictEqual(mark(h.root, STEM, 'round-done').status, 2, 'round 2 has no pin yet')
+})
+
+test('AC-20261108-02-4 approved needs a live app, an active pin and a committed worktree', async (t) => {
+  const h = host()
+  const { pid } = await opened(t, h)
+  const none = mark(h.root, STEM, 'approved')
+  assert.strictEqual(none.status, 2)
+  assert.ok(none.stderr.includes('nothing to approve'), none.stderr)
+
+  ok(pin(h.root, STEM, ...PIN))
+  process.kill(-pid, 'SIGKILL')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const down = mark(h.root, STEM, 'approved')
+  assert.strictEqual(down.status, 2)
+  assert.ok(down.stderr.includes('the app is down'), down.stderr)
+  assert.strictEqual(statusOf(h.root).marks.approved, undefined)
+  assert.match(ok(drive(h.root, [STEM])), /ready for pins/, 're-running restarts it')
+
+  fs.writeFileSync(path.join(wtOf(h.root), 'wip.txt'), 'not committed\n')
+  const dirty = mark(h.root, STEM, 'approved')
+  assert.strictEqual(dirty.status, 2)
+  assert.ok(dirty.stderr.includes('uncommitted changes') && dirty.stderr.includes(`proto/${STEM}`) && dirty.stderr.includes('mark approved'), dirty.stderr)
+  fs.rmSync(path.join(wtOf(h.root), 'wip.txt'))
+  ok(mark(h.root, STEM, 'approved'))
+  assert.ok(statusOf(h.root).marks.approved)
+})
+
+test('AC-20261108-02-5 CONTRACTED prints the closed mark line inside its bullet, no when-done line, and closed is still accepted', async (t) => {
+  const h = host()
+  await approved(t, h)
+  const out = ok(mark(h.root, STEM, 'contracted', '--confirmed'))
+  assert.doesNotMatch(out, /^▶ when done:/m)
+  assert.match(out, /^- Worktree and branch stay until the specs built from this contract are done; then: node \S+prototype\.js \S+ --root \S+ --mark closed$/m, out)
+  assert.strictEqual(out.match(/contract written/g).length, 1, 'the body is printed once')
+  const again = ok(drive(h.root, [STEM]))
+  assert.doesNotMatch(again, /^▶ when done:/m)
+  assert.match(again, /^▶ CONTRACTED · spec /)
+  assert.match(ok(mark(h.root, STEM, 'closed')), /prototype closed/)
+})
+
+test('AC-20261108-02-6 a brief path with no file is refused and creates nothing; idea words whose second word is pin open a prototype', (t) => {
+  const h = guard(t, host())
+  const r = drive(h.root, ['docs/roadmap/99-missing.md'])
+  assert.strictEqual(r.status, 2, r.stdout)
+  assert.ok(r.stderr.includes('no brief at docs/roadmap/99-missing.md'), r.stderr)
+  assert.ok(!fs.existsSync(path.join(h.root, 'design')) && !fs.existsSync(path.join(h.root, '.claude/worktrees')), 'nothing was created')
+  assert.match(ok(drive(h.root, ['login', 'pin'])), /Auto-picked stem login-pin /)
+  assert.ok(fs.existsSync(path.join(h.root, 'design/prototypes/login-pin/status.json')))
+  assert.match(ok(drive(h.root, ['login', 'drop', 'p1'])), /Auto-picked stem login-drop-p1 /)
 })

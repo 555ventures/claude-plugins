@@ -5,4 +5,5 @@ allowed-tools: Bash(node *), Read, Grep, Glob
 ---
 
 Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/doctor.js` and show its output. With `--fix`, apply
-the printed remedies after the user says yes.
+the printed remedies after the user says yes. A `plugin:` finding means this session runs an older spec
+plugin than the one installed: restart Claude Code (`/clear` does not reload plugins).

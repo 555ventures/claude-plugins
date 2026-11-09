@@ -46,7 +46,14 @@ const TRANSIENT = ['closeWarn', 'removed', 'discarded', 'pictureWarns', 'appErro
 function resolveStem(ctx) {
   const arg = ctx.arg
   let stem, brief = null, auto = false
-  if (/\.md$/.test(arg)) { brief = arg; stem = path.basename(arg, '.md') }
+  if (/\.md$/.test(arg)) {
+    const abs = path.resolve(ctx.root, arg)
+    const outside = path.relative(ctx.root, abs).split(path.sep)[0] === '..'
+    if (outside || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      refuse(`no brief at ${arg} — pass a roadmap brief path, idea words or a stem`)
+    }
+    brief = arg; stem = path.basename(arg, '.md')
+  }
   else if (fs.existsSync(statusFile(ctx.root, arg))) stem = arg
   else { stem = ideaStem(arg); auto = true }
   if (ctx.flags.stem && ctx.flags.stem !== true) { stem = String(ctx.flags.stem); auto = false }
@@ -99,7 +106,6 @@ const appOpts = (s, ctx) => ({
 // worktree this call made, so the re-run provisions afresh.
 function setup(s, ctx) {
   const rt = ctx.config.runtime
-  if (!app.bootOf(rt)) refuse(app.BOOT_MISSING)
   const from = git.trunk(ctx.config)
   const had = git.branchExists(ctx.root, s.branch) // a branch it did not create is never deleted
   const made = host.provision(ctx.root, { rel: s.worktree, branch: s.branch, from, config: ctx.config })
@@ -152,10 +158,31 @@ function approvedBody(s, ctx) {
   ].join('\n')
 }
 
+// The runtime and pin-test keys the host has not set: the pin-test pair counts as missing when either is.
+const filled = (v) => typeof v === 'string' && v.trim() !== ''
+const PAIR = ['prototype.e2eFile', 'prototype.e2eCommand']
+const ASKED = {
+  'runtime.bootCommand': 'starts the app; $PORT when runtime.url has {port}',
+  'prototype.e2eFile': 'the file the pin tests go in; {stem} substituted',
+  'prototype.e2eCommand': 'runs one e2e file against APP_URL; {file} substituted',
+}
+const undeclared = (cfg) => [
+  ...(app.bootOf(cfg.runtime) ? [] : ['runtime.bootCommand']),
+  ...(filled(cfg.prototype.e2eFile) && filled(cfg.prototype.e2eCommand) ? [] : PAIR),
+]
+const runtimeQuestion = (keys) => [
+  "The host's runtime is not declared yet.",
+  'Ask the user once (AskUserQuestion, one question, free text per key):',
+  ...keys.map((k) => `- ${k}: ${ASKED[k]}`),
+  'Set the answers in .claude/spec.config.json, then re-run.',
+].join('\n')
+
 function derive(s, ctx) {
   const cmd = (mark) => markCmd(ctx, mark)
   switch (phase(s)) {
-    case 'OPEN':
+    case 'OPEN': {
+      const asks = !s.ready && undeclared(ctx.config)
+      if (asks && asks.length) return { name: 'OPEN', accepts: ['closed'], body: runtimeQuestion(asks) }
       if (!s.ready) return { name: 'OPEN', auto: setup }
       if (!revived && !s.appError && !app.up(ctx.config.runtime, s.app)) return { name: 'OPEN', auto: revive }
       if (s.appError) return { name: 'OPEN', accepts: ['closed'], body: `⚠️ the app did not come up — ${s.appError}` }
@@ -168,6 +195,7 @@ function derive(s, ctx) {
           s.brief ? `Build a throwaway prototype of ${s.brief}` : `Build a throwaway prototype of ${s.idea || ctx.stem}`,
         ].filter(Boolean).join('\n'),
       }
+    }
     case 'ROUND': {
       if (!revived && !s.appError && !app.up(ctx.config.runtime, s.app)) return { name: 'ROUND', auto: revive }
       if (s.appError) {
@@ -193,10 +221,11 @@ function derive(s, ctx) {
     case 'CONTRACTED': {
       const pics = (() => { try { return fs.readdirSync(path.join(ctx.root, designDir(ctx.stem), 'pictures')).length } catch { return 0 } })()
       return {
-        name: 'CONTRACTED', mark: 'closed', accepts: [],
+        name: 'CONTRACTED', accepts: ['closed'],
         body: render({
           outcome: `✅ contract written — ${contractPath(ctx.stem)}`,
-          bullets: [`design/prototypes/${ctx.stem}/ committed on trunk. Worktree and branch stay until the specs built from this are done; then mark closed.`,
+          bullets: [`design/prototypes/${ctx.stem}/ committed on trunk.`,
+            `Worktree and branch stay until the specs built from this contract are done; then: ${cmd('closed')}`,
             ...(pics ? [`${pics} picture(s) under design/prototypes/${ctx.stem}/pictures/`] : [])],
           warns: s.pictureWarns,
           queued: planItem(ctx.stem),
@@ -258,17 +287,39 @@ function takePictures(s, ctx, pins) {
   return warns
 }
 
+// A mark that claims work refuses while the worktree holds uncommitted changes.
+function committed(s, ctx, mark) {
+  const wt = path.resolve(ctx.root, s.worktree)
+  if (!fs.existsSync(wt)) refuse(`no worktree at ${s.worktree} — mark closed --force, then open it again`)
+  const dirty = (git.raw(['status', '--porcelain'], wt).stdout || '').trim()
+  if (dirty) refuse(`uncommitted changes in ${s.worktree} — commit on ${s.branch}, then mark ${mark}`)
+}
+
 const steps = {
   opened(s) { s.marks.opened = now() },
   'round-done'(s, _f, ctx) {
+    if (!active(pinsOf(ctx)).some((p) => p.round === s.rounds + 1)) {
+      refuse('no pin this round — record each ruling with the pin line, or mark approved')
+    }
+    committed(s, ctx, 'round-done')
     s.rounds += 1
     s.handled = pinsOf(ctx).filter((p) => p.round <= s.rounds).map((p) => p.id)
     s.marks.lastRound = now()
   },
   // The approving round is a completed round too: "Round 2" then approve reads "after 2 round(s)".
-  approved(s) { s.rounds += 1; s.marks.approved = now() },
+  // Approval is claimed over a live app, with a ruling pinned and the work committed.
+  approved(s, _f, ctx) {
+    if (!app.up(ctx.config.runtime, s.app)) refuse('the app is down — re-run to restart it, then mark approved')
+    if (!active(pinsOf(ctx)).length) refuse('nothing to approve — pin at least one ruling')
+    committed(s, ctx, 'approved')
+    s.rounds += 1
+    s.marks.approved = now()
+  },
   contracted(s, flags, ctx) {
     if (flags.confirmed !== true) refuse('the user confirms the sentences first — print them, get a yes, then mark contracted --confirmed')
+    if (undeclared(ctx.config).some((k) => PAIR.includes(k))) {
+      refuse('pin tests need prototype.e2eFile and prototype.e2eCommand — set them, then re-mark')
+    }
     onTrunk(ctx, 'contracted')
     const pins = pinsOf(ctx)
     if (!active(pins).length) refuse('nothing to contract — drop was the last word')
@@ -295,6 +346,14 @@ const steps = {
       if (state.liveRun(ctx.root, c.rel)) refuse(`${c.rel} is being run from this prototype's contract — let it finish, then mark closed`)
     }
     const contracted = !!s.marks.contracted
+    // Never set up (OPEN's runtime question): no worktree, branch or app of its own — nothing to discard or remove.
+    if (!s.ready) {
+      fs.rmSync(path.join(ctx.root, designDir(ctx.stem)), { recursive: true, force: true })
+      s.marks.closed = now()
+      s.removed = false
+      s.discarded = true
+      return
+    }
     if (!contracted && flags.force !== true) {
       const tip = git.raw(['rev-parse', '--short', s.branch], ctx.root)
       refuse(`unmerged prototype work on ${s.branch} (tip ${tip.status === 0 ? tip.stdout.trim() : 'none'}) — re-run with --force to discard it`)
@@ -325,11 +384,8 @@ const steps = {
   },
 }
 
-// The contract's report is shown under the checkpoint: CONTRACTED has a mark, so the driver would not print its body.
-const after = (verb, s, ctx) => (verb === 'contracted' ? derive(s, ctx).body : null)
-
 const driver = makeDriver({
-  name: 'prototype', specArg: 'idea words | docs/roadmap/NN-*.md | stem', load, save, derive, steps, after,
+  name: 'prototype', specArg: 'idea words | docs/roadmap/NN-*.md | stem', load, save, derive, steps,
   script: __filename,
 })
 
@@ -393,9 +449,11 @@ function dropCmd(a) {
 function main(argv) {
   try {
     const a = parseArgv(argv)
-    if (a.mark === 'closed') revived = true // closing never starts the app it is about to stop
-    if (a.pos[1] === 'pin' && a.pos.length === 2) return void pinCmd(a)
-    if (a.pos[1] === 'drop' && a.pos.length === 3 && /^p\d+$/.test(a.pos[2])) return void dropCmd(a)
+    // Closing never starts the app it is about to stop, nor does approving one: a dead app is the refusal.
+    if (a.mark === 'closed' || a.mark === 'approved') revived = true
+    const known = fs.existsSync(statusFile(a.root, a.pos[0] || ''))
+    if (known && a.pos[1] === 'pin' && a.pos.length === 2) return void pinCmd(a)
+    if (known && a.pos[1] === 'drop' && a.pos.length === 3 && /^p\d+$/.test(a.pos[2])) return void dropCmd(a)
     // `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
     const joined = a.pos.join(' ')
     const out = [joined, '--root', a.root].filter(Boolean)

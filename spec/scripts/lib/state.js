@@ -3,6 +3,7 @@
 // Writes are atomic (tmp + rename). Parsers are CRLF-safe. No CLI.
 
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 const crypto = require('crypto')
 const { spawnSync } = require('child_process')
@@ -76,6 +77,41 @@ function readConfig(root) {
   return merge(DEFAULTS, raw)
 }
 const writeConfig = (root, cfg) => writeJson(configPath(root), cfg)
+
+// ---- the running plugin and the installed one --------------------------------------------
+
+const pluginVersion = (pluginRoot) => {
+  return (readJson(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), {}) || {}).version || null
+}
+
+// The version Claude Code has installed for the plugin whose cache folder holds pluginRoot (its registry's entries
+// whose installPath sits in the same folder), the highest when several scopes list one; null for a dev checkout or a
+// registry that cannot be read. A registry of another shape is never a refusal.
+function installedVersion(pluginRoot) {
+  const home = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
+  const reg = readJson(path.join(home, 'plugins', 'installed_plugins.json'))
+  const real = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
+  const cache = real(path.dirname(path.resolve(pluginRoot)))
+  const mine = Object.values(isObj(reg) && isObj(reg.plugins) ? reg.plugins : {}).flat()
+    .filter((e) => isObj(e) && typeof e.installPath === 'string' && typeof e.version === 'string' && e.version &&
+      real(path.dirname(path.resolve(e.installPath))) === cache).map((e) => e.version)
+  const parts = (v) => v.split('.').map((n) => Number(n) || 0)
+  const newer = (a, b) => {
+    const [x, y] = [parts(a), parts(b)]
+    for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0)
+    return false
+  }
+  return mine.reduce((best, v) => (best === null || newer(v, best) ? v : best), null)
+}
+
+// The line a step prints when this process runs an older plugin than the one installed, else null.
+function staleNote(pluginRoot) {
+  const running = pluginVersion(pluginRoot)
+  const installed = installedVersion(pluginRoot)
+  if (!running || !installed || running === installed) return null
+  return `⚠️ spec ${running} is running but ${installed} is installed — ` +
+    'restart Claude Code (/clear does not reload plugins)'
+}
 
 // ---- spec documents -----------------------------------------------------------------------
 
@@ -237,7 +273,7 @@ const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 
 module.exports = {
   writeText, writeJson, readJson, readText,
-  DEFAULTS, CONFIG_KEYS, readConfig, writeConfig, configPath, appLog,
+  DEFAULTS, CONFIG_KEYS, readConfig, writeConfig, configPath, appLog, pluginVersion, installedVersion, staleNote,
   readSpec, writeStatus,
   runDir, runPath, readRun, writeRun, clearRun, liveRun, specState, resumes,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout, readRelease, writeRelease,

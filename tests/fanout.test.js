@@ -104,7 +104,7 @@ test('AC-20261107-02-1 AC-20261105-02-12 AC-20261105-10-1 AC-20261105-10-2 AC-20
   assert.match(wait, /lane 2 conflicts: src\/a\.js\n\nLanes \(status · run step\):\n {2}lane 1 — spec-01-alpha: merged\n {2}lane 2 — spec-02-beta: sent-back · resolving rebase \(1 files\)\n {2}lane 3 — spec-03-gamma: dispatched · no run state yet\n {2}lane 4 — spec-04-delta: dispatched · no run state yet\n\n▶ when done: /, 'the re-send dispatch, a blank line, the lane list, nothing after it: ' + wait)
   h.finish('03-gamma', 'src/c.js')
   assert.match(h.ok('--mark', 'returned', '--lane', '3'), /^lane 3 landed as [0-9a-f]{40}$/m, 'a lane lands while another is sent back')
-  assert.match(h.lok('02-beta'), /^▶ DONE\n\nA rebase onto trunk [0-9a-f]{40} is in progress/, 'the lane driver prints the rebase step itself')
+  assert.match(h.lok('02-beta'), /^▶ DONE · spec \S+\n\nA rebase onto trunk [0-9a-f]{40} is in progress/, 'the lane driver prints the rebase step itself')
   h.ok('--mark', 'resent')
   assert.match(h.ok(), /lane 2 — spec-02-beta: dispatched · resolving rebase \(1 files\)/)
   h.finish('04-delta', 'src/d.js')

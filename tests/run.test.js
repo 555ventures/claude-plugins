@@ -110,7 +110,7 @@ test('a merge reports the derivation\'s next pick, not the queue file\'s head: a
 
 test('AC-20261105-14-10 AC-20261105-07-13 the whole loop lands through one path: no port for a spec without prototype:, the worktree gate passes the tree trunk gets, the report lists the notice', () => {
   const h = fixture(); const out = ok(h.run())
-  assert.match(out, /^▶ BUILD\n/)
+  assert.match(out, /^▶ BUILD · spec \S+\n/)
   assert.ok(out.includes('- You asked: make a thing') && out.includes('## Decisions\n- D1: plain text, no JSON | no YAML — ADR-0001'), out)
   assert.ok(out.includes(`The brief is saved at ${path.join(h.dir, 'specs/20261104/01-thing.run/brief-build-1.md')}`))
   assert.ok(out.includes('01-thing.run/evidence.md; the driver appends it to the build commit') && out.includes('01-thing.run/as-built.md'), out)
@@ -464,11 +464,11 @@ test('AC-20261105-15-1 AC-20261105-15-2 OPEN admits only hardened or implementin
     assert.ok(r.status === 2 && r.stderr.includes(named) && r.stderr.includes('hardened or implementing'), r.stderr)
     assert.ok(!fs.existsSync(h.wt) && h.g('branch', '--list', 'spec/01-thing') === '', named)
   }
-  assert.match(ok(fixture({ status: 'implementing' }).run()), /^▶ BUILD\n/)
+  assert.match(ok(fixture({ status: 'implementing' }).run()), /^▶ BUILD · spec \S+\n/)
   const flag = path.join(tmpdir('setup'), 'ok')
   const h = fixture({ cfg: { setupCommand: `echo ran >> ${flag}.log; test -f ${flag}` } }); const r = h.run()
   assert.ok(r.status === 1 && /setupCommand failed/.test(r.stderr) && !fs.existsSync(h.wt) && h.g('branch', '--list', 'spec/01-thing') === '', r.stderr)
-  fs.writeFileSync(flag, ''); assert.match(ok(h.run()), /^▶ BUILD\n/)
+  fs.writeFileSync(flag, ''); assert.match(ok(h.run()), /^▶ BUILD · spec \S+\n/)
   assert.strictEqual(fs.readFileSync(flag + '.log', 'utf8'), 'ran\nran\n', 'setup ran again on the re-run')
 })
 

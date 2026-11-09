@@ -8,6 +8,7 @@ const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readJson, configPath, readFanout, readConfig, protoV7, protoDir } = require('./lib/state')
+const { staleNote, pluginVersion: versionOf } = require('./lib/state')
 const { run, cacheDir, worktreeIncluded } = require('./lib/host')
 const { derive } = require('./lib/next')
 const git = require('./lib/git')
@@ -81,17 +82,21 @@ function boxInfo(root, cfg, probedMs) {
   return out
 }
 
-const pluginVersion = () => (readJson(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), {}) || {}).version || null
+const PLUGIN = path.join(__dirname, '..')
+const pluginVersion = () => versionOf(PLUGIN)
 
 // probe:false skips the testCommand run (status counts hygiene findings and must stay fast).
 function check(root, { probe = true } = {}) {
   const f = []; const info = [] // info: runs in flight, printed but not a finding
+  const stale = staleNote(PLUGIN) // a long-lived Claude Code keeps the plugin it loaded: only a restart reloads it
+  if (stale) f.push('plugin: ' + stale.replace(/^⚠️ /, ''))
   // Every check below reads git state; outside a repository they would crash, so refuse and name the remedy.
   if (spawnSync('git', ['-C', root, 'rev-parse', '--git-dir'], { encoding: 'utf8' }).status !== 0) {
-    return { findings: [`git: ${root} is not inside a git repository — run git init`], info, version: pluginVersion(), refusal: true }
+    const noRepo = `git: ${root} is not inside a git repository — run git init`
+    return { findings: [...f, noRepo], info, version: pluginVersion(), refusal: true }
   }
   try { readConfig(root) } catch (e) { // a config the strict readers refuse (ADR-0049): a refusal naming the migration
-    return { findings: [`config: ${e.message}`], info, version: pluginVersion(), refusal: true }
+    return { findings: [...f, `config: ${e.message}`], info, version: pluginVersion(), refusal: true }
   }
   let cfg = null
   if (!fs.existsSync(configPath(root))) f.push('config: .claude/spec.config.json is missing — run /spec:init')

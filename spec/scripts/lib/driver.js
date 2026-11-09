@@ -17,6 +17,9 @@
 
 const fs = require('fs')
 const path = require('path')
+const plugin = require('./state')
+
+const PLUGIN_ROOT = path.join(__dirname, '..', '..')
 
 function writeOut(fd, text) {
   const buf = Buffer.from(text, 'utf8')
@@ -85,12 +88,24 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     return { state, step, from }
   }
 
-  function render(step, ctx) {
-    if (ctx.json) return JSON.stringify({ step: step.name, body: step.body || '', mark: step.mark ? markLine(ctx, step.mark) : null }) + '\n'
-    const lines = [`▶ ${step.name}`]
+  // Every step names the plugin version it runs; a newer installed one is said under it (restart, not /clear).
+  function render(step, ctx, { warn = true } = {}) {
+    const version = plugin.pluginVersion(PLUGIN_ROOT)
+    if (ctx.json) {
+      const mark = step.mark ? markLine(ctx, step.mark) : null
+      return JSON.stringify({ step: step.name, version, body: step.body || '', mark }) + '\n'
+    }
+    const lines = [`▶ ${step.name}${version ? ' · spec ' + version : ''}`]
     if (step.body) lines.push('', step.body.trimEnd())
     if (step.mark) lines.push('', '▶ when done: ' + markLine(ctx, step.mark))
+    const stale = warn && plugin.staleNote(PLUGIN_ROOT)
+    if (stale) lines.push('', stale)
     return lines.join('\n') + '\n'
+  }
+
+  const checkpoint = (text) => {
+    const stale = plugin.staleNote(PLUGIN_ROOT)
+    writeOut(1, text + '\n' + (stale ? stale + '\n' : ''))
   }
 
   function run(argv) {
@@ -109,7 +124,9 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const allowed = [...(cur.step.accepts || []), ...(cur.step.mark ? [cur.step.mark.split(/\s+/)[0]] : [])]
     if (!steps[verb]) refuse(`unknown mark '${verb}' — known: ${Object.keys(steps).join(', ') || 'none'}`)
     const alreadyApplied = () => {
-      writeOut(1, `✅ checkpoint — ${cur.from.name} → ${cur.step.name}; mark ${verb} was already applied; safe to /clear and re-run /spec:${name}${ctx.arg ? ' ' + ctx.arg : ''}\n`)
+      const rerun = `/spec:${name}${ctx.arg ? ' ' + ctx.arg : ''}`
+      const move = `${cur.from.name} → ${cur.step.name}`
+      checkpoint(`✅ checkpoint — ${move}; mark ${verb} was already applied; safe to /clear and re-run ${rerun}`)
     }
     if (!allowed.includes(verb)) {
       if (applied && applied(verb, state, a.flags, ctx)) return alreadyApplied()
@@ -126,11 +143,11 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
     const settled = settle(state, ctx)
     const next = settled.step
     const arg = ctx.arg ? ' ' + ctx.arg : ''
-    writeOut(1, `✅ checkpoint — ${cur.step.name} → ${next.name}; safe to /clear and re-run /spec:${name}${arg}\n`)
+    checkpoint(`✅ checkpoint — ${cur.step.name} → ${next.name}; safe to /clear and re-run /spec:${name}${arg}`)
     const extra = after && !ctx.json && after(verb, settled.state, ctx)
     if (extra) writeOut(1, extra + '\n')
     // A terminal step (no mark) is shown now: its state may already be cleared, so a re-run cannot.
-    if (!next.mark && next.body && !ctx.json) writeOut(1, '\n' + render(next, ctx))
+    if (!next.mark && next.body && !ctx.json) writeOut(1, '\n' + render(next, ctx, { warn: false }))
   }
 
   return function main(argv = process.argv.slice(2)) {

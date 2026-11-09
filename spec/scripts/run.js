@@ -279,16 +279,29 @@ function commit(state, ctx) {
   if (adv.length && !state.advised) { // advisories reach someone: one fix item per run, bound to the spec if it has one
     const words = `advisories of ${s.stem}: ${adv.map((f) => f.summary.trim()).join('; ')}`
     state.advised = true
-    if (state.fix && /^advisories of /.test(state.fix.symptom)) { // queuing again would chain without end
+    if (fromAdvisories(state, ctx)) { // queuing again would chain without end
       decide(state, `this fix is itself advisories, so these queue no more: ${adv.map((f) => f.summary).join('; ')}`)
     } else {
-      const item = Q.add(ctx.root, { type: 'fix', ...(s.rel ? { spec: s.rel } : {}), payload: words })
+      const item = Q.add(ctx.root, { type: 'fix', ...(s.rel ? { spec: s.rel } : {}), payload: words, advisories: true })
       if (item) decide(state, `queued the review's advisories as one fix: ${Q.paste(ctx.root, item)}`)
     }
   }
   if (!state.lane) return go(state, 'MERGE')
   state.report = B.report(state, `✅ ${state.fix ? `fixed — ${state.fix.symptom}` : `${s.id} built and reviewed`} — committed on ${state.branch}; fanout lands it`, 'nothing needs you — fanout lands the lane')
   return go(state, 'DONE') // a lane ends in its worktree: fanout lands it through the same lib/land.js
+}
+
+// Whether this fix is a queued advisories item, read from the item, never from the symptom's words: a fanout lane's
+// own item (the batch records its id, so a reworded symptom still finds it), else the open item the typed symptom
+// is (merge ticks it the same way).
+function fromAdvisories(state, ctx) {
+  if (!state.fix) return false
+  const fan = state.lane && st.readFanout(ctx.root) // a landed lane's worktree is gone: git.real tolerates it
+  const at = (l) => git.real(path.resolve(mainRoot(ctx.root), l.worktree)) === git.real(ctx.root)
+  const lane = fan && (fan.batch || []).find(at)
+  const typed = (i) => (i.spec || null) === (state.spec || null) && i.payload === state.fix.symptom
+  const it = Q.open(Q.read(ctx.root)).find((i) => i.type === 'fix' && (lane ? i.id === lane.item : typed(i)))
+  return !!(it && it.advisories)
 }
 
 function merge(state, ctx) {

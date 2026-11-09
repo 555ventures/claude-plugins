@@ -6,9 +6,10 @@
 // The file holds what was placed, by a user or an agent; readers derive the rest (ADR-0044).
 //
 // File: <git-common-dir>/spec-queue.json = {version: 3, seq, items[]}.
-// Item: {id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?}
+// Item: {id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?, advisories?}
 //   type   only on a prompt: plan | prototype | fix | decide; none = a plain note. The only carrier of a prompt's command.
 //   spec   only on type fix: the root-relative specs/…md the fix is bound to; absent = a spec-less fix.
+//   advisories  only on a fix queued for a run's advisories: the run working it queues none of its own.
 //   payload is bare text (a spec path, a brief path, the words); never a `/spec:<type> ` prefix.
 const fs = require('fs')
 const path = require('path')
@@ -126,7 +127,7 @@ function place(root, q, item, at = q.items.length) {
   return stored
 }
 
-// fields {payload, type?, spec?, after?, defaultType?}: payload as typed. A prompt goes through `parse`
+// fields {payload, type?, spec?, after?, advisories?, defaultType?}: payload as typed. A prompt goes through `parse`
 // (a given `spec` is taken as is); a prompt with no type takes `defaultType`. null = an open duplicate (a brief by number).
 function add(root, fields, { top } = {}) {
   const q = reconcile(root, read(root))
@@ -140,6 +141,7 @@ function add(root, fields, { top } = {}) {
   if (open(q).some(same)) return null
   q.seq += 1
   const item = { id: 'q' + q.seq, kind, ...(body.type ? { type: body.type } : {}), ...(body.spec ? { spec: body.spec } : {}), payload: body.payload, added: new Date().toISOString(), ...(fields.after ? { after: fields.after } : {}) }
+  if (fields.advisories) item.advisories = true
   const first = top ? open(q)[0] : null
   q.items.splice(first ? q.items.indexOf(first) : q.items.length, 0, item)
   write(root, q)

@@ -42,9 +42,33 @@ function host(name) {
   return dir
 }
 
-const connect = (root, args, npx) => runNode('scripts/connect.js', [...args, '--root', root], {
+// Every fixture lives under the OS temp dir, so the helper passes the flag that allows a temp root;
+// connectBare is the same run without it.
+const connectBare = (root, args, npx) => runNode('scripts/connect.js', [...args, '--root', root], {
   env: { GIT_CONFIG_GLOBAL: '/dev/null', XDG_CONFIG_HOME: tmpdir('xdg'), PATH: (npx ? npx.dir + path.delimiter : '') + process.env.PATH, WALKTHROUGH_TOKEN: undefined },
 })
+const connect = (root, args, npx) => connectBare(root, ['--allow-temp-root', ...args], npx)
+
+test('a root under the OS temp dir is refused with exit 2 before anything is called or written; the flag allows it', async (t) => {
+  const root = host('scratch')
+  const npx = fakeNpx('unused')
+  const r = connectBare(root, DEAD_URL, npx)
+  assert.strictEqual(r.status, 2, r.stderr)
+  assert.match(r.stderr, /temp/)
+  assert.match(r.stderr, /--allow-temp-root/)
+  assert.deepStrictEqual(npx.verbs(), [], 'no walkthrough-cli call reaches the service')
+  assert.ok(!fs.existsSync(path.join(root, '.claude')), 'nothing is written')
+  // a symlink into the temp dir is the same place
+  const link = path.join(tmpdir('link'), 'via-link')
+  fs.symlinkSync(root, link)
+  const viaLink = connectBare(link, DEAD_URL, npx)
+  assert.strictEqual(viaLink.status, 2, viaLink.stderr)
+  assert.deepStrictEqual(npx.verbs(), [])
+  const stub = await startStub(t, { 'GET /v1': [HELLO], 'GET /v1/projects/scratch/approvals': [APPROVALS] })
+  const ok = connectBare(root, ['--allow-temp-root', '--base-url', stub.url], npx)
+  assert.strictEqual(ok.status, 0, ok.stderr)
+})
+const DEAD_URL = ['--base-url', 'http://127.0.0.1:9']
 
 test('connect creates the project, stores the token ignored, writes the block, proves the link', async (t) => {
   const stub = await startStub(t, { 'GET /v1': [HELLO], 'GET /v1/projects/acme-shop/approvals': [APPROVALS] })

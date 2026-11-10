@@ -42,6 +42,13 @@ function commonDir(root) {
   return path.resolve(root, r.stdout.trim())
 }
 
+// The main checkout's top level, whichever worktree (or submodule) root is in. `git worktree list` names the git dir
+// itself first when it lives outside the checkout (--separate-git-dir); the checkout is then the one root is in.
+function mainRoot(root) {
+  const first = G.worktreeList(root)[0]
+  return first === G.real(commonDir(root)) ? G.repoRoot(root) : first
+}
+
 const cacheDir = (root) => path.join(commonDir(root), 'spec-run-cache')
 
 // A HEAD-seeded scratch index (so tracked-but-ignored files stay in), `add -A`, overlay removed,
@@ -213,7 +220,7 @@ function prepare(main, wt, config, fresh) {
 function provision(root, { rel, branch, from, config }) {
   const fresh = !fs.existsSync(path.resolve(root, rel))
   const wt = G.worktreeAdd(root, rel, branch, from)
-  return { wt, fresh, setup: prepare(G.worktreeList(root)[0], wt, config, fresh) }
+  return { wt, fresh, setup: prepare(mainRoot(root), wt, config, fresh) }
 }
 
 // The one way a driver removes a worktree: first stops what runs for or from it (every process tagged SPEC_APP=<wt>,
@@ -271,5 +278,5 @@ const listening = (url) => spawnSync(process.execPath, ['-e',
 { timeout: 5000 }).status === 0
 
 module.exports = { freePort, resolveUrl, listening, provision, prepare, release, run, gate, treeSha, cacheDir,
-  commonDir, copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf,
+  commonDir, mainRoot, copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf,
   firstRedLine, testsExecuted, COUNT_PATTERNS }

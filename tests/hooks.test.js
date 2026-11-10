@@ -169,6 +169,25 @@ test('AC-20261108-04-3 session-start stops what a SIGKILLed session left under t
   assert.strictEqual(reap('session-start', {}).status, 0)
 })
 
+test('AC-20261108-04-3 session-start in a repo whose git dir lives elsewhere sweeps the checkout, not the git dir\'s parent', async (t) => {
+  const base = fs.realpathSync(tmpdir('reap-sep'))
+  const repo = path.join(base, 'work'), beside = path.join(base, 'beside')
+  fs.mkdirSync(repo); fs.mkdirSync(beside)
+  execFileSync('git', ['init', '-q', '--separate-git-dir', path.join(base, 'meta.git'), repo])
+  const dying = owner(t)
+  await settle(300)
+  const deadPid = dying.pid
+  dying.kill('SIGKILL')
+  await new Promise((r) => dying.once('exit', r))
+  const here = idle(t, { CLAUDE_PID: String(deadPid) }, repo)
+  const next = idle(t, { CLAUDE_PID: String(deadPid) }, beside)
+  await settle()
+  const r = reap('session-start', { cwd: repo })
+  assert.match(r.stdout, /^🧹 stopped 1 process\(es\)/)
+  assert.ok(await gone(here.pid), 'the orphan in the checkout is stopped')
+  assert.ok(alive(next.pid), 'an orphan beside the checkout, under the git dir\'s parent, is not this repo\'s to sweep')
+})
+
 test('AC-20261108-04-3 session-start stops a SIGTERM-ignoring orphan and returns inside the hook\'s 5 s timeout', async (t) => {
   const repo = fs.realpathSync(tmpdir('reap-stubborn'))
   gitRepo(repo)

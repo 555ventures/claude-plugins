@@ -266,9 +266,23 @@ test('AC-20261108-04-1 release kills what is tagged with the worktree and what a
   assert.ok(alive(plain.pid), 'a process with neither tag is the user\'s own and stays')
 })
 
-test('AC-20261108-04-2 worktreeRemove( is called only in lib/git.js and lib/host.js', () => {
+test('AC-20261108-04-1 release never stops the releasing process or its ancestors, though both carry a CLAUDE_PID and stand in the worktree', () => {
+  const root = tmpdir('release-self'); gitRepo(root)
+  const wt = path.join(fs.realpathSync(root), '.claude/worktrees/spec-s')
+  spawnSync('git', ['-C', root, 'worktree', 'add', '-q', '-b', 'spec/s', wt])
+  const out = tmpdir('release-self-out')
+  const hostJs = path.join(SPEC, 'scripts/lib/host.js')
+  const js = `require(${JSON.stringify(hostJs)}).release(${JSON.stringify(root)}, ${JSON.stringify(wt)}, { force: true }); require('fs').writeFileSync(${JSON.stringify(path.join(out, 'self'))}, 'ok')`
+  // the ancestor is a node (a system shell hides its environment from ps), alive across the child's whole run
+  const parent = `require('child_process').spawnSync(process.execPath, ['-e', ${JSON.stringify(js)}], { stdio: 'inherit' }); require('fs').writeFileSync(${JSON.stringify(path.join(out, 'ancestor'))}, 'ok')`
+  spawnSync(process.execPath, ['-e', parent], { cwd: wt, env: { ...process.env, CLAUDE_PID: '4242', SPEC_APP: undefined }, timeout: 30000 })
+  assert.deepStrictEqual(fs.readdirSync(out).sort(), ['ancestor', 'self'], 'the process that releases and the shell above it both survive')
+  assert.ok(!fs.existsSync(wt), 'and the worktree is gone')
+})
+
+test('AC-20261108-04-2 worktreeRemove is named only in lib/git.js and lib/host.js, and no other script spells the raw git call (red-check included)', () => {
   const hits = []
-  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/worktreeRemove\(/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(path.join(SPEC, 'scripts'), f)) } }
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/worktreeRemove|['\"]worktree['\"]\s*,\s*['\"]remove['\"]/.test(fs.readFileSync(f, 'utf8'))) hits.push(path.relative(path.join(SPEC, 'scripts'), f)) } }
   walk(path.join(SPEC, 'scripts'))
   assert.deepStrictEqual(hits.sort(), ['lib/git.js', 'lib/host.js'])
 })

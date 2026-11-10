@@ -8,7 +8,6 @@
 //                   named claude), TERM then KILL after 1 s; `clear` and `resume` keep the process, so nothing stops
 
 const fs = require('fs')
-const path = require('path')
 const host = require('./lib/host')
 const reap = require('./lib/reap')
 
@@ -24,7 +23,7 @@ const readInput = () => {
 
 function sessionStart(input) {
   if (typeof input.cwd !== 'string' || !input.cwd) return
-  const n = reap.sweep(path.resolve(host.commonDir(input.cwd), '..'), GRACE_MS)
+  const n = reap.sweep(host.mainRoot(input.cwd), GRACE_MS)
   if (n > 0) process.stdout.write(`🧹 stopped ${n} process(es) a closed session left in this repo\n`)
 }
 

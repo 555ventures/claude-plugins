@@ -160,7 +160,7 @@ function start(rt, { cwd, port, log, root }) {
   const boot = bootOf(rt)
   if (!boot) throw fail(BOOT_MISSING, 2, 'config')
   const wt = real(cwd)
-  reap.sweep(root || path.resolve(host.commonDir(cwd), '..'))
+  reap.sweep(root || host.mainRoot(cwd))
   const url = host.resolveUrl(rt.url, port)
   if (ready(rt, port, wt)) {
     const remedy = typeof rt.stopCommand === 'string' && rt.stopCommand.trim()

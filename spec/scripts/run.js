@@ -33,10 +33,10 @@ function specInfo(ctx) {
 const cfgOf = (ctx) => st.readConfig(ctx.root)
 const wtOf = (state, ctx) => path.resolve(ctx.root, state.worktree)
 const specIn = (state, ctx) => (state.spec ? path.join(wtOf(state, ctx), state.spec) : null)
+const mainRoot = host.mainRoot
 const ownOf = (state) => state.spec && state.spec.split(path.sep).join('/')
 const runFile = (ctx, name) => { const s = specInfo(ctx); return path.join(s.abs ? st.runDir(s.abs) : st.fixRunDir(ctx.root, s.slug), name) }
 const runText = (ctx, name) => st.readText(runFile(ctx, name), '').replace(/\r\n/g, '\n').trim()
-const mainRoot = (root) => git.worktreeList(root)[0]
 // A fix lends its spec's full text, a stub's from history (ADR-0046); nothing writes the spec.
 const docOf = (state, ctx) => (!state.fix ? st.readSpec(specIn(state, ctx))
   : S.fixDoc(state.fix.symptom, state.spec ? stub.readFull(wtOf(state, ctx), state.spec) : null))

@@ -44,9 +44,11 @@ address the admin — was a legitimate environment stage the plugin had no hook 
   plugin names no language, tool, database or default command. `prototype` keeps only
   `picture`, `e2eFile`, `e2eCommand`.
 - **One owner of the app.** `lib/app.js` starts the app detached, waits on the host's ready
-  check, keeps the pid in `status.json` / `state.json`, restarts it when dead (the prototype
-  trusts the host's dev reload between rounds) or at every GATE (the gated tree is the booted
-  tree), and stops it at `closed` and at every ending of a run. A fixed url that already answers
+  check, keeps the pid in `status.json` / `state.json` and a copy of the record in the worktree's
+  git dir (`spec-app.json`, which a stop reads when the driver's own state is gone and which says
+  which record is newest at a fixed url), restarts it when dead (the prototype trusts the host's
+  dev reload between rounds) or at every GATE (the gated tree is the booted tree; the last gate's
+  app is stopped before `testCommand` runs), and stops it at `closed` and at every ending of a run. A fixed url that already answers
   before the start is refused: it is serving some other tree.
 - **The Claude session owns the app's life** (added 2026-11-08 after the leaked-servers report).
   The app inherits Claude Code's `CLAUDE_PID` and carries `SPEC_APP=<worktree>`; stop kills

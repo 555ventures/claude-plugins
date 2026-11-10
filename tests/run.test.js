@@ -692,6 +692,24 @@ test('AC-20261105-14-9 AC-20261108-01-5 a prototype spec: GATE boots the app thr
   assert.ok(!alive(h.state() ? h.state().app.pid : again) && !tagged(h).length, 'looked stops the app: no process of it is left')
 })
 
+test('AC-20261108-01-5 the app a red pin gate left up is stopped before the next gate runs testCommand', (t) => {
+  const FREE = `const fs = require('fs'); let s = {}
+try { s = JSON.parse(fs.readFileSync(require('path').join(__dirname, '../../../${REL.replace(/\.md$/, '.run')}/state.json'), 'utf8')) } catch {}
+if (s.app && s.app.pid) { try { process.kill(s.app.pid, 0); console.error('FAIL the last gate\\'s app is up'); process.exit(1) } catch {} }
+`
+  const h = guard(t, protoFixture({}, {}, { 'free.js': FREE }))
+  const cfg = path.join(h.dir, '.claude/spec.config.json')
+  fs.writeFileSync(cfg, JSON.stringify({ ...JSON.parse(fs.readFileSync(cfg, 'utf8')), testCommand: 'node check.js && node free.js' })); h.g('commit', '-qam', 'gate checks the port')
+  ok(h.run()); put(h.wt, 'feature.txt', 'thing\n'); put(h.wt, 'PINRED', '')
+  assert.match(ok(h.run('--mark', 'built')), /BUILD → REPAIR;.*\ngate: red — FAIL pin p1/)
+  const left = h.state().app.pid
+  assert.ok(alive(left), 'the red pin gate leaves its app up')
+  fs.rmSync(path.join(h.wt, 'PINRED'))
+  const r = ok(h.run('--mark', 'repaired'))
+  assert.strictEqual(h.state().step, 'REVIEW', 'testCommand ran with the old app stopped\n' + r)
+  assert.ok(!alive(left) && h.state().app.pid !== left, 'the pin tests got a fresh app')
+})
+
 test('AC-20261108-01-5 LOOK over an app whose boot leader exited while its tagged server serves shows the url and does not restart it', (t) => {
   const h = guard(t, protoFixture({}, { bootCommand: 'node app.js & exit 0' }))
   build(h)

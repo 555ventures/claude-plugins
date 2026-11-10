@@ -133,8 +133,8 @@ function buildProof(state, wt, rows) {
   return bad.map((r) => `file plan: ${r.action} ${r.path} is not true on disk`).join('\n') || null
 }
 
-// After a green gate: a criterion the build stopped citing, or one no test cites, is red (ADR-0048). Criteria are
-// read as locked at the base; a note is a 📌 line.
+// After a green gate: a criterion the build stopped citing is red, and one of this spec no test cites is red where
+// the base cites any AC, else a 📌 note (ADR-0048). Criteria are read as locked at the base.
 function criteriaRed(state, ctx, wt, cfg) {
   const own = !state.fix && ownOf(state); const locked = own && git.raw(['show', `${state.base}:${own}`], wt)
   const doc = locked && locked.status === 0 ? S.parse(locked.stdout) : docOf(state, ctx)
@@ -149,6 +149,7 @@ let lookTried = false // LOOK ensures the app once per invocation
 function gateStep(state, ctx) {
   const cfg = cfgOf(ctx); const wt = wtOf(state, ctx); const rows = S.planRows(docOf(state, ctx)); const t0 = Date.now()
   intentToAdd(wt, rows.filter((r) => r.action !== 'DELETE'))
+  app.stopIn(state) // the last gate's app holds the url: testCommand runs without it, the pin tests start a fresh one
   let g = host.gate(wt, cfg)
   let waited = g.lockWaitMs || 0
   const prior = state.gate && state.gate.tree === g.tree ? state.gate : null // one rerun per tree

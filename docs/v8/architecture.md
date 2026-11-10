@@ -267,7 +267,7 @@ Later builders: use these, do not re-derive them.
   `planRows`, `inPlan`, `decisionRows`, `parseAssumptions`, `globToRe`, `isSpecText`, and `fixDoc(symptom, spec?)`.
 - `briefs.js`: the text run.js prints — builder, reviewer, question, look and rebase briefs, the report, the commit message.
 - `app.js` and `reap.js` (ADR-0049, no CLI): `app.js` is the one owner of the host's app — `start`, `ready`, `alive`, `stop`,
-  `ensure` over config `runtime` (and `runtime.stopCommand`, kept on the record, for a boot that leaves a daemon), the pid kept in `status.json` / `state.json`; `reap.js` is the one process reader
+  `ensure` over config `runtime` (and `runtime.stopCommand`, kept on the record, for a boot that leaves a daemon), the pid kept in `status.json` / `state.json` and the record copied to `<worktree git dir>/spec-app.json` (read by a stop with no state, and to tell the newest record at a fixed url); `reap.js` is the one process reader
   (`procs`, `tagged`, `ownerAlive`, `cwdUnder`, `kill`, `sweep`): every start first reaps what a dead session left.
 - `land.js`: `land(main, {wt, branch, spec?, id, config, message, inPlace?, tick?})` → `{landed}` | `{conflicts}` | `{red, base}`.
 - `stub.js`: the one owner of the stub shape (no CLI): `isStub(frontmatter)` (`text:` of 7–64 hex), `stubOf(text, sha)`, `fullText(cwd, rel, sha)` (`git show <sha>:<rel>`; a sha not in the clone is exit 2), `readFull(cwd, rel)` (the `readSpec` shape of the full text, stub or not), `sweep(root, {dry})` → `{paths, retired, sha}` (done/superseded, tracked, unedited specs; one path-limited `--no-verify` commit).

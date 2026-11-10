@@ -596,6 +596,19 @@ test('AC-20261108-01-6 prototype.bootCommand/url/publicUrl move to runtime (an e
   assert.match(runNode('scripts/migrate.js', ['--root', d]).stdout, /✅ nothing to migrate/)
 })
 
+test('AC-20261108-01-6 runtime keys outside ADR-0049 are dropped and listed by name', () => {
+  const d = tmpdir('mig-extra')
+  fs.mkdirSync(path.join(d, '.claude'))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({
+    testCommand: 'true', trunk: 'main', prototype: { bootCommand: 'pnpm dev' }, runtime: { url: 'http://127.0.0.1:{port}', healthPath: '/up', warmup: 3 },
+  }))
+  gitRepo(d)
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.match(r.stdout + r.stderr, /runtime keys dropped: healthPath, warmup/)
+  assert.deepStrictEqual(rj(d, '.claude/spec.config.json').runtime, { url: 'http://127.0.0.1:{port}', bootCommand: 'pnpm dev' })
+})
+
 test('AC-20261109-01-6 migrate --apply keeps runtime.stopCommand and prints no `runtime keys dropped` line naming it', () => {
   const d = tmpdir('mig-stop')
   fs.mkdirSync(path.join(d, '.claude'))

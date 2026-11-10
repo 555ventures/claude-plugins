@@ -413,6 +413,14 @@ test('AC-20261105-07-2 AC-20261105-09-10 lanes go spec, bound fix, spec-less fix
   for (const l of ['lane 1: ' + P('01-alpha'), `lane 2: ${P('02-beta')} — fix: RED file left`, 'lane 3: fix-' + st.slugOf('login is slow'), 'waits — its spec is in a lane', 'waits — fix item names no spec on disk']) assert.ok(plan.includes(l), l + '\n' + plan)
 })
 
+test('AC-20261105-07-2 a fix bound to a hardened spec with no lane waits for that spec to land instead of going out from trunk', () => {
+  const h = host({ lanes: 2, specs: [['01-alpha', 'src/a.js'], ['02-beta', 'src/b.js']],
+    queue: [{ id: 'q1', kind: 'spec', payload: P('01-alpha'), after: { spec: P('02-beta') }, added: 'x' }, { id: 'q2', kind: 'prompt', type: 'fix', spec: P('01-alpha'), payload: 'tidy the list', added: 'x' }] })
+  const plan = h.ok()
+  assert.ok(plan.includes('lane 1: ' + P('02-beta')) && !plan.includes('fix: tidy the list'), plan)
+  assert.ok(plan.includes('tidy the list waits — its spec is hardened, not done — it goes out once that spec lands'), plan)
+})
+
 test('AC-20261105-07-9 AC-20261105-08-16 a returned mark refused by a dirty main checkout lands on the re-run, already applied; REPORT names a lane\'s reruns and slot waits and sums them', () => {
   const h = host({ lanes: 1, specs: [['01-alpha', 'src/a.js']] })
   dispatch(h); h.finish('01-alpha', 'src/a.js')

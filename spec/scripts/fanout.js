@@ -93,7 +93,8 @@ function eligible(root, opts = {}) {
     const wt = path.join(root, '.claude', 'worktrees', 'fix-' + (spec ? stemOf(spec) : key))
     const specWt = spec && path.join(root, '.claude', 'worktrees', 'spec-' + stemOf(spec))
     // A fix bound to a spec builds on that spec's code: while its own lane run sits STOPPED (ended, or held
-    // after/amend) in spec-<stem>, that code is only in the kept worktree, not on trunk, so the fix waits on that lane.
+    // after/amend) in spec-<stem>, that code is only in the kept worktree, not on trunk, so the fix waits on that lane;
+    // with no lane, a spec not yet done has no code on trunk to fix, so the fix waits for it to land.
     const own = spec && st.readRun(path.join(specWt, spec))
     const fixRun = fs.existsSync(wt) && laneRun(root, { spec, symptom, worktree: wt })
     const heldOn = own && `its spec's lane is held on ${path.relative(root, specWt)} (${own.why} ${own.on})`
@@ -106,8 +107,10 @@ function eligible(root, opts = {}) {
         : doc && doc.frontmatter.prototype ? `stops at LOOK for you — /spec:fix ${spec} — ${symptom}`
           : spec && (pending.isLane(specWt) || ok.some((o) => o.spec === spec && !o.symptom)) ? 'its spec is in a lane'
             : kept ? kept
-              : pending.isLane(wt) || taken.has(key) ? `already in a lane at ${path.relative(root, wt)}`
-                : work.gateWhy(root, item.after, cache) ? 'after ' + work.gateWhy(root, item.after, cache) : null
+              : doc && doc.frontmatter.status !== 'done'
+                ? 'its spec is hardened, not done — it goes out once that spec lands'
+                : pending.isLane(wt) || taken.has(key) ? `already in a lane at ${path.relative(root, wt)}`
+                  : work.gateWhy(root, item.after, cache) ? 'after ' + work.gateWhy(root, item.after, cache) : null
     if (why) { wait(label, why); continue }
     taken.add(key)
     ok.push({ spec, symptom, item: item.id, label, title: `fix ${spec ? stemOf(spec) + ' ' : ''}— ${symptom}`, worktree: path.relative(root, wt) })

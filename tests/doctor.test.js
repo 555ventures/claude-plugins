@@ -132,6 +132,14 @@ test('gitignore is judged by git: a broader pattern that covers the sidecars is 
   assert.ok(!f.some((x) => /gitignore: missing/.test(x)), f.join('\n'))
 })
 
+test('AC-20261108-01-6 a runtime with bootCommand and fixed-url readyCheck but no url is a finding naming those urls; a url clears it', () => {
+  const rt = { bootCommand: 'pnpm dev', readyCheck: ['http://127.0.0.1:3100', 'http://127.0.0.1:4321'] }
+  const d = setup({ testCommand: 'true', runtime: rt })
+  assert.ok(doctor.check(d, { probe: false }).findings.some((x) => x.startsWith('config: runtime.url is unset') && x.includes('http://127.0.0.1:4321')))
+  fs.writeFileSync(path.join(d, '.claude/spec.config.json'), JSON.stringify({ testCommand: 'true', runtime: { ...rt, url: 'http://127.0.0.1:4321' } }))
+  assert.ok(!doctor.check(d, { probe: false }).findings.some((x) => x.includes('runtime.url')))
+})
+
 test('check(root, { probe: false }) returns the same findings without running the test command', () => {
   const marker = 'probed.marker'
   const d = setup({ testCommand: `touch ${marker}; exit 3` })

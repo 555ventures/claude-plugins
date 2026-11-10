@@ -106,6 +106,12 @@ function check(root, { probe = true } = {}) {
     if (!cfg || typeof cfg !== 'object') f.push('config: .claude/spec.config.json does not parse')
     else if (!cfg.testCommand) f.push('config: testCommand is not set — run /spec:init')
     else if (repairChain(cfg.testCommand, detect(root).checks.map((c) => c.command)) !== cfg.testCommand) f.push('config: testCommand lets a failed check pass the gate — run /spec:init')
+    const rt = cfg && cfg.runtime
+    // No url: the app opens at a free {port}; a boot ready-checked only by fixed urls never serves that port.
+    const fixed = rt && rt.bootCommand && rt.url === undefined && Array.isArray(rt.readyCheck) && rt.readyCheck.length
+      && rt.readyCheck.every((u) => !/\{port\}/.test(u))
+    if (fixed) f.push(`config: runtime.url is unset, so the app opens at a free port runtime.bootCommand never serves `
+      + `while readyCheck probes fixed urls — set runtime.url to the page to open (${rt.readyCheck.join(', ')})`)
   }
   let probedMs = null
   if (probe && cfg && cfg.testCommand) {

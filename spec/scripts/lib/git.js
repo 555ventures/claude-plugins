@@ -113,6 +113,16 @@ function scanFile(cwd, rel) {
   return hits
 }
 
+// The secrets scan over the staged names (deleted ones have nothing to scan).
+const stagedHits = (cwd) => sh(['diff', '--cached', '--name-only', '-z', '--diff-filter=d'], cwd)
+  .split('\0').filter(Boolean).flatMap((f) => scanFile(cwd, f))
+
+// Unstages `keep` and every staged file the secrets scan flags: they stay on disk, out of the next commit.
+function unstageKept(cwd, keep) {
+  const out = [...new Set([...keep, ...stagedHits(cwd).map((h) => h.path)])]
+  if (out.length) sh(['--literal-pathspecs', 'reset', '-q', '--', ...out], cwd)
+}
+
 // Stages everything and commits; returns the new sha, or null when there was nothing to commit.
 // `exclude` paths are unstaged after `add -A` (they stay on disk, out of this commit). Unless `noVerify`, the
 // staged names pass the secrets scan; hits commit nothing and come back as {hits: [{path, reason, line}]}.
@@ -121,7 +131,7 @@ function commitAll(cwd, message, { noVerify, exclude = [] } = {}) {
   if (exclude.length) sh(['--literal-pathspecs', 'reset', '-q', '--', ...exclude], cwd)
   if (raw(['diff', '--cached', '--quiet'], cwd).status === 0) return null
   if (!noVerify) {
-    const hits = sh(['diff', '--cached', '--name-only', '-z', '--diff-filter=d'], cwd).split('\0').filter(Boolean).flatMap((f) => scanFile(cwd, f))
+    const hits = stagedHits(cwd)
     if (hits.length) return { hits }
   }
   sh(['commit', '-q', ...(noVerify ? ['--no-verify'] : []), '-m', message], cwd)
@@ -130,12 +140,14 @@ function commitAll(cwd, message, { noVerify, exclude = [] } = {}) {
 
 // A lane's safety-net commit: everything but the relay file, hooks skipped. Returns the sha, or null
 // when nothing was staged or a rebase is in progress (a commit would land inside the rebase).
-function commitWip(wt, message) {
+// With `keep` (an array), those paths and every staged file the secrets scan flags stay on disk, out of the commit.
+function commitWip(wt, message, keep) {
   if (rebasing(wt)) return null
   // Not an :(exclude) pathspec: when a host gitignores the relay file, git add refuses the
   // pathspec itself ("paths are ignored") and nothing is staged.
   sh(['add', '-A', '--', '.'], wt)
   raw(['rm', '--cached', '-q', '--ignore-unmatch', '--', '.claude/pending-question.json'], wt)
+  if (keep) unstageKept(wt, keep)
   if (raw(['diff', '--cached', '--quiet'], wt).status === 0) return null
   sh(['commit', '-q', '--no-verify', '-m', message], wt)
   return headSha(wt)
@@ -178,15 +190,22 @@ function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
 }
 
 // Rebases the branch checked out in worktree onto trunk. A conflict leaves the rebase in progress
-// in the worktree (for the lane to resolve) and lists the conflicted files.
+// in the worktree (for the lane to resolve) and lists the conflicted files. With `autostash`, tracked edits left out of
+// every commit (a kept-out secret) come back once the rebase completes: the amend resume only, never a landing.
 const rebasing = (wt) => ['rebase-merge', 'rebase-apply'].some((d) => fs.existsSync(path.join(sh(['rev-parse', '--absolute-git-dir'], wt), d)))
-function rebaseOnto(worktree, trunk) {
-  const r = raw(['-c', 'core.editor=true', 'rebase', trunk], worktree)
+function rebaseOnto(worktree, trunk, { autostash } = {}) {
+  const r = raw(['-c', 'core.editor=true', 'rebase', ...(autostash ? ['--autostash'] : []), trunk], worktree)
   if (r.status === 0) return { ok: true, conflicts: [] }
   const conflicts = conflictsIn(worktree)
   if (conflicts.length) return { ok: false, conflicts }
   if (rebasing(worktree)) raw(['rebase', '--abort'], worktree)
   throw new Error(`rebase of ${worktree} onto ${trunk} failed without conflicts: ${(r.stderr || r.stdout).trim()}`)
+}
+// Takes the resolved files and continues; `keep` and what the secrets scan flags stay out (unstageKept).
+function continueRebase(wt, keep = []) {
+  sh(['add', '-A'], wt)
+  unstageKept(wt, keep)
+  return raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt)
 }
 
 // Runs fn(env) with GIT_INDEX_FILE pointing at a scratch index holding the working tree.
@@ -210,5 +229,6 @@ const changedFiles = (base, cwd) =>
 module.exports = {
   repoRoot, dirtyMessage, real,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
-  commitAll, commitWip, lsFiles, restore, mergeBack, conflictsIn, rebaseOnto, rebasing, diff, changedFiles,
+  commitAll, commitWip, lsFiles, restore, mergeBack, conflictsIn, rebaseOnto, continueRebase, rebasing,
+  diff, changedFiles,
 }

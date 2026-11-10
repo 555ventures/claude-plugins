@@ -33,9 +33,9 @@ driver builds only with `--in-place`, and then lands nothing on trunk.
   the reviewer says the spec did not make, a Decision the build cannot keep. Ask it as printed
   and mark `escalate <label>`; if the user dismisses it, mark `dismissed` (the run stops and the
   question is queued as a decide item). You record the user's pick; you never choose.
-- **STOPPED**: the run ended by a rule (gate red past the repair cap, blocking past the fix cap,
-  a dismissed question) with its item queued; print the report. A run that picked `amend` waits, committed as
-  wip, for the spec: print `/spec:plan <spec>`; once it is locked with changed text on trunk (in place, on the
+- **STOPPED**: the run ended by a rule (a dismissed question; a `/spec:fix` run past a cap) with its item queued; print the
+  report. A run that picked `amend`, or a spec's run that hit a cap (gate red past the repair cap, the commit hook
+  still rejecting, blocking past the fix cap), waits, committed as wip, for the spec: print `/spec:plan <spec>`; once it is locked with changed text on trunk (in place, on the
   branch), the same `/spec:run <spec>` rebases, takes the amended text and goes on through GATE and REVIEW.
 
 Everything else is decided by a rule and printed as a 📌 line: spec text a build edits is

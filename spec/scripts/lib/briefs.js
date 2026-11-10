@@ -110,7 +110,7 @@ function reviewer(b) {
 // The three questions a run asks, each in the agent's own words: {kind, q, options}; amend only where a spec can be amended.
 // An unmet Decision (or an Assumption with no options) leads with amend; retry only while Opus has not run, park last.
 function escalation(state, amendable) {
-  const lock = 'with /spec:plan ' + state.spec + '; the build resumes by itself once the amended spec is locked'
+  const lock = `with /spec:plan ${state.spec}; the build resumes from its kept work once the amended spec is locked`
   const amend = { label: 'amend', description: `amend the spec ${lock}` }
   const retry = { label: 'retry', description: `re-run ${state.from || 'the step'} on Opus with fresh attempts` }
   const list = (what) => [{ ...amend, description: `amend ${what} ${lock}` }, ...(state.opus ? [] : [retry]),

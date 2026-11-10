@@ -71,7 +71,10 @@ function eligible(root, opts = {}) {
     const status = doc.frontmatter.status === 'hardened' && own && own.ended !== true && !['DONE', 'STOPPED'].includes(own.step) ? 'implementing' : doc.frontmatter.status || 'missing'
     if (status !== 'hardened') { (EXPLICIT.length ? waited : held).push({ spec, why: `status is ${status}, not hardened` }); continue }
     if (doc.frontmatter.prototype) { wait(spec, 'stops at LOOK for you — /spec:run it'); continue } // the app must outlive the agent
+    // A solo /spec:run's amend wait keeps its state at the root over the same kept worktree: only that run resumes it.
+    const solo = !run && own && own.step === 'STOPPED' && own.why === 'amend' && fs.existsSync(wt)
     const hold = laneHold(wt, run, spec)
+      || (solo && (laneHold(wt, own, spec) || `a solo run holds it — /spec:run ${spec}`))
     if (hold) { wait(spec, hold); continue }
     if (pending.isLane(wt)) { wait(spec, `already in a lane at ${path.relative(root, wt)}`); continue }
     const entry = d.entries.find((e) => e.path === spec)

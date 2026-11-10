@@ -7,7 +7,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { readJson, configPath, readFanout, readConfig, protoV7, protoDir } = require('./lib/state')
+const { readJson, configPath, readFanout, readConfig, protoV7, protoDir, resumes } = require('./lib/state')
 const { staleNote, pluginVersion: versionOf } = require('./lib/state')
 const { run, cacheDir, worktreeIncluded } = require('./lib/host')
 const { derive } = require('./lib/next')
@@ -136,18 +136,27 @@ function check(root, { probe = true } = {}) {
   for (const e of IGNORE) if (git.raw(['-c', 'core.excludesFile=/dev/null', 'check-ignore', '-q', e.replace('**/*', 'x/y') + (e.endsWith('/') ? 'z' : '')], root).status === 1) f.push(`gitignore: missing ${e} — run ${cfg && cfg.generatedBy ? '/spec:migrate' : '/spec:init'}`)
   // The roadmap derivation status prints: hygiene anomalies are findings, decide ones are the user's call.
   for (const a of derive(root).anomalies) (a.audience === 'hygiene' ? f : info).push(`roadmap: [${a.kind}] ${a.detail}`)
-  const ended = (run) => run.ended || run.step === 'DONE' || (run.step === 'STOPPED' && run.why !== 'after') // a run waiting for another spec is in flight
+  const waits = ['after', 'amend'] // a run waiting for another spec or for its amended spec is in flight
+  const ended = (run) => run.ended || run.step === 'DONE' || (run.step === 'STOPPED' && !waits.includes(run.why))
   const used = new Set() // worktrees a live run points at
   const fan = readFanout(root)
   if (fan && fan.step && fan.step !== 'PLAN') { info.push(`in flight: fan-out at ${fan.step} — /spec:fanout`); for (const l of fan.batch || []) if (l.worktree) used.add(path.resolve(root, l.worktree)) }
+  // A live run's info line; `base` holds its sidecar: the root, or a lane's worktree (its run state lives there).
+  const inFlight = (base, d, run) => {
+    const rel = path.relative(base, d)
+    const fixOnly = run.fix && !run.spec // specs/fix/<slug>.run names a symptom, not a spec file
+    const symptom = fixOnly ? String(run.fix.symptom).replace(/\s+/g, ' ') : '' // blanks as one: slugOf keys it so
+    const what = fixOnly ? `fix "${symptom.slice(0, 60)}"` : rel.replace(/\.run$/, '.md')
+    const cmd = fan ? '/spec:fanout' : fixOnly ? `/spec:fix ${symptom}` : `/spec:run ${what}`
+    if (run.why !== 'amend') return `in flight: ${what} at ${run.step} — ${cmd}`
+    const wt = run.worktree ? path.resolve(root, run.worktree) : base // /spec:plan only until the re-lock
+    return resumes(wt, run, readConfig(root).trunk) ? `in flight: ${what} resumes on its amended spec — ${cmd}`
+      : `in flight: ${what} waits for its amended spec — /spec:plan ${what}`
+  }
   for (const d of walkRuns(path.join(root, 'specs'), [])) {
     const run = readJson(path.join(d, 'state.json'), null); const rel = path.relative(root, d)
     if (run && run.step && !ended(run)) {
-      const fixOnly = run.fix && !run.spec // specs/fix/<slug>.run names a symptom, not a spec file
-      const symptom = fixOnly ? String(run.fix.symptom).replace(/\s+/g, ' ') : '' // blanks as one: slugOf keys it so
-      const what = fixOnly ? `fix "${symptom.slice(0, 60)}"` : rel.replace(/\.run$/, '.md')
-      const cmd = fan ? '/spec:fanout' : fixOnly ? `/spec:fix ${symptom}` : `/spec:run ${what}`
-      info.push(`in flight: ${what} at ${run.step} — ${cmd}`)
+      info.push(inFlight(root, d, run))
       if (run.worktree) used.add(path.resolve(root, run.worktree))
     } else f.push(`stale sidecar: ${rel} — rm -r ${rel}`)
   }
@@ -168,7 +177,14 @@ function check(root, { probe = true } = {}) {
         else f.push(`leftover worktree: .claude/worktrees/${n} — git worktree remove --force .claude/worktrees/${n}`)
         continue
       }
-      if (live(p)) info.push(`in flight: .claude/worktrees/${n} (a run in flight, a lane marker or uncommitted work) — leave it to ${fan ? '/spec:fanout' : 'its run'}`)
+      // A held lane (an amend or `after` wait) is clean and unmarked: its own run state says it is in flight.
+      const lane = used.has(p) ? [] : walkRuns(path.join(p, 'specs'), [])
+        .map((d) => [d, readJson(path.join(d, 'state.json'), null)]).filter(([, run]) => run && run.step && !ended(run))
+      if (lane.length) info.push(...lane.map(([d, run]) => inFlight(p, d, run)))
+      else if (live(p)) {
+        info.push(`in flight: .claude/worktrees/${n} (a run in flight, a lane marker or uncommitted work)`
+          + ` — leave it to ${fan ? '/spec:fanout' : 'its run'}`)
+      }
       else f.push(`leftover worktree: .claude/worktrees/${n} — git worktree remove .claude/worktrees/${n}`)
     }
   } catch { /* none */ }

@@ -155,3 +155,15 @@ test('AC-20261105-15-9 commitAll returns {hits} and commits nothing for a secret
   assert.ok(G.commitAll(wt, 'z').hits, 'a new hit is reported again')
   assert.strictEqual(G.commitAll(wt, 'z', { noVerify: true }), G.headSha(wt), 'noVerify commits without scanning')
 })
+
+test('AC-20261108-05-2 rebaseOnto autostashes only when asked (the amend resume): a landing with a tracked edit outside every commit refuses', () => {
+  const { root, g, wt } = laneRepo()
+  fs.writeFileSync(path.join(root, 'trunk.txt'), 'trunk\n'); g('add', '-A'); g('commit', '-qm', 'trunk moves')
+  fs.writeFileSync(path.join(wt, 'tracked.txt'), 'x\n'); G.sh(['add', '-A'], wt); G.sh(['commit', '-qm', 'lane'], wt)
+  fs.writeFileSync(path.join(wt, 'tracked.txt'), 'kept out\n')
+  assert.throws(() => G.rebaseOnto(wt, 'main'), /failed without conflicts/, 'a landing never stashes: the gated tree is the landed tree')
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'tracked.txt'), 'utf8'), 'kept out\n')
+  assert.deepStrictEqual(G.rebaseOnto(wt, 'main', { autostash: true }), { ok: true, conflicts: [] })
+  assert.strictEqual(fs.readFileSync(path.join(wt, 'tracked.txt'), 'utf8'), 'kept out\n', 'the kept-out edit comes back')
+  assert.ok(fs.existsSync(path.join(wt, 'trunk.txt')))
+})

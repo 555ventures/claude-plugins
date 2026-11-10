@@ -48,7 +48,7 @@ One test, three buckets: would the client need to sign this off?
   Decision (`amend`). A lane writes its question to `.claude/pending-question.json`; the orchestrator
   relays each verbatim in one AskUserQuestion per RELAY and never answers for the user. A dismissed
   AskUserQuestion stops the run, queued as a decide item; a dismissed promote question promotes nothing.
-- **Automate** the mechanical with a rule: a cap stops the run with a fix queued, spec edits revert, a
+- **Automate** the mechanical with a rule: a cap on a spec waits for your amend (a fix queues a fix), spec edits revert, a
   secret stays out of the commit, advisories become one fix item, a fix needing a behaviour change goes to
   `/spec:plan`. A builder never improvises on a fork; a lane never edits a spec.
 - **Report** each rule's decision as a `📌` line (`📌 Auto-picked <choice> — <reason> (veto anytime)`),

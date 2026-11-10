@@ -160,7 +160,7 @@ function gateStep(state, ctx) {
     : buildProof(state, wt, rows) || criteriaRed(state, ctx, wt, cfg)
   if (!tail && state.prototype) tail = app.gatePins(cfg, state, { ...appAt(state, ctx), say: (l) => decide(state, l) })
   state.gate = { status: tail ? 'red' : 'green', runId: g.runId, cached: g.cached, ms: Date.now() - t0, output_tail: tail || g.tail, tree: g.tree, files: builderFiles(ctx), failing: g.failing || [], reruns, lockWaitMs: waited }
-  if (tail) return state.attempts.repair >= REPAIR_CAP ? parkRun(state, ctx, `still red after ${REPAIR_CAP} repairs`, fixItem(state, ctx, host.firstRedLine(tail))) : go(state, 'REPAIR')
+  if (tail) return repair(state, ctx, `still red after ${REPAIR_CAP} repairs`, host.firstRedLine(tail))
   if (!cfg.testFileCommand) delete state.redCheck
   else if (state.redCheckTree !== g.tree) { state.redCheck = redCheck(state, wt); state.redCheckTree = g.tree }
   const edits = specEdits(state, ctx)
@@ -201,7 +201,6 @@ function parkRun(state, ctx, why, item) {
   const s = specInfo(ctx)
   app.stopIn(state)
   if (s.abs && !state.fix && state.inPlace) st.writeStatus(s.abs, 'hardened')
-  // null from add: the same item is already open
   const queued = Q.paste(ctx.root, Q.add(ctx.root, item) || { kind: 'prompt', ...item })
   decide(state, `stopped: ${why}${queued ? ` — queued ${queued}` : ''}`)
   if (state.lane) pending.consumePending(ctx.root)
@@ -210,18 +209,23 @@ function parkRun(state, ctx, why, item) {
   return go(state, 'STOPPED', { why, ended: !state.lane })
 }
 
-// The user amends the spec: the work stays (a worktree's committed as wip, the spec back as the base had it, so the
-// rebase onto the re-locked trunk cannot conflict) and the run waits, STOPPED, until plan.js lock lands a changed spec.
-function amend(state, ctx) {
-  const s = specInfo(ctx); const wt = wtOf(state, ctx); const own = ownOf(state)
+// A cap: a spec's run waits for an amend, a fix run queues a fix.
+const capStop = (state, ctx, why, words) => (state.spec && !state.fix ? amend(state, ctx, { why, words })
+  : parkRun(state, ctx, why, fixItem(state, ctx, words)))
+const repair = (state, ctx, why, words) => (state.attempts.repair < REPAIR_CAP ? go(state, 'REPAIR')
+  : capStop(state, ctx, why, words))
+
+// The user amends the spec or a cap stopped it (`cap`): the work stays (wip, the spec as the base had it); it waits.
+function amend(state, ctx, cap) {
+  const s = specInfo(ctx); const wt = wtOf(state, ctx); const own = ownOf(state); const next = `/spec:plan ${s.rel}`
+  const was = cap ? `stopped: ${cap.why} — ${cap.words}; ` : ''
   app.stopIn(state)
-  decide(state, `amend: /spec:plan ${s.rel} — the build resumes by itself once the amended spec is locked`)
-  const next = `/spec:plan ${s.rel}`
-  state.report = render({ outcome: `⏸️ ${s.id} stopped — amend`, pins: B.pins(state), artifacts: s.rel, next })
-  if (state.inPlace) { // the checkout's own spec, as the branch has it
-    git.restore(wt, 'HEAD', [own]); state.at = git.headSha(wt)
-  }
-  else { git.restore(wt, state.base, [own]); git.commitWip(wt, `wip(spec): ${s.stem} awaits its amended spec`) }
+  decide(state, `${was}amend: ${next} — the build resumes from its kept work once the amended spec is locked`)
+  state.report = render({ outcome: `⏸️ ${s.id} stopped — ${cap ? cap.why : 'amend'}`,
+    pins: B.pins(state), artifacts: s.rel, next })
+  if (state.inPlace) { git.restore(wt, 'HEAD', [own]); state.at = git.headSha(wt) } // the branch's own spec
+  else { git.restore(wt, state.base, [own]); git.commitWip(wt, `wip(spec): ${s.stem} awaits its amended spec`,
+    state.keptOut || []) }
   return go(state, 'STOPPED', { why: 'amend', on: own, from: state.from })
 }
 
@@ -240,7 +244,7 @@ function resume(state, ctx) {
   const from = amended ? 'GATE' : state.from
   const fresh = amended ? { review: null, attempts: { repair: 0, fix: 0 } } : {}
   go(state, from, { why: undefined, on: undefined, at: undefined, report: undefined, ...fresh })
-  const rebased = state.inPlace || git.rebaseOnto(wt, ref).ok // a conflict: the rebase guard prints it
+  const rebased = state.inPlace || git.rebaseOnto(wt, ref, { autostash: amended }).ok // a conflict: the guard prints it
   if (rebased) state.base = git.sh(['merge-base', ref, 'HEAD'], wt)
   if (amended) { if (rebased) takeSpec(state, ctx); else state.respec = true }
   return state
@@ -267,7 +271,7 @@ function commit(state, ctx) {
     const hooks = git.raw(['rev-parse', '--git-path', 'hooks'], wt).stdout.trim()
     if (!['pre-commit', 'commit-msg'].some((h) => fs.existsSync(path.resolve(wt, hooks, h)))) refuse(`git commit failed in ${wt}: ${e.message}`, 1)
     state.gate = { ...(state.gate || {}), status: 'red', output_tail: `git commit was rejected (a commit hook?):\n${e.message}` }
-    return state.attempts.repair >= REPAIR_CAP ? parkRun(state, ctx, 'the commit hook still rejects the build', fixItem(state, ctx, host.firstRedLine(e.message))) : go(state, 'REPAIR')
+    return repair(state, ctx, 'the commit hook still rejects the build', host.firstRedLine(e.message))
   }
   const dirty = new Set(git.sh(['status', '--porcelain', '-z', '--untracked-files=all'], wt).split('\0').filter(Boolean).map((e) => e.slice(3)))
   state.commitWarns = left.some((f) => dirty.has(f)) ? [`left uncommitted: ${left.filter((f) => dirty.has(f)).join(', ')}`] : []
@@ -350,7 +354,7 @@ function askBody(state, ctx) { // a lane writes the question for the parent sess
 const rebaseGuard = (state, ctx) => !state.inPlace && state.worktree && !['STOPPED', 'ESCALATE'].includes(state.step) && fs.existsSync(wtOf(state, ctx)) && git.rebasing(wtOf(state, ctx))
 function finishRebase(state, ctx) {
   const wt = wtOf(state, ctx)
-  git.sh(['add', '-A'], wt); git.raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt) // a later commit may conflict again
+  git.continueRebase(wt, state.keptOut) // a later commit may conflict again
   if (!git.rebasing(wt)) {
     const base = git.sh(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt)
     go(state, 'GATE', { base, attempts: { repair: 0, fix: 0 }, report: undefined })
@@ -441,7 +445,7 @@ const steps = {
     state.reviews = [...(state.reviews || []), round]
     if (state.review.verdict === 'stopped') {
       const why = `still blocking after ${FIX_CAP} fix rounds`
-      return parkRun(state, ctx, why, fixItem(state, ctx, blocking[0].summary || 'blocking review findings'))
+      return capStop(state, ctx, why, blocking[0].summary || 'blocking review findings')
     }
     if (blocking.length) return go(state, 'FIX')
     return choices ? go(state, 'ESCALATE', { why: 'decision', from: 'REVIEW' }) : afterReview(state)

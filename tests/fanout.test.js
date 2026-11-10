@@ -260,6 +260,56 @@ test('AC-20261108-03-6 a lane that picks amend is held on its kept worktree with
   assert.ok(h.g('show', `${built}:${P('01-alpha')}`).includes('01-alpha, amended') && fs.existsSync(path.join(h.dir, 'src/a.js')), 'the build commit carries the amended text and the kept work')
 })
 
+test('AC-20261108-05-4 a solo run\'s amend wait over a kept worktree is never sent out as a fresh lane: PLAN waits it for /spec:plan, then for /spec:run after the re-lock; doctor follows', () => {
+  const h = host({ lanes: 1, specs: [['01-alpha', 'src/a.js']], queue: [{ id: 'q1', kind: 'spec', payload: P('01-alpha'), added: 'x' }] })
+  const base = h.g('rev-parse', 'HEAD').trim()
+  h.g('worktree', 'add', '-q', '-b', 'spec/01-alpha', h.wt('01-alpha'))
+  st.writeJson(path.join(h.dir, P('01-alpha').replace(/\.md$/, '.run'), 'state.json'),
+    { step: 'STOPPED', why: 'amend', on: P('01-alpha'), base, worktree: path.relative(h.dir, h.wt('01-alpha')) })
+  const before = h.ok()
+  assert.ok(!before.includes('lane 1: ' + P('01-alpha')) && before.includes(`${P('01-alpha')} waits — its lane waits for the amended spec — /spec:plan ${P('01-alpha')}`), before)
+  const doc = () => JSON.parse(runNode('scripts/doctor.js', ['--root', h.dir, '--json']).stdout).info.join('\n')
+  assert.ok(doc().includes(`in flight: ${P('01-alpha')} waits for its amended spec — /spec:plan ${P('01-alpha')}`), doc())
+  const spec = path.join(h.dir, P('01-alpha'))
+  fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('- You asked: 01-alpha', '- You asked: 01-alpha, amended')); h.g('commit', '-qam', 'lock the amended spec')
+  const after = h.ok()
+  assert.ok(!after.includes('lane 1: ' + P('01-alpha')) && after.includes(`${P('01-alpha')} waits — a solo run holds it — /spec:run ${P('01-alpha')}`), after)
+  assert.ok(doc().includes(`in flight: ${P('01-alpha')} resumes on its amended spec — /spec:run ${P('01-alpha')}`), doc())
+})
+
+test('AC-20261108-05-4 a lane stopped at the fix cap is held as an amend: PLAN waits the spec with /spec:plan and queues no fix lane, and after the re-lock its kept worktree lands, ticking the spec item and leaving none open', () => {
+  const h = host({ lanes: 1, specs: [['01-alpha', 'src/a.js']], queue: [{ id: 'q1', kind: 'spec', payload: P('01-alpha'), added: 'x' }] })
+  dispatch(h)
+  const blocking = h.findings([{ severity: 'blocking', file: 'src/a.js', line: 1, summary: 'wrong thing', evidence: 'cat' }])
+  h.lok('01-alpha'); fs.mkdirSync(path.join(h.wt('01-alpha'), 'src'), { recursive: true }); fs.writeFileSync(path.join(h.wt('01-alpha'), 'src/a.js'), 'a\n')
+  h.lok('01-alpha', '--mark', 'built'); h.lok('01-alpha', '--mark', 'reviewed', '--file', blocking)
+  fs.writeFileSync(path.join(h.wt('01-alpha'), 'src/b.js'), 'b\n'); h.lok('01-alpha', '--mark', 'fixed'); h.lok('01-alpha', '--mark', 'reviewed', '--file', blocking)
+  fs.writeFileSync(path.join(h.wt('01-alpha'), 'src/c.js'), 'c\n'); h.lok('01-alpha', '--mark', 'fixed')
+  const stop = h.lok('01-alpha', '--mark', 'reviewed', '--file', blocking)
+  assert.ok(stop.includes(`stopped: still blocking after 2 fix rounds — wrong thing; amend: /spec:plan ${P('01-alpha')}`), stop)
+  assert.deepStrictEqual(Q.open(Q.read(h.dir)).map((i) => i.id), ['q1'], 'the stop queued nothing')
+  h.ok('--mark', 'returned', '--lane', '1')
+  const lane = h.fan().batch[0]
+  assert.deepStrictEqual([lane.status, lane.why, lane.on], ['held', 'amend', P('01-alpha')])
+  const rep = h.ok()
+  assert.ok(rep.includes(`held spec-01-alpha — amend: /spec:plan ${P('01-alpha')}`), rep)
+  h.ok('--mark', 'reported')
+  // AC-20261108-05-5: the held lane's run state lives in its worktree; doctor lists it in flight, never as a leftover to remove
+  const doc = JSON.parse(runNode('scripts/doctor.js', ['--root', h.dir, '--json']).stdout)
+  assert.ok(doc.info.includes(`in flight: ${P('01-alpha')} waits for its amended spec — /spec:plan ${P('01-alpha')}`), doc.info.join('\n'))
+  assert.ok(!doc.findings.some((x) => /leftover worktree: \.claude\/worktrees\/spec-01-alpha|stale sidecar/.test(x)), doc.findings.join('\n'))
+  const wait = h.ok(P('01-alpha'))
+  assert.ok(wait.includes(`${P('01-alpha')} waits — its lane waits for the amended spec`) && wait.includes(`/spec:plan ${P('01-alpha')}`) && !wait.includes('fix:'), wait)
+  const spec = path.join(h.dir, P('01-alpha'))
+  fs.writeFileSync(spec, fs.readFileSync(spec, 'utf8').replace('- You asked: 01-alpha', '- You asked: 01-alpha, amended')); h.g('commit', '-qam', 'lock the amended spec')
+  assert.ok(dispatch(h).plan.includes('lane 1: ' + P('01-alpha')))
+  assert.ok(h.lok('01-alpha').startsWith('▶ REVIEW'), 'the kept lane resumes at GATE')
+  h.lok('01-alpha', '--mark', 'reviewed', '--file', h.findings())
+  assert.match(h.ok('--mark', 'returned', '--lane', '1'), /^lane 1 landed as [0-9a-f]{40}$/m)
+  assert.deepStrictEqual(Q.open(Q.read(h.dir)), [], 'landing ticked the spec item and nothing else is open')
+  assert.ok(fs.existsSync(path.join(h.dir, 'src/a.js')) && fs.existsSync(path.join(h.dir, 'src/b.js')), 'the kept work landed')
+})
+
 const FIXQ = (extra) => [{ id: 'q1', kind: 'prompt', type: 'fix', ...extra, added: 'x' }]
 
 test('AC-20261107-02-4 AC-20261107-02-5 AC-20261105-12-8 AC-20261105-07-2 AC-20261105-07-3 AC-20261105-07-4 AC-20261105-09-10 AC-20261105-09-11 AC-20261107-01-7 a fix item is a lane: the advisories item bound to a done spec, and a spec-less fix, each land as fix(…) with no spec file written, a stub commit after the first; open items left end REPORT nothing runnable', () => {

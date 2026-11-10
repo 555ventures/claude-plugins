@@ -31,10 +31,10 @@ Read `${CLAUDE_PLUGIN_ROOT}/doctrine.md` once, then drive
   rebase: …` with that lane's Agent call. A sent-back lane resolves in its own worktree, gates and reviews inside one
   dispatch (mark `resent`), and lands when marked returned; a second conflict on the same trunk stops it for you.
 - A lane that needs another spec ends `after` it: returned, it is held on its queue item (the queue's own `after`),
-  and a later PLAN sends it out again on its kept worktree once that spec is done. A lane that picked `amend` is held
+  and a later PLAN sends it out again on its kept worktree once that spec is done. A lane that picked `amend`, or stopped at a cap, is held
   the same way on its kept worktree (its run state is the hold, no queue `after`): PLAN waits it with `its lane
   waits for the amended spec — /spec:plan <spec>, then /spec:fanout` and sends it out again once the amended spec is
-  locked on trunk; the lane resumes at GATE. A lane that stopped by a rule (a cap, a dismissed question) keeps its
+  locked on trunk; the lane resumes at GATE. A lane that stopped by a rule (a fix lane's cap, a dismissed question) keeps its
   worktree and waits until you remove it; its item is queued.
   `dismissed --lane <id>` drops a lane, `--discard` also removes its worktree and branch and prints the wip commit.
 - **RELAY**: lane questions are printed by kind (`[assumption]`, `[decision]`, `[unmet]`), each in the agent's own

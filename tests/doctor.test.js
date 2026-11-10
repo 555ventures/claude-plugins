@@ -125,6 +125,29 @@ test('a sidecar at DONE or STOPPED is stale, whatever its spec says', () => {
   for (const stem of ['01-done', '02-stopped']) assert.match(f, new RegExp(`stale sidecar: specs/20260101/${stem}\\.run — rm -r`))
 })
 
+test('AC-20261108-05-5 a run waiting for an amend is in flight with /spec:plan <spec>, never a stale sidecar', () => {
+  const d = inited({ testCommand: 'true' })
+  fs.mkdirSync(path.join(d, 'specs/20260101/01-cap.run'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'specs/20260101/01-cap.run/state.json'), JSON.stringify({ step: 'STOPPED', why: 'amend', on: 'specs/20260101/01-cap.md' }))
+  const j = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
+  assert.ok(j.info.includes('in flight: specs/20260101/01-cap.md waits for its amended spec — /spec:plan specs/20260101/01-cap.md'), j.info.join('\n'))
+  assert.ok(!j.findings.some((x) => /stale sidecar/.test(x)), j.findings.join('\n'))
+})
+
+test('AC-20261108-05-5 a lane held for an amend, its run state in a clean unmarked worktree, is in flight with /spec:plan <spec>, never a leftover worktree', () => {
+  const d = inited({ testCommand: 'true' })
+  execFileSync('git', ['-C', d, 'add', '-A']); execFileSync('git', ['-C', d, 'commit', '-qm', 'init'])
+  for (const [n, run] of [['spec-01-cap', { step: 'STOPPED', why: 'amend', on: 'specs/20260101/01-cap.md' }], ['spec-02-done', { step: 'DONE' }]]) {
+    execFileSync('git', ['-C', d, 'worktree', 'add', '-q', '-b', 'spec/' + n, '.claude/worktrees/' + n])
+    const sc = path.join(d, '.claude/worktrees', n, 'specs/20260101', n.slice(5) + '.run')
+    fs.mkdirSync(sc, { recursive: true }); fs.writeFileSync(path.join(sc, 'state.json'), JSON.stringify(run))
+  }
+  const j = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
+  assert.ok(j.info.includes('in flight: specs/20260101/01-cap.md waits for its amended spec — /spec:plan specs/20260101/01-cap.md'), j.info.join('\n'))
+  assert.ok(!j.findings.some((x) => /spec-01-cap|stale sidecar/.test(x)), j.findings.join('\n'))
+  assert.ok(j.findings.includes('leftover worktree: .claude/worktrees/spec-02-done — git worktree remove .claude/worktrees/spec-02-done'), 'an ended run keeps no worktree: ' + j.findings.join('\n'))
+})
+
 test('gitignore is judged by git: a broader pattern that covers the sidecars is not missing', () => {
   const d = setup({ testCommand: 'true' })
   fs.writeFileSync(path.join(d, '.gitignore'), '*.run/\n.claude/\n')

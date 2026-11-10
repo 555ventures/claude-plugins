@@ -1,6 +1,6 @@
 ---
 date: 2026-11-08
-status: hardened
+status: done
 area: queue
 depends_on: [specs/20261108/01-the-host-declares-its-runtime-once.md, specs/20261108/02-every-mark-proves-its-claim.md, specs/20261108/04-the-session-reaps-what-it-started.md]
 brief: n/a

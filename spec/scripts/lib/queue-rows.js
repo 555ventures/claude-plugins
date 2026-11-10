@@ -1,7 +1,7 @@
 'use strict'
-// lib/queue-rows.js — what the queue says, as rows: groom's rot report, `queue list` and `queue show`, the type table
-// (🏃 run · 📝 plan · 🧪 prototype · 🔧 fix · 📌 decide) and the in-progress marker the status screen shares. v7's row
-// helpers ported onto v8 state. It writes nothing: every item write goes through lib/queue.js and queue.js.
+// lib/queue-rows.js — what the queue says, as rows: groom's rot report, `queue list` and `show`, the type table (🏃 run
+// · 📝 plan · 🧪 prototype · 🔧 fix · 📌 decide) and the in-progress marker the status screen shares. v7's row helpers on
+// v8 state. It writes nothing: every item write goes through lib/queue.js.
 const fs = require('fs')
 const path = require('path')
 const Q = require('./queue')
@@ -10,8 +10,7 @@ const st = require('./state')
 
 const { text } = Q
 
-// Duplicate and cites-done helpers, ported from v7. They read `text(it)`: a bound fix's spec path lives in `spec`.
-// Token set of a free-text prompt: lowercase [a-z0-9]+ runs of length >= 4.
+// Duplicate and cites-done helpers (v7's). Token set of a prompt: lowercase [a-z0-9]+ runs of length >= 4.
 function promptTokens(payload) {
   const out = new Set()
   for (const t of String(payload || '').toLowerCase().match(/[a-z0-9]+/g) || []) if (t.length >= 4) out.add(t)
@@ -37,7 +36,7 @@ function promptDupScore(a, b) {
   return jaccard(promptTokens(a), promptTokens(b))
 }
 
-// The first specs/YYYYMMDD/NN…md a prompt names whose spec is done or superseded (ctx = {specStatus(rel), specRoot}), else null.
+// The first specs/YYYYMMDD/NN…md a prompt names whose spec is done or superseded (ctx: {specStatus, specRoot}).
 function citesDoneSpec(item, ctx) {
   if (!item || item.kind !== 'prompt') return null
   const words = text(item)
@@ -53,7 +52,6 @@ function citesDoneSpec(item, ctx) {
 }
 
 
-// ---- types and the marker -----------------------------------------------------------------------
 const TYPES = { run: '🏃', plan: '📝', prototype: '🧪', fix: '🔧', decide: '📌' }
 // A row's type is read off the line it pastes, so it can never disagree with it.
 const typeOf = (line) => { const m = /^\/spec:(run|plan|prototype|fix)\b/.exec(String(line)); return m ? m[1] : /^📌 decide:/.test(String(line)) ? 'decide' : null }
@@ -65,7 +63,6 @@ const mark = (line) => { const t = typeOf(line); return t && t !== 'decide' ? TY
 const busy = (specStatuses, lane) => specStatuses.includes('implementing') || ['dispatched', 'sent-back'].includes(lane)
 const laneOf = (root, id) => { const f = st.readFanout(root); const l = f && Array.isArray(f.batch) && id && f.batch.find((x) => x && x.item === id); return l ? l.status : null }
 
-// ---- rows ---------------------------------------------------------------------------------------
 const ageDays = (it) => { const t = Date.parse(it.added); return it.added && !Number.isNaN(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null }
 const ageText = (it) => (ageDays(it) === null ? '?' : `${ageDays(it)}d`)
 const isStale = (it) => it.kind === 'prompt' && !it.after && ageDays(it) !== null && ageDays(it) >= 14
@@ -83,7 +80,7 @@ function dupPairs(prompts) {
   return pairs
 }
 
-// One read of specs and briefs for a screen: v7's brief rows (number-sharing files read as the last), spec statuses, gate cache.
+// One read of specs and briefs for a screen: v7's brief rows, spec statuses, gate cache.
 function ctxOf(root) {
   const specs = work.readSpecs(root); const briefs = Q.v7Briefs(root, work.readBriefs(root, specs))
   const byNum = new Map(briefs.map((b) => [b.num, b]))
@@ -93,20 +90,17 @@ function ctxOf(root) {
 }
 const nameOf = (c, it) => c.byNum.get(work.normBrief(it.payload))
 const gate = (c, it) => work.gateWhy(c.root, it.after, c.cache) // null = met or none
-// A brief item whose brief has every spec done (or is superseded) and is still queued: the user closes it.
+// A brief item whose brief has every spec done (or is superseded) and an open step outside specs: the user closes it.
 const finished = (c, it) => { const b = it.kind === 'brief' && nameOf(c, it); return b && ['done', 'superseded'].includes(b.status) ? b.status : null }
-// The list tag of a finished brief: a done one with open steps outside specs says how many.
-const finTag = (c, it, fin) => {
-  const n = (nameOf(c, it).open || []).length
-  return fin === 'done' ? `✔ specs done${n ? `, ${n} step(s) open` : ''}` : '⛔ superseded'
-}
+const finTag = (c, it, fin) =>
+  (fin === 'done' ? `✔ specs done, ${(nameOf(c, it).open || []).length} step(s) open` : '⛔ superseded')
 const inProgress = (c, it) => it.kind === 'spec' ? busy([c.statusOf.get(it.payload)])
   : it.kind === 'brief' ? busy(((nameOf(c, it) || { specs: [] }).specs).map((s) => s.status))
     : busy([], it.type === 'fix' ? laneOf(c.root, it.id) : null)
 
 const desc = (c, it) => (it.kind === 'brief' ? `brief ${work.normBrief(it.payload)}${nameOf(c, it) ? ` (${nameOf(c, it).name})` : ''}` : it.kind === 'spec' ? `spec ${it.payload}` : Q.paste(c.root, it))
 
-// groom: v7's pending set on v8 state (the fill, minus a finished brief and a finished or absent spec), flagged in buckets.
+// groom: v7's pending set on v8 state (the fill less finished work), flagged in buckets.
 function groom(root, q) {
   const c = ctxOf(root)
   const isDone = (it) => !!it.done || (it.kind === 'brief' && (nameOf(c, it) || {}).status === 'done') ||
@@ -127,7 +121,7 @@ function groom(root, q) {
   return [...buckets.flatMap(([name, r]) => [`${name} (${r.length}):`, ...r]), 'fates: spec-queue done <ref> · spec-queue move <ref> <n> · keep — never tick without a yes'].join('\n')
 }
 
-// list: `n  id  age  type  text` and the flags, v7's columns plus the type; the text is cut to the width and the flags stay whole.
+// list: `n id age type text` and the flags (v7's columns plus the type); the text is cut to the width, flags whole.
 function list(root, q, json) {
   const c = ctxOf(root); const all = Q.fill(root, q).items; const items = Q.open({ items: all }); const done = all.length - items.length
   const info = (it) => ({ type: typeOf(Q.paste(root, it)), ref: it.id || (it.kind === 'brief' ? work.normBrief(it.payload) : it.payload), inProgress: inProgress(c, it) })
@@ -154,4 +148,4 @@ function show(root, it) {
   return [`${it.id || '—'}  ${it.kind}${it.done ? ' · done' : ''}`, ...(it.after ? [why ? `⏳ after ${why}` : '⏳ gate met'] : []), '', desc(c, it)].join('\n')
 }
 
-module.exports = { TYPES, typeOf, typeCell, mark, busy, laneOf, ctxOf, gate, finished, groom, list, show, promptTokens, jaccard, isPathPayload, pathIdentity, promptDupScore, citesDoneSpec }
+module.exports = { TYPES, typeCell, mark, oneLine, ROW_WIDTH, busy, laneOf, ctxOf, gate, finished, groom, list, show }

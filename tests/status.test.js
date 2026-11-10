@@ -6,7 +6,7 @@ const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { SPEC, ROOT, tmpdir, gitRepo, runNode, v7Scripts, v1Queue } = require('./helpers')
+const { SPEC, ROOT, tmpdir, gitRepo, runNode, v7Scripts, v1Queue, seedQueue } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
 
@@ -40,11 +40,11 @@ const unmark = (screen) => screen.replace(/^((?:q\d+ +)?)(?:🏃|📝|🧪|🔧)
 
 // ---- the fixture hosts ---------------------------------------------------------------------
 
-// openBrief leaves q16 pending: brief 01 is then done but still queued, and v8 raises the decide line (brief-done-queued).
+// openBrief gives brief 01 an open step outside specs: it is then done but still queued, and v8 raises the decide line (brief-done-queued).
 function fullHost({ openBrief = false } = {}) {
   const d = tmpdir('status'); gitRepo(d)
   w(d, 'docs/roadmap/00-overview.md', '# Overview\n\n| # | Brief | Status |\n|---|---|---|\n| 01 | foundation | done |\n| 02 | schema | |\n')
-  w(d, 'docs/roadmap/01-foundation.md', brief('01', 'Foundation', 'P0', '—'))
+  w(d, 'docs/roadmap/01-foundation.md', brief('01', 'Foundation', 'P0', '—', openBrief ? '\n## Steps outside specs\n\n- [ ] cut over DNS\n' : ''))
   w(d, 'docs/roadmap/02-schema.md', brief('02', 'Schema', 'P0', '01'))
   w(d, 'docs/roadmap/03-rounds.md', brief('03', 'Rounds', 'P1', '02, 99'))
   w(d, 'docs/roadmap/04A-boards.md', brief('04A', 'Boards', 'P1', '03'))
@@ -97,14 +97,12 @@ function fullHost({ openBrief = false } = {}) {
     { id: 'q13', kind: 'prompt', payload: 'after a ghost', type: 'plan', after: { spec: `${A}/99-ghost.md` } },
     { id: 'q14', kind: 'prompt', payload: 'after retired', type: 'plan', after: { spec: `${A}/09-retired.md` } },
     { id: 'q15', kind: 'spec', payload: `${A}/08-gated.md`, after: { brief: '03' } },
-    // Brief 01 is done. The default host stamps q16 done because v7's oracle reconcile ticks a done brief and v7
-    // never printed the decide line (a pending q16 would break the byte-identity of AC-20261105-05-1); openBrief
-    // leaves it pending for the brief-queued golden.
-    { id: 'q16', kind: 'brief', payload: '01', ...(openBrief ? {} : { done: '2026-11-02T00:00:00.000Z' }) },
+    // Brief 01 is done: with no open step it reads done (as v7's oracle reconcile ticks it); openBrief gives it one.
+    { id: 'q16', kind: 'brief', payload: '01' },
     { id: 'q17', kind: 'brief', payload: '77' },
     { id: 'q18', kind: 'brief', payload: '07' },
   ].map((i) => ({ added: '2026-11-01T00:00:00.000Z', ...i }))
-  Q.write(d, { version: 3, seq: 18, items })
+  seedQueue(d, items)
   st.writeFanout(d, { step: 'WAIT', batch: [] })
   w(d, '.claude/pending-question.json', JSON.stringify({ lane: 'root', question: 'which?', options: [], answer: null }))
   return d
@@ -149,9 +147,9 @@ test('the goldens are the full host\'s render (UPDATE_GOLDENS=1 regenerates them
   }
   assert.deepStrictEqual(Object.values(runs).map((r) => r.status), [0, 0, 0, 1, 0])
   const queued = GOLD('brief-queued.txt')
-  assert.ok(queued.includes('⚠️ Brief 01 (foundation) has every spec done but is still queued.\n   Close it?  /spec:queue done 01\n'), 'the decide pair')
+  assert.ok(queued.includes('⚠️ Brief 01 (foundation) has every spec done; 1 step(s) outside specs are still open.\n   Close it?  /spec:queue done 01\n'), 'the decide pair')
   assert.ok(queued.includes('· 3 more to decide (--all)'), 'the footer clause')
-  assert.ok(!v7Screen(fullHost({ openBrief: true })).includes('still queued'), 'v7 ticks a done brief in its oracle reconcile and never printed the line')
+  assert.ok(!v7Screen(fullHost({ openBrief: true })).includes('Close it?'), 'v7 ticks a done brief in its oracle reconcile and never printed the line')
 })
 
 // ---- what the oracle cannot say ------------------------------------------------------------
@@ -160,7 +158,7 @@ const lines = (r) => r.stdout.split('\n')
 const small = (files, queue) => {
   const d = tmpdir('status'); gitRepo(d)
   for (const [rel, text] of Object.entries(files)) w(d, rel, text)
-  if (queue) Q.write(d, { version: 3, seq: queue.length, items: queue.map((i, n) => ({ id: 'q' + (n + 1), added: '2026-11-01T00:00:00.000Z', ...i })) })
+  if (queue) seedQueue(d, queue.map((i) => ({ added: '2026-11-01T00:00:00.000Z', ...i })))
   return d
 }
 const rm = (d, rel) => fs.rmSync(path.join(d, rel), { recursive: true, force: true })
@@ -384,18 +382,19 @@ test('AC-20261105-05-15 the contract, the architecture note and the command doc 
   assert.ok(!cmd.includes('📈'))
 })
 
-test('AC-20261105-10-13 a queued brief with every spec done raises a decide line and a brief-done-queued anomaly; an unqueued done brief raises nothing', () => {
-  const d = small({
-    'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—'), 'docs/roadmap/04-boards.md': brief('04', 'Boards', 'P1', '—'),
+test('AC-20261108-06-8 a queued brief with every spec done and no open step reads done: no decide line and no anomaly; an opened box brings the line back; an unqueued done brief raises nothing', () => {
+  const files = (box) => ({
+    'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—', box ? `\n## Steps outside specs\n\n- [${box}] cut over DNS\n` : ''), 'docs/roadmap/04-boards.md': brief('04', 'Boards', 'P1', '—'),
     [`${A}/01-rounds.md`]: specDoc('done', { brief: '03' }), [`${A}/02-boards.md`]: specDoc('done', { brief: '04' }),
-  }, [{ kind: 'brief', payload: '03' }])
-  const out = status(d).stdout
-  assert.ok(out.includes('⚠️ Brief 03 (rounds) has every spec done but is still queued.\n   Close it?  /spec:queue done 03\n'), out)
-  assert.ok(!out.includes('Brief 04 (boards) has every spec done'), 'brief 04 is not queued')
-  const a = json(d).anomalies.filter((x) => x.kind === 'brief-done-queued')
-  assert.deepStrictEqual(a.map((x) => [x.kind, x.audience]), [['brief-done-queued', 'decide']])
-  assert.strictEqual(a[0].detail, 'Brief 03 (rounds) has every spec done but is still queued.')
-  assert.ok(!status(small({ 'docs/roadmap/03-rounds.md': brief('03', 'Rounds', 'P1', '—'), [`${A}/01-rounds.md`]: specDoc('done', { brief: '03' }) })).stdout.includes('still queued'))
+  })
+  const queued = [{ kind: 'brief', payload: '03' }]
+  const d = small(files(null), queued)
+  assert.ok(!status(d).stdout.includes('Close it?') && !status(d).stdout.includes('still queued'), status(d).stdout)
+  assert.deepStrictEqual(json(d).anomalies.filter((x) => x.kind === 'brief-done-queued'), [])
+  const open = small(files(' '), queued)
+  assert.deepStrictEqual(json(open).anomalies.filter((x) => x.kind === 'brief-done-queued').map((x) => [x.kind, x.audience]), [['brief-done-queued', 'decide']], 'an opened box brings it back')
+  assert.ok(status(open).stdout.includes('⚠️ Brief 03 (rounds) has every spec done; 1 step(s) outside specs are still open.\n   Close it?  /spec:queue done 03\n'))
+  assert.ok(!status(open).stdout.includes('Brief 04 (boards) has every spec done'), 'brief 04 is not queued')
 })
 
 test('AC-20261107-05-6 an unstored done brief with an open step raises the decide line with its count; ticking the box clears it', () => {

@@ -18,8 +18,8 @@ lane both run it.
   conflict, `PENDING_QUESTION`, `after --on`); a lane stops and returns on `PENDING_QUESTION`.
 - **`<spec> — <symptom>`** binds the fix to that spec in both forms (pass `<spec>` first); it is what
   a queued bound fix already pastes. A fix on a spec with `prototype:` runs in place only, and its
-  gate runs the pin tests and it stops at LOOK too. An in-place fix on a spec closes the queued
-  `type: fix` item with that spec and symptom when it finishes.
+  gate runs the pin tests and it stops at LOOK too. When a queued `type: fix` item is the fix (a lane's from its batch row, an in-place one the open item with that spec
+  and symptom), the fix commit ends with `Queue: <id>` and the item reads closed once that commit is on trunk, on every machine.
 
 A fix is the same run as a spec, on no spec file: the brief is the symptom, the reproduce-first
 recipe and one criterion, the builder writes the cause and the regression test in `evidence.md`,

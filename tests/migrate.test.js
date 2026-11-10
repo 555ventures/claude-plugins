@@ -10,6 +10,8 @@ const V7 = '/home/jj/projects/claude-plugins'
 const real = fs.existsSync(path.join(V7, '.git'))
 const hasTag = () => { try { execFileSync('git', ['-C', V7, 'rev-parse', '-q', '--verify', 'spec-v7-final'], { stdio: 'ignore' }); return true } catch { return false } }
 const git = (d, ...a) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8' })
+// The tracked items a migration wrote, in rank order (a tombstone, which has none, last).
+const trackedItems = (d) => { const dir = path.join(d, 'specs/queue'); return (fs.existsSync(dir) ? fs.readdirSync(dir) : []).map((n) => JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'))).sort((a, b) => (a.rank === undefined) - (b.rank === undefined) || Number(a.rank) - Number(b.rank) || (a.payload < b.payload ? -1 : 1)) }
 const mig = (d, ...a) => { const r = runNode('scripts/migrate.js', ['--root', d, '--json', ...a]); assert.strictEqual(r.status, 0, r.stderr); return JSON.parse(r.stdout) }
 
 // Synthetic v7 host: every artifact class in host-footprint.md.
@@ -66,11 +68,12 @@ test('synthetic: plan changes nothing; apply converts; second apply is a no-op',
   assert.deepStrictEqual(cfg.seats, { builder: { model: 'haiku' }, reviewer: { model: 'opus' } })
   assert.strictEqual(cfg.mergeStrategy, 'squash')
   assert.strictEqual(cfg.worktreePerSpec, false)
-  const q = JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8'))
-  assert.strictEqual(q.version, 3); assert.strictEqual(q.seq, 9)
-  assert.deepStrictEqual(q.items.map((i) => [i.id, i.kind, i.payload]), [['q1', 'brief', 'docs/roadmap/33-x.md'], ['q2', 'spec', 'specs/20260101/01-a.md'], ['q3', 'prompt', 'do it'], ['q4', 'prompt', 'plain'], ['q5', 'prompt', 'ms']])
-  assert.strictEqual(q.items[2].type, 'fix', 'lane became type')
-  assert.deepStrictEqual(q.items.slice(3).map((i) => i.added), ['2024-10-27T03:33:20.000Z', '2024-10-27T03:33:20.000Z'])
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')), { version: 4, items: [], holds: {} }, 'the local file is left empty at version 4')
+  const q = trackedItems(d)
+  assert.deepStrictEqual(q.map((i) => [i.kind, i.payload]), [['brief', 'docs/roadmap/33-x.md'], ['spec', 'specs/20260101/01-a.md'], ['prompt', 'do it'], ['prompt', 'plain'], ['prompt', 'ms']], 'one tracked file per row, in stored order')
+  assert.ok(q.every((i) => /^\d{8}-[0-9a-f]{4}$/.test(i.id)), 'new ids')
+  assert.strictEqual(q[2].type, 'fix', 'lane became type')
+  assert.deepStrictEqual(q.slice(3).map((i) => i.added), ['2024-10-27T03:33:20.000Z', '2024-10-27T03:33:20.000Z'])
   for (const f of ['.claude/spec-runs.jsonl', '.claude/spec-runs', '.claude/spec-session.json', '.claude/spec-manifest.json', '.claude/rules/enforcement.json',
     '.claude/skills/run', '.claude/agents/gen.md', '.claude/rules/spec-pipeline.md', 'scripts/spec-patterns.sh',
     'specs/20260101/01-a.deviations.md', 'specs/20260101/01-a.build', 'specs/20260101/01-a.review', '.git/spec-fanout.json', '.git/spec-wave-open', '.git/spec-run-cache', '.git/spec-queue-done.json']) assert.ok(!e(f), f + ' still present')
@@ -211,8 +214,13 @@ function migrated() {
   return { d, g }
 }
 
-// The file a v8 build before version 3 left: the migrated queue, stamped version 2.
-function asV2(d) { const q = readQ(d); q.version = 2; fs.writeFileSync(qfile(d), JSON.stringify(q, null, 2) + '\n') }
+// The file a v8 build before version 3 left: the migrated queue's rows as the old file held them, stamped version 2, the
+// tracked items gone (so a migration has all of them to make again).
+function asV2(d) {
+  const rows = trackedItems(d).map(({ id, rank, version, ...rest }, n) => ({ id: 'q' + (n + 1), ...rest }))
+  git(d, 'rm', '-rq', 'specs/queue'); git(d, 'commit', '-qm', 'the items go')
+  fs.writeFileSync(qfile(d), JSON.stringify({ version: 2, seq: rows.length, items: rows }, null, 2) + '\n')
+}
 
 test('AC-20261105-04-10 an already-migrated host gets queue-fields from the newest backup: planned line by line, applied, idempotent', () => {
   const { d } = migrated()
@@ -235,11 +243,11 @@ test('AC-20261105-04-10 an already-migrated host gets queue-fields from the newe
   const text = runNode('scripts/migrate.js', ['--root', d]).stdout
   assert.ok(text.includes('q4 type plan') && text.includes('q1 after brief 03'), text)
   mig(d, '--apply')
-  const items = Object.fromEntries(readQ(d).items.map((i) => [i.id, i]))
-  assert.deepStrictEqual(items.q1.after, { brief: '03' })
-  assert.deepStrictEqual([items.q3.type, items.q3.after], ['fix', { spec: 'specs/20260101/01-a.md' }])
-  assert.strictEqual(items.q4.type, 'plan')
-  assert.strictEqual(readQ(d).version, 3, 'queue-fields then queue: the file ends at 3')
+  const items = Object.fromEntries(trackedItems(d).map((i) => [i.payload, i]))
+  assert.deepStrictEqual(items['docs/roadmap/33-x.md'].after, { brief: '03' })
+  assert.deepStrictEqual([items['do it'].type, items['do it'].after], ['fix', { spec: 'specs/20260101/01-a.md' }])
+  assert.strictEqual(items.plain.type, 'plan')
+  assert.strictEqual(readQ(d).version, 4, 'queue-fields then queue: the old file ends at version 4, empty, and its rows are tracked items')
   assert.ok(!mig(d).ops.some((o) => o.op === 'queue-fields' || o.op === 'queue'), 'a second run plans neither')
 })
 
@@ -419,19 +427,109 @@ test('AC-20261105-12-2 --apply converts a version 1 file; a second --apply is "n
     { id: 'q6', kind: 'prompt', payload: '/spec:fix specs/x.md — gate red', added: ISO },
   ], { 'docs/roadmap/33-x.md': '# 33\n', 'a.txt': 'a\n' })
   const p = mig(d)
-  assert.ok(p.ops.some((o) => o.op === 'queue' && o.note === '6 items -> v3'), JSON.stringify(p.ops))
+  assert.ok(p.ops.some((o) => o.op === 'queue' && o.note === '6 rows -> specs/queue/'), JSON.stringify(p.ops))
   assert.strictEqual(readQ(d).version, 1, 'the plan writes nothing')
   mig(d, '--apply')
-  const q = readQ(d)
-  assert.strictEqual(q.version, 3)
-  assert.deepStrictEqual(q.items.map((i) => [i.kind, i.type, i.spec, i.payload]), [
+  assert.deepStrictEqual(readQ(d), { version: 4, items: [], holds: {} })
+  assert.deepStrictEqual(trackedItems(d).map((i) => [i.kind, i.type, i.spec, i.payload]), [
     ['spec', undefined, undefined, 'specs/20261104/01-a.md'], ['spec', undefined, undefined, 'specs/20261104/02-b.md'],
     ['brief', undefined, undefined, 'docs/roadmap/33-x.md'], ['prompt', 'fix', undefined, 'digest sends twice'],
-    ['prompt', 'plan', undefined, 'x'], ['prompt', 'fix', 'specs/x.md', 'gate red']])
-  assert.ok(q.items[4].done)
+    ['prompt', 'fix', 'specs/x.md', 'gate red']], 'every open row, in stored order; the ticked prompt is dropped')
   const again = runNode('scripts/migrate.js', ['--root', d, '--apply'])
   assert.match(again.stdout, /✅ nothing to migrate/)
   assert.strictEqual(runNode('scripts/queue.js', ['list', '--root', d]).status, 0, 'the strict reader accepts the result')
+})
+
+// A host whose machine-local queue is a real-shaped version 3 file: open prompts (one bound, one advisories, one gated), done
+// prompts, and the done rows ("tombstones") of finished and of unfinished work.
+const V3_ROWS = [
+  { id: 'q1', kind: 'prompt', type: 'fix', spec: 'specs/20261104/09-adhoc.md', payload: 'digest sends twice', advisories: true, added: ISO },
+  { id: 'q2', kind: 'prompt', type: 'plan', payload: 'tidy the copy', after: { brief: '04' }, added: ISO },
+  { id: 'q3', kind: 'prompt', type: 'fix', payload: 'already fixed', done: '2026-11-02T00:00:00.000Z', added: ISO },
+  { id: 'q4', kind: 'brief', payload: '03', done: '2026-11-02T00:00:00.000Z' },
+  { id: 'q5', kind: 'brief', payload: '04', done: '2026-11-02T00:00:00.000Z', added: ISO },
+  { id: 'q6', kind: 'spec', payload: 'specs/20261104/09-adhoc.md', done: '2026-11-02T00:00:00.000Z', added: ISO },
+  { id: 'q7', kind: 'prompt', type: 'decide', payload: 'pick a database', added: ISO },
+]
+const V3_FILES = {
+  'docs/roadmap/03-fin.md': '# 03 — fin\n', 'specs/20261104/03-a.md': '---\nstatus: done\nbrief: 03\n---\n# A\n',
+  'docs/roadmap/04-wip.md': '# 04 — wip\n', 'specs/20261104/04-a.md': '---\nstatus: hardened\nbrief: 04\n---\n# B\n',
+  'specs/20261104/09-adhoc.md': '---\nstatus: hardened\n---\n# C\n', 'a.txt': 'a\n',
+}
+const v3Host = (rows = V3_ROWS) => {
+  const h = queueHost(3, rows, V3_FILES)
+  fs.mkdirSync(path.join(h.d, '.git/spec-run-cache'), { recursive: true }); fs.writeFileSync(path.join(h.d, '.git/spec-run-cache/x.json'), '{}')
+  return h
+}
+const commits = (d) => git(d, 'rev-list', '--count', 'HEAD').trim()
+
+test('AC-20261108-06-11 --apply on a version 3 file writes one tracked file per open row and per tombstone of unfinished work, in stored order, every field kept with a new id, drops done prompts and finished work, rewrites the local file as version 4, keeps a backup, prints each qN → id, commits once, tags nothing and keeps spec-run-cache', () => {
+  const { d } = v3Host()
+  const old = fs.readFileSync(qfile(d)); const n0 = commits(d)
+  const plan = mig(d)
+  assert.ok(plan.ops.some((o) => o.op === 'queue') && !plan.ops.some((o) => o.op === 'tag'), 'the plan has the queue step and no v7 tag')
+  assert.deepStrictEqual(trackedItems(d), [], 'the plan writes nothing')
+  const r = mig(d, '--apply')
+  const items = trackedItems(d)
+  assert.deepStrictEqual(items.map((i) => [i.payload, i.rank, !!i.done]), [['digest sends twice', '1', false], ['tidy the copy', '2', false], ['pick a database', '3', false], ['04', undefined, true], ['specs/20261104/09-adhoc.md', undefined, true]],
+    'open rows ranked in stored order, then the tombstones of unfinished work; the done prompt and the finished brief are dropped')
+  assert.ok(items.every((i) => /^\d{8}-[0-9a-f]{4}$/.test(i.id) && i.version === 4))
+  assert.deepStrictEqual([items[0].type, items[0].spec, items[0].advisories, items[0].added], ['fix', 'specs/20261104/09-adhoc.md', true, ISO], 'every field is kept')
+  assert.deepStrictEqual([items[1].after, items[1].added], [{ brief: '04' }, ISO])
+  assert.strictEqual(items[0].id.slice(0, 8), ISO.slice(0, 10).replace(/-/g, ''), 'the id is issued from `added`')
+  assert.deepStrictEqual(r.queued.map((x) => x.from), ['q1', 'q2', 'q5', 'q6', 'q7'], 'qN → id for every row that moved')
+  assert.deepStrictEqual(Object.fromEntries(r.queued.map((x) => [x.from, x.to])).q1, items[0].id)
+  const text = runNode('scripts/migrate.js', ['--root', v3Host().d, '--apply']).stdout
+  assert.ok(/q1 → \d{8}-[0-9a-f]{4}/.test(text) && /q7 → \d{8}-[0-9a-f]{4}/.test(text), text)
+  assert.deepStrictEqual(readQ(d), { version: 4, items: [], holds: {} }, 'the local file is rewritten, not deleted')
+  assert.ok(fs.readFileSync(path.join(r.backup, 'spec-queue.json')).equals(old), 'the backup keeps the old file byte for byte')
+  assert.strictEqual(commits(d), String(Number(n0) + 1), 'one commit')
+  assert.strictEqual(git(d, 'log', '-1', '--format=%s').trim(), 'chore(spec): migrate v7 → v8')
+  assert.ok(git(d, 'show', '--name-only', '--format=', 'HEAD').includes('specs/queue/'), 'and it holds the items')
+  assert.strictEqual(git(d, 'tag', '-l').trim(), '', 'no tag')
+  assert.ok(fs.existsSync(path.join(d, '.git/spec-run-cache/x.json')), 'spec-run-cache is kept')
+  assert.strictEqual(git(d, 'status', '--porcelain').trim(), '')
+  const list = JSON.parse(runNode('scripts/queue.js', ['list', '--json', '--root', d]).stdout).items
+  assert.deepStrictEqual(list.slice(0, 3).map((i) => i.payload), ['digest sends twice', 'tidy the copy', 'pick a database'])
+})
+
+test('AC-20261108-06-12 a second --apply is "nothing to migrate"; a second clone that pulls the migration and migrates its own file adds only the rows not already there, after the existing ranks', () => {
+  const { d } = v3Host()
+  mig(d, '--apply')
+  assert.match(runNode('scripts/migrate.js', ['--root', d, '--apply']).stdout, /✅ nothing to migrate/)
+  const b = tmpdir('mig-clone'); fs.rmSync(b, { recursive: true }); execFileSync('git', ['clone', '-q', d, b])
+  for (const [k, v] of [['user.email', 't@t'], ['user.name', 't'], ['commit.gpgsign', 'false']]) git(b, 'config', k, v)
+  const mine = [{ ...V3_ROWS[0], id: 'q40' }, { id: 'q41', kind: 'prompt', type: 'plan', payload: 'only on machine b', added: ISO }, { ...V3_ROWS[2], id: 'q42' }]
+  fs.writeFileSync(qfile(b), JSON.stringify({ version: 3, seq: 42, items: mine }))
+  const r = mig(b, '--apply')
+  assert.deepStrictEqual(r.queued.map((x) => x.from), ['q41'], 'the row the pull already brought is skipped, and the done prompt dropped')
+  assert.deepStrictEqual(trackedItems(b).map((i) => [i.payload, i.rank]).filter(([, rk]) => rk), [['digest sends twice', '1'], ['tidy the copy', '2'], ['pick a database', '3'], ['only on machine b', '4']], 'after the existing ranks')
+  assert.deepStrictEqual(readQ(b), { version: 4, items: [], holds: {} })
+})
+
+test('AC-20261108-06-12 --apply refuses, exit 2 and nothing changed, off trunk, in a linked worktree, during a live fan-out and on an unparseable file; a version 2 file reaches version 4 in one run', () => {
+  const snap = (d) => [fs.readFileSync(qfile(d), 'utf8'), git(d, 'rev-parse', 'HEAD'), git(d, 'status', '--porcelain'), fs.existsSync(path.join(d, 'specs/queue'))].join('|')
+  const refuses = (d, root, why) => { const before = snap(d); const r = runNode('scripts/migrate.js', ['--root', root, '--apply']); assert.strictEqual(r.status, 2, why + ': ' + r.stdout + r.stderr); assert.strictEqual(snap(d), before, why + ': nothing changed'); return r.stderr }
+  const off = v3Host(); git(off.d, 'checkout', '-q', '-b', 'side')
+  assert.match(refuses(off.d, off.d, 'off trunk'), /on side, not main/)
+  const lin = v3Host(); const wt = path.join(lin.d, '.claude/worktrees/lane'); git(lin.d, 'worktree', 'add', '-q', '-b', 'lane', wt)
+  assert.match(refuses(lin.d, wt, 'a linked worktree'), /linked worktree/)
+  const fan = v3Host(); require(path.join(__dirname, '../spec/scripts/lib/state.js')).writeFanout(fan.d, { step: 'WAIT', batch: [{ id: '1', stem: 'a', status: 'dispatched' }] })
+  assert.match(refuses(fan.d, fan.d, 'a live fan-out'), /fan-out is in flight/)
+  const bad = v3Host(); fs.writeFileSync(qfile(bad.d), '{ not json')
+  assert.match(refuses(bad.d, bad.d, 'an unparseable file'), /not valid JSON/)
+  const v2 = queueHost(2, [{ id: 'q1', kind: 'prompt', type: 'plan', payload: 'a v2 row', added: ISO }])
+  mig(v2.d, '--apply')
+  assert.deepStrictEqual([readQ(v2.d).version, trackedItems(v2.d).map((i) => i.payload)], [4, ['a v2 row']], 'version 2 to version 4 in one run')
+})
+
+test('AC-20261108-06-12 a row that matches the secrets scan stops the apply before anything changes', () => {
+  const { d } = v3Host([{ id: 'q1', kind: 'prompt', type: 'plan', payload: 'deploy with AKIAIOSFODNN7EXAMPLE', added: ISO }])
+  const before = [fs.readFileSync(qfile(d), 'utf8'), git(d, 'rev-parse', 'HEAD')]
+  const r = runNode('scripts/migrate.js', ['--root', d, '--apply'])
+  assert.strictEqual(r.status, 2)
+  assert.ok(r.stderr.includes('content:AKIA[0-9A-Z]{16}') && !r.stderr.includes('AKIAIOSFODNN7EXAMPLE'), r.stderr)
+  assert.deepStrictEqual([fs.readFileSync(qfile(d), 'utf8'), git(d, 'rev-parse', 'HEAD')], before)
 })
 
 test('AC-20261105-12-1 shop-bltr q52: a version 2 fix with a bare payload is a fix to status, to queue next and to fanout once migrated', () => {
@@ -444,7 +542,7 @@ test('AC-20261105-12-1 shop-bltr q52: a version 2 fix with a bare payload is a f
   const fan0 = runNode('scripts/fanout.js', ['--root', d, '--json'])
   assert.strictEqual(fan0.status, 2); assert.ok(fan0.stderr.includes('queue file is version 2 — run /spec:migrate'), fan0.stderr)
   const plan = mig(d)
-  assert.ok(plan.ops.some((o) => o.op === 'queue' && o.note === '1 items -> v3'))
+  assert.ok(plan.ops.some((o) => o.op === 'queue' && o.note === '1 rows -> specs/queue/'))
   mig(d, '--apply')
   assert.strictEqual(runNode('scripts/queue.js', ['next', '--root', d]).stdout.trim(), '/spec:fix Admin polish after 10')
   const planned = runNode('scripts/fanout.js', ['--root', d, '--mark', 'planned'])
@@ -452,7 +550,7 @@ test('AC-20261105-12-1 shop-bltr q52: a version 2 fix with a bare payload is a f
   const batch = require(path.join(__dirname, '../spec/scripts/lib/state.js')).readFanout(d).batch
   assert.strictEqual(batch.length, 1)
   assert.match(path.basename(batch[0].worktree), /^fix-admin-polish-after-10-[0-9a-f]{6}$/)
-  assert.strictEqual(batch[0].item, 'q52')
+  assert.strictEqual(batch[0].item, trackedItems(d)[0].id, 'the lane names the item by its new id')
 })
 
 test('AC-20261105-12-9 every stored shape, migrated, is one shape to status and to fanout', () => {

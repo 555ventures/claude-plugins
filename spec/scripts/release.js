@@ -5,18 +5,21 @@
 // Argv is read only up to `--`; everything after it is note text, never a flag. An unknown --flag before it exits 2.
 // Staging: deploy → ready (curl <stagingUrl><healthPath>, 3 tries 5 s apart) → migrations (release.migrationsCheck,
 // when set and not `none`) → e2e (BASE_URL, STAGING_URL, RELEASE_NOTE). With release.testCountPattern set, an e2e that
-// exits 0 but counts 0 tests, or matches nothing, stops. A green run records {sha, note} in the git common dir.
-// --promote: only on a record whose sha is HEAD; the record is cleared, promoteCommand runs, then production must
-// answer at <productionUrl><healthPath> before `✅ released` prints. Missing config keys, a missing or stale record -> exit 2.
+// exits 0 but counts 0 tests, or matches nothing, stops. A green run records {sha, treeSha, note} in the git common
+// dir.
+// --promote: only on a record whose sha is HEAD, or whose committed tree (queue items aside) is HEAD's — never the
+// working tree's, so an edit committed after staging refuses and a dirty tree does not; the record is cleared,
+// promoteCommand runs, then production must answer at <productionUrl><healthPath> before `✅ released` prints.
+// Missing config keys, a missing or stale record -> exit 2.
 
 const path = require('path')
 const { spawnSync } = require('child_process')
 const { readConfig, readRelease, writeRelease } = require('./lib/state')
-const { run, testsExecuted } = require('./lib/host')
+const { run, testsExecuted, treeSha } = require('./lib/host')
 const git = require('./lib/git')
 const { render } = require('./lib/report')
 
-const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+const { sleepMs: sleep } = require('./lib/reap')
 
 // curl -fsS, 3 tries 5 s apart. A missing curl is not retried.
 function ready(url) {
@@ -69,7 +72,7 @@ function main(argv) {
 
   if (promote) {
     const rec = readRelease(root)
-    if (!rec || rec.sha !== head) {
+    if (!rec || (rec.sha !== head && !(rec.treeSha && rec.treeSha === treeSha(root, { rev: 'HEAD' })))) {
       process.stderr.write(`release: ${rec ? `HEAD moved since the green staging run (${String(rec.sha).slice(0, 7)} → ${head.slice(0, 7)})` : 'there is no green staging run'} — run /spec:release first\n`)
       return 2
     }
@@ -107,7 +110,7 @@ function main(argv) {
   const n = counted ? testsExecuted(e.stdout + e.stderr, rel.testCountPattern) : null
   if (counted && !n) return stop('e2e', bullets, `e2e exited 0 but ran no tests (testCountPattern ${rel.testCountPattern} ${n === 0 ? 'counted 0' : 'matched nothing'}):\n${e.tail}`)
   bullets.push(counted ? `e2e ok (${n} tests)` : 'e2e ok (tests not counted)')
-  writeRelease(root, { sha: head, note })
+  writeRelease(root, { sha: head, treeSha: treeSha(root, { rev: head }), note })
   return out({ outcome: `✅ staging verified${note ? ' — ' + note : ''}`, bullets, pins: `promote? staging is green on ${head.slice(0, 7)} — promote only on the user's yes`, next: 'promote to production when ready' })
 }
 

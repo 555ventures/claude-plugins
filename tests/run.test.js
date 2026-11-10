@@ -6,7 +6,7 @@ const assert = require('node:assert')
 const fs = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
-const { tmpdir, gitRepo, runNode, runBash, freePort, killStrays, SPEC } = require('./helpers')
+const { tmpdir, gitRepo, runNode, runBash, freePort, killStrays, SPEC, seedQueue } = require('./helpers')
 const st = require(path.join(SPEC, 'scripts/lib/state.js'))
 const pending = require(path.join(SPEC, 'scripts/lib/pending.js'))
 const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
@@ -151,12 +151,61 @@ for (const mergeStrategy of ['ff-only', 'merge-commit', 'squash']) {
   })
 }
 
+const QITEM = (id, payload = 'x') => JSON.stringify({ version: 4, id, rank: '1', kind: 'prompt', type: 'plan', payload, added: '2026-11-08T00:00:00.000Z' }) + '\n'
+for (const mergeStrategy of ['ff-only', 'merge-commit', 'squash']) {
+  test(`AC-20261108-06-10 under ${mergeStrategy} a queue commit on trunk while the lane gates is a rebase and a cache hit, never a second gate run or a refusal`, () => {
+    const h = fixture({ cfg: { mergeStrategy } }); build(h)
+    put(h.dir, 'specs/queue/20261108-aaaa.json', QITEM('20261108-aaaa')); h.g('add', '--', 'specs/queue'); h.g('commit', '-qm', 'chore(queue): add 20261108-aaaa', '--', 'specs/queue')
+    ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+    assert.strictEqual(h.gates().length, 1, 'the one real gate run is the build\'s: the rebased tree is a cache hit')
+    assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n')
+    assert.ok(h.g('ls-tree', '-r', '--name-only', 'main').split('\n').includes('specs/queue/20261108-aaaa.json'), 'the queue item stays on trunk')
+    assert.strictEqual(h.g('status', '--porcelain'), '')
+  })
+}
+
+test('AC-20261108-06-10 a builder edit under specs/queue/ is in no run commit, and the lane still lands', () => {
+  const h = fixture(); ok(h.run()); put(h.wt, 'feature.txt', 'thing\n'); put(h.wt, 'specs/queue/20261108-zzzz.json', '{"stray": 1}\n')
+  ok(h.run('--mark', 'built'))
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.ok(!h.g('ls-tree', '-r', '--name-only', 'main').includes('specs/queue'), 'trunk holds no queue path')
+  assert.ok(!h.g('log', '--name-only', '--format=', 'main').includes('specs/queue'), 'and no run commit touched one')
+  assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n')
+})
+
+test('AC-20261108-06-10 an in-place run on trunk holds no queue path in its diff.patch, its outside-plan files or its build commit, whether the queue commit came before or the file is a stray', () => {
+  const h = fixture()
+  ok(h.run('--in-place')); put(h.dir, 'feature.txt', 'thing\n')
+  put(h.dir, 'specs/queue/20261108-aaaa.json', QITEM('20261108-aaaa')); h.g('add', '--', 'specs/queue'); h.g('commit', '-qm', 'chore(queue): add 20261108-aaaa', '--', 'specs/queue')
+  put(h.dir, 'specs/queue/20261108-bbbb.json', QITEM('20261108-bbbb', 'stray')); put(h.dir, 'specs/queue/20261108-aaaa.json', QITEM('20261108-aaaa', 'edited'))
+  ok(h.run('--in-place', '--mark', 'built'))
+  const dir = path.join(h.dir, 'specs/20261104/01-thing.run')
+  assert.ok(fs.readFileSync(path.join(dir, 'diff.patch'), 'utf8').includes('feature.txt'), 'the patch holds the build')
+  assert.ok(!fs.readFileSync(path.join(dir, 'diff.patch'), 'utf8').includes('specs/queue'), 'no queue path in diff.patch')
+  assert.ok(!fs.readFileSync(path.join(dir, 'brief-review.md'), 'utf8').includes('specs/queue'), 'no outside-plan file names a queue path')
+  ok(h.run('--in-place', '--mark', 'reviewed', '--file', h.findings([])))
+  assert.deepStrictEqual(h.g('show', '--name-only', '--format=', 'HEAD').trim().split('\n').filter((f) => !f.startsWith('specs/20261104/01-thing')).sort(), ['feature.txt'], 'the build commit holds the build alone')
+  assert.ok(fs.existsSync(path.join(h.dir, 'specs/queue/20261108-bbbb.json')), 'the stray stays on disk')
+})
+
 test('a trunk that moves during every landing gate is refused after the third round: nothing merges, main is clean', () => {
   const h = fixture(); ok(h.run()); put(h.wt, 'feature.txt', 'thing\n'); put(h.wt, 'MOVER', h.dir); ok(h.run('--mark', 'built'))
   const r = h.run('--mark', 'reviewed', '--file', h.findings([]))
   assert.strictEqual(r.status, 2, r.stdout)
   assert.match(r.stderr, /trunk moved three times while landing — re-run/)
   assert.ok(!h.g('ls-tree', '--name-only', 'main').split('\n').includes('feature.txt') && h.g('status', '--porcelain') === '')
+})
+
+test('AC-20261108-05-2 a landing rebases without --autostash: the tree trunk gets is the tree its last gate ran', () => {
+  const h = fixture(); build(h)
+  const dir = tmpdir('spy'); const spy = path.join(dir, 'spy.js'); const log = path.join(dir, 'calls.log')
+  fs.writeFileSync(spy, `const g = require(${JSON.stringify(path.join(SPEC, 'scripts/lib/git.js'))}); const o = g.rebaseOnto
+g.rebaseOnto = (wt, t, opt) => { require('fs').appendFileSync(process.env.SPY_LOG, JSON.stringify(opt || {}) + '\\n'); return o(wt, t, opt) }\n`)
+  const r = runNode('scripts/run.js', [REL, '--root', h.dir, '--mark', 'reviewed', '--file', h.findings([])],
+    { env: { RUN_COUNTER: h.counter, NODE_OPTIONS: `--require ${spy}`, SPY_LOG: log } })
+  assert.match(ok(r), /REVIEW → DONE/)
+  const calls = fs.readFileSync(log, 'utf8').trim().split('\n')
+  assert.ok(calls.length >= 1 && calls.every((c) => !JSON.parse(c).autostash), 'land() never autostashes: ' + calls.join(' '))
 })
 
 test('AC-20261107-02-1 a conflict at MERGE stays in the worktree: the rebase step prints, main is clean, the re-run gates and reviews again', () => {
@@ -452,18 +501,20 @@ test('AC-20261107-01-5 /spec:fix on a stub in place briefs the Decisions and Ass
   assert.ok(r.status === 2 && r.stderr.includes('is already done — nothing to run'), r.stderr)
 })
 
-test('a fix that is itself a queued advisories item queues no further advisories, whatever its symptom says; a typed symptom that only reads like one still queues', () => {
+test('AC-20261108-06-9 a fix that is itself a queued advisories item queues no further advisories, whatever its symptom says; a typed symptom that only reads like one still queues; its commit ends with the item\'s Queue: trailer, a lane\'s from its batch row', () => {
   const adv = h => h.findings([{ severity: 'advisory', summary: 'rename the helper' }])
   // in place: the open advisories item the typed symptom is
   const h = fixture({ status: 'done' })
   const symptom = 'advisories of 01-thing: name it better'
-  Q.add(h.dir, { type: 'fix', payload: symptom, advisories: true })
+  const own = Q.add(h.dir, { type: 'fix', payload: symptom, advisories: true })
   // typed back as pasted and reflowed: the words match, the whitespace does not
   const reflowed = 'advisories of 01-thing:\n  name  it better '
   const fx = (...a) => runNode('scripts/run.js', ['--fix', reflowed, '--in-place', '--root', h.dir, ...a])
   ok(fx()); put(h.dir, 'a.txt', 'fixed\n'); ok(fx('--mark', 'built'))
   const done = ok(fx('--mark', 'reviewed', '--file', adv(h)))
-  assert.deepStrictEqual(open(h).map((i) => i.payload), [symptom], 'only the item it came from: nothing new queued, even when its whitespace was edited')
+  assert.deepStrictEqual(Q.read(h.dir).items.map((i) => i.payload), [symptom], 'only the item it came from: nothing new queued, even when its whitespace was edited')
+  assert.deepStrictEqual(open(h), [], 'and its own fix commit closed it: the trailer is on trunk')
+  assert.ok(h.g('log', '-1', '--format=%B').trimEnd().endsWith(`\n\nQueue: ${own.id}`), 'the fix commit ends with the trailer')
   assert.ok(done.includes('📌') && done.includes('rename the helper'), done)
   // a hand-typed symptom that begins with those words is no advisories item: it queues its own
   const t = fixture({ status: 'done' })
@@ -481,7 +532,8 @@ test('a fix that is itself a queued advisories item queues no further advisories
     { id: '1', symptom, item: item.id, worktree: '.claude/worktrees/fix-lane', status: 'dispatched' }] })
   const lx = (...a) => runNode('scripts/run.js', ['--fix', 'tidy up the naming please', '--root', lane, ...a])
   ok(lx()); put(lane, 'a.txt', 'fixed\n'); ok(lx('--mark', 'built')); ok(lx('--mark', 'reviewed', '--file', adv(l)))
-  assert.deepStrictEqual(open(l).map((i) => i.payload), [symptom], 'a reworded lane symptom queues nothing')
+  assert.deepStrictEqual(open(l).map((i) => i.payload), [symptom], 'a reworded lane symptom queues nothing, and its commit is on a side branch: the item stays open')
+  assert.ok(l.g('log', '-1', '--format=%B', 'fix/lane').trimEnd().endsWith(`\n\nQueue: ${item.id}`), 'the lane\'s commit names the batch row\'s item, whatever the agent typed')
 })
 
 test('a fix whose cause needs a plan stops with a plan item; a fix offers no unmet, a spec run no needs-plan', () => {
@@ -496,6 +548,22 @@ test('a fix whose cause needs a plan stops with a plan item; a fix offers no unm
   assert.deepStrictEqual(open(h).map((i) => i.type), ['plan'])
   const s = fixture(); ok(s.run())
   assert.strictEqual(s.run('--mark', 'needs-plan', '--why', 'x').status, 2)
+})
+
+test('AC-20261108-06-7 a park queues a plan or decide item in the local file alone: no commit and no tracked path, on trunk and with the checkout off it', () => {
+  for (const off of [false, true]) {
+    const h = fixture({ status: 'done' }); const d = fixture()
+    if (off) for (const x of [h, d]) x.g('checkout', '-q', '-b', 'side')
+    const [hh, dh] = [h.g('rev-parse', 'HEAD'), d.g('rev-parse', 'HEAD')]
+    const fx = (...a) => runNode('scripts/run.js', ['--fix', 'it breaks', '--in-place', '--root', h.dir, ...a])
+    ok(fx()); ok(fx('--mark', 'needs-plan', '--why', 'a model change'))
+    ok(d.run('--in-place')); ok(d.run('--in-place', '--mark', 'unmet', '--decision', 'D1', '--why', 'Plain cannot hold it.')); ok(d.run('--in-place', '--mark', 'dismissed'))
+    assert.deepStrictEqual([open(h).map((i) => i.type), open(d).map((i) => i.type)], [['plan'], ['decide']], off ? 'off trunk' : 'on trunk')
+    for (const [x, head] of [[h, hh], [d, dh]]) {
+      assert.strictEqual(x.g('rev-parse', 'HEAD'), head, 'no commit'); assert.ok(!fs.existsSync(path.join(x.dir, 'specs/queue')), 'no tracked path')
+      assert.deepStrictEqual(Q.read(x.dir).items.map(Q.storeOf), ['local'])
+    }
+  }
 })
 
 test('AC-20261107-02-7 a dismissed question parks with a decide item whose payload is the question; no option label is recorded', () => {
@@ -1153,26 +1221,26 @@ function briefFixture({ steps = '', banner = '', stored = true, sibling = false 
   const files = { [REL]: SPEC_DOC.replace('brief: n/a', 'brief: 03'), [BRIEF03]: `# 03 — Rounds\n${banner}\nPhase: P1 · Depends on: —\n\n## Result\n\nx\n${steps}` }
   if (sibling) files['specs/20261104/02-later.md'] = SPEC_DOC.replace('brief: n/a', 'brief: 03').replace('# Thing', '# Later')
   const h = fixture({ files })
-  if (stored) Q.write(h.dir, { version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-07' }] })
+  if (stored) seedQueue(h.dir, [{ kind: 'brief', payload: '03', added: '2026-11-07' }])
   return h
 }
 const briefItem = (h) => Q.read(h.dir).items.find((i) => i.kind === 'brief')
 const listed = (h) => runNode('scripts/queue.js', ['list', '--root', h.dir]).stdout
 
-test('AC-20261107-05-2 a solo run merging the last spec of a brief with no open step ticks its item and prints the 📌 auto-closed line; unstored or superseded alike', () => {
+test('AC-20261107-05-2 AC-20261108-06-8 a solo run merging the last spec of a brief with no open step reads its item done and prints the 📌 auto-closed line; unstored or superseded alike', () => {
   const h = briefFixture(); build(h)
   const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.ok(done.includes(AUTO03 + '\n'), done)
-  assert.ok(briefItem(h).done, 'q1 is ticked')
+  assert.ok(briefItem(h).done, 'the item reads done: nothing was ticked')
   const u = briefFixture({ stored: false })
   assert.ok(listed(u).includes('brief 03 (rounds)'), 'an in-flight brief is in the fill before the merge')
   build(u)
   assert.ok(ok(u.run('--mark', 'reviewed', '--file', u.findings([]))).includes(AUTO03))
-  assert.strictEqual(Q.read(u.dir).items.length, 0, 'nothing is stored or ticked')
+  assert.strictEqual(Q.read(u.dir).items.length, 0, 'nothing is stored')
   assert.ok(!listed(u).includes('brief 03'), 'the brief leaves the list')
   const s = briefFixture({ banner: '\n> **Superseded by 04**\n' }); build(s)
   assert.ok(ok(s.run('--mark', 'reviewed', '--file', s.findings([]))).includes(AUTO03))
-  assert.ok(briefItem(s).done, 'a stored brief left superseded is ticked')
+  assert.ok(briefItem(s).done, 'a stored brief left superseded reads done')
 })
 
 test('AC-20261107-05-3 an open step keeps the brief queued and warns how many; a merge leaving a sibling spec open ticks no brief', () => {
@@ -1187,7 +1255,7 @@ test('AC-20261107-05-3 an open step keeps the brief queued and warns how many; a
   assert.ok(!briefItem(o).done, 'another spec of brief 03 is open: no brief item ticks')
 })
 
-test('AC-20261107-05-4 an in-place run finishing the last spec of a stored brief ticks no brief item and prints no auto-closed line', () => {
+test('AC-20261107-05-4 AC-20261108-06-8 an in-place run finishing the last spec of a stored brief prints no auto-closed line, and the item reads done all the same', () => {
   const h = briefFixture()
   ok(h.run('--in-place')); put(h.dir, 'feature.txt', 'thing\n')
   ok(h.run('--in-place', '--mark', 'built'))
@@ -1195,9 +1263,9 @@ test('AC-20261107-05-4 an in-place run finishing the last spec of a stored brief
   assert.match(done, /REVIEW → DONE/)
   const work = require(path.join(SPEC, 'scripts/lib/work.js'))
   const b = work.readBriefs(h.dir).find((x) => x.num === '03')
-  assert.deepStrictEqual([b.status, b.open], ['done', []], 'the brief is finished with no open step: a worktree land would tick it here')
+  assert.deepStrictEqual([b.status, b.open], ['done', []], 'the brief is finished with no open step')
   assert.ok(!done.includes('auto-closed'), done)
-  assert.ok(!briefItem(h).done, 'no brief item is ticked in place')
+  assert.ok(briefItem(h).done, 'a read closes it, whatever landed it: there is no tick to miss in place')
 })
 
 test('the reviewer seat: opus high by default, opus xhigh on an architecture spec, and every round lands in the build commit', () => {

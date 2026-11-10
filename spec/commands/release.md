@@ -13,7 +13,8 @@ missing `release` config key, ask for the value and save it.
 Staging runs deploy, then a ready check on `stagingUrl` + `healthPath`, then `migrationsCheck`
 when the host set one, then e2e with `BASE_URL`. A green run on this commit is the only way to
 promote: `node ${CLAUDE_PLUGIN_ROOT}/scripts/release.js --promote -- $ARGUMENTS` refuses
-(exit 2) after a red run, after a new commit, and a second time. Promotion is irreversible:
+(exit 2) after a red run, after a new commit (one touching only `specs/queue/` aside), and a
+second time. Promotion is irreversible:
 show what staging showed and ask once (AskUserQuestion) before you run it. A dismissed
 question promotes nothing, and you never invent the answer. After the promote the driver
 checks that production answers at `productionUrl` + `healthPath` and prints its response body

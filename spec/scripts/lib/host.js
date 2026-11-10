@@ -1,12 +1,9 @@
 'use strict'
-// lib/host.js — host commands, the test gate with its green-run cache, the app, test-command detection. No CLI.
-// run(cmd, {cwd, env, timeoutMs}) → {status, stdout, stderr, tail}; timeout → 124. gate(root, config) → {status, cached,
-// runId, tail, tree, failing, lockWaitMs}: green runs cached by tree, at most gateConcurrency at once on the host;
-// testsExecuted(output, pattern) reads a test count.
-// copyIncluded(main, wt) copies the .worktreeinclude matches into a fresh worktree; treeSha(root) is the working tree's
-// git tree; provision(root, {rel, branch, from, config}) → {wt, fresh, setup} makes a worktree as every driver does
-// (the .worktreeinclude files and setupCommand on a fresh one; prepare is that second half); detectTestCommand,
-// firstRedLine, freePort, resolveUrl, listening, release. The host's app is lib/app.js.
+// lib/host.js — host commands, the test gate and its green-run cache, worktree provisioning, test-command detection. No
+// CLI. run(cmd, {cwd, env, timeoutMs}) → {status, stdout, stderr, tail} (timeout → 124); gate(root, config) → {status,
+// cached, runId, tail, tree, failing, lockWaitMs}; treeSha(root) is the working tree's git tree, treeSha(root, {rev})
+// that commit's; provision(root, {rel,
+// branch, from, config}) → {wt, fresh, setup}. The host's app is lib/app.js.
 
 const fs = require('fs')
 const path = require('path')
@@ -16,8 +13,9 @@ const reap = require('./reap')
 const { spawnSync } = require('child_process')
 
 const TAIL_LINES = 40
-// Pipeline files that never count toward the tree a gate ran over.
-const OVERLAY = [':(glob)**/*.run/**', '.claude/pending-question.json']
+// Files that never count toward the tree a gate ran over: pipeline state, and queue items (a queue commit is no re-
+// gate).
+const OVERLAY = [':(glob)**/*.run/**', '.claude/pending-question.json', G.QUEUE_DIR]
 
 const tailOf = (text, n = TAIL_LINES) => String(text || '').replace(/\s+$/, '').split('\n').slice(-n).join('\n')
 
@@ -36,11 +34,8 @@ function run(cmd, { cwd, env, timeoutMs } = {}) {
 
 const git = (root, args, env) => spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', env: env || process.env, maxBuffer: 64 * 1024 * 1024 })
 
-function commonDir(root) {
-  const r = git(root, ['rev-parse', '--git-common-dir'])
-  if (r.status !== 0) throw new Error(`host: ${root} is not a git checkout — run inside a git repository`)
-  return path.resolve(root, r.stdout.trim())
-}
+const st = require('./state')
+const commonDir = st.gitCommonDir
 
 // The main checkout's top level, whichever worktree (or submodule) root is in. `git worktree list` names the git dir
 // itself first when it lives outside the checkout (--separate-git-dir); the checkout is then the one root is in.
@@ -51,17 +46,19 @@ function mainRoot(root) {
 
 const cacheDir = (root) => path.join(commonDir(root), 'spec-run-cache')
 
-// A HEAD-seeded scratch index (so tracked-but-ignored files stay in), `add -A`, overlay removed,
-// write-tree. Identical content gives the identical sha in any worktree of the repo.
-function treeSha(root) {
+// A HEAD-seeded scratch index, `add -A`, pipeline files removed, write-tree: identical content, identical sha in any
+// worktree. With `rev`, the index is that commit's tree alone: no working-tree file, tracked or not, counts.
+function treeSha(root, { rev } = {}) {
   const dir = cacheDir(root)
   fs.mkdirSync(dir, { recursive: true })
   const indexFile = path.join(dir, 'idx-' + process.pid + '-' + crypto.randomBytes(4).toString('hex'))
   const env = { ...process.env, GIT_INDEX_FILE: indexFile }
   try {
-    const hasHead = git(root, ['rev-parse', '-q', '--verify', 'HEAD']).status === 0
-    if (hasHead) must(git(root, ['read-tree', 'HEAD'], env), 'read-tree HEAD')
-    must(git(root, ['add', '-A', '--', '.'], env), 'add -A')
+    const base = rev || 'HEAD'
+    const hasBase = git(root, ['rev-parse', '-q', '--verify', base + '^{commit}']).status === 0
+    if (rev && !hasBase) throw new Error(`host: ${rev} is not a commit`)
+    if (hasBase) must(git(root, ['read-tree', base], env), 'read-tree ' + base)
+    if (!rev) must(git(root, ['add', '-A', '--', '.'], env), 'add -A')
     git(root, ['rm', '--cached', '-r', '-q', '--ignore-unmatch', '--', ...OVERLAY], env)
     const sha = must(git(root, ['write-tree'], env), 'write-tree').stdout.trim()
     if (!/^[0-9a-f]{40,64}$/.test(sha)) throw new Error('host: git write-tree printed no tree sha')
@@ -76,18 +73,10 @@ const must = (r, what) => { if (r.status !== 0) throw new Error(`host: git ${wha
 
 const keyFor = (cmd, tree) => crypto.createHash('sha256').update(cmd + '\0' + tree).digest('hex')
 
-function lookup(root, cmd, tree) {
-  try { return JSON.parse(fs.readFileSync(path.join(cacheDir(root), keyFor(cmd, tree) + '.json'), 'utf8')) } catch { return null }
-}
-
-function record(root, cmd, tree, entry) {
-  const dir = cacheDir(root)
-  fs.mkdirSync(dir, { recursive: true })
-  const file = path.join(dir, keyFor(cmd, tree) + '.json')
-  const tmp = file + '.' + process.pid + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify({ cmd, tree, ...entry, ts: new Date().toISOString() }) + '\n')
-  fs.renameSync(tmp, file)
-}
+const cacheFile = (root, cmd, tree) => path.join(cacheDir(root), keyFor(cmd, tree) + '.json')
+const lookup = (root, cmd, tree) => st.readJson(cacheFile(root, cmd, tree))
+const record = (root, cmd, tree, entry) =>
+  st.writeJson(cacheFile(root, cmd, tree), { cmd, tree, ...entry, ts: new Date().toISOString() })
 
 const newRunId = () => new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + crypto.randomBytes(3).toString('hex')
 
@@ -104,8 +93,6 @@ function failingFiles(root, tail) {
   return out
 }
 
-// ---- gate slots: a pid file per running gate, shared by every worktree through the common dir ----
-
 function slots(config) {
   const raw = config && config.gateConcurrency
   if (raw === undefined || raw === null) return 2
@@ -113,9 +100,7 @@ function slots(config) {
   return Number.isFinite(n) ? Math.max(1, n) : 2
 }
 
-const alive = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
-
-const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+const { sleepMs, signal0: alive } = reap
 
 // Live holders other than `self`; holder files naming a dead pid are deleted on sight.
 function holders(dir, self) {
@@ -130,7 +115,6 @@ function holders(dir, self) {
   return live
 }
 
-// Takes a slot (blocking, polling every 2 s) and returns {release, waitedMs}.
 function takeSlot(root, config) {
   const dir = path.join(commonDir(root), 'spec-gate.lock')
   fs.mkdirSync(dir, { recursive: true })
@@ -149,8 +133,7 @@ function takeSlot(root, config) {
   }
 }
 
-// Port of v7 computeTestsExecuted: the LAST match of the pattern (a decoy test name can quote the summary phrase
-// before the real one) read as a count; null when the pattern is absent or `none`, or matches nothing.
+// Port of v7 computeTestsExecuted: the LAST match of the pattern read as a count; null when absent, `none` or no match.
 function testsExecuted(output, pattern) {
   if (!pattern || pattern === 'none') return null
   let last = null
@@ -158,14 +141,14 @@ function testsExecuted(output, pattern) {
   return last ? Number(last[1]) || 0 : null
 }
 
-// Known runner summaries, one capture group each: node --test TAP and spec reporter, jest, vitest, pytest. init sets
-// the first that counts more than 0 in its probe's output as config.testCountPattern.
+// Known runner summaries, one capture group each (node --test, jest, vitest, pytest); init picks the first that counts
+// > 0.
 const COUNT_PATTERNS = ['# tests (\\d+)', 'ℹ tests (\\d+)', 'Tests:\\s+(\\d+) passed', 'Tests\\s+(\\d+) passed',
   '(\\d+) passed[^\\n]* in [\\d.]+s']
 
-// Runs config.testCommand in root unless this exact tree already ran green under it. With config.testCountPattern
-// set (not `none`), an exit 0 that counts 0 tests or matches nothing is red.
-function gate(root, config, { timeoutMs } = {}) {
+// Runs config.testCommand unless this exact tree already ran green under it; with testCountPattern, an exit 0 counting
+// 0 tests is red.
+function gate(root, config) {
   const cmd = config && config.testCommand
   if (!cmd) throw Object.assign(new Error('no testCommand in .claude/spec.config.json — run /spec:init'), { exit: 2 })
   const tree = treeSha(root)
@@ -175,7 +158,7 @@ function gate(root, config, { timeoutMs } = {}) {
   const slot = takeSlot(root, config)
   try {
     const t0 = Date.now()
-    const r = run(cmd, { cwd: root, timeoutMs })
+    const r = run(cmd, { cwd: root })
     const pat = r.status === 0 && config.testCountPattern
     if (pat && pat !== 'none' && !testsExecuted(r.stdout + r.stderr, pat)) {
       Object.assign(r, { status: 1, tail: `exited 0 but ran no tests (testCountPattern ${pat}):\n${r.tail}` })
@@ -185,9 +168,8 @@ function gate(root, config, { timeoutMs } = {}) {
   } finally { slot.release() }
 }
 
-// The files .worktreeinclude selects, a port of v7's worktree-include.sh: untracked files its patterns
-// match (git's own exclude grammar, `!` negation included), minus .claude/worktrees/, that git also
-// ignores. No manifest gives [].
+// The files .worktreeinclude selects (v7's worktree-include.sh): untracked files its patterns match, minus
+// .claude/worktrees/, that git ignores.
 function worktreeIncluded(root) {
   if (!fs.existsSync(path.join(root, '.worktreeinclude'))) return []
   const ls = git(root, ['ls-files', '-z', '-oi', '--exclude-from=.worktreeinclude'])
@@ -207,9 +189,8 @@ function copyIncluded(main, wt) {
   }
 }
 
-// What a fresh worktree gets before anything runs in it: the .worktreeinclude files of the main checkout, then the
-// host's setupCommand. Returns the setupCommand's result ({status: 0} when there is none or the worktree is not fresh);
-// a non-zero status is for the caller to refuse.
+// What a fresh worktree gets first: the .worktreeinclude files, then setupCommand. → its result ({status: 0} when none
+// or not fresh).
 function prepare(main, wt, config, fresh) {
   if (!fresh) return { status: 0 }
   copyIncluded(main, wt)
@@ -223,9 +204,8 @@ function provision(root, { rel, branch, from, config }) {
   return { wt, fresh, setup: prepare(mainRoot(root), wt, config, fresh) }
 }
 
-// The one way a driver removes a worktree: first stops what runs for or from it (every process tagged SPEC_APP=<wt>,
-// and any process a session started — one carrying a CLAUDE_PID — whose cwd is inside; never this process or its
-// ancestors, and never a process with no CLAUDE_PID, which is the user's own), then G.worktreeRemove.
+// The one way a driver removes a worktree: first stops what runs for or from it (SPEC_APP-tagged processes, and a
+// session's own with a cwd inside; never this process, its ancestors or the user's own), then G.worktreeRemove.
 function release(root, wt, opts) {
   const abs = path.resolve(root, wt)
   const skip = reap.lineage()
@@ -278,5 +258,5 @@ const listening = (url) => spawnSync(process.execPath, ['-e',
 { timeout: 5000 }).status === 0
 
 module.exports = { freePort, resolveUrl, listening, provision, prepare, release, run, gate, treeSha, cacheDir,
-  commonDir, mainRoot, copyIncluded, worktreeIncluded, failingFiles, lookup, record, keyFor, detectTestCommand, tailOf,
+  mainRoot, copyIncluded, worktreeIncluded, lookup, record, detectTestCommand,
   firstRedLine, testsExecuted, COUNT_PATTERNS }

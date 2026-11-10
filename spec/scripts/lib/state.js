@@ -8,8 +8,7 @@ const path = require('path')
 const crypto = require('crypto')
 const { spawnSync } = require('child_process')
 const spec = require('./spec')
-
-// ---- atomic io ----------------------------------------------------------------------------
+const { real } = require('./reap')
 
 function writeText(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -27,7 +26,11 @@ function readJson(file, fallback = null) {
 
 const readText = (file, fallback = null) => { try { return fs.readFileSync(file, 'utf8') } catch { return fallback } }
 
-// ---- config (§3) --------------------------------------------------------------------------
+// A typed path (`@path` as pasted): under root first (a lane's shell sits in the main checkout); else as typed.
+const typedPath = (root, arg) => {
+  const t = String(arg || '').replace(/^@/, ''); const here = path.resolve(root, t)
+  return fs.existsSync(here) || !fs.existsSync(path.resolve(t)) ? here : path.resolve(t)
+}
 
 const DEFAULTS = {
   testCommand: null,
@@ -78,8 +81,6 @@ function readConfig(root) {
 }
 const writeConfig = (root, cfg) => writeJson(configPath(root), cfg)
 
-// ---- the running plugin and the installed one --------------------------------------------
-
 const pluginVersion = (pluginRoot) => {
   return (readJson(path.join(pluginRoot, '.claude-plugin', 'plugin.json'), {}) || {}).version || null
 }
@@ -91,7 +92,6 @@ const pluginVersion = (pluginRoot) => {
 function installedVersion(pluginRoot, root) {
   const home = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')
   const reg = readJson(path.join(home, 'plugins', 'installed_plugins.json'))
-  const real = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
   const cache = real(path.dirname(path.resolve(pluginRoot)))
   const mine = Object.values(isObj(reg) && isObj(reg.plugins) ? reg.plugins : {}).flat()
     .filter((e) => isObj(e) && typeof e.installPath === 'string' && typeof e.version === 'string' && e.version &&
@@ -117,9 +117,6 @@ function staleNote(pluginRoot, root) {
     'restart Claude Code (/clear does not reload plugins)'
 }
 
-// ---- spec documents -----------------------------------------------------------------------
-
-// The file is read here; its grammar is lib/spec.js.
 const readSpec = (specPath) => spec.parse(fs.readFileSync(specPath, 'utf8'))
 
 // Rewrites only the frontmatter `status:` line (inserted when absent); keeps line endings.
@@ -134,8 +131,6 @@ function writeStatus(specPath, status) {
     : block + eol + 'status: ' + status
   writeText(specPath, '---' + eol + next + text.slice(3 + eol.length + block.length))
 }
-
-// ---- run sidecar (§4) ---------------------------------------------------------------------
 
 const runDir = (specPath) => specPath.replace(/\.md$/, '') + '.run'
 const runPath = (specPath) => path.join(runDir(specPath), 'state.json')
@@ -160,8 +155,8 @@ function liveRun(root, rel) {
 const specState = (root, rel, status) => (status === 'hardened' && liveRun(root, rel) ? 'implementing' : status)
 
 // Does a STOPPED run's wait end? `ref` is the branch the spec lands on. An `after` run waits for its spec to be `done`
-// there; an `amend` run (on = its own spec) for it to be `hardened` again with a blob unlike the one the build began
-// from (`run.at`, a commit, when the run stopped in place; else `run.base`): the lock commit, not the status alone.
+// there; an `amend` run for it to be `hardened` again with a blob unlike the one the build began from: the lock commit,
+// not the status alone.
 function resumes(cwd, run, ref) {
   const git = (...args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
   const shown = git('show', `${ref}:${run.on}`)
@@ -173,21 +168,17 @@ function resumes(cwd, run, ref) {
   return now.status === 0 && (was.status !== 0 || now.stdout.trim() !== was.stdout.trim())
 }
 
-// ---- git common dir files ----------------------------------------------------------------
-
-function gitDirOf(root, which) {
-  const r = spawnSync('git', ['-C', root, 'rev-parse', which], { encoding: 'utf8' })
+function gitCommonDir(root) {
+  const r = spawnSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' })
   if (r.status !== 0) throw new Error(`state: ${root} is not inside a git repository — run git init`)
   // One dir, one name: from the main checkout git answers relative to the root as given, from a
   // worktree with its real path, so a root reached through a symlink (macOS /tmp, Windows 8.3) differs.
   return fs.realpathSync.native(path.resolve(root, r.stdout.trim()))
 }
-const gitCommonDir = (root) => gitDirOf(root, '--git-common-dir')
 
-// A fix with no spec keeps its run state where a spec's is: a `.run` dir the `specs/**/*.run/` ignore line covers,
-// in the checkout it runs in (a lane's goes with its worktree, and the write hook lets an agent write there).
-// slugOf keys it: the first six words of the symptom plus a hash of all of it, whitespace runs as one blank
-// (every line that prints a symptom for resuming is one line, so a newline in it cannot be part of the key).
+// A fix with no spec keeps its run state in a `.run` dir (covered by the `specs/**/*.run/` ignore line) in the checkout
+// it runs in. slugOf keys it: the first six words of the symptom plus a hash of all of it, whitespace runs as one
+// blank.
 const slugOf = (symptom) => {
   const s = String(symptom).trim().replace(/\s+/g, ' ')
   const words = s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 6).join('-').slice(0, 40).replace(/-+$/, '')
@@ -207,8 +198,6 @@ const appLog = (root, name) => path.join(gitCommonDir(root), 'spec-app', name + 
 const fanoutPath = (root) => path.join(gitCommonDir(root), 'spec-fanout.json')
 const readFanout = (root) => readJson(fanoutPath(root))
 const writeFanout = (root, f) => writeJson(fanoutPath(root), f)
-
-// ---- design / genesis files --------------------------------------------------------------
 
 const PROTO_FILES = ['status', 'pins', 'contract']
 const protoDir = (root, stem) => path.join(root, 'design', 'prototypes', stem)
@@ -241,23 +230,26 @@ function writeProto(root, stem, docs) {
   for (const f of PROTO_FILES) if (docs[f] !== undefined) writeJson(path.join(protoDir(root, stem), f + '.json'), docs[f])
 }
 
-// Every spec whose frontmatter `prototype:` is the stem: [{rel, status}], in path order. Run sidecars are not specs.
+// Every .md under specs/, in path order: run sidecars are not specs.
+function specFiles(root, dir = path.join(root, 'specs')) {
+  let ents = []
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return [] }
+  return ents.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).flatMap((e) => {
+    const p = path.join(dir, e.name)
+    return e.isDirectory() ? (e.name.endsWith('.run') ? [] : specFiles(root, p)) : e.name.endsWith('.md') ? [p] : []
+  })
+}
+
+// Every spec whose frontmatter `prototype:` is the stem: [{rel, status}], in path order.
 function specsCiting(root, stem) {
   const out = []
-  const walk = (dir) => {
-    let ents = []
-    try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
-    for (const e of ents.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-      const p = path.join(dir, e.name)
-      if (e.isDirectory()) { if (!e.name.endsWith('.run')) walk(p) } else if (e.name.endsWith('.md')) {
-        const text = readText(p, '').replace(/\r\n/g, '\n')
-        if (!/^prototype:/m.test(text)) continue
-        const fm = spec.parseFrontmatter(text).frontmatter
-        if (fm.prototype === stem) out.push({ rel: path.relative(root, p).split(path.sep).join('/'), status: String(fm.status || '') })
-      }
-    }
+  for (const p of specFiles(root)) {
+    const text = readText(p, '').replace(/\r\n/g, '\n')
+    if (!/^prototype:/m.test(text)) continue
+    const fm = spec.parseFrontmatter(text).frontmatter
+    const rel = path.relative(root, p).split(path.sep).join('/')
+    if (fm.prototype === stem) out.push({ rel, status: String(fm.status || '') })
   }
-  walk(path.join(root, 'specs'))
   return out
 }
 
@@ -276,10 +268,10 @@ const readGenesis = (root) => readJson(genesisPath(root))
 const writeGenesis = (root, s) => writeJson(genesisPath(root), s)
 
 module.exports = {
-  writeText, writeJson, readJson, readText,
-  DEFAULTS, CONFIG_KEYS, readConfig, writeConfig, configPath, appLog, pluginVersion, installedVersion, staleNote,
+  writeText, writeJson, readJson, readText, typedPath,
+  DEFAULTS, CONFIG_KEYS, readConfig, writeConfig, configPath, appLog, pluginVersion, staleNote,
   readSpec, writeStatus,
-  runDir, runPath, readRun, writeRun, clearRun, liveRun, specState, resumes,
+  runDir, readRun, writeRun, clearRun, liveRun, specState, resumes,
   gitCommonDir, slugOf, fixRunDir, fixRunPath, readFanout, writeFanout, readRelease, writeRelease,
-  readProto, writeProto, protoV7, protoDir, specsCiting, readMocks, writeMocks, readGenesis, writeGenesis,
+  readProto, writeProto, protoV7, protoDir, specFiles, specsCiting, readMocks, writeMocks, readGenesis, writeGenesis,
 }

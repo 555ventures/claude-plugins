@@ -20,7 +20,7 @@ function setup() {
 const brief = (dims) => `# Genesis brief\n\n## Idea\n\nclinic booking\n\n## Users\n\nclinics\n\n## Open dimensions\n\n${dims.map((d) => `- ${d}`).join('\n')}\n`
 const BRIEF = (n, extra = '') => `# ${n}\n\nPhase: P0 · Depends on: — · Primary workspaces: app\n\n## Result\n\nx\n\n## Scope\n\n1. y\n\n## Out of scope\n\nz\n${extra}`
 
-test('genesis walks idea to GROUNDED', () => {
+test('AC-20261108-06-7 genesis walks idea to GROUNDED, its roadmap queued in the local file with no queue commit', () => {
   const g = setup()
   const first = g.run('clinic booking app for clinics')
   assert.strictEqual(first.status, 0, first.stderr)
@@ -72,6 +72,7 @@ test('genesis walks idea to GROUNDED', () => {
   assert.strictEqual(g.mark('roadmap-written').status, 0)
   assert.deepStrictEqual(Q.read(g.dir).items.map((i) => [i.kind, i.payload]),
     ['01-first-light', '02-booking', '03-billing'].map((b) => ['brief', `docs/roadmap/${b}.md`]))
+  assert.ok(!fs.existsSync(path.join(g.dir, 'specs/queue')), 'no tracked path')
   assert.strictEqual(g.step(), 'HANDOFF')
 
   g.w('.claude/spec.config.json', JSON.stringify({ lanes: 5, trunk: 'trunk' }))

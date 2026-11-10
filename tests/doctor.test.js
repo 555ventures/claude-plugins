@@ -288,7 +288,6 @@ test('AC-20261105-14-13 no file under spec/ carries the overlay, its endpoint or
 
 // ---- spec 20261105/17: roadmap hygiene, the .gitignore remedy, .worktreeinclude -------------------------------
 
-const Q = require(path.join(SPEC, 'scripts/lib/queue.js'))
 const put = (d, rel, text) => { fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true }); fs.writeFileSync(path.join(d, rel), text) }
 const briefDoc = (nn, title) => `# ${nn} — ${title}\n\nPhase: P1 · Depends on: — · Primary workspaces: app\n\n## Result\n\nx\n`
 const specDoc = (stat, brief) => `---\nstatus: ${stat}\nbrief: ${brief}\n---\n# S\n\n## File Plan\n\n| Path | Action | Summary |\n|---|---|---|\n| x.js | MODIFY | x |\n`
@@ -299,7 +298,7 @@ test('AC-20261105-17-8 doctor reports status\'s hygiene anomalies as roadmap fin
   put(d, 'specs/20261104/01-rounds.md', specDoc('done', '03'))
   put(d, 'specs/20261104/02-stamp.md', specDoc('hardened', '77')) // orphan-stamp: hygiene
   put(d, 'specs/20261104/03-weird.md', specDoc('weird', 'n/a')) // unknown-status: hygiene
-  Q.write(d, { version: 3, seq: 1, items: [{ id: 'q1', kind: 'brief', payload: '03', added: '2026-11-01T00:00:00.000Z' }] }) // brief 03 done but queued: decide
+  put(d, 'docs/roadmap/02-schema.md', briefDoc('02', 'Schema')) // brief 02 unplanned while 03 has moved on: out-of-order, a decide line
   const st = JSON.parse(runNode('scripts/status.js', ['--root', d, '--json']).stdout).anomalies
   const hygiene = st.filter((a) => a.audience === 'hygiene')
   const decide = st.filter((a) => a.audience === 'decide')
@@ -392,4 +391,16 @@ test('AC-20261108-02-1 doctor lists the stale-plugin finding when a newer plugin
   const away = runNode('scripts/doctor.js', ['--root', d, '--json'], { env: reg(path.join(tmpdir('elsewhere'), 'spec', '999.0.0')) })
   assert.deepStrictEqual(JSON.parse(away.stdout).findings, [])
   assert.strictEqual(away.status, 0)
+})
+
+test('AC-20261108-05-5 an in-place amend wait reads the branch it builds on: re-locked there, doctor says it resumes', () => {
+  const d = inited({ testCommand: 'true' })
+  const rel = 'specs/20260101/01-cap.md'; const g = (...a) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8' }).trim()
+  fs.mkdirSync(path.join(d, 'specs/20260101'), { recursive: true }); fs.writeFileSync(path.join(d, rel), '---\nstatus: hardened\n---\n# Cap\n')
+  g('add', '-A'); g('commit', '-qm', 'spec'); const base = g('rev-parse', 'HEAD')
+  g('switch', '-qc', 'feat'); fs.writeFileSync(path.join(d, rel), '---\nstatus: hardened\n---\n# Cap, amended\n'); g('commit', '-qam', 'relock on feat'); g('switch', '-q', 'main')
+  fs.mkdirSync(path.join(d, 'specs/20260101/01-cap.run'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'specs/20260101/01-cap.run/state.json'), JSON.stringify({ step: 'STOPPED', why: 'amend', on: rel, base, inPlace: true, branch: 'feat', worktree: '.' }))
+  const j = JSON.parse(runNode('scripts/doctor.js', ['--root', d, '--json']).stdout)
+  assert.ok(j.info.includes(`in flight: ${rel} resumes on its amended spec — /spec:run ${rel}`), j.info.join('\n'))
 })

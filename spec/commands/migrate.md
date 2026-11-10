@@ -8,7 +8,13 @@ Run `node ${CLAUDE_PLUGIN_ROOT}/scripts/migrate.js`. It changes nothing and prin
 Show the plan and ask the user once whether to apply it. On a yes, run
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/migrate.js --apply`.
 
-It also converts the queue file to the current queue version (3); until it has run, the queue commands, `/spec:run` and `/spec:fanout` refuse with `queue file is version <n> — run /spec:migrate`.
+It also moves each machine's queue file (version 1 to 3) to version 4 (ADR-0050): every open row, and every tombstone of
+unfinished work, becomes a tracked item `specs/queue/<id>.json` with a new id (`qN → 20261108-a3f9` is printed), in stored
+order after the committed items, in the one migration commit; a row matching an open committed item is skipped, done
+prompts are dropped, and the local file is left `{version: 4, items: [], holds: {}}` with a backup kept. Run it on each
+machine, in the main checkout on trunk (it refuses in a linked worktree, off trunk, with a fan-out live or on a file that
+is not valid JSON). Until it has run, the queue commands, `/spec:run` and `/spec:fanout` refuse with `queue file is
+version <n> — run /spec:migrate`.
 
 It also moves the `prototype` keys `bootCommand`, `url` and `publicUrl` into the `runtime` block (an
 existing `runtime` key wins, and the plan says so; `runtime` keeps `readyCheck`, `envCommand`,

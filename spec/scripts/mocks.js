@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 'use strict'
-// mocks.js — /spec:mocks driver: SEED → SCREENS → APPROVED. The wireframe settles structure (screens,
-// navigation, content order), not look. `approved` commits design/mocks/ on the root's branch.
-//
-//   node mocks.js [--mark seed-done | journey-drawn --journey <j> | approved]
-//   node mocks.js push | pull     review-service helpers (service mode)
-//
-// State: design/mocks/status.json {marks:{seedDone, approved}, drawn:{journey: beats-hash}, pushed?}.
-// A journey whose beats change after it was drawn is pending again. Service mode when
-// config.walkthrough.baseUrl is set (push, then the client confirms each journey; `approved` needs
-// every journey confirmed on its current beats); terminal mode otherwise. Exit: 0 · 1 · 2 refusal.
+// mocks.js — /spec:mocks driver: SEED → SCREENS → APPROVED. The wireframe settles structure (screens, navigation,
+// content
+// order), not look. `approved` commits design/mocks/ on the root's branch.
+//   node mocks.js [--mark seed-done | journey-drawn --journey <j> | approved] · node mocks.js push | pull (service
+//     mode)
+// State: design/mocks/status.json {marks:{seedDone, approved}, drawn:{journey: beats-hash}, pushed?}. A journey whose
+// beats change after it was drawn is pending again. Service mode when config.walkthrough.baseUrl is set (push, then the
+// client confirms each journey; `approved` needs every journey confirmed on its current beats); terminal mode
+// otherwise.
 
 const fs = require('fs')
 const path = require('path')
@@ -71,8 +70,7 @@ const pendingOf = (s, journeys) => journeys.filter((j) => s.drawn[j.id] !== beat
 const serviceMode = (ctx) => Boolean(ctx.config.walkthrough && ctx.config.walkthrough.baseUrl)
 
 function readScreen(root, b) {
-  let doc
-  try { doc = JSON.parse(fs.readFileSync(screenFile(root, b), 'utf8')) } catch { return null }
+  const doc = state.readJson(screenFile(root, b))
   return doc && typeof doc.root === 'string' && doc.elements && doc.elements[doc.root] ? doc : null
 }
 
@@ -170,8 +168,6 @@ const steps = {
 
 const driver = makeDriver({ name: 'mocks', load, save, derive, steps, script: __filename })
 
-// ---- service helpers -----------------------------------------------------------------------
-
 async function service(sub, a) {
   const c = wt.openContext(a.root, process.env)
   if (!c) refuse('no review service configured — run /spec:connect, or stay in terminal mode')
@@ -214,4 +210,4 @@ if (require.main === module) {
   const code = main(process.argv.slice(2))
   if (code !== undefined) process.exitCode = code
 }
-module.exports = { main, parseSeed }
+module.exports = { main }

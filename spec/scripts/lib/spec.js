@@ -237,6 +237,6 @@ function fixDoc(symptom, spec) {
 }
 
 module.exports = {
-  parse, parseFrontmatter, section, parseIntent, splitCells, splitPlanCell, parseFilePlan, planRows, parseAcs, parseAssumptions,
-  globToRe, inPlan, decisionRows, isSpecText, fixDoc,
+  parse, parseFrontmatter, section, parseIntent, splitCells, planRows, parseAssumptions,
+  globToRe, inPlan, decisionRows, isSpecText, fixDoc, FM_RE,
 }

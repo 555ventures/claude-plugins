@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 'use strict'
-// red-check.js — every test file ADDED since base must fail on base and pass on HEAD (an edited existing
-// test is not checked). A test that passes on base too is a vacuous green: it proves nothing about the new
-// code. It is information for the reviewer, never a block.
-//
-// node red-check.js --base <sha> --root <worktree>
-//   → stdout JSON {files: [{file, redOnBase, greenOnHead}], vacuousGreen: [file…], error?}
-// Runs config.testFileCommand ({file} = the path) in a throwaway detached worktree at base with
-// the new test files copied in, then in root. Exit 0 always; a problem is reported as `error`.
+// red-check.js — every test file ADDED since base must fail on base and pass on HEAD (an edited existing test is not
+// checked). A test that passes on base too is a vacuous green. Information for the reviewer, never a block. node red-
+// check.js --base <sha> --root <worktree> → stdout JSON {files: [{file, redOnBase, greenOnHead}], vacuousGreen:
+// [file…], error?} Runs config.testFileCommand ({file} = the path) in a throwaway detached worktree at base with the
+// new test files copied in, then in root. Exit 0 always; a problem is reported as `error`.
 
 const fs = require('fs')
 const os = require('os')

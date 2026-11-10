@@ -27,22 +27,12 @@ function briefOrd(num) {
 
 const strip = (p) => String(p).trim().replace(/^@/, '').replace(/^\.\//, '')
 
-function walkSpecs(dir, out) {
-  let ents = []
-  try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
-  for (const e of ents.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    const p = path.join(dir, e.name)
-    if (e.isDirectory()) { if (!e.name.endsWith('.run')) walkSpecs(p, out) } else if (e.name.endsWith('.md')) out.push(p)
-  }
-  return out
-}
-
 // A spec's `brief:` frontmatter as a brief number, or null for none (`n/a`, `—`, absent).
 const briefOf = (fm) => (fm.brief === undefined || NONE.test(String(fm.brief).trim()) ? null : normBrief(fm.brief))
 
 function readSpecs(root) {
   const specs = []
-  for (const file of walkSpecs(path.join(root, 'specs'), [])) {
+  for (const file of st.specFiles(root)) {
     let doc
     try { doc = st.readSpec(file) } catch { continue }
     const fm = doc.frontmatter

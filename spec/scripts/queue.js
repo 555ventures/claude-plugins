@@ -1,8 +1,8 @@
 'use strict'
 // queue.js — the session queue CLI: next | list | groom | add | move | done | show. Every item read and write goes
-// through lib/queue.js, the queue's one owner; the rows (list, show, groom) are lib/queue-rows.js. The queue a
-// reader sees is the file plus the fill (unfinished briefs and open ad-hoc specs), worked out on every read and
-// never stored: `move` and `done` on a filled item store that one item (ADR-0044).
+// through lib/queue.js (the owner; the rows are lib/queue-rows.js). A reader sees both stores plus the fill, worked out
+// on every read and never stored: `move` and `done` on a filled item store that one item. `add`, `move` and `done` on
+// the user's own items are the only writers of the tracked store: one commit on trunk each (ADR-0044, ADR-0050).
 const fs = require('fs')
 const path = require('path')
 const Q = require('./lib/queue')
@@ -14,10 +14,11 @@ const { BRIEF_RE, briefPath, text } = Q
 const refuse = (message) => Object.assign(new Error(message), { exit: 2 })
 const FLAGS = { add: ['--json', '--top', '--type', '--after'], groom: [] } // every other subcommand takes --json; all take --root
 const WITH_VALUE = ['--root', '--type', '--after']
+const ID = /^(q\d+|\d{8}-[0-9a-f]{4})$/
 const sameWork = (a, b) => a.kind === b.kind && (a.kind === 'brief' ? work.normBrief(a.payload) === work.normBrief(b.payload) : a.kind === 'spec' && a.payload === b.payload)
 
-// A brief number names the brief item first (`done 02` closes brief 02, never the 2nd row); a zero-padded ref is
-// never a row position, so a brief number with no open item is null for `done` ("nothing queued"). No match or two is a refusal.
+// A brief number names the brief item first (`done 02` closes brief 02, never the 2nd row); a brief number with no open
+// item is null for `done` ("nothing queued"). No match or two is a refusal.
 function resolve(view, list, ref, root, soft) {
   if (BRIEF_RE.test(ref)) {
     const brief = list.find((i) => i.kind === 'brief' && work.normBrief(i.payload) === work.normBrief(ref))
@@ -29,14 +30,15 @@ function resolve(view, list, ref, root, soft) {
   const byId = view.find((i) => i.id === ref)
   if (byId) return byId
   // An id-shaped ref names an id or nothing: another item's text that mentions it is not a match.
-  if (/^q\d+$/.test(ref)) throw refuse(`no item matches "${ref}" — run \`/spec:queue list\``)
+  if (ID.test(ref)) throw refuse(`no item matches "${ref}" — run \`/spec:queue list\``)
   const hits = [list.filter((i) => text(i) === ref || path.basename(text(i)) === ref), list.filter((i) => text(i).includes(ref))].find((xs) => xs.length) || []
   if (hits.length > 1) throw refuse(`"${ref}" is ambiguous — matches ${hits.map((m) => m.id || (m.kind === 'brief' ? work.normBrief(m.payload) : m.payload)).join(', ')} — use the id instead`)
   if (!hits.length) throw refuse(`no item matches "${ref}" — run \`/spec:queue list\``)
   return hits[0]
 }
 
-// `--after` target -> {brief: "NN"} when docs/roadmap/NN-*.md exists, {spec: "specs/…md"} when the file exists, else null.
+// `--after` target -> {brief: "NN"} when docs/roadmap/NN-*.md exists, {spec: "specs/…md"} when the file exists, else
+// null.
 function afterOf(root, v) {
   const t = String(v).trim().replace(/^@/, '').replace(/^\.\//, '')
   if (/^(?:docs\/roadmap\/)?\d+[a-z]?(?:-[^/]*\.md)?$/i.test(t)) {
@@ -78,7 +80,7 @@ function run(argv) {
   const root = path.resolve(flags.root || require('./lib/git').repoRoot(process.cwd()))
   const cmd = pos[0] || 'next'
   let arg = pos.slice(1).join(' ')
-  const q = Q.reconcile(root, Q.read(root))
+  const q = Q.read(root)
   const view = Q.fill(root, q).items
   const list = Q.open({ items: view })
   const out = (line, json) => console.log(flags.json ? JSON.stringify(json ?? line) : line)
@@ -105,7 +107,8 @@ function run(argv) {
     const kind = Q.kindOf(arg)
     if (flags.type !== undefined && (kind !== 'prompt' || !Q.TYPES.includes(flags.type))) throw refuse('--type takes plan, prototype, fix or decide, on a prompt item')
     if (kind === 'spec' && !fs.existsSync(path.join(root, arg))) throw refuse(`add ${arg}: no such spec file — a queued spec path must exist at add time`)
-    // A brief is queued once however it is spelled, stored or filled; an ad-hoc spec that is only filled is stored where asked.
+    // A brief is queued once however it is spelled, stored or filled; an ad-hoc spec that is only filled is stored
+    // where asked.
     const at = kind === 'brief' ? list.findIndex((i) => i.kind === 'brief' && work.normBrief(i.payload) === work.normBrief(arg))
       : kind === 'spec' ? list.findIndex((i) => i.id && i.kind === 'spec' && i.payload === arg) : -1
     if (at >= 0) throw refuse(`${kind === 'brief' ? 'brief ' + work.normBrief(arg) : arg} is already queued at position ${at + 1} — /spec:queue move ${kind === 'brief' ? work.normBrief(arg) : arg} <n> to reorder it`)
@@ -114,7 +117,8 @@ function run(argv) {
       after = afterOf(root, flags.after)
       if (!after) throw refuse(`--after target not found: ${flags.after}`)
     }
-    const it = Q.add(root, { payload: arg, type: flags.type, after, defaultType: 'plan' }, { top: flags.top })
+    const fields = { payload: arg, type: flags.type, after, defaultType: 'plan' }
+    const it = Q.add(root, fields, { top: flags.top, tracked: true })
     if (!it) throw refuse(`duplicate payload already queued: ${arg}`)
     out(`queued ${it.id} (${it.kind}): ${text(it)}`, it)
   } else if (cmd === 'move' || cmd === 'done' || cmd === 'show') {
@@ -128,17 +132,11 @@ function run(argv) {
     if (cmd === 'move') {
       const n = Number(pos[2])
       if (!Number.isInteger(n) || n < 1) throw refuse('move needs a 1-based position')
-      // Position n counts the list as printed; only stored items can sit before it, so past them the item lands just after the last one.
-      const others = list.filter((i) => i.id && i !== it)
-      if (it.id) q.items.splice(q.items.indexOf(it), 1)
-      const where = others[n - 1] ? q.items.indexOf(others[n - 1]) : q.items.length
-      let id = it.id
-      if (id) { q.items.splice(where, 0, it); Q.write(root, q) } else id = Q.place(root, q, it, where).id
-      out(`moved ${id} to ${Math.min(n, others.length + 1)}`, { ...it, id })
+      const moved = Q.move(root, q, it, n)
+      out(`moved ${moved.id} to ${Math.min(n, list.filter((i) => i.id && i !== it).length + 1)}`, moved)
     } else {
-      const id = it.id || Q.place(root, q, it).id
-      Q.tick(root, (i) => i.id === id)
-      out(`done ${id}: ${text(it)}`, { ...it, id })
+      const closed = Q.done(root, q, it)
+      out(`done ${closed.id}: ${text(it)}`, closed)
       if (Q.pending(root).some((i) => sameWork(i, it))) (flags.json ? console.error : console.log)(`⚠️ ${ref} is still open work, so it stays in the list`)
     }
   } else throw refuse(`unknown subcommand ${cmd}`)

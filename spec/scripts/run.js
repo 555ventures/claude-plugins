@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 'use strict'
-// run.js [<spec>] [--fix "<symptom>"] [--in-place] [--root <dir>] [--state] [--json] [--mark <verb>] — /spec:run and /spec:fix:
-// OPEN → BUILD → GATE → REPAIR | REVIEW → FIX | ESCALATE | LOOK → COMMIT → MERGE → DONE, or STOPPED {why} (architecture §4).
-// A fix is the same machine on lib/spec.js fixDoc; MERGE lands through lib/land.js as a lane does. The session asks three
-// questions (assumption, decision, unmet); the rest is a rule, printed as a 📌 line.
+// run.js [<spec>] [--fix "<symptom>"] [--in-place] [--root <dir>] [--state] [--json] [--mark <verb>] — /spec:run and
+// /spec:fix: OPEN → BUILD → GATE → REPAIR | REVIEW → FIX | ESCALATE | LOOK → COMMIT → MERGE → DONE, or STOPPED {why}
+// (architecture §4). A fix is the same machine on lib/spec.js fixDoc; MERGE lands through lib/land.js as a lane does.
+// The session asks three questions (assumption, decision, unmet); the rest is a rule, printed as a 📌 line.
 
 const fs = require('fs')
 const path = require('path')
@@ -23,8 +23,7 @@ let inPlaceFlag = false
 
 function specInfo(ctx) {
   if (!ctx.arg && ctx.flags.fix !== undefined) { const slug = st.slugOf(String(ctx.flags.fix)); return { abs: null, rel: null, stem: 'fix-' + slug, id: slug, slug } }
-  const typed = ctx.arg.replace(/^@/, '') // under root first (a lane's shell sits in the main checkout); else as typed
-  const abs = fs.existsSync(path.resolve(ctx.root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(ctx.root, typed) : path.resolve(process.cwd(), typed)
+  const abs = st.typedPath(ctx.root, ctx.arg)
   const rel = path.relative(ctx.root, abs)
   if (rel.startsWith('..') || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) refuse(`no spec at ${abs} — pass a spec path inside ${ctx.root}`)
   const m = /(\d{8})\/(\d+)-[^/]+\.md$/.exec(rel.split(path.sep).join('/'))
@@ -33,7 +32,6 @@ function specInfo(ctx) {
 const cfgOf = (ctx) => st.readConfig(ctx.root)
 const wtOf = (state, ctx) => path.resolve(ctx.root, state.worktree)
 const specIn = (state, ctx) => (state.spec ? path.join(wtOf(state, ctx), state.spec) : null)
-const mainRoot = host.mainRoot
 const ownOf = (state) => state.spec && state.spec.split(path.sep).join('/')
 const runFile = (ctx, name) => { const s = specInfo(ctx); return path.join(s.abs ? st.runDir(s.abs) : st.fixRunDir(ctx.root, s.slug), name) }
 const runText = (ctx, name) => st.readText(runFile(ctx, name), '').replace(/\r\n/g, '\n').trim()
@@ -93,7 +91,7 @@ function open(state, ctx) {
       git.sh(['branch', '-D', branch], ctx.root)
     }
     ;({ wt, setup } = host.provision(ctx.root, { rel, branch, from: cfg.trunk, config: cfg }))
-  } else if (lane) setup = host.prepare(mainRoot(ctx.root), wt, cfg, true)
+  } else if (lane) setup = host.prepare(git.mainRoot(ctx.root), wt, cfg, true)
   if (setup.status !== 0) {
     if (!lane) host.release(ctx.root, wt, { force: true, deleteBranch: branch }) // the re-run provisions afresh
     refuse(`setupCommand failed in ${wt}:\n${setup.tail}\nfix setupCommand in .claude/spec.config.json, then re-run`, 1)
@@ -143,7 +141,8 @@ function criteriaRed(state, ctx, wt, cfg) {
   return r.red.join('\n') || null
 }
 
-const appAt = (s, c) => ({ cwd: wtOf(s, c), root: mainRoot(c.root), log: st.appLog(c.root, 'run-' + specInfo(c).stem) })
+const appAt = (s, c) =>
+  ({ cwd: wtOf(s, c), root: git.mainRoot(c.root), log: st.appLog(c.root, 'run-' + specInfo(c).stem) })
 let lookTried = false // LOOK ensures the app once per invocation
 
 function gateStep(state, ctx) {
@@ -258,7 +257,11 @@ function commit(state, ctx) {
   if (mb.status === 0 && git.sh(['log', '--format=%s', `${mb.stdout.trim()}..HEAD`], wt).split('\n').some((l) => l.startsWith('wip(spec):'))) git.sh(['reset', '-q', '--soft', mb.stdout.trim()], wt)
   const outside = state.spec && !state.fix ? outsideFiles(state, ctx, doc) : []
   const asBuilt = [...runText(ctx, 'as-built.md').split('\n').map((l) => l.trim().replace(/^[-*]\s+/, '')).filter(Boolean), ...outside.map((f) => `touched outside the File Plan: ${f}`)]
-  const message = B.commitMessage(state, state.fix ? `fix(${s.id}): ${state.fix.symptom.replace(/\s+/g, ' ')}` : `build(${s.id}): ${doc.title}`, asBuilt, runText(ctx, 'evidence.md'))
+  const item = itemOf(state, ctx) // the queued fix this commit finishes; its trailer is trunk's record of that (D5)
+  if (item) Object.assign(state, { item: item.id, advItem: !!item.advisories })
+  const subject = state.fix ? `fix(${s.id}): ${state.fix.symptom.replace(/\s+/g, ' ')}` : `build(${s.id}): ${doc.title}`
+  const trailer = state.item ? `\n\nQueue: ${state.item}` : ''
+  const message = B.commitMessage(state, subject, asBuilt, runText(ctx, 'evidence.md')) + trailer
   const left = state.fix ? state.untracked0 || [] : state.inPlace ? outside : [] // in place a spec commits only its File Plan; a fix, only what it touched
   try {
     for (;;) {
@@ -279,7 +282,7 @@ function commit(state, ctx) {
   if (adv.length && !state.advised) { // advisories reach someone: one fix item per run, bound to the spec if it has one
     const words = `advisories of ${s.stem}: ${adv.map((f) => f.summary.trim()).join('; ')}`
     state.advised = true
-    if (fromAdvisories(state, ctx)) { // queuing again would chain without end
+    if (state.advItem) { // queuing again would chain without end
       decide(state, `this fix is itself advisories, so these queue no more: ${adv.map((f) => f.summary).join('; ')}`)
     } else {
       const item = Q.add(ctx.root, { type: 'fix', ...(s.rel ? { spec: s.rel } : {}), payload: words, advisories: true })
@@ -291,28 +294,28 @@ function commit(state, ctx) {
   return go(state, 'DONE') // a lane ends in its worktree: fanout lands it through the same lib/land.js
 }
 
-// Is this queued item the fix being run? fromAdvisories and merge's tick ask.
 const flat = (t) => String(t).replace(/\s+/g, ' ').trim()
 const isThisFix = (state, ctx, s = specInfo(ctx)) => (i) => i.type === 'fix' &&
   (i.spec && path.resolve(ctx.root, i.spec) || null) === s.abs &&
   flat(i.payload || 'repair ' + s.stem) === flat(state.fix.symptom)
 
-// Whether this fix is a queued advisories item, read from the item, never from the symptom's words: a fanout lane's
-// own item (the batch records its id, so a reworded symptom still finds it), else the open item the typed symptom is.
-function fromAdvisories(state, ctx) {
-  if (!state.fix) return false
+// The open queued item this fix finishes: a fanout lane's own (its batch row names the id, so a reworded symptom still
+// finds it), else the open item the typed symptom is.
+function itemOf(state, ctx) {
+  if (!state.fix) return null
   const fan = state.lane && st.readFanout(ctx.root) // a landed lane's worktree is gone: git.real tolerates it
-  const at = (l) => git.real(path.resolve(mainRoot(ctx.root), l.worktree)) === git.real(ctx.root)
+  const at = (l) => git.real(path.resolve(git.mainRoot(ctx.root), l.worktree)) === git.real(ctx.root)
   const lane = fan && (fan.batch || []).find(at)
-  const it = Q.open(Q.read(ctx.root)).find((i) => lane ? i.id === lane.item : isThisFix(state, ctx)(i))
-  return !!(it && it.advisories)
+  return Q.open(Q.read(ctx.root)).find((i) => lane ? i.id === lane.item : isThisFix(state, ctx)(i)) || null
 }
 
 function merge(state, ctx) {
   const s = specInfo(ctx)
-  const tick = !state.fix ? (i) => i.kind === 'spec' && path.resolve(ctx.root, i.payload) === s.abs
-    : s.abs ? isThisFix(state, ctx) : null
-  const r = land(mainRoot(ctx.root), { wt: wtOf(state, ctx), branch: state.branch, spec: state.fix ? null : specIn(state, ctx), id: s.id, config: cfgOf(ctx), message: `chore(spec): merge ${s.id} — ${state.fix ? state.fix.symptom : docOf(state, ctx).title}`, inPlace: state.inPlace, tick })
+  const message = `chore(spec): merge ${s.id} — ${state.fix ? state.fix.symptom : docOf(state, ctx).title}`
+  const spec = state.fix ? null : specIn(state, ctx)
+  const wt = wtOf(state, ctx)
+  const o = { wt, branch: state.branch, spec, id: s.id, config: cfgOf(ctx), message, inPlace: state.inPlace }
+  const r = land(git.mainRoot(ctx.root), o)
   if (r.conflicts) return state // the rebase is left in the worktree: the rebase guard prints the step
   if (r.red) return go(state, 'GATE', { base: r.base, attempts: { repair: 0, fix: 0 } })
   if (r.kept) state.commitWarns = [...(state.commitWarns || []), `worktree kept at ${state.worktree}: ${r.kept} — git worktree remove --force ${state.worktree}`]

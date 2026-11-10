@@ -1,19 +1,14 @@
 'use strict'
 // lib/driver.js — the step-machine frame every driver uses. No CLI of its own.
-//
 // makeDriver({name, specArg, load, save, derive, steps, script}) → main(argv) → exit code
-//   load(ctx) → state                 ctx = {root, arg, json, script}
-//   derive(state, ctx) → step         step = {name, body?, mark?, accepts?, auto?}
-//     mark     the verb line the session replies with, e.g. 'reviewed --file <json>'
-//     accepts  extra verbs allowed at this step (default: the first word of mark)
-//     auto     (state, ctx) → state; the driver runs it, saves, and re-derives (no session work)
-//   steps[verb](state, flags, ctx) → state (or mutate in place and return nothing)
-//   save(state, ctx)
-//   after(verb, state, ctx) → line?   optional; printed under the checkpoint (e.g. the gate result)
-//   markArgs(ctx) → words   optional; extra argv printed after the argument in every mark line (a spec-less fix's --fix)
-//   applied(verb, state, flags, ctx) → boolean   optional; true when a mark the settled step refuses
-//     has already taken effect: the frame prints a checkpoint saying so and exits 0, running no step
-// Refusals: throw {exit: 2, message} (or call die). Exit 0 ok · 1 error · 2 refusal.
+//   load(ctx) → state (ctx = {root, arg, json, script}) · save(state, ctx)
+//   derive(state, ctx) → step {name, body?, mark?, accepts?, auto?}: mark is the verb line the session replies with;
+//     accepts extra verbs allowed here (default: mark's first word); auto (state, ctx) → state runs, saves, re-derives
+//   steps[verb](state, flags, ctx) → state (or mutate in place)
+//   after(verb, state, ctx) → line? printed under the checkpoint · markArgs(ctx) → words printed after the argument in
+//   every mark line · applied(verb, state, flags, ctx) → true when a mark the settled step refuses has already taken
+//   effect: a checkpoint says so, exit 0, no step runs
+// Refusals: throw {exit: 2, message}. Exit 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
 const path = require('path')
@@ -42,11 +37,6 @@ const refuse = (message, exit = 2) => { throw new Refusal(message, exit) }
 // Shell-quotes a word for a printed command line; plain paths stay as they are.
 const shq = (w) => (/^[\w@%+=:,./-]+$/.test(String(w)) ? String(w) : "'" + String(w).replace(/'/g, "'\\''") + "'")
 
-function die(msg, code = 1) {
-  writeOut(2, msg.endsWith('\n') ? msg : msg + '\n')
-  process.exit(code)
-}
-
 // Positional args, --root, --state, --json, --mark <verb>, and every other --flag [value].
 function parseArgv(argv) {
   const out = { pos: [], flags: {}, root: require('./git').repoRoot(process.cwd()), state: false, json: false, mark: null }
@@ -66,7 +56,7 @@ function parseArgv(argv) {
   return out
 }
 
-function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after, applied, markArgs }) {
+function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script, after, applied, markArgs, words }) {
   const scriptPath = script || (require.main && require.main.filename) || name
   const MAX_AUTO = 50
 
@@ -110,7 +100,8 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
 
   function run(argv) {
     const a = parseArgv(argv)
-    const ctx = { root: a.root, arg: (a.pos[0] || '').replace(/^@/, ''), json: a.json, script: scriptPath, flags: a.flags }
+    const typed = (words ? a.pos.join(' ') : a.pos[0] || '').replace(/^@/, '')
+    const ctx = { root: a.root, arg: typed, json: a.json, script: scriptPath, flags: a.flags }
     if (specArg && !ctx.arg && a.flags.fix === undefined) refuse(`usage: /spec:${name} <${specArg}> [--root <dir>] [--state] [--mark <verb>]`)
     let state = load(ctx)
     if (a.state) return writeOut(1, derive(state, ctx).name + '\n')
@@ -162,4 +153,4 @@ function makeDriver({ name, specArg = '', load, save, derive, steps = {}, script
   }
 }
 
-module.exports = { makeDriver, parseArgv, refuse, Refusal, die, writeOut, shq }
+module.exports = { makeDriver, parseArgv, refuse, Refusal, writeOut, shq }

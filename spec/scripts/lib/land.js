@@ -1,23 +1,19 @@
 'use strict'
-// lib/land.js — the one landing path, for a solo run and a fanout lane alike. In the worktree: the bookkeeping
-// commit (`status: done`), the rebase onto trunk and the gate; then the merge into the main checkout with the
-// configured strategy. The branch is a descendant of trunk when it merges, so it cannot conflict, and trunk
-// gets exactly the tree the gate passed; any merge failure is backed out (`reset --merge`). A merge that leaves its
-// spec's brief done (or superseded) with no open step outside specs ticks the brief's item too. Then every finished
-// spec becomes a stub in one `chore(spec): stub …` commit on the landed sha (lib/stub.js, ADR-0046), ungated:
-// `landed` is the gated tree. An in-place run merges nothing and stubs nothing. No CLI.
+// lib/land.js — the one landing path, for a solo run and a fanout lane alike. In the worktree: the bookkeeping commit
+// (`status: done`), the rebase onto trunk and the gate; then the merge into the main checkout with the configured
+// strategy, backed out (`reset --merge`) on any failure. A merge that leaves its spec's brief finished reports it: no
+// driver ticks a queue item, lib/queue.js reads the close (ADR-0050). Then every finished spec becomes a stub in one
+// `chore(spec): stub …` commit on the landed sha (lib/stub.js, ADR-0046); an in-place run merges and stubs nothing.
 //
-// land(main, {wt, branch, spec?, id, config, message, inPlace?, tick?}) →
-//   {landed: sha, kept?: reason, brief?}  merged, worktree removed (kept names why it stayed), queue ticked;
-//                                 `brief` ({num, name, file, open, closed}) when the spec's brief is done or superseded
-//                                 after the merge
+// land(main, {wt, branch, spec?, id, config, message, inPlace?}) →
+//   {landed: sha, kept?: reason, brief?}  merged, worktree removed (kept names why it stayed); `brief` is
+//                                 {num, name, file, open, closed} when the spec's brief is done or superseded after it
 //   {conflicts: [files]}          the rebase is left in progress in the worktree for its run to resolve
 //   {red: tail, base}             the rebased tree is red: the run goes back to GATE on the new base
 
 const st = require('./state')
 const git = require('./git')
 const host = require('./host')
-const Q = require('./queue')
 const pending = require('./pending')
 const work = require('./work')
 const stub = require('./stub')
@@ -33,6 +29,7 @@ function land(main, o) {
     if (o.spec) num = work.briefOf(st.readSpec(o.spec).frontmatter) // read before the merge removes the worktree
     const on = git.currentBranch(main)
     if (on !== trunk) throw refusal(`${main} is on ${on}, not ${trunk} — check out ${trunk} there, then re-run`)
+    git.dropQueueEdits(o.wt) // a lane's copy of specs/queue/ is never read: a stray edit must not stop the rebase
     if (o.spec && st.readSpec(o.spec).frontmatter.status !== 'done') {
       st.writeStatus(o.spec, 'done')
       git.commitAll(o.wt, `chore(spec): ${o.id} done`, { noVerify: true })
@@ -56,17 +53,14 @@ function land(main, o) {
     const rm = host.release(main, o.wt, { deleteBranch: o.branch })
     if (!rm.removed) kept = rm.reason
   }
-  if (o.tick) Q.tick(main, o.tick)
   return { landed: landed || git.headSha(main), kept, ...(num ? finishBrief(main, num) : {}) }
 }
 
-// The brief after its spec merged: a finished brief with no open step leaves the queue (its item ticked, or the fill
-// drops it at this moment); one with open steps stays for the user. An unfinished brief returns nothing.
+// The brief after its spec merged: a finished one with no open step has left the queue; one with open steps stays.
 function finishBrief(main, num) {
   const b = work.readBriefs(main).find((x) => x.num === num)
   if (!b || !['done', 'superseded'].includes(b.status)) return {}
-  const hit = b.open.length ? 0 : Q.tick(main, (i) => i.kind === 'brief' && work.normBrief(i.payload) === num)
-  const closed = hit > 0 || (b.status === 'done' && !b.open.length)
+  const closed = !b.open.length
   return { brief: { num, name: b.name, file: b.file, open: b.open, closed } }
 }
 

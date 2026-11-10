@@ -1,17 +1,14 @@
 'use strict'
 // lib/reap.js — the one process reader (ADR-0049). The Claude session owns an app's life: Claude Code exports
-// CLAUDE_PID to every Bash-tool child, so the driver's app inherits it (and so does a server the model starts by
-// hand); lib/app.js adds SPEC_APP=<worktree realpath>. No supervisor, TTL or registry: the process table is the
-// record, read on entry.
-//   procs() → [{pid, CLAUDE_PID, SPEC_APP}] this uid's processes (env: macOS `ps -E`, Linux /proc/*/environ)
-//   info(pid) → {stat, pgid, started} | null (undefined: no ps)      running(pid)      alive and not a zombie
-//   members(pgids) → the live pids in those process groups (a member ps shows no environment for is found here)
-//   tagOf(pid) → the SPEC_APP one process carries      tagged(wt)   pids carrying SPEC_APP=wt
-//   ownerAlive(pid)   the process is alive and is named `claude`
-//   cwdUnder(pids, dir) → pids whose cwd is dir or below              kill(pids, graceMs = 5000)   TERM, grace, KILL
-//   lineage() → this process and its ancestors, nearest first (never ours to kill)
-//   sweep(root, graceMs = 5000) → n   kills what a dead session left under root: every SPEC_APP process and every
-//                                      untagged one
+// CLAUDE_PID
+// to every Bash-tool child, so the driver's app inherits it (and a server the model starts by hand); lib/app.js adds
+// SPEC_APP=<worktree realpath>. No supervisor, TTL or registry: the process table is the record, read on entry.
+//   procs() → [{pid, CLAUDE_PID, SPEC_APP}] this uid's processes ·
+//   info(pid) → {stat, pgid, started} | null (undefined: no ps) ·
+//     running(pid)
+//   members(pgids) → live pids in those groups · tagOf(pid) · tagged(wt) · ownerAlive(pid) (alive and named `claude`)
+//   cwdUnder(pids, dir) · kill(pids, graceMs = 5000) TERM, grace, KILL · lineage() (this process and its ancestors:
+//   never ours to kill) · sweep(root, graceMs = 5000) → n: kills what a dead session left under root
 
 const fs = require('fs')
 const path = require('path')
@@ -50,7 +47,6 @@ function procs() {
   return out
 }
 
-// The SPEC_APP tag one process carries, or null (a process that is gone carries none).
 function tagOf(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return null
   if (LINUX) {
@@ -84,7 +80,6 @@ function members(pgids) {
   return out
 }
 
-const baseName = (w) => path.basename(String(w || ''))
 // A process that signal 0 reaches is an owner when it is named claude. When ps cannot say (it fails, or prints
 // nothing for a running pid) the owner counts as alive: the sweep never kills on a guess.
 function ownerAlive(pid) {
@@ -94,7 +89,7 @@ function ownerAlive(pid) {
   const [stat, name, cmd] = [q('stat'), q('comm'), q('command')]
   if (!name && !cmd) return true
   if (stat.startsWith('Z')) return false
-  return [name, ...cmd.split(/\s+/).slice(0, 2)].some((w) => /^claude(\.exe)?$/.test(baseName(w)))
+  return [name, ...cmd.split(/\s+/).slice(0, 2)].some((w) => /^claude(\.exe)?$/.test(path.basename(w)))
 }
 
 const tagged = (wt) => { const dir = real(wt); return procs().filter((p) => p.SPEC_APP === dir).map((p) => p.pid) }
@@ -156,4 +151,6 @@ function sweep(root, graceMs = 5000) {
   return kill([...tags, ...here], graceMs)
 }
 
-module.exports = { procs, tagOf, info, running, members, ownerAlive, tagged, cwdUnder, kill, lineage, sweep }
+module.exports = {
+  sleepMs, real, under, signal0, procs, tagOf, info, running, members, ownerAlive, tagged, cwdUnder, kill, lineage,
+  sweep }

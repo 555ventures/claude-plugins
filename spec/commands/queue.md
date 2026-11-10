@@ -9,22 +9,26 @@ puts the item first; `add --type plan|prototype|fix|decide` sets what a prose it
 `add --after <NN|spec>` holds the item until that brief's specs are done or that spec is done) and show its
 output.
 
-**The queue is the file plus the fill.** Agents mainly write the queue and you read it and reorder it. The file holds
-what was placed; every unfinished brief and open ad-hoc spec nobody placed joins the end on every read, worked out
-by `lib/queue.js` and never stored (ADR-0044; the rows are `lib/queue-rows.js`), so `list` shows the same work the status screen shows. A filled
-item has no id (`—`): name it by its brief number or spec path. `move` or `done` on it stores that one item; `done`
-on unfinished work prints `⚠️ <ref> is still open work, so it stays in the list`. `next` prints the real next
+**The queue is two stores plus the fill (ADR-0050).** The items you place are tracked files `specs/queue/<id>.json`
+(version 4; ids read `20261108-a3f9`), written only by `add`, `move` and `done`: each is one `chore(queue): …` commit on
+trunk that refuses (exit 2) with its fix while the main checkout is off trunk, detached or mid-merge, and no script
+pushes or pulls, so push before switching machines and `git pull` brings your other machines' queue. The items a run,
+fanout or prototype queues stay on the machine that made them in `spec-queue.json` in the git dir (`{version: 4, items[],
+holds{}}`); `move` and `done` on one change that file only. Every unfinished brief and open ad-hoc spec nobody placed joins
+the end on every read, worked out by `lib/queue.js` and never stored (ADR-0044; the rows are `lib/queue-rows.js`), so
+`list` shows the same work the status screen shows. A filled item has no id (`—`): name it by its brief number or spec
+path. `move` or `done` on it stores that one item; `done` on unfinished work leaves a tombstone and prints `⚠️ <ref> is
+still open work, so it stays in the list`. `next` prints the real next
 command (a prompt's paste line, else the derivation's top pick as `/spec:run @<spec>` with its `⏳` branches when it
 is blocked) and never a blocked spec while an unblocked one exists. An item whose `--after` gate is unmet is skipped
-by `next` and listed with `⏳ after <target> (<state>)`. When `/spec:run` or `/spec:fanout` merges a brief's last
-spec and the brief's `## Steps outside specs` lists no open `- [ ]` box, the brief closes itself: its item is ticked
-(an unstored brief leaves the fill) and the report says `📌 auto-closed brief NN (<name>) — its last spec merged and
-<file> lists no open step (veto anytime)`. To veto, add an open box and the fill brings it back, or
-`/spec:queue add NN`. With a box still open the brief stays queued and the report warns how many steps are open; an
-in-place run, a superseded last spec or a box ticked after the merge closes nothing, and `done` closes it. `next`
-skips a finished brief (every spec done, or superseded) and `list` ends its row with `✔ specs done — /spec:queue
-done NN` (`✔ specs done, N step(s) open — …` with open steps, `⛔ superseded` for a superseded brief); the status
-screen raises a decide line to close it.
+by `next` and listed with `⏳ after <target> (<state>)`. No driver ticks an item: every close is read from trunk. A spec
+item reads done once its spec is; a brief item once its brief is done or superseded and `## Steps outside specs` lists no
+open `- [ ]` box (an in-place run, a supersede or a box ticked later closes it, an opened box brings it back; a worktree
+landing says `📌 auto-closed brief NN (<name>) — its last spec merged and <file> lists no open step (veto anytime)`); a
+fix or plan item once a commit on trunk ends with `Queue: <id>`, the trailer the fix commit or the lock commit carries.
+The next `add`, `move` or `done` deletes, in its own commit, the files of what trunk reads done. A done brief with a step
+still open stays queued: `next` skips it and `list` ends its row with `✔ specs done, N step(s) open — /spec:queue done NN`
+(`⛔ superseded` for a superseded one); `done` closes it.
 
 `list` rows are `n  id  age  type  text` and end with the flags `🔨 in progress`, `⏳`, `📎 cites done`, `⌛ stale`: the
 type column is 🏃 run, 📝 plan, 🧪 prototype, 🔧 fix or 📌 decide (a plain note has none). `list --json` is

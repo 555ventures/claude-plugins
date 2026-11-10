@@ -1,8 +1,7 @@
 'use strict'
-// lib/briefs.js — the text run.js prints: the builder, reviewer, question, look and rebase briefs, the report, the commit
-// message and the checkpoint line. Pure text from
-// what run.js hands it; nothing here reads or writes a file. A spec and a fix take the same path: a fix's
-// document is lib/spec.js `fixDoc`. No CLI.
+// lib/briefs.js — the text run.js prints: the builder, reviewer, question, look and rebase briefs, the report, the
+// commit message and the checkpoint line. Pure text from what run.js hands it; nothing here reads or writes a file. A
+// spec and a fix take the same path (a fix's document is lib/spec.js `fixDoc`). No CLI.
 //
 // b = {wt, specPath?, doc, cfg, runFile(name), attempt, opus, plugin, rulings[], gate?, review?, fixFor?,
 //      lookReply?, proto?: {pins[], e2eFile, stem, pictures[]}, base, outside[], redCheck?, evidence, asBuilt}
@@ -10,7 +9,7 @@
 const S = require('./spec')
 const { render } = require('./report')
 const { firstRedLine, resolveUrl } = require('./host')
-const { retiredLines } = require('./criteria')
+const { retiredLines, isFix } = require('./criteria')
 const { shq } = require('./driver')
 
 const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
@@ -26,8 +25,6 @@ const assumptions = (doc) => {
   return l.length ? l : ['- none']
 }
 const pinLines = (p) => (p.pins.length ? p.pins.map((x) => `- ${x.id} (${x.kind}): ${x.sentence}`) : ['- none'])
-
-const isFix = (doc) => doc.acs.length === 1 && doc.acs[0].id === 'FIX-1'
 
 // What the build is held to, in the order both agents read it.
 function contract(b, { plan }) {
@@ -107,8 +104,9 @@ function reviewer(b) {
   return { head: `Dispatch ONE \`reviewer\` agent (spec:reviewer, ${b.plugin}/agents/reviewer.md) — model ${seat.model}, effort ${seat.effort}, in ${b.wt}.`, body }
 }
 
-// The three questions a run asks, each in the agent's own words: {kind, q, options}; amend only where a spec can be amended.
-// An unmet Decision (or an Assumption with no options) leads with amend; retry only while Opus has not run, park last.
+// The three questions a run asks, each in the agent's own words: {kind, q, options}; amend only where a spec can be
+// amended. An unmet Decision (or an Assumption with no options) leads with amend; retry only while Opus has not run,
+// park last.
 function escalation(state, amendable) {
   const lock = `with /spec:plan ${state.spec}; the build resumes from its kept work once the amended spec is locked`
   const amend = { label: 'amend', description: `amend the spec ${lock}` }
@@ -156,8 +154,6 @@ function redCheckLine(stdout) {
 }
 
 const rebase = ({ wt, trunk, files }) => `A rebase onto trunk ${trunk} is in progress in ${wt}, conflicting in ${files.join(', ')}: edit each conflicted file to both sides' intent (no markers left), then re-run this driver — it continues the rebase, then gates and reviews the result in this same dispatch. If a resolution cannot keep a Decision, mark \`unmet --decision <id> --why <text>\` instead of deciding.`
-
-// ---- the run's report, commit message and checkpoint line ----------------------------------------------
 
 const secs = (ms) => Math.round(ms / 1000)
 const lookLine = (state) => (state.look ? [`pin tests green · look accepted after ${state.look.rounds} round(s)`] : [])

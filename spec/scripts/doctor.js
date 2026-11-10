@@ -147,10 +147,12 @@ function check(root, { probe = true } = {}) {
     const fixOnly = run.fix && !run.spec // specs/fix/<slug>.run names a symptom, not a spec file
     const symptom = fixOnly ? String(run.fix.symptom).replace(/\s+/g, ' ') : '' // blanks as one: slugOf keys it so
     const what = fixOnly ? `fix "${symptom.slice(0, 60)}"` : rel.replace(/\.run$/, '.md')
-    const cmd = fan ? '/spec:fanout' : fixOnly ? `/spec:fix ${symptom}` : `/spec:run ${what}`
+    // A lane's run resumes through fanout even after the batch file is gone: /spec:run there would start it over.
+    const cmd = fan || run.lane ? '/spec:fanout' : fixOnly ? `/spec:fix ${symptom}` : `/spec:run ${what}`
     if (run.why !== 'amend') return `in flight: ${what} at ${run.step} — ${cmd}`
     const wt = run.worktree ? path.resolve(root, run.worktree) : base // /spec:plan only until the re-lock
-    return resumes(wt, run, readConfig(root).trunk) ? `in flight: ${what} resumes on its amended spec — ${cmd}`
+    const ref = run.inPlace ? run.branch : readConfig(root).trunk // the ref run.js resumes from (refOf)
+    return resumes(wt, run, ref) ? `in flight: ${what} resumes on its amended spec — ${cmd}`
       : `in flight: ${what} waits for its amended spec — /spec:plan ${what}`
   }
   for (const d of walkRuns(path.join(root, 'specs'), [])) {

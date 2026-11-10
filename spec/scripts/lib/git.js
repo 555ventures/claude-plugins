@@ -1,9 +1,7 @@
 'use strict'
-// lib/git.js — thin git wrappers for drivers. No CLI.
-//
-// sh(args, cwd) → stdout (trimmed); throws with git's stderr on non-zero.
-// diff/changedFiles compare the WORKING TREE (tracked edits + untracked, not ignored) to base,
-// through a scratch index, so uncommitted builder work is visible without touching the real index.
+// lib/git.js — thin git wrappers for drivers. No CLI. sh(args, cwd) → stdout (trimmed), throws with git's stderr.
+// diff/changedFiles compare the WORKING TREE to base through a scratch index (builder work visible, real index
+// untouched).
 
 const fs = require('fs')
 const os = require('os')
@@ -26,6 +24,9 @@ const trunk = (config) => (config && config.trunk) || 'main'
 const headSha = (cwd) => sh(['rev-parse', 'HEAD'], cwd)
 const branchExists = (cwd, b) => raw(['rev-parse', '-q', '--verify', 'refs/heads/' + b], cwd).status === 0
 
+const gitDir = (cwd) => {
+  const r = raw(['rev-parse', '--absolute-git-dir'], cwd); return r.status === 0 ? r.stdout.trim() : null
+}
 const real = (p) => { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
 // The checkout's top level (specs/, docs/ and .claude/ live there), or dir itself outside a repo.
 function repoRoot(dir) {
@@ -38,6 +39,21 @@ function worktreeList(root) {
     .filter((l) => l.startsWith('worktree ')).map((l) => real(l.slice(9)))
 }
 
+// Where the user's queue items live (lib/queue-files.js); a run never changes a path under it.
+const QUEUE_DIR = 'specs/queue'
+const isQueue = (f) => f === QUEUE_DIR || f.startsWith(QUEUE_DIR + '/')
+
+// The main checkout of the repo `root` belongs to, root's own sub-path kept.
+const mains = new Map()
+function mainRoot(root) {
+  if (!mains.has(root)) {
+    const pre = raw(['rev-parse', '--show-prefix'], root)
+    if (pre.status !== 0) throw new Error(`git: ${root} is not inside a git repository — run git init`)
+    mains.set(root, path.resolve(worktreeList(root)[0], pre.stdout.trim()))
+  }
+  return mains.get(root)
+}
+
 // Idempotent: an existing worktree at wtPath is returned as is; an existing branch is attached.
 function worktreeAdd(root, wtPath, branch, base) {
   const abs = path.resolve(root, wtPath)
@@ -48,8 +64,7 @@ function worktreeAdd(root, wtPath, branch, base) {
   return abs
 }
 
-// No --force by default: untracked files or edits after the lane's commit are never thrown away
-// silently. A refusal is returned, not thrown, so the caller can finish and say the worktree stays.
+// No --force by default: untracked work is never thrown away; a refusal is returned, not thrown.
 function worktreeRemove(root, wtPath, { deleteBranch, force } = {}) {
   const abs = path.resolve(root, wtPath)
   if (worktreeList(root).includes(real(abs))) {
@@ -61,9 +76,8 @@ function worktreeRemove(root, wtPath, { deleteBranch, force } = {}) {
   return { removed: true }
 }
 
-// The secrets scan (v7 secrets-scan.js, tag spec-v7-final, rules byte for byte): a closed list, no host patterns.
-// A path rule matches the basename and short-circuits that file's content scan; the content scan reads the
-// first 1 MiB, skips a file whose first 8 KiB holds a NUL byte and any line holding `secrets-scan:allow`.
+// The secrets scan (v7 secrets-scan.js, rules byte for byte): a path rule matches the basename; content reads the first
+// 1 MiB, skips a file with a NUL in its first 8 KiB and any line holding `secrets-scan:allow`.
 const PATH_RULES = [
   [/^\.env$/, '.env'],
   [/^\.env\..+$/, '.env.*', (b) => !['.env.example', '.env.sample', '.env.template'].includes(b)],
@@ -123,11 +137,12 @@ function unstageKept(cwd, keep) {
   if (out.length) sh(['--literal-pathspecs', 'reset', '-q', '--', ...out], cwd)
 }
 
-// Stages everything and commits; returns the new sha, or null when there was nothing to commit.
-// `exclude` paths are unstaged after `add -A` (they stay on disk, out of this commit). Unless `noVerify`, the
-// staged names pass the secrets scan; hits commit nothing and come back as {hits: [{path, reason, line}]}.
+// Stages everything and commits; → the new sha, or null when nothing was staged. `exclude` paths stay on disk, out of
+// the commit. Unless `noVerify`, staged names pass the secrets scan; hits commit nothing: {hits: [{path, reason,
+// line}]}.
 function commitAll(cwd, message, { noVerify, exclude = [] } = {}) {
   sh(['add', '-A'], cwd)
+  raw(['reset', '-q', '--', QUEUE_DIR], cwd) // queue items are the owner's commits, never a run's
   if (exclude.length) sh(['--literal-pathspecs', 'reset', '-q', '--', ...exclude], cwd)
   if (raw(['diff', '--cached', '--quiet'], cwd).status === 0) return null
   if (!noVerify) {
@@ -138,16 +153,15 @@ function commitAll(cwd, message, { noVerify, exclude = [] } = {}) {
   return headSha(cwd)
 }
 
-// A lane's safety-net commit: everything but the relay file, hooks skipped. Returns the sha, or null
-// when nothing was staged or a rebase is in progress (a commit would land inside the rebase).
-// With `keep` (an array), those paths and every staged file the secrets scan flags stay on disk, out of the commit.
+// A lane's safety-net commit: all but the relay file and queue edits, hooks skipped; → the sha, or null (nothing
+// staged, or mid-rebase). `keep` paths and what the secrets scan flags stay on disk, out of the commit.
 function commitWip(wt, message, keep) {
   if (rebasing(wt)) return null
-  // Not an :(exclude) pathspec: when a host gitignores the relay file, git add refuses the
-  // pathspec itself ("paths are ignored") and nothing is staged.
+  // Not an :(exclude) pathspec: a host that gitignores the relay file makes git add refuse the pathspec.
   sh(['add', '-A', '--', '.'], wt)
   raw(['rm', '--cached', '-q', '--ignore-unmatch', '--', '.claude/pending-question.json'], wt)
   if (keep) unstageKept(wt, keep)
+  dropQueueEdits(wt) // back to HEAD, not just unstaged: a dirty tracked file would stop the resume's rebase
   if (raw(['diff', '--cached', '--quiet'], wt).status === 0) return null
   sh(['commit', '-q', '--no-verify', '-m', message], wt)
   return headSha(wt)
@@ -168,30 +182,40 @@ function restore(cwd, base, files) {
   }
 }
 
+// Puts specs/queue/ back as HEAD has it: a lane's copy is never read, so a stray edit must not stop its rebase.
+function dropQueueEdits(cwd) {
+  const out = raw(['status', '--porcelain', '-z', '--untracked-files=all', '--', QUEUE_DIR], cwd).stdout
+  const files = out.split('\0').filter(Boolean).map((e) => e.slice(3))
+  if (files.length) restore(cwd, 'HEAD', files)
+}
+
 const dirtyMessage = (root) => `${root} has uncommitted tracked changes — commit or stash them, then re-run`
 
 const conflictsIn = (root) => sh(['diff', '--name-only', '--diff-filter=U'], root).split('\n').filter(Boolean)
 
-// Merges branch into the branch checked out at root. Any failure (a conflict, a hook, ff-only divergence)
-// is backed out with `reset --merge`, so root is never left mid-merge: {merged: false, reason}. A dirty
-// root (tracked changes) or an unknown strategy is refused.
+// Merges branch into the checkout at root; any failure is backed out with `reset --merge`: {merged: false, reason}. A
+// dirty root or an unknown strategy is refused.
 const MERGE = { 'merge-commit': (b, m) => ['merge', '--no-ff', '--no-edit', ...(m ? ['-m', m] : []), b], 'ff-only': (b) => ['merge', '--ff-only', b], squash: (b) => ['merge', '--squash', b] }
 function mergeBack(root, branch, strategy = 'merge-commit', { message } = {}) {
   if (!MERGE[strategy]) throw Object.assign(new Error(`unknown merge strategy '${strategy}' (merge-commit | ff-only | squash)`), { exit: 2 })
   if (sh(['status', '--porcelain', '--untracked-files=no'], root)) throw Object.assign(new Error(dirtyMessage(root)), { exit: 2 })
+  // A squash drops the branch's commits, so their `Queue: <id>` trailers travel in its message.
+  const log = () => raw(['log', '--format=%(trailers:key=Queue,valueonly)', `HEAD..${branch}`], root).stdout
+  const queued = strategy === 'squash' ? log().split('\n').map((l) => l.trim()).filter(Boolean) : []
   let r = raw(MERGE[strategy](branch, message), root)
   if (r.status === 0 && strategy === 'squash') {
     if (raw(['diff', '--cached', '--quiet'], root).status === 0) return { merged: true, sha: headSha(root), empty: true }
-    r = raw(['commit', '-q', '-m', message || `chore(spec): squash ${branch} into ${currentBranch(root)}`], root)
+    const say = message || `chore(spec): squash ${branch} into ${currentBranch(root)}`
+    const trailers = queued.length ? '\n\n' + queued.map((id) => `Queue: ${id}`).join('\n') : ''
+    r = raw(['commit', '-q', '-m', say + trailers], root)
   }
   if (r.status === 0) return { merged: true, sha: headSha(root) }
   raw(['reset', '-q', '--merge'], root)
   return { merged: false, reason: (r.stderr || r.stdout).trim() }
 }
 
-// Rebases the branch checked out in worktree onto trunk. A conflict leaves the rebase in progress
-// in the worktree (for the lane to resolve) and lists the conflicted files. With `autostash`, tracked edits left out of
-// every commit (a kept-out secret) come back once the rebase completes: the amend resume only, never a landing.
+// Rebases the worktree's branch onto trunk; a conflict leaves the rebase in progress and lists the files. `autostash`
+// (the amend resume only, never a landing) brings back tracked edits left out of every commit.
 const rebasing = (wt) => ['rebase-merge', 'rebase-apply'].some((d) => fs.existsSync(path.join(sh(['rev-parse', '--absolute-git-dir'], wt), d)))
 function rebaseOnto(worktree, trunk, { autostash } = {}) {
   const r = raw(['-c', 'core.editor=true', 'rebase', ...(autostash ? ['--autostash'] : []), trunk], worktree)
@@ -203,6 +227,7 @@ function rebaseOnto(worktree, trunk, { autostash } = {}) {
 }
 // Takes the resolved files and continues; `keep` and what the secrets scan flags stay out (unstageKept).
 function continueRebase(wt, keep = []) {
+  dropQueueEdits(wt) // a lane's queue copy is never read: it must not ride into the replayed commit
   sh(['add', '-A'], wt)
   unstageKept(wt, keep)
   return raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt)
@@ -222,12 +247,15 @@ function withWorkingIndex(cwd, fn) {
   }
 }
 
-const diff = (base, cwd) => withWorkingIndex(cwd, (env) => sh(['diff', '--cached', '--no-color', base], cwd, env))
+// What a run changed: queue items are the owner's commits, so neither the patch nor the file list holds them.
+const diff = (base, cwd) => withWorkingIndex(cwd, (env) =>
+  sh(['diff', '--cached', '--no-color', base, '--', '.', ':(exclude)' + QUEUE_DIR], cwd, env))
 const changedFiles = (base, cwd) =>
-  withWorkingIndex(cwd, (env) => sh(['diff', '--cached', '--name-only', base], cwd, env)).split('\n').filter(Boolean)
+  withWorkingIndex(cwd, (env) => sh(['diff', '--cached', '--name-only', base], cwd, env))
+    .split('\n').filter((f) => f && !isQueue(f))
 
 module.exports = {
-  repoRoot, dirtyMessage, real,
+  repoRoot, dirtyMessage, real, gitDir, QUEUE_DIR, mainRoot, scanFile, dropQueueEdits,
   sh, raw, currentBranch, trunk, headSha, branchExists, worktreeList, worktreeAdd, worktreeRemove,
   commitAll, commitWip, lsFiles, restore, mergeBack, conflictsIn, rebaseOnto, continueRebase, rebasing,
   diff, changedFiles,

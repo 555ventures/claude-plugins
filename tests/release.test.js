@@ -224,6 +224,47 @@ test('AC-20261105-15-16 --promote runs only after green staging on the same comm
   assert.strictEqual(green.record(), null)
 })
 
+test('AC-20261108-06-10 --promote promotes a record whose tree is HEAD\'s although HEAD moved by queue commits only, and refuses any other move', () => {
+  const s = setup()
+  assert.strictEqual(s.run('v1').status, 0)
+  fs.mkdirSync(path.join(s.d, 'specs/queue'), { recursive: true }); fs.writeFileSync(path.join(s.d, 'specs/queue/20261108-aaaa.json'), '{}\n')
+  s.g('add', '--', 'specs/queue'); s.g('commit', '-q', '-m', 'chore(queue): add 20261108-aaaa', '--', 'specs/queue') // staging's untracked log stays out
+  fs.writeFileSync(path.join(s.d, 'specs/queue/20261108-aaaa.json'), '{"moved": 1}\n'); s.g('add', '--', 'specs/queue'); s.g('commit', '-q', '-m', 'chore(queue): move 20261108-aaaa', '--', 'specs/queue')
+  const ok = s.run('--promote')
+  assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr)
+  assert.ok(s.log().includes('promote'))
+  const t = setup()
+  assert.strictEqual(t.run('v2').status, 0)
+  fs.mkdirSync(path.join(t.d, 'specs/queue'), { recursive: true }); fs.writeFileSync(path.join(t.d, 'specs/queue/20261108-aaaa.json'), '{}\n')
+  fs.writeFileSync(path.join(t.d, 'new.txt'), 'x\n'); t.g('add', '-A'); t.g('commit', '-q', '-m', 'a queue commit with something else in it')
+  const no = t.run('--promote')
+  assert.strictEqual(no.status, 2); assert.match(no.stderr, /HEAD moved since the green staging run/)
+  assert.ok(!t.log().includes('promote'))
+})
+
+test('AC-20261108-06-10 --promote compares HEAD\'s committed tree: an edit staged uncommitted and committed afterwards refuses, queue commits over a dirty tree promote', () => {
+  const s = setup()
+  fs.writeFileSync(path.join(s.d, 'app.txt'), 'v1\n'); s.g('add', '-A'); s.g('commit', '-q', '-m', 'app')
+  fs.writeFileSync(path.join(s.d, 'app.txt'), 'v2 untested at H\n') // an uncommitted edit while staging runs
+  assert.strictEqual(s.run('v1').status, 0)
+  s.g('commit', '-q', '-am', 'commit the edit after staging')
+  const no = s.run('--promote')
+  assert.strictEqual(no.status, 2, no.stdout + no.stderr)
+  assert.match(no.stderr, /HEAD moved since the green staging run/)
+  assert.ok(!s.log().includes('promote'), 'a commit made after staging promotes nothing')
+
+  const q = setup()
+  fs.writeFileSync(path.join(q.d, 'app.txt'), 'v1\n'); q.g('add', '-A'); q.g('commit', '-q', '-m', 'app')
+  assert.strictEqual(q.run('v2').status, 0)
+  fs.writeFileSync(path.join(q.d, 'app.txt'), 'a local edit, never committed\n')
+  fs.writeFileSync(path.join(q.d, 'scratch.txt'), 'untracked\n')
+  fs.mkdirSync(path.join(q.d, 'specs/queue'), { recursive: true }); fs.writeFileSync(path.join(q.d, 'specs/queue/20261108-bbbb.json'), '{}\n')
+  q.g('add', '--', 'specs/queue'); q.g('commit', '-q', '-m', 'chore(queue): add 20261108-bbbb', '--', 'specs/queue')
+  const ok = q.run('--promote')
+  assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr)
+  assert.ok(q.log().includes('promote'), 'queue-only commits promote with uncommitted and untracked files present')
+})
+
 test('AC-20261105-15-16 every staging run clears the old record first, and a failing promote stages again', () => {
   const h = setup()
   assert.strictEqual(h.run().status, 0)

@@ -1,12 +1,12 @@
 'use strict'
-// lib/next.js — "where is the work": v7's derivation on v8's state. Entries and blockers, the read-only
-// queue overlay (the file plus the fill: ADR-0044), pairwise lane admission (no cap) and the anomaly catalogue.
-// One derivation for the screen, `queue next`, fanout and `--json`. Reads only; the queue file is never written. No CLI.
+// lib/next.js — "where is the work": v7's derivation on v8's state. Entries and blockers, the read-only queue overlay,
+// pairwise lane admission (no cap) and the anomaly catalogue; one derivation for the screen, `queue next`, fanout and
+// `--json`. Reads only. No CLI.
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
 const work = require('./work')
-const { paste, reconcile, fill, VERSION } = require('./queue')
+const { paste, read, fill } = require('./queue')
 const { busy, laneOf } = require('./queue-rows')
 
 const KNOWN = ['draft', 'hardened', 'implementing', 'done']
@@ -17,24 +17,20 @@ const landed = (s) => s === 'done' || s === 'implementing'
 // Directories, a trailing `(state)` and `.md` dropped: the part of a blocker a person recognises.
 const shortBlocker = (b) => b.replace(/\S*\//g, '').replace(/\s*\([^)]*\)$/, '').replace(/\.md$/, '')
 
-// The queue file for the overlay: off in a linked worktree, with no git, or an unusable file (an unparseable one, or one
-// that is not version 3, is reported; `old` marks a version the screen can be told to migrate). No file reads as no items:
-// the fill still places the work. `items` are v8's, as written.
+// The queue for the overlay (both stores plus the fill): off in a linked worktree or with no git; a refusal of
+// lib/queue.js is `parseError`, and `old` (it names /spec:migrate) lets the screen offer the migration.
 function overlay(root) {
   const git = (arg) => { const r = spawnSync('git', ['-C', root, 'rev-parse', arg], { encoding: 'utf8' }); return r.error || r.status !== 0 ? null : r.stdout.trim() }
   const common = git('--git-common-dir'); const dir = git('--git-dir')
   if (common === null || dir === null || path.resolve(root, common) !== path.resolve(root, dir)) return { on: false }
-  const file = path.join(path.resolve(root, common), 'spec-queue.json')
-  if (!fs.existsSync(file)) return { on: true, items: [] }
-  let data
-  try { data = JSON.parse(fs.readFileSync(file, 'utf8')) } catch (e) { return { on: false, parseError: `${file}: ${e.message}` } }
-  if (data && data.version !== VERSION) return { on: false, old: true, parseError: `${file}: version ${data.version} — run /spec:migrate` }
-  if (!data || !Array.isArray(data.items)) return { on: false, parseError: `${file}: missing "items" array` }
-  return { on: true, items: data.items.filter((i) => i && typeof i === 'object') }
+  try { return { on: true, q: read(root) } } catch (e) {
+    if (typeof e.exit !== 'number') throw e
+    return { on: false, parseError: e.message, ...(e.old ? { old: true } : {}) }
+  }
 }
 
-// The queue the screen reads: the stored items reconciled and filled in memory (lib/queue.js). A done row gives no position and no gate.
-const virtualQueue = (root, items) => fill(root, reconcile(root, { items })).items.filter((i) => !i.done)
+// The queue the screen reads: both stores, reconciled and filled in memory. A done row gives no position and no gate.
+const virtualQueue = (root, q) => fill(root, q).items.filter((i) => !i.done)
 
 function derive(root) {
   const all = work.readSpecs(root)
@@ -45,7 +41,6 @@ function derive(root) {
   const anomalies = []
   const note = (a) => anomalies.push({ ...a, audience: a.line ? 'decide' : 'hygiene' })
 
-  // ---- queue overlay (positions, gates, prompt entries) ----
   const ov = overlay(root)
   const posBrief = new Map(); const posSpec = new Map(); const gateBrief = new Map(); const gateSpec = new Map()
   const prompts = []
@@ -55,16 +50,15 @@ function derive(root) {
   }
   if (ov.on) {
     const cache = { briefs }
-    virtualQueue(root, ov.items).forEach((it, i) => {
+    virtualQueue(root, ov.q).forEach((it, i) => {
       const num = it.kind === 'brief' ? work.normBrief(it.payload) : null
       if (num !== null) {
         posBrief.set(num, i)
         if (!byNum.has(num) && !it.done) note({ kind: 'queue-orphan', detail: `spec-queue.json item points at brief ${num}, which has no docs/roadmap/${num}-*.md — remove it with \`/spec:queue done ${num}\`, reorder it away with \`/spec:queue move ${num} <n>\`, or restore the brief file` })
         const own = byNum.get(num)
-        if (own && !it.done && own.status === 'done') {
-          const line = own.open.length
-            ? `Brief ${num} (${own.name}) has every spec done; ${own.open.length} step(s) outside specs are still open.`
-            : `Brief ${num} (${own.name}) has every spec done but is still queued.`
+        if (own && !it.done && own.status === 'done') { // no open step: it reads done and never gets here
+          const line = `Brief ${num} (${own.name}) has every spec done; ${own.open.length} step(s) outside specs ` +
+            'are still open.'
           note({ kind: 'brief-done-queued', detail: line, line, ask: 'Close it?', paste: `/spec:queue done ${num}` })
         }
       } else if (it.kind === 'spec') posSpec.set(it.payload, i)
@@ -75,7 +69,6 @@ function derive(root) {
     })
   }
 
-  // ---- anomalies ----
   for (const s of specs) {
     if (!KNOWN.includes(s.status)) note({ kind: 'unknown-status', detail: `${s.path} has status: ${s.status} — not in the spec lifecycle (${KNOWN.join(' → ')}); fix the frontmatter (to retire a preserved spec: status: superseded)` })
   }
@@ -128,7 +121,6 @@ function derive(root) {
     if (cells.length) note({ kind: 'hand-tracked-status', detail: `docs/roadmap/00-overview.md Sequence table carries hand-tracked status cell(s): ${[...new Set(cells)].join(', ')} — statuses live only in this derivation; strip that column` })
   }
 
-  // ---- entries ----
   const entries = []
   for (const s of specs) {
     if (done(s.status) || !KNOWN.includes(s.status)) continue
@@ -212,7 +204,8 @@ function laneAdmission(entries, serial) {
   return { unblocked, blocked, lanes, laneClash, later: unblocked.slice(1).filter((e) => !lanes.includes(e)) }
 }
 
-// `queue next` for a spec or brief head: v7's `--next` render of the derivation's top pick, `<action> @<path>` and its blockers.
+// `queue next` for a spec or brief head: v7's `--next` render of the derivation's top pick, `<action> @<path>` and its
+// blockers.
 function topLines(d) {
   const top = d.entries[0]
   if (!top) return [`✨ ${d.nothing}`]
@@ -226,4 +219,4 @@ function nothingNextLine(specs, briefs) {
       : 'nothing next — all specs done, no unplanned briefs'
 }
 
-module.exports = { derive, laneAdmission, nothingNextLine, shortBlocker, topLines }
+module.exports = { derive, shortBlocker, topLines }

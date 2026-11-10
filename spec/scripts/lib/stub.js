@@ -1,14 +1,11 @@
 'use strict'
 // lib/stub.js — the one owner of a finished spec's shape on disk (ADR-0046): a done or superseded spec is its
-// frontmatter plus `text: <sha>` and `acs: [ids]`, its title and its `## Goal`; the rest is `git show <sha>:<path>`.
-// No CLI.
-//
-//   isStub(frontmatter)       a `text:` of 7–64 hex
-//   stubOf(text, sha)         the stub of a spec's text (a stub's own stub moves only `text:`)
-//   fullText(cwd, rel, sha)   the text at sha; a sha this clone lacks is a refusal, exit 2
-//   readFull(cwd, rel)        the readSpec shape of the full text, stub or not
-//   sweep(root, {dry})        every tracked, unedited finished spec not yet a stub, in one commit
-//                             → {paths, retired (its `[retired:` tags), sha (null when nothing is committed)}
+// frontmatter
+// plus `text: <sha>` and `acs: [ids]`, its title and its `## Goal`; the rest is `git show <sha>:<path>`. No CLI.
+//   isStub(frontmatter) a `text:` of 7–64 hex · stubOf(text, sha) the stub of a spec's text (a stub's own moves only
+//   `text:`) · fullText(cwd, rel, sha) the text at sha (a sha this clone lacks: refusal, exit 2) · readFull(cwd, rel)
+//   the readSpec shape · sweep(root, {dry}) every tracked, unedited finished spec not yet a stub, in one commit →
+//   {paths, retired, sha}
 
 const fs = require('fs')
 const path = require('path')
@@ -16,7 +13,6 @@ const S = require('./spec')
 const st = require('./state')
 const git = require('./git')
 
-const FM_RE = /^﻿?---\n([\s\S]*?)\n---(?:\n|$)/
 const FINISHED = ['done', 'superseded']
 const CITE = /\(pin (p\d+)\)/g
 const isStub = (fm) => typeof (fm && fm.text) === 'string' && /^[0-9a-f]{7,64}$/.test(fm.text)
@@ -28,7 +24,7 @@ const setKey = (lines, key, value) => (lines.some((l) => l.startsWith(key + ':')
 
 function stubOf(raw, sha) {
   const text = String(raw).replace(/\r\n/g, '\n')
-  const m = FM_RE.exec(text)
+  const m = S.FM_RE.exec(text)
   const fm = m ? m[1].split('\n') : []
   const body = m ? text.slice(m[0].length) : text
   const acs = S.parse(text).acs
@@ -60,14 +56,6 @@ function readFull(cwd, rel) {
   return isStub(doc.frontmatter) ? S.parse(fullText(cwd, rel, doc.frontmatter.text)) : doc
 }
 
-const walk = (dir) => {
-  let ents = []
-  try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return [] }
-  return ents.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).flatMap((e) => {
-    const p = path.join(dir, e.name)
-    return e.isDirectory() ? (e.name.endsWith('.run') ? [] : walk(p)) : e.name.endsWith('.md') ? [p] : []
-  })
-}
 const idOf = (rel) => {
   const m = /(\d{8})\/(\d+)-[^/]+\.md$/.exec(rel)
   return m ? `${m[1]}/${m[2]}` : path.basename(rel, '.md')
@@ -78,7 +66,7 @@ function sweep(root, { dry = false } = {}) {
   const tracked = new Set(git.sh(['ls-files', '-z', '--', 'specs'], root).split('\0'))
   const dirty = new Set(git.sh(['status', '--porcelain', '-z', '--', 'specs'], root).split('\0').map((e) => e.slice(3)))
   const found = []
-  for (const abs of walk(path.join(root, 'specs'))) {
+  for (const abs of st.specFiles(root)) {
     const rel = path.relative(root, abs).split(path.sep).join('/')
     if (!tracked.has(rel) || dirty.has(rel)) continue
     const text = st.readText(abs, '')

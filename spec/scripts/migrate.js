@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 'use strict'
-// migrate.js — v7 host -> v8, and the queue file to its current version (3). node migrate.js [--root <dir>] [--apply] [--json]
-// Without --apply prints the plan. Idempotent: a second --apply finds nothing to do. The only converter of
-// the queue file: lib/queue.js reads version 3 strictly, so text is parsed here, once, and never on read.
+// migrate.js — v7 host -> v8, and the queue file to its current shape. node migrate.js [--root <dir>] [--apply]
+// [--json] Without --apply prints the plan; a second --apply finds nothing to do. The only converter of the queue file
+// (lib/queue.js reads version 4 strictly): a version 1-3 file's open rows and tombstones of unfinished work become
+// tracked files under specs/queue/ with new ids (ADR-0050), in the one migration commit; the local file is left empty
+// at version 4.
 
 const fs = require('fs')
 const path = require('path')
 const git = require('./lib/git')
 const { readJson, writeJson, configPath, gitCommonDir, protoV7, DEFAULTS, CONFIG_KEYS: KEYS } = require('./lib/state')
-const { parse, VERSION } = require('./lib/queue')
+const Q = require('./lib/queue')
+const files = Q.files
 const { normBrief } = require('./lib/work')
+const { parse, VERSION } = Q
 const { detectTestCommand, resolveUrl } = require('./lib/host')
 const { render } = require('./lib/report')
 const { ensureGitignore, IGNORE } = require('./init')
+const { sentenceOf } = require('./prototype')
 
 const ARCH = 'docs/archive/v7'
 const MERGE = ['merge-commit', 'ff-only', 'squash'] // v7's `derived` and `rebase-ff` have no v8 meaning: git.mergeBack throws on them
@@ -32,16 +37,15 @@ const SIDECAR = /\.(build|review|design)$/
 const exists = (p) => { try { fs.lstatSync(p); return true } catch { return false } }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
-function walk(dir, fn, depth = 0) {
+function walk(dir, fn) {
   let ents = []
   try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
   for (const e of ents) {
     const p = path.join(dir, e.name)
-    if (e.isDirectory()) { if (!fn(p, true)) walk(p, fn, depth + 1) } else fn(p, false)
+    if (e.isDirectory()) { if (!fn(p, true)) walk(p, fn) } else fn(p, false)
   }
 }
 
-// ---- config ---------------------------------------------------------------------------------
 function trimConfig(root, cfg, notes = []) {
   const out = {}
   const pol = cfg.policy || {}
@@ -50,11 +54,9 @@ function trimConfig(root, cfg, notes = []) {
   const seats = { ...(cfg.seats || {}) }
   if (seat(models.workers) && !seats.builder) seats.builder = seat(models.workers)
   if (seat(models.reviewer) && !seats.reviewer) seats.reviewer = seat(models.reviewer)
-  // v8's testCommand is the whole gate. A v7 gateCommand without {placeholders} already is one
-  // (typecheck, lint, build, tests); a thin testCommand beside it would silently drop those. v7
-  // appended {testDirs} / {scopeDirs} / {testFiles} to the gate as paths, so removing them leaves the
-  // unscoped gate. A v7 typecheckCommand is often per-file (needs an argument), so it is prepended
-  // only to a plain test command, never to a chosen gate.
+  // v8's testCommand is the whole gate: a v7 gateCommand without {placeholders} already is one, so it wins, its
+  // {testDirs} / {scopeDirs} / {testFiles} removed (v8 does not scope). A per-file typecheckCommand is prepended only
+  // to a plain test command.
   const gate = typeof cfg.gateCommand === 'string' ? cfg.gateCommand.replace(/\s*\{(testDirs|scopeDirs|testFiles)\}/g, '').trim() || null : null
   let test = gate || cfg.testCommand || detectTestCommand(root)
   const post = cfg.postGateCommand
@@ -76,8 +78,8 @@ function trimConfig(root, cfg, notes = []) {
   return out
 }
 
-// The v8 prototype block: overlay, e2eList, dbCreate and dbDestroy are gone, e2eRun is e2eCommand, and what moved to
-// `runtime` (bootCommand, url, publicUrl) is left there.
+// The v8 prototype block: overlay, e2eList, dbCreate and dbDestroy are gone, e2eRun is e2eCommand; the keys that moved
+// to `runtime` stay there.
 function trimPrototype(proto) {
   const { overlay, e2eList, dbCreate, dbDestroy, e2eRun, bootCommand, url, publicUrl, ...rest } = proto
   const out = { ...rest }
@@ -85,8 +87,8 @@ function trimPrototype(proto) {
   return out
 }
 
-// The v8 runtime block: the host's runtime keys as it wrote them; the `prototype` ones that moved fill what `runtime`
-// lacks (a key `runtime` already holds wins, and the plan says the other was dropped). Other keys are dropped, listed.
+// The v8 runtime block: the host's runtime keys as written; the moved `prototype` ones fill what `runtime` lacks
+// (`runtime` wins, dropped ones are listed).
 function trimRuntime(proto, runtime, notes) {
   const rt = runtime && typeof runtime === 'object' && !Array.isArray(runtime) ? runtime : {}
   const old = proto && typeof proto === 'object' ? proto : {}
@@ -99,7 +101,7 @@ function trimRuntime(proto, runtime, notes) {
     if (old[k] === undefined) continue
     if (out[k] === undefined) out[k] = old[k]; else notes.push(`prototype.${k} dropped — runtime.${k} already holds it`)
   }
-  // A command readyCheck must read $PORT exactly when the url is a {port} one: otherwise it checks the wrong thing.
+  // A command readyCheck must read $PORT exactly when the url is a {port} one.
   const reads = typeof out.readyCheck === 'string' && /\$\{?PORT\b/.test(out.readyCheck)
   const templated = /\{port\}/.test(out.url === undefined ? DEFAULTS.runtime.url : out.url)
   if (typeof out.readyCheck === 'string' && reads !== templated) {
@@ -112,8 +114,6 @@ function trimRuntime(proto, runtime, notes) {
   return out
 }
 
-// ---- prototype records (v7 → v8) -----------------------------------------------------------------
-const sentenceOf = (p) => `On ${p.route}${p.given ? `, given ${p.given}` : ''}: ${String(p.note).trim()}`
 const isV7Doc = (o) => o && typeof o === 'object' && !Array.isArray(o) && 'schemaVersion' in o
 
 // One record's three files, rewritten in place. Files the folder holds besides them are left alone.
@@ -152,7 +152,6 @@ function migrateProto(root, rel, urlTemplate) {
   }
 }
 
-// ---- queue ----------------------------------------------------------------------------------
 function isoAdded(v) {
   let t = NaN
   if (typeof v === 'number') t = v < 1e11 ? v * 1000 : v
@@ -168,8 +167,8 @@ function afterOf(a) {
   return null
 }
 
-// Every stored shape (versions 1 and 2, and the mixed files real repos hold) to version 3: `lane` is `type`,
-// `ticked` is `done`, a spec item keeps the `payload` it already carries, a prompt goes through `parse`.
+// Every stored shape (versions 1 to 3 and the mixed files real repos hold) to version 3's rows: `lane` is `type`,
+// `ticked` is `done`.
 function convertQueue(root, q) {
   const lost = []
   const briefFile = (n) => {
@@ -183,18 +182,47 @@ function convertQueue(root, q) {
     const kind = !ledger && (it.kind === 'brief' || it.kind === 'spec') ? it.kind : 'prompt'
     const type = [it.type, it.lane].find((t) => TYPES.includes(t))
     const body = kind === 'prompt' ? parse(payload, type) : { payload }
-    const o = { id: it.id, kind, ...(body.type ? { type: body.type } : {}), ...(body.spec ? { spec: body.spec } : {}), payload: body.payload }
+    const spec = body.spec || (kind === 'prompt' && typeof it.spec === 'string' && it.spec) // a v3 row's bound spec
+    const o = { id: it.id, kind, ...(body.type && { type: body.type }), ...(spec && { spec }), payload: body.payload }
+    if (it.advisories) o.advisories = true
     o.added = it.added === undefined && kind === 'brief' ? undefined : isoAdded(it.added)
     if (it.ticked || it.done) o.done = typeof it.done === 'string' && Number.isFinite(Date.parse(it.done)) ? it.done : new Date().toISOString()
     const after = afterOf(it.after)
     if (after) o.after = after
     return o
   })
-  return { queue: { version: VERSION, seq: q.seq || 0, items }, lost }
+  return { queue: { version: 3, seq: q.seq || 0, items }, lost }
 }
 
-// An already-migrated (v2) queue lacks the `type`/`after` v7 held; the newest spec-v7-backup queue that
-// carries any of them is the only copy. One fill per field a same-id v2 item lacks.
+// The rows of an old queue file, the v7 fills applied.
+function queueRows(root, file, fills) {
+  const q = readJson(file, {})
+  for (const f of fills) {
+    const it = (q.items || []).find((i) => i.id === f.id)
+    if (it && it[f.field] === undefined) it[f.field] = f.value
+  }
+  return convertQueue(root, q).queue.items
+}
+
+// The tracked files an old file becomes: every open row (a duplicate of an open committed item is skipped) and
+// tombstone of unfinished work, in stored order, ranked after the committed items, every field kept, an id issued from
+// `added`.
+function trackedRows(root, rows) {
+  const main = git.mainRoot(root); const have = files.readAll(main); const fin = Q.finisher(root)
+  const ranks = have.map((i) => i.rank).filter((r) => r !== undefined).sort(files.rank.cmp)
+  let rank = ranks[ranks.length - 1]; const used = new Set(); const out = []
+  for (const row of rows) {
+    const { id: from, ...rest } = row
+    if (row.done ? row.kind === 'prompt' || fin(row) : have.some((h) => !h.done && Q.same(h, row))) continue
+    const id = files.newId(main, row.added ? new Date(row.added) : new Date(), used); used.add(id)
+    if (!row.done) rank = files.rank.after(rank)
+    out.push({ from, file: { id, ...(row.done ? {} : { rank }), ...rest } })
+  }
+  return out
+}
+
+// A v2 queue lacks the `type`/`after` v7 held; the newest spec-v7-backup queue carrying any is the only copy: one fill
+// per field.
 function queueFills(common, q) {
   const dir = path.join(common, 'spec-v7-backup')
   let names = []
@@ -216,7 +244,6 @@ function queueFills(common, q) {
   return []
 }
 
-// ---- plan -----------------------------------------------------------------------------------
 function section(text, re) {
   const lines = text.split('\n')
   const s = lines.findIndex((l) => re.test(l))
@@ -256,6 +283,7 @@ function plan(root) {
   const q = readJson(qf, null)
   let lost = []
   let fills = []
+  const badQueue = exists(qf) && q === null
   if (q && q.version !== VERSION) {
     lost = convertQueue(root, q).lost
     // A version 2 file lacks the `type`/`after` v7 held: the fills run first, on the raw file, then the conversion.
@@ -263,7 +291,7 @@ function plan(root) {
       fills = queueFills(common, q)
       if (fills.length) add('queue-fields', qf, null, `${fills.length} fills`)
     }
-    add('queue', qf, null, `${(q.items || []).length} items -> v${VERSION}`)
+    add('queue', qf, null, `${(q.items || []).length} rows -> specs/queue/`)
   }
   // prototype records v8's readers would refuse
   const rtUrl = cfg && cfg.runtime && cfg.runtime.url
@@ -306,8 +334,7 @@ function plan(root) {
   // git dir leftovers
   const privs = [common]
   if (exists(path.join(common, 'worktrees'))) for (const n of fs.readdirSync(path.join(common, 'worktrees'))) privs.push(path.join(common, 'worktrees', n))
-  // v8's fan-out state shares v7's file name. A v8 record ({step, batch[]}) is never a leftover:
-  // with lanes out, the migration refuses; idle, the file is left to the driver.
+  // v8's fan-out state shares v7's file name: never a leftover; with lanes out the migration refuses.
   const fan = readJson(path.join(common, 'spec-fanout.json'), null)
   const v8Fan = fan && typeof fan.step === 'string' && Array.isArray(fan.batch) ? fan : null
   const liveFanout = !!(v8Fan && v8Fan.batch.some((l) => l && l.status !== 'merged' && l.status !== 'dismissed'))
@@ -323,11 +350,12 @@ function plan(root) {
   try {
     if (/spec-runs\.jsonl merge=union/.test(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8'))) add('gitattributes', '.gitattributes')
   } catch { /* none */ }
-  // A v7 migration is pending only while some v7 artifact is: a version 2 queue file, a config with no
-  // v7-only key, the gitignore and prototype records are v8's own conversions. spec-fanout.json and
-  // spec-run-cache keep v7's names in v8, so they are v7 leftovers only beside such an artifact, never on their own.
+  // A v7 migration is pending only while some v7 artifact is (the queue, config, gitignore and prototype records are
+  // v8's own conversions); spec-fanout.json and spec-run-cache keep v7's names, so they are leftovers only beside such
+  // an artifact.
   const v7Config = !!cfg && V7_CONFIG.some((k) => k in cfg)
-  const v7Pending = () => v7Config || ops.some((o) => !['config', 'gitignore', 'queue-fields', 'prototype'].includes(o.op) && !(o.op === 'queue' && q.version === 2))
+  const own = ['config', 'gitignore', 'queue-fields', 'prototype', 'queue']
+  const v7Pending = () => v7Config || ops.some((o) => !own.includes(o.op))
   if (v7Pending()) {
     for (const d of privs) if (exists(path.join(d, 'spec-fanout.json')) && !(d === common && v8Fan)) add('delete', path.join(d, 'spec-fanout.json'))
     if (exists(path.join(common, 'spec-run-cache')) && !v8Fan) add('delete', path.join(common, 'spec-run-cache'))
@@ -340,16 +368,16 @@ function plan(root) {
   const br = git.raw(['for-each-ref', '--format=%(refname:short)', 'refs/heads/worktree-agent-*', 'refs/heads/plan/*', 'refs/heads/fix/*'], root).stdout.split('\n').filter(Boolean)
   for (const b of br) listed.push('branch ' + b)
   const warns = [...notes]
+  if (badQueue) warns.push(`queue file ${qf} is not valid JSON — repair or remove it, then re-run`)
   const pc = (cfg && cfg.prototype) || {}
   if (/PROTO_URL/.test(String(pc.e2eRun || '') + String(pc.e2eCommand || ''))) warns.push('prototype.e2eCommand reads PROTO_URL — the run sets APP_URL')
   if (/\{(width|height)\}/.test(String(pc.picture || ''))) warns.push('prototype.picture uses {width}/{height} — v8 fills only {url} and {out}')
   if (git.raw(['ls-files', '--', '.claude/settings.local.json'], root).stdout.trim()) warns.push('.claude/settings.local.json is tracked and may hold a token — run: git rm --cached .claude/settings.local.json')
   const wts = git.worktreeList(root).slice(1).filter((w) => path.relative(fs.realpathSync(root), w).startsWith('..'))
   if (wts.length) warns.push('git worktree entries outside this repo (copied repo?) — never touched: ' + wts.join('; '))
-  return { ops, dropped, lost, listed, owned, warns, testCommand, fills, liveFanout, protoUrl }
+  return { ops, dropped, lost, listed, owned, warns, testCommand, fills, liveFanout, protoUrl, badQueue }
 }
 
-// ---- apply ----------------------------------------------------------------------------------
 function archive(root, src, dst, warns) {
   const s = path.resolve(root, src), d = path.resolve(root, dst)
   if (exists(d)) { warns.push(`not moved, destination exists: ${dst}`); return false }
@@ -368,8 +396,8 @@ function commit(root, warns) {
   return { sha: git.headSha(root) }
 }
 
-// Copies every git-dir file the apply deletes or rewrites, and the refs/spec-review refs (refs.txt,
-// restorable with `git update-ref <ref> <sha>`), to <git-common-dir>/spec-v7-backup/<ISO time>/.
+// Copies every git-dir file the apply deletes or rewrites, and the refs/spec-review refs (refs.txt), to <git-common-
+// dir>/spec-v7-backup/<ISO time>/.
 function backup(root, p) {
   const common = gitCommonDir(root)
   const files = p.ops.filter((o) => o.op !== 'ref' && path.relative(common, path.resolve(root, o.path)).match(/^(?!\.\.)./))
@@ -382,19 +410,20 @@ function backup(root, p) {
   return dir
 }
 
-function apply(root, p) {
+function apply(root, p, tracked) {
   const warns = []
   let skipped = 0
   for (const o of p.ops) {
     const abs = path.resolve(root, o.path)
     if (o.op === 'tag') git.sh(['tag', 'spec-v7-final'], root)
     else if (o.op === 'config') writeJson(abs, trimConfig(root, readJson(abs, {})))
-    else if (o.op === 'queue') writeJson(abs, convertQueue(root, readJson(abs, {})).queue)
-    else if (o.op === 'queue-fields') {
-      const q = readJson(abs, {})
-      for (const f of p.fills) { const it = (q.items || []).find((i) => i.id === f.id); if (it && it[f.field] === undefined) it[f.field] = f.value }
-      writeJson(abs, q)
-    } else if (o.op === 'delete') fs.rmSync(abs, { recursive: true, force: true })
+    else if (o.op === 'queue') {
+      for (const { file } of tracked) {
+        writeJson(path.join(root, git.QUEUE_DIR, file.id + '.json'), { version: VERSION, ...file })
+      }
+      writeJson(abs, { version: VERSION, items: [], holds: {} })
+    }
+    else if (o.op === 'delete') fs.rmSync(abs, { recursive: true, force: true })
     else if (o.op === 'archive') { if (!archive(root, o.path, o.to, warns)) skipped++ }
     else if (o.op === 'extract') {
       const text = fs.readFileSync(abs, 'utf8')
@@ -412,35 +441,65 @@ function apply(root, p) {
   return { warns, skipped }
 }
 
+const refusal = (message) => Object.assign(new Error(message), { exit: 2 })
+
+// What --apply checks before it changes anything (refusals, exit 2); → the tracked files {from, file} the queue
+// becomes: the main checkout on trunk, no secret in a row.
+function preflight(root, p) {
+  if (p.liveFanout) {
+    const f = path.join(gitCommonDir(root), 'spec-fanout.json')
+    throw refusal(`refusing --apply while a fan-out is in flight (${f}) — finish or dismiss its lanes, then re-run`)
+  }
+  if (p.badQueue) throw refusal(p.warns.find((w) => /not valid JSON/.test(w)))
+  const dirty = p.ops.length ? git.raw(['status', '--porcelain'], root).stdout.split('\n').filter(Boolean) : []
+  if (dirty.length) {
+    const list = dirty.map((l) => '  ' + l).join('\n')
+    throw refusal(`refusing --apply on a dirty tree — commit or stash first (the commit is the migration's):\n${list}`)
+  }
+  const op = p.ops.find((o) => o.op === 'queue')
+  if (!op) return []
+  if (!Q.isMain(root)) throw refusal(`refusing --apply in a linked worktree — run it in ${git.mainRoot(root)}`)
+  const bad = files.stateOf(root)
+  if (bad) throw refusal(`${bad.state} — ${bad.remedy}`)
+  const tracked = trackedRows(root, queueRows(root, path.resolve(root, op.path), p.fills))
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'spec-migrate-'))
+  for (const { file } of tracked) fs.writeFileSync(path.join(tmp, file.id), JSON.stringify(file))
+  const hit = tracked.flatMap(({ file }) => git.scanFile(tmp, file.id))[0]
+  fs.rmSync(tmp, { recursive: true, force: true })
+  if (hit) throw refusal(`a queue row matches the secrets scan (${hit.reason}) — take it out of the row, then re-run`)
+  return tracked
+}
+
 function main(argv) {
   const i = argv.indexOf('--root')
   const root = i >= 0 ? path.resolve(argv[i + 1]) : process.cwd()
   const doApply = argv.includes('--apply')
   const p = plan(root)
-  if (doApply && p.liveFanout) {
-    process.stderr.write(`migrate: refusing --apply while a fan-out is in flight (${path.join(gitCommonDir(root), 'spec-fanout.json')}) — finish or dismiss its lanes, then re-run\n`)
+  let tracked = []
+  try { tracked = doApply ? preflight(root, p) : [] } catch (e) {
+    if (e.exit !== 2) throw e
+    process.stderr.write(`migrate: ${e.message}\n`)
     return 2
   }
-  if (doApply && p.ops.length) {
-    const dirty = git.raw(['status', '--porcelain'], root).stdout.split('\n').filter(Boolean)
-    if (dirty.length) {
-      process.stderr.write(`migrate: refusing --apply on a dirty tree — commit or stash first so the migration commit holds only migration changes:\n${dirty.map((l) => '  ' + l).join('\n')}\n`)
-      return 2
-    }
-  }
   const saved = doApply && p.ops.length ? backup(root, p) : null
-  const { warns: applyWarns, skipped } = doApply ? apply(root, p) : { warns: [], skipped: 0 }
+  const { warns: applyWarns, skipped } = doApply ? apply(root, p, tracked) : { warns: [], skipped: 0 }
   const { sha, failed } = doApply && p.ops.length ? commit(root, applyWarns) : { sha: null }
   const done = p.ops.length - skipped
   const counts = {}
   for (const o of p.ops) counts[o.op] = (counts[o.op] || 0) + 1
-  if (argv.includes('--json')) { process.stdout.write(JSON.stringify({ applied: doApply, commit: sha, backup: saved, counts, ...p, warns: [...p.warns, ...applyWarns] }) + '\n'); return 0 }
+  const queued = tracked.map((t) => ({ from: t.from, to: t.file.id }))
+  if (argv.includes('--json')) {
+    const warns = [...p.warns, ...applyWarns]
+    const out = { applied: doApply, commit: sha, backup: saved, counts, queued, ...p, warns }
+    process.stdout.write(JSON.stringify(out) + '\n')
+    return 0
+  }
   const bullets = Object.entries(counts).map(([k, n]) => `${LABEL[k] || k}: ${n}`)
   if (sha) bullets.push(`commit ${sha}: chore(spec): migrate v7 → v8`)
   if (saved) bullets.push(`git-dir backup: ${saved}`)
   if (!doApply) bullets.push(...p.ops.map((o) => (o.op === 'prototype' ? `prototype ${o.note}` : `${o.op} ${o.path}${o.to ? ' -> ' + o.to : ''}${o.op === 'queue-fields' ? ` (${o.note})` : ''}`)))
   else bullets.push(...p.ops.filter((o) => o.op === 'prototype').map((o) => `prototype ${o.note}`))
-  bullets.push(...p.fills.map((f) => '  ' + f.text))
+  bullets.push(...p.fills.map((f) => '  ' + f.text), ...queued.map((t) => `${t.from} → ${t.to}`))
   const warns = [...p.warns, ...applyWarns]
   if (p.dropped.length) warns.push('dropped config keys: ' + p.dropped.join(', '))
   if (p.testCommand) warns.push(`testCommand: ${p.testCommand}`)

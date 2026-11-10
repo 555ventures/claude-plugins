@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 'use strict'
-// prototype.js — /spec:prototype driver. A throwaway worktree on proto/<stem> carries a running app;
-// the user argues with it in chat round after round, the session records each ruling as a pin
-// sentence, and a literal `approve` plus the user's yes on the sentences makes
-// design/prototypes/<stem>/contract.json and a queued /spec:plan.
-//
+// prototype.js — /spec:prototype driver. A throwaway worktree on proto/<stem> carries a running app; the user
+// argues with
+// it in chat round after round, the session records each ruling as a pin sentence, and a literal `approve` plus the
+// user's yes makes design/prototypes/<stem>/contract.json and a queued /spec:plan.
 //   node prototype.js <idea words | docs/roadmap/NN-*.md | stem> [--stem <name>] [--mark <verb>]
 //   node prototype.js <stem> pin --kind behaviour|look --route </route> [--given "<precondition>"] --note "<note>"
 //   node prototype.js <stem> drop pN --why "<reason>"
-//
-// States OPEN → ROUND (×N) → APPROVED → CONTRACTED → CLOSED. Marks: opened, round-done, approved,
-// contracted --confirmed, closed [--force]. State: design/prototypes/<stem>/status.json (marks, rounds,
-// handled pin ids, branch, worktree, app {pid, …}, appPort, url); pins.json is the pin list (a plain array);
-// contract.json is written and the stem's dir committed on trunk at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
+// States OPEN → ROUND (×N) → APPROVED → CONTRACTED → CLOSED. Marks: opened, round-done, approved, contracted
+// --confirmed, closed [--force]. State: design/prototypes/<stem>/status.json; pins.json is the pin list; contract.json
+// is written and the stem's dir committed on trunk at `contracted`. Exit: 0 ok · 1 error · 2 refusal.
 
 const fs = require('fs')
 const path = require('path')
@@ -41,8 +38,6 @@ const copy = (o) => JSON.parse(JSON.stringify(o))
 // Fields that live only for the invocation that set them: the report reads them, status.json never holds them.
 const TRANSIENT = ['closeWarn', 'removed', 'discarded', 'pictureWarns', 'appError']
 
-// ---- input: brief path | existing stem | idea words ---------------------------------------
-
 function resolveStem(ctx) {
   const arg = ctx.arg
   let stem, brief = null, auto = false
@@ -60,8 +55,6 @@ function resolveStem(ctx) {
   if (!STEM_RE.test(stem)) refuse(`'${stem}' is not a usable stem — pass --stem <lowercase-name>`)
   return { stem, brief, auto, idea: brief || fs.existsSync(statusFile(ctx.root, stem)) ? null : arg }
 }
-
-// ---- the driver ---------------------------------------------------------------------------
 
 function load(ctx) {
   const words = ctx.arg
@@ -249,12 +242,12 @@ function derive(s, ctx) {
   }
 }
 
-// ---- marks --------------------------------------------------------------------------------
-
 const onTrunk = (ctx, then) => {
   const trunk = git.trunk(ctx.config)
   const on = git.raw(['symbolic-ref', '--short', 'HEAD'], ctx.root).stdout.trim()
-  if (on !== trunk) refuse(`${ctx.root} is on ${on || 'a detached HEAD'}, not ${trunk} — check out ${trunk} there, then mark ${then}`)
+  if (on !== trunk) {
+    refuse(`${ctx.root} is on ${on || 'a detached HEAD'}, not ${trunk} — check out ${trunk} there, then ${then}`)
+  }
 }
 
 // Commits the stem's dir on trunk; a rejection (a hook) unstages and returns git's message.
@@ -321,7 +314,7 @@ const steps = {
     if (undeclared(ctx.config).some((k) => PAIR.includes(k))) {
       refuse('pin tests need prototype.e2eFile and prototype.e2eCommand — set them, then re-mark')
     }
-    onTrunk(ctx, 'contracted')
+    onTrunk(ctx, 'mark contracted')
     const pins = pinsOf(ctx)
     if (!active(pins).length) refuse('nothing to contract — drop was the last word')
     const rec = ({ id, kind, route, given, note, round, status, why }) => ({
@@ -342,7 +335,7 @@ const steps = {
     Q.add(ctx.root, { payload: contractPath(ctx.stem), type: 'plan' })
   },
   closed(s, flags, ctx) {
-    onTrunk(ctx, 'closed')
+    onTrunk(ctx, 'mark closed')
     for (const c of state.specsCiting(ctx.root, ctx.stem)) {
       if (state.liveRun(ctx.root, c.rel)) refuse(`${c.rel} is being run from this prototype's contract — let it finish, then mark closed`)
     }
@@ -386,11 +379,9 @@ const steps = {
 }
 
 const driver = makeDriver({
-  name: 'prototype', specArg: 'idea words | docs/roadmap/NN-*.md | stem', load, save, derive, steps,
+  name: 'prototype', words: true, specArg: 'idea words | docs/roadmap/NN-*.md | stem', load, save, derive, steps,
   script: __filename,
 })
-
-// ---- pin and drop: the session writes down each ruling -----------------------------------------
 
 function existing(a) {
   const stem = a.pos[0]
@@ -434,18 +425,14 @@ function dropCmd(a) {
   state.writeProto(a.root, stem, { pins: nextPins })
   if (ph === 'CONTRACTED' && contract) {
     const ctx = { root: a.root, stem, config }
-    const trunk = git.trunk(config)
-    const on = git.raw(['symbolic-ref', '--short', 'HEAD'], a.root).stdout.trim()
     const undo = () => state.writeProto(a.root, stem, { pins, contract })
-    if (on !== trunk) { undo(); refuse(`${a.root} is on ${on || 'a detached HEAD'}, not ${trunk} — check out ${trunk} there, then drop ${id}`) }
+    try { onTrunk(ctx, 'drop ' + id) } catch (e) { undo(); throw e }
     state.writeProto(a.root, stem, { contract: { ...contract, pins: contract.pins.map((p) => (p.id === id ? { ...p, status: 'dropped', why: why.trim() } : p)) } })
     const bad = commitDir(ctx, `chore(proto): drop ${id} — ${why.trim()}`)
     if (bad) { undo(); refuse(`the drop commit was rejected — ${bad}`) }
   }
   writeOut(1, `🗑️ ${id} dropped — ${why.trim()}\n`)
 }
-
-// ---- entry ---------------------------------------------------------------------------------
 
 function main(argv) {
   try {
@@ -464,14 +451,7 @@ function main(argv) {
       refuse(`${given} belong to a pin or drop line, and '${a.pos.join(' ')}' is neither — ` +
         `known prototypes: ${stems.join(', ') || 'none'}; copy the pin or drop line the step printed`)
     }
-    // `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
-    const joined = a.pos.join(' ')
-    const out = [joined, '--root', a.root].filter(Boolean)
-    if (a.mark) out.push('--mark', a.mark)
-    if (a.state) out.push('--state')
-    if (a.json) out.push('--json')
-    for (const [k, v] of Object.entries(a.flags)) out.push('--' + k, ...(v === true ? [] : [v]))
-    return driver(out)
+    return driver(argv) // `$ARGUMENTS` arrives unquoted: `words` rejoins the idea words
   } catch (e) {
     writeOut(2, `prototype: ${e.message}\n`)
     return typeof e.exit === 'number' ? e.exit : 1
@@ -482,4 +462,4 @@ if (require.main === module) {
   const code = main(process.argv.slice(2))
   if (code !== undefined) process.exitCode = code
 }
-module.exports = { main }
+module.exports = { main, sentenceOf }

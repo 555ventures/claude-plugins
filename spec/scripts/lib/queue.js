@@ -1,50 +1,34 @@
 'use strict'
-// lib/queue.js — the one owner of the session queue: the file, its version, the item shape, the type
-// list, creation, dedupe, ticking, reconcile, the fill (unfinished briefs and open ad-hoc specs, worked out on
-// every read and never stored), the paste line and the brief helpers groom shares. No CLI. Typed text is parsed
-// once, at the door (`add`, and /spec:migrate); a reader trusts what it reads. No other script touches items.
-// The file holds what was placed, by a user or an agent; readers derive the rest (ADR-0044).
-//
-// File: <git-common-dir>/spec-queue.json = {version: 3, seq, items[]}.
-// Item: {id, kind: spec|brief|prompt, payload, added, done?, type?, spec?, after?, advisories?}
-//   type   only on a prompt: plan | prototype | fix | decide; none = a plain note. The only carrier of a prompt's command.
-//   spec   only on type fix: the root-relative specs/…md the fix is bound to; absent = a spec-less fix.
-//   advisories  only on a fix queued for a run's advisories: the run working it queues none of its own.
-//   payload is bare text (a spec path, a brief path, the words); never a `/spec:<type> ` prefix.
+// lib/queue.js — the one owner of the session queue: its two stores, the item shape, add, move, done, the closes
+// worked out on read, the fill (unfinished briefs and open ad-hoc specs, derived on every read, not stored), the paste
+// line and the brief helpers groom shares. No CLI. Typed text is parsed once, at the door (`add`, /spec:migrate).
+// Tracked store: specs/queue/<id>.json in the main checkout (lib/queue-files.js), the items only /spec:queue
+// add|move|done place, one trunk commit each. Local store: <git-common-dir>/spec-queue.json = {version: 4, items[],
+// holds{}}, the items a driver places; `holds[id]` is a driver's `after` on a tracked item. No driver writes a tracked
+// path or ticks (ADR-0050). Item: {id: YYYYMMDD-xxxx, rank, kind: spec|brief|prompt, payload, added, done?, type?,
+// spec?, after?, advisories?}; rank is a decimal string over both stores (none on a tombstone: the user's `done`).
 const fs = require('fs')
 const path = require('path')
 const st = require('./state')
+const git = require('./git')
 const work = require('./work')
-
-const VERSION = 3
+const qf = require('./queue-files')
+const VERSION = 4
 const TYPES = ['plan', 'prototype', 'fix', 'decide']
 const CMD_TYPES = ['plan', 'prototype', 'fix']
 const BRIEF_RE = /^(?:docs\/roadmap\/)?(\d+[a-z]?)(?:-[^/]*\.md)?$/
 const PREFIX_RE = /^\/spec:(plan|prototype|fix) ([\s\S]+)$/
 const BOUND_RE = /^(specs\/\S+\.md)(?: — (.+))?$/
-
-const queuePath = (root) => path.join(st.gitCommonDir(root), 'spec-queue.json')
-const refuse = (message) => Object.assign(new Error(message), { exit: 2 })
-
-// A brief is `NN[a-z]` or `docs/roadmap/NN…-…`; `3` and `2026` are prose. Refs (`3`, `07`) are BRIEF_RE's business.
-function kindOf(payload) {
-  if (/^specs\/.*\.md$/.test(payload)) return 'spec'
-  return /^\d{2}[a-z]?$/.test(payload) || /^docs\/roadmap\/\d+[a-z]?-/.test(payload) ? 'brief' : 'prompt'
-}
-
-// A brief number names the brief item first (`done 02` closes brief 02, never the 2nd row).
-const briefNo = (p) => { const m = BRIEF_RE.exec(p); return m ? String(Number.parseInt(m[1], 10)) + m[1].replace(/^\d+/, '') : null }
-
+const BRIEFISH = [/^\d{2}[a-z]?$/, /^docs\/roadmap\/\d+[a-z]?-/]
+const kindOf = (p) => (/^specs\/.*\.md$/.test(p) ? 'spec' : BRIEFISH.some((re) => re.test(p)) ? 'brief' : 'prompt')
 function briefPath(root, payload) {
   const nn = BRIEF_RE.exec(payload)[1]
   const dir = path.join(root, 'docs', 'roadmap')
   const f = (fs.existsSync(dir) ? fs.readdirSync(dir) : []).find((n) => n.startsWith(nn + '-') && n.endsWith('.md'))
   return f ? 'docs/roadmap/' + f : payload.endsWith('.md') ? payload : `docs/roadmap/${nn}-*.md`
 }
-
-// The only reader of typed text. A `/spec:(plan|prototype|fix) ` prefix is stripped and sets the type when
-// none is given or it is the same; a prefix that disagrees with a given type stays as text. A fix whose
-// text is `specs/….md[ — words]` is bound: the path moves to `spec`, the rest is the payload.
+// The only reader of typed text: a `/spec:(plan|prototype|fix) ` prefix sets the type (a disagreeing one stays text); a
+// fix whose text is `specs/….md[ — words]` is bound: the path moves to `spec`.
 function parse(text, type) {
   let t = String(text)
   const m = PREFIX_RE.exec(t)
@@ -53,41 +37,61 @@ function parse(text, type) {
   const bound = BOUND_RE.exec(t.trim())
   return bound ? { type, spec: bound[1], payload: (bound[2] || '').trim() } : { type, payload: t.trim() }
 }
-
-function read(root) {
-  const text = st.readText(queuePath(root))
-  if (text === null) return { version: VERSION, seq: 0, items: [] }
-  let q
-  try { q = JSON.parse(text) } catch { throw refuse(`queue file is not valid JSON: ${queuePath(root)}`) }
-  if (!q || q.version !== VERSION) throw refuse(`queue file is version ${q && q.version} — run /spec:migrate`)
-  if (!Array.isArray(q.items)) throw refuse(`queue file has no "items" list — repair or remove ${queuePath(root)}`)
-  return q
-}
-
-const write = (root, q) => st.writeJson(queuePath(root), { version: VERSION, seq: q.seq, items: q.items })
+// STORE: an item's store. GONE: read done by derivation: 'done' (its file or row goes at the next write) or 'missing'
+// (a spec file absent here: kept). HELD: a held tracked item's own `after`.
+const STORE = new WeakMap(); const GONE = new WeakMap(); const HELD = new WeakMap()
+const storeOf = (i) => STORE.get(i) || null
 const open = (q) => q.items.filter((i) => !i.done)
 const isMain = (root) => { try { return fs.statSync(path.join(root, '.git')).isDirectory() } catch { return false } }
-
-function specStatus(root, p) {
+const specStatus = (root, p) => {
   try { return st.readSpec(path.join(root, p)).frontmatter.status } catch { return null }
 }
-
-// A spec item whose spec is done (or superseded), or whose file is gone, and not live counts as done; the timestamp is
-// written with the next write. A file is only missed from the main checkout: a lane may predate the spec. A brief item
-// is never ticked here: `done` closes it, or lib/land.js when its last spec merges with no step open.
+// → (item) => 'done' when its work is finished: a spec or brief done or superseded (a brief: no open step).
+function finisher(root) {
+  let briefs = null
+  return (i) => {
+    if (i.kind === 'spec') return ['done', 'superseded'].includes(specStatus(root, i.payload)) ? 'done' : null
+    if (i.kind !== 'brief' || !isMain(root)) return null
+    const b = (briefs = briefs || work.readBriefs(root)).find((x) => x.num === work.normBrief(i.payload))
+    return b && ['done', 'superseded'].includes(b.status) && !b.open.length ? 'done' : null
+  }
+}
+// The ids a `Queue: <id>` trailer on trunk names, read once while a fix or plan prompt is open.
+function trailed(root, items) {
+  const want = items.filter((i) => !i.done && i.kind === 'prompt' && ['fix', 'plan'].includes(i.type))
+  if (!want.length) return new Set()
+  const t = want.map((i) => Date.parse(i.added)); const main = git.mainRoot(root)
+  const since = t.some(Number.isNaN) ? [] : [`--since=${Math.floor(Math.min(...t) / 1000) - 86400}`]
+  const trunk = git.trunk(st.readJson(st.configPath(main)))
+  const r = git.raw(['log', trunk, ...since, '--format=%(trailers:key=Queue,valueonly)'], main)
+  return new Set(r.status === 0 ? r.stdout.split('\n').map((l) => l.trim()).filter(Boolean) : [])
+}
+// Finished work, a prompt a trunk trailer names and a spec file gone from the main checkout read done (not while live).
 function reconcile(root, q) {
-  const now = new Date().toISOString(); const main = isMain(root)
+  const now = new Date().toISOString(); const main = isMain(root); const fin = finisher(root)
+  const ids = trailed(root, q.items)
   for (const i of q.items) {
-    if (i.done || i.kind !== 'spec' || st.liveRun(root, i.payload)) continue
-    if ((main && !fs.existsSync(path.join(root, i.payload))) || ['done', 'superseded'].includes(specStatus(root, i.payload))) i.done = now
+    let why = i.kind === 'prompt' ? !i.done && ids.has(i.id) && 'done' : fin(i)
+    if (!why && i.kind === 'spec' && !i.done && main && !fs.existsSync(path.join(root, i.payload))) why = 'missing'
+    if (!why || (i.kind === 'spec' && !i.done && st.liveRun(root, i.payload))) continue
+    GONE.set(i, why)
+    i.done = i.done || now
   }
   return q
 }
-
-// A brief is superseded in v7 only by the bold banner; work.js also takes a plain `> Superseded by`.
+// Both stores as one list: open items by rank then id, done ones last; reconciled, a driver's holds laid over.
+function read(root) {
+  const local = qf.readLocal(root); const tracked = qf.readAll(git.mainRoot(root))
+  for (const i of tracked) {
+    STORE.set(i, 'tracked')
+    if (local.holds[i.id] && !i.done) { HELD.set(i, i.after); i.after = local.holds[i.id] }
+  }
+  for (const i of local.items) STORE.set(i, 'local')
+  const all = [...tracked, ...local.items]
+  const items = [...all.filter((i) => !i.done).sort(qf.order), ...all.filter((i) => i.done)]
+  return reconcile(root, { version: VERSION, items, holds: local.holds })
+}
 const isSupersededBriefText = (words) => /^>\s*\*\*Superseded by\b/m.test(words)
-
-// work.readBriefs rows with v7's `superseded` and `status`, so groom counts and gates a plainly bannered brief as v7 did.
 function v7Briefs(root, briefs) {
   return briefs.map((b) => {
     const superseded = isSupersededBriefText(fs.readFileSync(path.join(root, b.file), 'utf8'))
@@ -95,10 +99,8 @@ function v7Briefs(root, briefs) {
     return { ...b, superseded, status: superseded && done ? 'superseded' : !b.specs.length ? 'unplanned' : done ? 'done' : 'in-flight' }
   })
 }
-
-// The fill, in memory and never stored (ADR-0044): later duplicates of an open brief or spec drop out of the view, then every
-// unfinished brief and every open ad-hoc spec (path order) no open item holds joins the end as {id: null, kind, payload}. A done
-// row holds nothing, so a ticked unfinished brief or spec comes back last (as v7's archive had it). Main checkout only: a lane's file tree may predate the work.
+// The fill (ADR-0044): every unfinished brief and open ad-hoc spec no open item holds joins the end as {id: null, kind,
+// payload}; a done row holds nothing, so it comes back last. Main only.
 const keyOf = (i) => (i.kind === 'brief' ? 'b' + work.normBrief(i.payload) : i.kind === 'spec' ? 's' + i.payload : null)
 function fill(root, q) {
   const seen = new Set()
@@ -106,8 +108,7 @@ function fill(root, q) {
   if (!isMain(root)) return { ...q, items }
   const specs = work.readSpecs(root); const adds = []
   for (const b of v7Briefs(root, work.readBriefs(root, specs))) {
-    const unfinished = (b.status !== 'done' || b.open.length) && !b.superseded // done with an open step: unfinished
-    if (!unfinished || seen.has('b' + b.num)) continue
+    if (!((b.status !== 'done' || b.open.length) && !b.superseded) || seen.has('b' + b.num)) continue // unfinished only
     seen.add('b' + b.num); adds.push({ id: null, kind: 'brief', payload: b.num })
   }
   for (const s of specs.filter((x) => !x.brief && !['done', 'superseded'].includes(x.status)).sort((a, b) => (a.path < b.path ? -1 : 1))) {
@@ -116,62 +117,73 @@ function fill(root, q) {
   const ticked = new Set(q.items.filter((i) => i.done).map(keyOf))
   return { ...q, items: [...items, ...adds.filter((i) => !ticked.has(keyOf(i))), ...adds.filter((i) => ticked.has(keyOf(i)))] }
 }
-const pending = (root) => open(fill(root, reconcile(root, read(root))))
-
-// Stores one filled item where `at` says (an index of q.items, default last): the next qN in v3's shape, no `added`. Writes q.
-function place(root, q, item, at = q.items.length) {
-  q.seq += 1
-  const stored = { id: 'q' + q.seq, kind: item.kind, payload: item.payload }
-  q.items.splice(at, 0, stored)
-  write(root, q)
-  return stored
+const pending = (root) => open(fill(root, read(root)))
+// The local file: its items less those read done, and the holds of tracked ids still there.
+function writeLocal(root, q) {
+  const ids = new Set(q.items.filter((i) => storeOf(i) === 'tracked').map((i) => i.id))
+  const items = q.items.filter((i) => storeOf(i) === 'local' && GONE.get(i) !== 'done')
+    .map((i) => { const { done, ...rest } = i; return GONE.get(i) === 'missing' ? rest : i })
+  qf.writeLocal(root, items, Object.fromEntries(Object.entries(q.holds).filter(([id]) => ids.has(id))))
 }
-
-// fields {payload, type?, spec?, after?, advisories?, defaultType?}: payload as typed. A prompt goes through `parse`
-// (a given `spec` is taken as is); a prompt with no type takes `defaultType`. null = an open duplicate (a brief by number).
-function add(root, fields, { top } = {}) {
-  const q = reconcile(root, read(root))
+const onDisk = (i) => ({ ...i, after: HELD.has(i) ? HELD.get(i) : i.after })
+const finished = (q) => q.items.filter((i) => storeOf(i) === 'tracked' && GONE.get(i) === 'done').map((i) => i.id)
+const newId = (root, q) => qf.newId(git.mainRoot(root), new Date(), new Set(q.items.map((i) => i.id)))
+const same = (a, b) => a.kind === b.kind && a.type === b.type && a.spec === b.spec &&
+  (a.kind === 'brief' ? work.normBrief(a.payload) === work.normBrief(b.payload) : a.payload === b.payload)
+// fields {payload, type?, spec?, after?, advisories?, defaultType?}; null = an open duplicate. `tracked` (only
+// /spec:queue add) commits a file on trunk; a driver's item goes to the local file with no git write.
+function add(root, fields, { top, tracked } = {}) {
+  const q = read(root)
   const kind = fields.type || fields.spec ? 'prompt' : kindOf(fields.payload)
-  let body = { payload: fields.payload }
-  if (kind === 'prompt') {
-    body = fields.spec ? { type: fields.type, spec: fields.spec, payload: fields.payload } : parse(fields.payload, fields.type)
-    body.type = body.type || fields.defaultType
-  }
-  const same = (i) => i.kind === kind && i.type === body.type && i.spec === body.spec && (kind === 'brief' ? work.normBrief(i.payload) === work.normBrief(body.payload) : i.payload === body.payload)
-  if (open(q).some(same)) return null
-  q.seq += 1
-  const item = { id: 'q' + q.seq, kind, ...(body.type ? { type: body.type } : {}), ...(body.spec ? { spec: body.spec } : {}), payload: body.payload, added: new Date().toISOString(), ...(fields.after ? { after: fields.after } : {}) }
-  if (fields.advisories) item.advisories = true
-  const first = top ? open(q)[0] : null
-  q.items.splice(first ? q.items.indexOf(first) : q.items.length, 0, item)
-  write(root, q)
+  const body = kind !== 'prompt' ? { payload: fields.payload }
+    : fields.spec ? { type: fields.type, spec: fields.spec, payload: fields.payload }
+      : parse(fields.payload, fields.type)
+  if (kind === 'prompt') body.type = body.type || fields.defaultType
+  if (open(q).some((i) => same(i, { kind, ...body }))) return null
+  const ranks = q.items.map((i) => i.rank).filter((r) => r !== undefined).sort(qf.rank.cmp)
+  const rank = top ? qf.rank.before(ranks[0]) : qf.rank.after(ranks[ranks.length - 1])
+  const { type, spec, payload } = body
+  const item = { id: newId(root, q), rank, kind, ...(type && { type }), ...(spec && { spec }), payload }
+  item.added = new Date().toISOString()
+  Object.assign(item, fields.after ? { after: fields.after } : {}, fields.advisories ? { advisories: true } : {})
+  if (tracked) qf.commit(root, 'add', { set: [item], del: finished(q) })
+  else { STORE.set(item, 'local'); q.items.push(item); writeLocal(root, q) }
   return item
 }
-
-// Sets `done` on every open item `pred` admits; one write; returns the count.
-function tick(root, pred) {
-  const q = read(root)
-  const now = new Date().toISOString()
-  const hit = open(q).filter(pred)
-  for (const i of hit) i.done = now
-  if (hit.length) write(root, q)
-  return hit.length
+// /spec:queue move: `it` (stored or filled) goes to position n of the list as `list` prints it. A tracked or filled
+// item is one commit on trunk; a local one is re-ranked locally.
+function move(root, q, it, n) {
+  const others = open(fill(root, q)).filter((i) => i.id && i !== it)
+  const id = it.id || newId(root, q); const k = Math.min(n, others.length + 1) // past the end is last
+  const rank = qf.rank.place(others[k - 2], others[k - 1], id)
+  if (storeOf(it) === 'local') { it.rank = rank; writeLocal(root, q) } else {
+    const file = it.id ? { ...onDisk(it), rank } : { id, rank, kind: it.kind, payload: it.payload }
+    qf.commit(root, 'move', { set: [file], del: finished(q) })
+  }
+  return { ...it, id, rank }
 }
-
-// Holds the open item `pred` admits behind `after` ({spec} or {brief}); with none stored, `fields` are added
-// holding it. Returns the item. A lane that needs another spec done waits on the queue's own gate.
+// /spec:queue done: a local item is set done; a tracked prompt's file is deleted; unfinished brief or spec work (a
+// filled item too) leaves a tombstone, so the fill brings it back last.
+function done(root, q, it) {
+  const now = new Date().toISOString()
+  if (storeOf(it) === 'local') { it.done = now; writeLocal(root, q); return { ...it, done: now } }
+  const id = it.id || newId(root, q)
+  const tomb = it.kind === 'prompt' ? [] : [{ id, kind: it.kind, payload: it.payload, done: now }]
+  const del = [...finished(q).filter((x) => x !== id), ...(tomb.length || !it.id ? [] : [id])]
+  qf.commit(root, 'done', { set: tomb, del })
+  return { ...it, id, done: now }
+}
+// Holds the open item `pred` admits behind `after` (or `fields` are added); a tracked item's hold is the local file's.
 function hold(root, pred, after, fields) {
   const q = read(root)
   const hit = open(q).find(pred)
   if (!hit) return add(root, { ...fields, after })
+  if (storeOf(hit) === 'tracked') q.holds[hit.id] = after
   hit.after = after
-  write(root, q)
+  writeLocal(root, q)
   return hit
 }
-
-// What the item says, as one line: a bound fix reads `specs/x.md — words`.
 const text = (it) => (it.spec ? it.spec + (it.payload ? ' — ' + it.payload : '') : it.payload)
-
 // The line the session pastes to start an item: a hardened or implementing spec runs, any other plans.
 function paste(root, it) {
   if (it.kind === 'spec') return (['hardened', 'implementing'].includes(st.specState(root, it.payload, specStatus(root, it.payload))) ? '/spec:run ' : '/spec:plan ') + it.payload
@@ -179,5 +191,8 @@ function paste(root, it) {
   if (CMD_TYPES.includes(it.type)) return `/spec:${it.type} ${text(it)}`
   return it.type === 'decide' ? '📌 decide: ' + it.payload : text(it)
 }
-
-module.exports = { VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath, kindOf, briefNo, briefPath, parse, read, write, open, reconcile, fill, pending, place, add, tick, hold, text, paste, isSupersededBriefText, v7Briefs, isMain }
+module.exports = {
+  VERSION, TYPES, CMD_TYPES, BRIEF_RE, queuePath: qf.queuePath, kindOf, briefPath, parse, read, open, fill, pending,
+  add, move, done, hold, same, finisher, storeOf, text, paste, isSupersededBriefText, v7Briefs, isMain,
+  files: { readAll: qf.readAll, rank: qf.rank, newId: qf.newId, stateOf: qf.stateOf }, // for migrate.js only
+}

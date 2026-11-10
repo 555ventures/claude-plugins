@@ -12,9 +12,13 @@ against the spec's Intent, Decisions and criteria, and merges. New projects star
 
 Config is `.claude/spec.config.json`; specs are `specs/YYYYMMDD/NN-slug.md`; briefs, ADRs and
 design live in `docs/roadmap/`, `docs/adr/`, `design/`. You edit specs, briefs and ADRs. Only
-scripts write state: `<spec>.run/`, the queue, fanout and release (`spec-release.json`, the
-green staging run `/spec:release` promotes from) files in the git common dir, and
-`.claude/pending-question.json`. A done or superseded spec is a stub (frontmatter, title, goal,
+scripts write state: `<spec>.run/`, fanout and release (`spec-release.json`, the green staging
+run `/spec:release` promotes from) files in the git common dir, and `.claude/pending-question.json`.
+The queue has two stores (ADR-0050): the items you place are `specs/queue/<id>.json` (version 4),
+written and committed on trunk only by `/spec:queue add|move|done` (push before switching
+machines); the items a driver places stay in `spec-queue.json` in the git common dir, and no driver
+writes a tracked path. A commit that finishes a queued fix or plan ends with `Queue: <id>`, which
+closes that item on every machine. A done or superseded spec is a stub (frontmatter, title, goal,
 `text: <sha>`); `git show <sha>:<path>` prints its text.
 
 ## Seats

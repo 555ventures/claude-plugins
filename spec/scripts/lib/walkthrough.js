@@ -1,15 +1,10 @@
 'use strict'
-// lib/walkthrough.js — calls to the hosted review service (apiVersion 1, revision >= 2) and the
-// round files they write under design/rounds/<n>/. No CLI.
-//
-//   const c = openContext(root, process.env)      // null when config.walkthrough.baseUrl is unset
-//   await probe(c) | push(c, round) | pullNotes(c) | pullApprovals(c)
-//
-// Rules: no request without baseUrl + project + a token (stored in .claude/settings.local.json env
-// first, else process env); baseUrl must be https or loopback http; redirects are refused; the token
-// rides one header and is scrubbed from every message; 429 with Retry-After <= 60 s is retried
-// twice. Failures throw Refusal {code, sentence, remedy, exit}: 1 service refused · 2 config or
-// usage · 3 service did not answer.
+// lib/walkthrough.js — calls to the hosted review service (apiVersion 1, revision >= 2) and the round files they write
+// under design/rounds/<n>/. No CLI. const c = openContext(root, process.env) (null when config.walkthrough.baseUrl is
+// unset); await probe(c) | push(c, round) | pullNotes(c) | pullApprovals(c). Rules: no request without baseUrl +
+// project + a token (settings.local.json env first, else process env); baseUrl must be https or loopback http;
+// redirects are refused; the token rides one header and is scrubbed from every message; 429 with Retry-After <= 60 s is
+// retried twice. Failures throw Refusal {code, sentence, remedy, exit}: 1 refused · 2 config · 3 silent.
 
 const fs = require('fs')
 const path = require('path')
@@ -48,8 +43,6 @@ class Refusal extends Error {
   line() { return scrub(`walkthrough: ${this.code} — ${this.sentence}` + (this.remedy ? ` — remedy: ${this.remedy}` : '')) }
 }
 
-// ---- config and token ---------------------------------------------------------------------
-
 // env.<name> in <root>/.claude/settings.local.json, '' when absent or unreadable.
 function storedToken(root, name) {
   const j = readJson(path.join(root, '.claude', 'settings.local.json'), null)
@@ -60,8 +53,8 @@ function storedToken(root, name) {
 const resolveToken = (root, env, name) => storedToken(root, name) || env[name] || ''
 const nameOk = (v) => typeof v === 'string' && NAME_RE.test(v)
 
-// First defect of a walkthrough block as a Refusal, or null. `needToken` false skips the token check.
-function configProblem(root, env, block, needToken = true) {
+// First defect of a walkthrough block as a Refusal, or null.
+function configProblem(root, env, block) {
   const bad = (code, sentence, remedy) => new Refusal(code, sentence, remedy, 2)
   if (!isObj(block)) return bad('bad-config', 'config.walkthrough must be an object', 'run /spec:connect')
   for (const k of ['baseUrl', 'project', 'tokenEnv']) {
@@ -74,14 +67,14 @@ function configProblem(root, env, block, needToken = true) {
   if (!(u.protocol === 'https:' || (u.protocol === 'http:' && LOOPBACK.has(u.hostname)))) {
     return bad('insecure-base-url', `walkthrough.baseUrl ${block.baseUrl} would send the token in clear`, 'use https (plain http only for localhost)')
   }
-  if (needToken && !resolveToken(root, env, block.tokenEnv)) {
+  if (!resolveToken(root, env, block.tokenEnv)) {
     return bad('no-token', `${block.tokenEnv} is unset or empty`, `run /spec:connect, or export ${block.tokenEnv}=<the project's token>`)
   }
   return null
 }
 
-function contextFromBlock(root, env, block, needToken = true) {
-  const problem = configProblem(root, env, block, needToken)
+function contextFromBlock(root, env, block) {
+  const problem = configProblem(root, env, block)
   if (problem) throw problem
   const token = resolveToken(root, env, block.tokenEnv)
   secret = token
@@ -93,8 +86,6 @@ function openContext(root, env) {
   const b = readConfig(root).walkthrough
   return b && b.baseUrl ? contextFromBlock(root, env, b) : null
 }
-
-// ---- requests -----------------------------------------------------------------------------
 
 async function once(c, method, url, headers, body) {
   const ms = Number(c.env.WALKTHROUGH_TIMEOUT_MS) > 0 ? Number(c.env.WALKTHROUGH_TIMEOUT_MS) : 10000
@@ -154,8 +145,6 @@ async function probe(c) {
   await send(c, 'pullApprovals')
   return { apiVersion: h.apiVersion, revision: h.revision }
 }
-
-// ---- rounds -------------------------------------------------------------------------------
 
 const roundsDir = (root) => path.join(root, 'design', 'rounds')
 const roundFile = (root, n, name) => path.join(roundsDir(root), String(n), name)
@@ -226,6 +215,6 @@ async function pullApprovals(c) {
 }
 
 module.exports = {
-  Refusal, storedToken, resolveToken, nameOk, configProblem, contextFromBlock, openContext,
+  Refusal, isObj, resolveToken, nameOk, contextFromBlock, openContext,
   gate, probe, push, pullNotes, pullApprovals, highestRound, roundsDir,
 }

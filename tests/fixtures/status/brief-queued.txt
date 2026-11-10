@@ -24,7 +24,7 @@ q14  📝 /spec:plan after retired
    ├─ 🔶 01-boards.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts
    └─ 🔶 04-adhoc-a.md × 05-adhoc-b.md: merge-conflict risk: src/shared.ts, src/z.ts (+2 more)
 
-⚠️ Brief 01 (foundation) has every spec done but is still queued.
+⚠️ Brief 01 (foundation) has every spec done; 1 step(s) outside specs are still open.
    Close it?  /spec:queue done 01
 ⚠️ Brief 07 (export) moved on, but its dependency 06 (reports) was never planned.
    Plan it now?  /spec:plan @docs/roadmap/06-reports.md

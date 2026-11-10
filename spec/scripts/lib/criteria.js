@@ -1,15 +1,11 @@
 'use strict'
-// lib/criteria.js — the criteria a project's tests cite (ADR-0048): which files are tests, which AC-IDs they name at
-// a commit or on disk, and GATE's check that a build keeps every cited criterion. Names no tool and assumes no
-// language: a test file is a name or a glob, a citation is the AC-ID in its text. No CLI.
-//
-//   isTest(rel, cfg)                 the one rule red-check and this check share
-//   cited(root, ref?, cfg?)          Map AC-ID → [test files naming it]; ref null = the working tree on disk
-//   testFiles(root, ref?, cfg?)      [{file, ids}] for every test file (doctor's count)
-//   retiredLines(doc)                the doc's `## Retired criteria` lines, as the briefs print them
-//   retired(doc)                     Map AC-ID → {by, review} from those lines
-//   retiredRefusal(doc)              why plan.js lock refuses that section, or null
-//   check({wt, base, cfg, doc})      {red: [lines], warn: [lines]}
+// lib/criteria.js — the criteria a project's tests cite (ADR-0048): which files are tests, which AC-IDs they name at a
+// commit or on disk, and GATE's check that a build keeps every cited criterion. Names no tool, assumes no language: a
+// test file is a name or a glob, a citation is the AC-ID in its text. No CLI.
+//   isTest(rel, cfg) the one rule red-check and this check share · cited(root, ref?, cfg?) Map AC-ID → [test files]
+//   (ref null = the working tree) · testFiles(root, ref?, cfg?) [{file, ids}] · retiredLines(doc) · retired(doc) Map
+//   AC-ID → {by, review} · retiredRefusal(doc) why plan.js lock refuses `## Retired criteria`, or null ·
+//   check({wt, base, cfg, doc}) → {red: [lines], warn: [lines]}
 
 const fs = require('fs')
 const path = require('path')
@@ -133,4 +129,4 @@ function check({ wt, base, cfg, doc }) {
   return { red, warn }
 }
 
-module.exports = { isTest, cited, testFiles, retiredLines, retired, retiredRefusal, check }
+module.exports = { isFix, isTest, cited, testFiles, retiredLines, retired, retiredRefusal, check }

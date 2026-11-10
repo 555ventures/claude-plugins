@@ -366,7 +366,7 @@ test('AC-3: pin writes the array, refuses bad input, round-done records handled'
   assert.match(ok(drive(h.root, [STEM])), /Round 2\.\n[^\n]*\nnone yet/)
 })
 
-test('AC-4: APPROVED prints the sentences by route; contracted needs the yes; the contract is sentences', async (t) => {
+test('AC-4: AC-20261108-06-7 APPROVED prints the sentences by route; contracted needs the yes; the contract is sentences', async (t) => {
   const h = host()
   await approved(t, h)
   const out = ok(drive(h.root, [STEM]))
@@ -396,6 +396,7 @@ test('AC-4: APPROVED prints the sentences by route; contracted needs the yes; th
   assert.strictEqual(h.g('show', `HEAD:design/prototypes/${STEM}/status.json`).includes('"contracted"'), true, 'the committed status carries the mark')
   const q = JSON.parse(fs.readFileSync(path.join(h.root, '.git/spec-queue.json'), 'utf8'))
   assert.deepStrictEqual(q.items.map((i) => [i.kind, i.type, i.payload]), [['prompt', 'plan', `design/prototypes/${STEM}/contract.json`]])
+  assert.ok(!fs.existsSync(path.join(h.root, 'specs/queue')) && !/chore\(queue\)/.test(h.g('log', '--format=%s')), 'the plan item is the local file\'s: no tracked path, no queue commit')
   assert.strictEqual(drive(h.root, [STEM, '--state']).stdout.trim(), 'CONTRACTED')
   assert.strictEqual(mark(h.root, STEM, 'contracted', '--confirmed').status, 2, 'a second contracted is out of step')
 
@@ -515,7 +516,7 @@ test('AC-6: a clean contracted close reports the removal and that the contract c
   const h = host()
   await approved(t, h)
   ok(mark(h.root, STEM, 'contracted', '--confirmed'))
-  fs.writeFileSync(path.join(h.root, '.git/spec-queue.json'), JSON.stringify({ version: 3, seq: 0, items: [] }))
+  fs.writeFileSync(path.join(h.root, '.git/spec-queue.json'), JSON.stringify({ version: 4, items: [], holds: {} }))
   const out = ok(mark(h.root, STEM, 'closed'))
   assert.match(out, /- worktree and branch removed/)
   assert.match(out, /Next: nothing needs you — the contract carries on/)
@@ -526,7 +527,7 @@ test('AC-6: a close takes its Next from the derivation: a hardened spec the queu
   const h = host()
   await approved(t, h)
   ok(mark(h.root, STEM, 'contracted', '--confirmed'))
-  fs.writeFileSync(path.join(h.root, '.git/spec-queue.json'), JSON.stringify({ version: 3, seq: 0, items: [] }))
+  fs.writeFileSync(path.join(h.root, '.git/spec-queue.json'), JSON.stringify({ version: 4, items: [], holds: {} }))
   const spec = 'specs/20261108/01-unqueued.md'
   fs.mkdirSync(path.join(h.root, 'specs/20261108'), { recursive: true })
   fs.writeFileSync(path.join(h.root, spec), '---\nstatus: hardened\n---\n\n# x\n')

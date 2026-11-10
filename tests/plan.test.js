@@ -202,10 +202,11 @@ function protoHost(pins = [pinRec('p1', 'behaviour'), pinRec('p2', 'look'), pinR
   assert.strictEqual(q.status, 0, q.stderr)
   return { d, g }
 }
-const openItems = (d) => JSON.parse(fs.readFileSync(path.join(d, '.git/spec-queue.json'), 'utf8')).items.filter((i) => !i.done)
+const openItems = (d) => JSON.parse(runNode('scripts/queue.js', ['list', '--json', '--root', d]).stdout).items.filter((i) => i.kind === 'prompt')
 
-test('AC-20261105-14-8 a behaviour pin with no (pin pN) AC refuses the lock by id; covering it locks and closes the plan item', () => {
-  const { d } = protoHost()
+test('AC-20261105-14-8 AC-20261108-06-9 a behaviour pin with no (pin pN) AC refuses the lock by id; covering it locks, names the plan item in the lock commit and closes it', () => {
+  const { d, g } = protoHost()
+  const itemId = openItems(d)[0].id
   const f = protoSpec(d, 'first', ['WHEN the user deletes THE SYSTEM SHALL ask first (pin p1).'])
   const r = plan(d, 'lock', f)
   assert.strictEqual(r.status, 2)
@@ -219,7 +220,8 @@ test('AC-20261105-14-8 a behaviour pin with no (pin pN) AC refuses the lock by i
   assert.strictEqual(ok.status, 0, ok.stderr)
   assert.match(ok.stdout, /plan item closed — every behaviour pin has an AC/)
   assert.strictEqual(status(f), 'hardened')
-  assert.deepStrictEqual(openItems(d), [], 'the queued plan item is ticked')
+  assert.deepStrictEqual(openItems(d), [], 'the queued plan item reads done: its lock commit names it')
+  assert.ok(g('log', '-1', '--format=%B').trimEnd().endsWith(`\n\nQueue: ${itemId}`) && /^chore\(spec\): lock /.test(g('log', '-1', '--format=%s')), 'the lock commit ends with the trailer')
 })
 
 test('AC-20261105-14-8 a dropped pin needs no AC; an earlier hardened citing spec covers for a later one; a missing contract is refused naming the path', () => {

@@ -5,7 +5,7 @@
 
 const fs = require('fs')
 const path = require('path')
-const { makeDriver, parseArgv, refuse, writeOut } = require('./lib/driver')
+const { makeDriver, refuse, writeOut } = require('./lib/driver')
 const git = require('./lib/git')
 const S = require('./lib/state')
 const Q = require('./lib/queue')
@@ -70,15 +70,7 @@ whole stack. Honour the ADRs. The driver queues every brief on --mark roadmap-wr
 const HANDOFF = `The driver writes .claude/spec.config.json (testCommand, setupCommand, trunk) from the descriptor, merged over any
 existing config, adds the pipeline's .gitignore entries, and commits everything as chore(genesis): grounded. Nothing for you to write.`
 
-// The same entries init.js ensures; kept here so genesis does not reach into init.
-const IGNORE = ['specs/**/*.run/', '.claude/worktrees/', '.claude/pending-question.json', '.claude/settings.local.json']
-function ensureGitignore(root) {
-  const file = path.join(root, '.gitignore')
-  const text = S.readText(file, '')
-  const have = new Set(text.split('\n').map((l) => l.trim()))
-  const add = IGNORE.filter((e) => !have.has(e))
-  if (add.length) fs.writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + add.join('\n') + '\n')
-}
+const { ensureGitignore } = require('./init')
 
 function derive(s) {
   switch (s.phase) {
@@ -186,25 +178,11 @@ function load(ctx) {
   return s
 }
 
-const driver = makeDriver({
-  name: 'genesis', load, derive: bind(derive), steps,
+// `$ARGUMENTS` arrives unquoted: `words` rejoins the idea words into the one argument.
+const main = makeDriver({
+  name: 'genesis', words: true, load, derive: bind(derive), steps,
   save: (s, ctx) => S.writeGenesis(ctx.root, s),
 })
 
-// `$ARGUMENTS` arrives unquoted: rejoin the idea words into the one argument the driver takes.
-function main(argv = process.argv.slice(2)) {
-  try {
-    const a = parseArgv(argv)
-    const out = [a.pos.join(' '), '--root', a.root].filter(Boolean)
-    if (a.mark) out.push('--mark', a.mark)
-    if (a.state) out.push('--state')
-    if (a.json) out.push('--json')
-    for (const [k, v] of Object.entries(a.flags)) out.push('--' + k, ...(v === true ? [] : [v]))
-    return driver(out)
-  } catch (e) {
-    writeOut(2, `genesis: ${e.message}\n`)
-    return typeof e.exit === 'number' ? e.exit : 1
-  }
-}
 if (require.main === module) process.exitCode = main()
 module.exports = { main }

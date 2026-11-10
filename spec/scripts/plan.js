@@ -3,8 +3,8 @@
 // validates it, locks it and (in a git repo) commits it on the current branch, so lanes branch with it.
 const fs = require('fs')
 const path = require('path')
-const { readSpec, writeStatus, writeText, readText, readProto, specsCiting } = require('./lib/state')
-const { isSpecText, decisionRows } = require('./lib/spec')
+const { readSpec, writeStatus, writeText, readText, readProto, specsCiting, typedPath } = require('./lib/state')
+const { isSpecText, decisionRows, section } = require('./lib/spec')
 const { retiredRefusal } = require('./lib/criteria')
 const { isStub } = require('./lib/stub')
 const Q = require('./lib/queue')
@@ -13,10 +13,11 @@ const git = require('./lib/git')
 
 const REQUIRED = ['Intent', 'Goal', 'Decisions', 'File Plan', 'Acceptance Criteria', 'Assumptions']
 
-// A Decisions row that takes something away from users needs the client's word: `[asked:]` on the row, or the Intent line.
+// A Decisions row that takes something away from users needs the client's word: `[asked:]` on the row, or the Intent
+// line.
 const RESTRICT_RE = /\b(cannot|can't|no longer|only (?:an? )?\w+ (?:can|may)|immutable|read-only|requires? (?:a )?reason|hidden from|removed from|locked out)\b/i
 
-class Refusal extends Error { constructor(m) { super(m); this.exit = 2 } }
+const { Refusal } = require('./lib/driver')
 
 function create(root, slug) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(slug || '')) throw new Refusal('new needs a kebab-case <slug>')
@@ -32,9 +33,9 @@ function create(root, slug) {
   return path.relative(root, file)
 }
 
-// The behaviour pins of a prototype contract that no AC of this spec, or of an earlier locked spec citing the
-// same stem, ends with `(pin pN)` — a stub's from its `acs:` entries. Returns {stem, contract, uncovered}; null for a
-// spec with no `prototype:`.
+// The behaviour pins of a prototype contract that no AC of this spec, or of an earlier locked spec citing the same
+// stem, ends with `(pin pN)` (a stub's from its `acs:`). → {stem, contract, uncovered}; null for a spec with no
+// `prototype:`.
 const CITE = /\(pin (p\d+)\)/g
 function pinCoverage(root, file, s) {
   const stem = s.frontmatter.prototype
@@ -54,8 +55,7 @@ function pinCoverage(root, file, s) {
 }
 
 function lock(root, arg, confirmed) {
-  const typed = (arg || '').replace(/^@/, '') // `/spec:run @path` pastes the file mention
-  const file = fs.existsSync(path.resolve(root, typed)) || !fs.existsSync(path.resolve(process.cwd(), typed)) ? path.resolve(root, typed) : path.resolve(process.cwd(), typed)
+  const file = typedPath(root, arg)
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Refusal(`no such spec: ${arg || '(none)'}`)
   if (path.relative(root, file).startsWith('..')) throw new Refusal(`${file} is outside ${root}`)
   const s = readSpec(file)
@@ -63,10 +63,11 @@ function lock(root, arg, confirmed) {
   if (missing.length) throw new Refusal(`missing sections: ${missing.join(', ')}`)
   if (s.markers) throw new Refusal(`${s.markers} [NEEDS CLARIFICATION:] marker(s) left — resolve them first`)
   // A spec this big is two specs or a wrong design: cut before lock, never after review.
-  const dKey = Object.keys(s.sections).find((k) => k === 'Decisions' || k.startsWith('Decisions ') || k.startsWith('Decisions('))
-  const size = { Decisions: dKey ? decisionRows(s.sections[dKey]).length : 0, lines: readText(file).trimEnd().split('\n').length }
+  const rows = decisionRows(section(s.sections, 'Decisions'))
+  const size = { Decisions: rows.length, lines: readText(file).trimEnd().split('\n').length }
   if (size.Decisions > 12 || size.lines > 90) throw new Refusal(`spec too big: ${size.Decisions} Decisions (max 12), ${size.lines} lines (max 90) — split it, or name the existing code each Decision changes and cut the rest`)
-  // Code may say `--root <path>` or <Title>Hi</Title>: drop fenced blocks (line by line, so a stray fence cannot swallow prose) and inline code.
+  // Code may say `--root <path>` or <Title>Hi</Title>: drop fenced blocks (line by line, so a stray fence cannot
+  // swallow prose) and inline code.
   let fence = false
   const prose = readText(file).split('\n').filter((l) => { if (/^\s*(```|~~~)/.test(l)) { fence = !fence; return false } return !fence }).join('\n').replace(/`[^`\n]*`/g, '')
   const left = [...new Set(readText(path.join(__dirname, '..', 'templates', 'spec.md')).match(/<[^<>\n]+>/g))].filter((t) => prose.includes(t))
@@ -81,7 +82,6 @@ function lock(root, arg, confirmed) {
   // A v7-era spec without an Intent section is unaffected.
   const intentKey = Object.keys(s.sections).find((k) => k === 'Intent' || k.startsWith('Intent '))
   if (intentKey !== undefined && s.intent.signoff === null) {
-    const rows = decisionRows(s.sections[Object.keys(s.sections).find((k) => k === 'Decisions' || k.startsWith('Decisions ') || k.startsWith('Decisions(')) || ''])
     const hit = rows.find((c) => RESTRICT_RE.test(c[1]) && !/\[(asked|guards):/.test(c[1]))
     const reason = s.frontmatter.breaking === true ? 'the spec is marked breaking: true'
       : hit ? `Decisions row ${hit[0]} restricts users ("${hit[1].length > 80 ? hit[1].slice(0, 77) + '...' : hit[1]}")` : null
@@ -93,22 +93,26 @@ function lock(root, arg, confirmed) {
   }
   writeStatus(file, 'hardened')
   const rel = path.relative(root, file)
-  if (git.raw(['rev-parse', '--git-dir'], root).status === 0) {
+  const inGit = git.raw(['rev-parse', '--git-dir'], root).status === 0
+  // Every active behaviour pin has an AC: the plan item the contract queued is done, and the lock commit names it.
+  let planItem = null; let held = null
+  try {
+    const contract = cover && `design/prototypes/${cover.stem}/contract.json`
+    const pick = (i) => inGit && contract && i.type === 'plan' && i.payload === contract
+    planItem = Q.open(Q.read(root)).find(pick) || null
+  } catch (e) { if (e.exit === 2) held = e }
+  if (inGit) {
     const id = (/(\d{8})\/(\d+)-/.exec(rel.split(path.sep).join('/')) || []).slice(1).join('/') || path.basename(rel, '.md')
     // ADR and brief edits the plan made travel with the spec, so lanes branch with them.
     const docs = git.raw(['status', '--porcelain', '--untracked-files=all', '--', 'docs/adr', 'docs/roadmap'], root).stdout
       .split('\n').filter(Boolean).map((l) => l.slice(3).trim())
     git.sh(['add', '--', rel, ...docs], root)
-    git.sh(['commit', '-q', '-m', `chore(spec): lock ${id}`, '--', rel, ...docs], root)
+    const msg = `chore(spec): lock ${id}${planItem ? `\n\nQueue: ${planItem.id}` : ''}`
+    git.sh(['commit', '-q', '-m', msg, '--', rel, ...docs], root)
   }
-  // Every active behaviour pin has an AC: the plan item the contract queued is done.
-  let closed = false
-  if (cover && git.raw(['rev-parse', '--git-dir'], root).status === 0) {
-    const item = `design/prototypes/${cover.stem}/contract.json`
-    try { closed = Q.tick(root, (i) => i.type === 'plan' && i.payload === item) > 0 } catch (e) { if (e.exit === 2) throw e }
-  }
-  try { Q.read(root) } catch (e) { if (e.exit === 2) throw e /* an unmigrated queue stops here, before any Next */ }
-  return `✅ spec hardened & locked — ${rel}${closed ? '\n📋 plan item closed — every behaviour pin has an AC' : ''}\nNext: ${N.topLines(N.derive(root)).join('\n')}`
+  if (held) throw held // an unmigrated queue stops here, before any Next
+  const closed = planItem ? '\n📋 plan item closed — every behaviour pin has an AC' : ''
+  return `✅ spec hardened & locked — ${rel}${closed}\nNext: ${N.topLines(N.derive(root)).join('\n')}`
 }
 
 function main(argv) {

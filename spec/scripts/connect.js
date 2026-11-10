@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 'use strict'
-// connect.js [--root <dir>] [--project <id>] [--name <text>] [--base-url <url>] [--allow-temp-root]
-// Links the project to the hosted review service: creates (or joins) the project through
-// `npx walkthrough-cli`, stores the minted token as env.<tokenEnv> in the git-ignored
-// .claude/settings.local.json, proves the link with one call, writes config.walkthrough, and
-// prints `connected <id> → <url>/p/<id>` plus `next: /spec:mocks`. The token is never printed.
-// A root under any scratch dir (realpath: $TMPDIR, the OS temp dir, /tmp, /var/tmp — on macOS the OS temp dir
-// is /var/folders/…, so /tmp and the agent scratchpad under /private/tmp are separate places) is refused with
-// exit 2 unless --allow-temp-root is passed: a scratch folder is never a real project, and connecting one
-// registers a live project on the hosted service.
+// connect.js [--root <dir>] [--project <id>] [--name <text>] [--base-url <url>] [--allow-temp-root] Links the project
+// to the hosted review service: creates (or joins) the project through `npx walkthrough-cli`, stores the minted token
+// as env.<tokenEnv> in the git-ignored .claude/settings.local.json, proves the link with one call, writes
+// config.walkthrough and prints `connected <id> → <url>/p/<id>` plus `next: /spec:mocks`. The token is never printed. A
+// root under a scratch dir ($TMPDIR, the OS temp dir, /tmp, /var/tmp; realpath) is refused (exit 2) unless
+// --allow-temp-root: a scratch folder is never a real project, and connecting one registers a live project.
 // Exit: 0 connected · 1 refused · 2 usage/config · 3 service silent. A connected project costs zero tool calls.
 
 const fs = require('fs')
@@ -37,11 +34,11 @@ function parse(argv) {
   return f
 }
 
-const real = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
+const { real, under: within } = require('./lib/reap')
 const SCRATCH_DIRS = () => [os.tmpdir(), process.env.TMPDIR, '/tmp', '/var/tmp'].filter(Boolean).map(real)
 function refuseTempRoot(root) {
   const r = real(root)
-  const under = SCRATCH_DIRS().find((d) => r === d || r.startsWith(d.endsWith(path.sep) ? d : d + path.sep))
+  const under = SCRATCH_DIRS().find((d) => within(r, d))
   if (under) {
     throw stop('temp-root',
       `${r} is under the scratch dir ${under}, so connecting it would register a live project`,
@@ -67,8 +64,7 @@ const jsonLine = (out, want) => lines(out).map((l) => { try { return JSON.parse(
 const fail = (r, what) => stop('tool-failed', lines(r.stderr).pop() || `${what} exited ${r.status}`, 'run npx walkthrough-cli whoami to see what is wrong, then /spec:connect again')
 const git = (root, ...a) => spawnSync('git', ['-C', root, ...a], { encoding: 'utf8' })
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
-
+const { isObj } = wt
 // A JSON file that must hold an object: null when it is absent, a refusal when it exists and is anything
 // else. Overwriting a file this script could not read would destroy it.
 function readStrict(root, rel, code, ok = isObj) {

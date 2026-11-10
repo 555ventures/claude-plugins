@@ -122,6 +122,15 @@ function v7Scripts() {
   return v7Dir
 }
 
+// The machine-local queue file as version 4: `items` in order, each with the id it names (qN by position when it names
+// none) and a rank by position unless it carries one; `holds` is the file's holds. One seed for every test that needs items.
+function seedQueue(dir, items, holds = {}) {
+  const st = require(path.join(SPEC, 'scripts/lib/state.js'))
+  const rows = items.map((i, n) => ({ id: 'q' + (n + 1), rank: String(n + 1), ...i }))
+  st.writeJson(path.join(st.gitCommonDir(dir), 'spec-queue.json'), { version: 4, items: rows, holds })
+  return rows
+}
+
 // A copy of a fixture host beside it whose queue file is the v1 twin of the host's v2 file and whose
 // specs read the state v8 derives (a live sidecar stamps `implementing`), so v7 can run on it.
 function v1Queue(root) {
@@ -138,7 +147,7 @@ function v1Queue(root) {
       const body = i.kind === 'brief' ? { brief: normBrief(i.payload) } : i.kind === 'spec' ? { spec: i.payload } : { payload: Q.text(i), lane: i.type }
       return { ...base, ...body, ...(i.after ? { after: i.after } : {}), ...(i.done ? { ticked: true } : {}), added: i.added }
     })
-    st.writeJson(path.join(st.gitCommonDir(twin), 'spec-queue.json'), { version: 1, seq: q.seq, items })
+    st.writeJson(path.join(st.gitCommonDir(twin), 'spec-queue.json'), { version: 1, seq: q.items.length, items })
   }
   const { readSpecs } = require(path.join(SPEC, 'scripts/lib/work.js'))
   for (const s of readSpecs(root)) {
@@ -156,4 +165,4 @@ function killStrays(dir) {
   }
 }
 
-module.exports = { ROOT, SPEC, RUN_ROOT, tmpdir, runNode, runBash, freePort, gitRepo, v7Scripts, v1Queue, killStrays }
+module.exports = { ROOT, SPEC, RUN_ROOT, tmpdir, runNode, runBash, freePort, gitRepo, v7Scripts, v1Queue, seedQueue, killStrays }

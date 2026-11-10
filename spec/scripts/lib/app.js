@@ -1,25 +1,18 @@
 'use strict'
-// lib/app.js — the one owner of the host's app (ADR-0049). The host declares it once in config `runtime`
-// ({bootCommand, readyCheck, url, publicUrl?, envCommand?, readySeconds?, stopCommand?}); prototype.js and run.js drive
-// it here.
-//   start(rt, {cwd, port, log, root}) → rec {pid, port, url, startedAt, log, wt, envAt?}
-//     reaps what a dead session left in root, refuses a url something else already answers, runs runtime.envCommand
-//     once per worktree (recorded in the worktree's git dir; a changed command runs again), spawns bootCommand detached
-//     in its own process group (stdout+stderr to log, SPEC_APP=<wt> and PORT in env), then waits for the ready check.
-//     A boot command that exits 0 keeps the wait (`docker compose up -d`); once ready with nothing SPEC_APP-tagged
-//     alive the server is a daemon's: the rec carries runtime.stopCommand (the host's command that stops it) or
-//     start refuses, nothing adopted
-//   ready(rt, port, cwd)   up(rt, rec) = alive and ready
-//   alive(rec) = its leader or a SPEC_APP-tagged process lives, or rec.stopCommand is set, rec is the newest record
-//     kept at its url and the url answers
-//   stop(rec) (idempotent; its group and every tagged process's group, then rec.stopCommand in the worktree)
-//   stopIfAt(rec, url) → stopped it when it is alive at url
-//   recOf(root, protoStatus) → the prototype's app record (status.app, else the one start kept in the git dir)
-//   ensure(rt, rec, {…, restart}) → rec: kept when up and not restart, else stopped and started
-//   portOf/stopIn/upIn/gatePins: the same for a state object holding {app, appPort} (run.js)
-//   tryEnsure → {rec, down}: ensure, but an app that cannot get ready is {rec: null, down: <why>}
+// lib/app.js — the one owner of the host's app (ADR-0049). The host declares it once in config `runtime` ({bootCommand,
+// readyCheck, url, publicUrl?, envCommand?, readySeconds?, stopCommand?}); prototype.js and run.js drive it here.
+//   start(rt, {cwd, port, log, root}) → rec {pid, port, url, startedAt, log, wt, envAt?}: reaps what a dead session
+//     left in root, refuses a url something else answers, runs runtime.envCommand once per worktree (a changed command
+//     runs again), spawns bootCommand detached in its own process group (SPEC_APP=<wt> and PORT in env), then waits for
+//     the ready check. A boot command that exits 0 keeps the wait (`docker compose up -d`); once ready with nothing
+//     SPEC_APP-tagged alive the server is a daemon's: the rec carries runtime.stopCommand, or start refuses.
+//   ready(rt, port, cwd) · up(rt, rec) = alive and ready · alive(rec) = its leader or a tagged process lives, or
+//     stopCommand is set, it is the newest record at its url and the url answers ·
+//     stop(rec) (idempotent: its group, every tagged process's group, then
+//     stopCommand) · stopIfAt(rec, url) · recOf(root, protoStatus) · ensure(rt, rec, {…, restart}) → rec: kept when up,
+//     else restarted · portOf/stopIn/upIn/gatePins: the same for a state {app, appPort} (run.js) · tryEnsure →
+//       {rec, down}
 // A failure is an Error with .exit and .kind: 'foreign', 'handoff' (exit 2), 'env' (1), 'ready' (1, the app is killed).
-// No CLI.
 
 const fs = require('fs')
 const path = require('path')
@@ -28,9 +21,8 @@ const host = require('./host')
 const reap = require('./reap')
 const state = require('./state')
 
-const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+const { sleepMs, real } = reap
 const fail = (message, exit, kind) => Object.assign(new Error(message), { exit, kind })
-const real = (p) => { try { return fs.realpathSync.native(p) } catch { return path.resolve(p) } }
 const lastLines = (file, n = 20) => {
   try { return fs.readFileSync(file, 'utf8').replace(/\s+$/, '').split('\n').slice(-n).join('\n') } catch { return '' }
 }
@@ -38,17 +30,10 @@ const lastLines = (file, n = 20) => {
 // A file in the worktree's git dir (never committed): spec-env.json, the record that runtime.envCommand ran
 // ({at, command}); spec-app.json, the running app's rec (what `contracted` keeps off trunk).
 const UTF8 = { encoding: 'utf8' }
-const gitFile = (wt, name) => {
-  const r = spawnSync('git', ['-C', wt, 'rev-parse', '--absolute-git-dir'], UTF8)
-  return r.status === 0 ? path.join(r.stdout.trim(), name) : null
-}
+const gitFile = (wt, name) => { const d = require('./git').gitDir(wt); return d && path.join(d, name) }
 const envFile = (wt) => gitFile(wt, 'spec-env.json')
 const recFile = (wt) => gitFile(wt, 'spec-app.json')
-const envRan = (file, command) => {
-  try { const r = JSON.parse(fs.readFileSync(file, 'utf8')); return r.command === command ? r.at : null } catch {
-    return null
-  }
-}
+const envRan = (file, command) => { const r = state.readJson(file); return r && r.command === command ? r.at : null }
 
 const BOOT_MISSING = 'no runtime.bootCommand in .claude/spec.config.json — set it to the command that starts this ' +
   'app (it serves on $PORT when runtime.url holds {port}), then re-run'
@@ -81,7 +66,7 @@ function newest(rec) {
   const g = spawnSync('git', ['-C', rec.wt, 'rev-parse', '--absolute-git-dir', '--git-common-dir'], UTF8)
   if (g.status !== 0) return false
   const [dir, common] = g.stdout.split('\n').map((d) => path.resolve(rec.wt, d))
-  const read = (d) => { try { return JSON.parse(fs.readFileSync(path.join(d, 'spec-app.json'), 'utf8')) } catch {} }
+  const read = (d) => state.readJson(path.join(d, 'spec-app.json'))
   const mine = read(dir)
   const linked = path.join(common, 'worktrees')
   let dirs = []
@@ -109,7 +94,6 @@ const bootStatus = (log, from) => {
   } catch { return null }
 }
 
-// Up: alive and the ready check passes; a live pid over a url nothing answers is down.
 const up = (rt, rec) => alive(rec) && ready(rt, rec.port, rec.wt)
 
 // TERM, 5 s, KILL: our leader's process group, every SPEC_APP-tagged process and the group of each (a group member
@@ -162,7 +146,7 @@ function recOf(root, status) {
   if (status.app || !status.worktree) return status.app || null
   const wt = real(path.resolve(root, status.worktree))
   const file = recFile(wt)
-  try { const r = JSON.parse(fs.readFileSync(file, 'utf8')); if (r.wt === wt) return r } catch { /* none kept */ }
+  const r = file && state.readJson(file); if (r && r.wt === wt) return r
   return { wt, url: status.url }
 }
 
@@ -270,8 +254,6 @@ function needProto(cfg, stem, contract) {
   }
 }
 
-// ---- for a driver whose state holds {app, appPort} (run.js) ----
-
 // One port per state, allocated once when the url holds {port}.
 function portOf(rt, s) {
   if (s.appPort === undefined) s.appPort = /\{port\}/.test(rt.url) ? host.freePort() : null
@@ -301,6 +283,6 @@ function gatePins(cfg, s, o) {
 }
 
 module.exports = {
-  start, ready, alive, up, stop, stopIfAt, ensure, tryEnsure, recOf, bootOf, BOOT_MISSING,
-  portOf, stopIn, upIn, gatePins, needProto,
+  start, ready, alive, up, stop, stopIfAt, ensure, recOf, bootOf,
+  stopIn, upIn, gatePins, needProto,
 }

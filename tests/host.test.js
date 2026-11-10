@@ -55,6 +55,17 @@ test('the cache is shared by worktrees with the same content', () => {
   assert.ok(H.gate(root, config).cached, 'merging an unchanged tree to trunk must not re-run the suite')
 })
 
+test('AC-20261108-06-10 a queue commit changes no gated tree: the second gate is a cache hit', () => {
+  const root = tmpdir('qgate'); const g = gitRepo(root)
+  const config = { testCommand: 'true' }
+  assert.ok(!H.gate(root, config).cached)
+  fs.mkdirSync(path.join(root, 'specs/queue'), { recursive: true }); fs.writeFileSync(path.join(root, 'specs/queue/20261108-aaaa.json'), '{}\n')
+  g('add', '-A'); g('commit', '-q', '-m', 'chore(queue): add 20261108-aaaa')
+  assert.ok(H.gate(root, config).cached, 'specs/queue/ is outside the gated tree')
+  fs.writeFileSync(path.join(root, 'src.js'), 'x\n')
+  assert.ok(!H.gate(root, config).cached, 'anything else is not')
+})
+
 test('gate without a testCommand is a refusal naming /spec:init', () => {
   const root = tmpdir('nocmd')
   gitRepo(root)

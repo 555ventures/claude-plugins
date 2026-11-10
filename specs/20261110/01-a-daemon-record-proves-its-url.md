@@ -1,6 +1,6 @@
 ---
 date: 2026-11-10
-status: hardened
+status: done
 area: prototype
 depends_on: []
 brief: n/a

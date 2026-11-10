@@ -6,7 +6,7 @@ const assert = require('node:assert')
 const fs = require('node:fs')
 const net = require('node:net')
 const path = require('node:path')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const { tmpdir, gitRepo, runNode, freePort, killStrays, SPEC } = require('./helpers')
 const reap = require(path.join(SPEC, 'scripts/lib/reap.js'))
 
@@ -293,17 +293,35 @@ function daemonHost(t, stopCommand) {
   if (stopCommand) rt.stopCommand = `kill $(cat ${dpid})`
   const h = guard(t, host({}, {}, rt, { 'daemon.js': DAEMON, 'launch.js': LAUNCH }))
   t.after(() => { try { process.kill(Number(fs.readFileSync(dpid, 'utf8')), 'SIGKILL') } catch { /* gone */ } })
-  return h
+  return { ...h, dpid }
 }
 
-test('AC-20261108-01-2 a daemon boot (`docker compose up -d`) with no runtime.stopCommand is waited for, then refused at OPEN (exit 2, runtime.stopCommand named): nothing is opened or adopted', async (t) => {
+test('AC-20261108-01-2 AC-20261110-01-1 a daemon boot (`docker compose up -d`) with no runtime.stopCommand is waited for, then refused at OPEN (exit 2, runtime.stopCommand named): nothing is opened or adopted; the worktree is kept and the remedy run there lets the re-run open', async (t) => {
   const h = daemonHost(t, false)
   const r = drive(h.root, ['invoice', 'list', 'page'])
   assert.strictEqual(r.status, 2, r.stderr + r.stdout)
   assert.ok(r.stderr.includes('left the app at') && r.stderr.includes('no process this driver can stop') && r.stderr.includes('runtime.stopCommand') &&
     !r.stderr.includes('did not start it'), r.stderr)
   assert.ok(!fs.existsSync(path.join(h.root, 'design/prototypes', STEM, 'status.json')), 'no status is written')
-  assert.ok(!fs.existsSync(path.join(h.root, '.claude/worktrees/proto-' + STEM)), 'the worktree it made is removed')
+  const wt = path.join(h.root, '.claude/worktrees/proto-' + STEM)
+  assert.ok(fs.existsSync(wt), 'the worktree is kept: the remedy runs there')
+  assert.ok(r.stderr.includes(wt) && r.stderr.includes('with PORT=') && r.stderr.includes('then re-run (the worktree is kept for that)'), r.stderr)
+
+  // the remedy as written: the stop command is set and run in that worktree (PORT as named), then the re-run opens
+  const port = /with PORT=(\d+)/.exec(r.stderr)[1]
+  const cfgFile = path.join(h.root, '.claude/spec.config.json')
+  const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))
+  cfg.runtime.stopCommand = `kill $(cat ${h.dpid})`
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg))
+  const stopped = spawnSync('sh', ['-c', cfg.runtime.stopCommand], { cwd: wt, env: { ...process.env, PORT: port }, encoding: 'utf8' })
+  assert.strictEqual(stopped.status, 0, stopped.stderr)
+  for (let i = 0; i < 50 && await answers(`http://127.0.0.1:${port}`); i++) await new Promise((r) => setTimeout(r, 100))
+  assert.ok(!(await answers(`http://127.0.0.1:${port}`)), 'the stopped daemon is gone')
+  const again = drive(h.root, ['invoice', 'list', 'page'])
+  assert.strictEqual(again.status, 0, again.stderr + again.stdout)
+  const st = statusOf(h.root)
+  assert.ok(again.stdout.includes(`app up at ${st.url}`), again.stdout)
+  assert.ok(await answers(st.url), 'the re-run booted the app in the kept worktree')
 })
 
 test('AC-20261109-01-5 a prototype on a daemon host reaches ROUND; --mark closed --force runs runtime.stopCommand before the worktree goes: nothing answers at the url, the worktree is gone', async (t) => {

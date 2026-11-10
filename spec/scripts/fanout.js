@@ -232,7 +232,9 @@ function mergeLane(s, ctx, lane) {
     else { Object.assign(lane, { status: 'sent-back', conflicts: r.conflicts, conflictAt: at }); stamp(s, lane, 'conflict', r.conflicts) }
   } else if (r.red) { // the rebased tree is red: back to its own run at GATE on the new base, never onto trunk
     const run = laneRun(root, lane) || {}
-    st.writeJson(path.join(runDirOf(root, lane), 'state.json'), { ...run, step: 'GATE', base: r.base, review: null, attempts: { repair: 0, fix: 0 }, report: undefined })
+    // the review stays: the repair's review is a later round over the delta (base moved)
+    const next = { ...run, step: 'GATE', base: r.base, attempts: { repair: 0, fix: 0 }, report: undefined }
+    st.writeJson(path.join(runDirOf(root, lane), 'state.json'), next)
     Object.assign(lane, { status: 'sent-back', red: r.red.split('\n').find((x) => /✖|not ok|FAIL|fail|error/i.test(x)) || r.red.split('\n')[0] })
     stamp(s, lane, 'red', lane.red)
   } else { Object.assign(lane, { status: 'merged', landed: r.landed, ...(r.kept ? { kept: `worktree kept at ${lane.worktree}: ${r.kept} — git worktree remove --force ${lane.worktree}` } : {}) }); stamp(s, lane, 'landed', r.landed) }

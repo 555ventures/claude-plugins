@@ -17,7 +17,7 @@ const { land, briefClosed, briefOpen } = require('./lib/land'); const { render }
 const criteria = require('./lib/criteria'); const stub = require('./lib/stub'); const app = require('./lib/app')
 
 const PLUGIN = path.resolve(__dirname, '..')
-const REPAIR_CAP = 2; const FIX_CAP = 2; const SEVERITIES = ['blocking', 'advisory', 'needs-decision']
+const REPAIR_CAP = 2; const FIX_CAP = 2; const SEVERITIES = ['blocking', 'advisory', 'needs-decision', 'note']
 const AGENT_STEPS = ['BUILD', 'REPAIR', 'FIX', 'REVIEW'] // only then is a non-lane checkout marked for block-worker-git.sh
 let inPlaceFlag = false
 
@@ -309,7 +309,7 @@ function merge(state, ctx) {
     : s.abs ? isThisFix(state, ctx) : null
   const r = land(mainRoot(ctx.root), { wt: wtOf(state, ctx), branch: state.branch, spec: state.fix ? null : specIn(state, ctx), id: s.id, config: cfgOf(ctx), message: `chore(spec): merge ${s.id} — ${state.fix ? state.fix.symptom : docOf(state, ctx).title}`, inPlace: state.inPlace, tick })
   if (r.conflicts) return state // the rebase is left in the worktree: the rebase guard prints the step
-  if (r.red) return go(state, 'GATE', { base: r.base, review: null, attempts: { repair: 0, fix: 0 } })
+  if (r.red) return go(state, 'GATE', { base: r.base, attempts: { repair: 0, fix: 0 } })
   if (r.kept) state.commitWarns = [...(state.commitWarns || []), `worktree kept at ${state.worktree}: ${r.kept} — git worktree remove --force ${state.worktree}`]
   state.mergeSha = state.inPlace ? null : r.landed
   if (r.brief && r.brief.closed) decide(state, briefClosed(r.brief))
@@ -352,7 +352,7 @@ function finishRebase(state, ctx) {
   git.sh(['add', '-A'], wt); git.raw(['-c', 'core.editor=true', 'rebase', '--continue'], wt) // a later commit may conflict again
   if (!git.rebasing(wt)) {
     const base = git.sh(['merge-base', cfgOf(ctx).trunk, 'HEAD'], wt)
-    go(state, 'GATE', { base, review: null, attempts: { repair: 0, fix: 0 }, report: undefined })
+    go(state, 'GATE', { base, attempts: { repair: 0, fix: 0 }, report: undefined })
     if (state.respec) takeSpec(state, ctx) // an amended spec's text, held back while the rebase conflicted
     return state
   }
@@ -425,13 +425,14 @@ const steps = {
   },
   reviewed(state, flags, ctx) {
     const doc = flags.file && flags.file !== true ? st.readJson(path.resolve(ctx.root, flags.file)) : refuse('reviewed needs --file <findings json>')
-    if (!doc || !Array.isArray(doc.findings)) refuse(`${flags.file} is missing or is not findings JSON — expected {"findings": [...], "verdict": "clean|fix"}`)
+    if (!doc || !Array.isArray(doc.findings)) refuse(`${flags.file} is not findings JSON — needs {"findings": [...]}`)
     const bad = doc.findings.filter((f) => !f || typeof f !== 'object' || !SEVERITIES.includes(f.severity))
     if (bad.length) refuse(`${flags.file}: every finding needs severity ${SEVERITIES.join(' or ')} — got ${bad.map((f) => JSON.stringify(f && f.severity)).join(', ')}; rewrite those findings, then re-mark`)
-    if (doc.verdict !== undefined && !['clean', 'fix'].includes(doc.verdict)) refuse(`${flags.file}: verdict must be clean or fix, got ${JSON.stringify(doc.verdict)}`)
     const blocking = doc.findings.filter((f) => f.severity === 'blocking'); const choices = doc.findings.some((f) => f.severity === 'needs-decision')
-    if (doc.verdict === 'fix' && !blocking.length) refuse(`${flags.file}: verdict is fix but no finding is blocking — set severity blocking on the finding(s) that must be fixed, or verdict clean`)
-    state.review = { findings: doc.findings, verdict: blocking.length ? (state.attempts.fix >= FIX_CAP ? 'stopped' : 'fix') : choices ? 'decision' : 'clean' }
+    const kept = (state.review ? state.review.findings : []).filter((f) => ['advisory', 'note'].includes(f.severity))
+    const verdict = blocking.length ? (state.attempts.fix >= FIX_CAP ? 'stopped' : 'fix') : choices ? 'decision' :
+      'clean'
+    state.review = { tree: state.gate.tree, base: state.base, findings: [...kept, ...doc.findings], verdict }
     const seat = B.reviewSeat(docOf(state, ctx), cfgOf(ctx))
     const round = `${seat.model}/${seat.effort}: ${doc.findings.length} findings, ${blocking.length} blocking`
     state.reviews = [...(state.reviews || []), round]

@@ -71,10 +71,23 @@ function builder(b, kind) {
 const reviewSeat = (doc, cfg) =>
   doc.frontmatter.architecture === true ? { model: 'opus', effort: 'xhigh' } : cfg.seats.reviewer
 
+// A later round: the last review recorded its tree, so this one checks the fix delta against what that review found.
+function laterRound(b) {
+  const r = b.review; const open = r.findings.filter((f) => ['blocking', 'needs-decision'].includes(f.severity))
+  return [`Later round: review only the fix. Delta since the last review: git -C ${b.wt} diff ${r.tree} ${b.gate.tree}`,
+    ...(r.base !== b.base ? ['The base moved (a rebase onto trunk): the delta also holds trunk\'s changes; ' +
+      'review only files the run\'s diff touches.'] : []),
+    'Decide each finding below closed or not closed (one not closed is written again with its severity). ' +
+      'The driver keeps earlier advisories and notes.',
+    ...(open.length ? open.map(finding) : ['- none']), '']
+}
+
 function reviewer(b) {
   const spec = !!b.specPath
   const body = [
     `Worktree: ${b.wt}`, `Base: ${b.base}`, `Diff (working tree vs base): ${b.runFile('diff.patch')}`,
+    `Gate: green on this tree (run ${b.gate.runId}). Do not run the test command again; ` +
+      'run one test file or a probe when you need output.',
     ...(b.evidence ? [`Evidence the builder recorded (not in the diff): ${b.runFile('evidence.md')}`] : []),
     ...(b.asBuilt ? [`Departures the builder recorded: ${b.runFile('as-built.md')}`] : []),
     ...(spec ? [`Spec: ${b.specPath}`] : []),
@@ -83,7 +96,7 @@ function reviewer(b) {
     ...(b.redCheck ? [b.redCheck] : []),
     ...(spec ? ["The spec's frontmatter status line changes during the run; that is bookkeeping, not a finding."] : []),
     ...(isFix(b.doc) ? ['A fix: check that the test evidence.md names fails for the stated cause without the fix and that the fix is at the root, not around the symptom.'] : []),
-    '', ...contract(b, { plan: false }),
+    '', ...(b.review && b.review.tree ? laterRound(b) : []), ...contract(b, { plan: false }),
     ...(b.proto ? [`For each behaviour pin open its test in ${b.proto.e2eFile}: a missing test, a title without \`pin pN:\`, or an assertion that does not establish the sentence (asserts less, a selector or structure, or skips the given) is blocking.`,
       ...(b.proto.pictures.length ? ['Pictures of the pinned routes (a reference for the look, never a gate):', ...b.proto.pictures.map((f) => `- ${f}`)] : []), ''] : []),
     ...(spec ? [OTHER_SECTIONS] : []),
@@ -162,8 +175,11 @@ function report(state, outcome, next) {
 
 // Rulings and as-built lines live in the commit, never in the spec.
 const block = (title, lines) => (lines.length ? [`${title}:\n` + lines.map((l) => `- ${l}`).join('\n')] : [])
+const notes = (state) => ((state.review || {}).findings || []).filter((f) => f.severity === 'note')
+  .map((f) => `${loc(f)} ${f.summary || ''}`.trim())
 const commitMessage = (state, subject, asBuilt, evidence) => [subject, ...lookLine(state),
   ...block('Rulings', state.rulings || []), ...block('Reviews', state.reviews || []),
+  ...block('Review notes', notes(state)),
   ...block('As built', asBuilt), ...(evidence ? [evidence] : [])].join('\n\n')
 
 // One line under the checkpoint: what the mark led to.

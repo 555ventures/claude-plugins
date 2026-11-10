@@ -20,7 +20,10 @@ driver builds only with `--in-place`, and then lands nothing on trunk.
   against the app the driver boots from `runtime`, restarted at every GATE; the cited prototype's own app is
   stopped first only when it holds the run's url, a fixed-port host, and otherwise runs on until `closed`); red is a REPAIR. `runtime.envCommand` runs once per worktree.
 - **REVIEW**: dispatch one `spec:reviewer`, then mark `reviewed --file <findings path>`; a clean
-  review runs through to DONE itself. Advisories become one queued fix item.
+  review runs through to DONE itself. Advisories become one queued fix item; `note` findings (style, wording)
+  are printed and listed under `Review notes:` in the build commit, never queued or blocking. A review after a fix
+  round (or a repair or conflict after landing's rebase) is a later round: it decides each earlier blocking finding
+  closed or not closed and reviews only the fix delta, `git diff <reviewed tree> <gate tree>`; the rest cannot block.
 - **LOOK** (a `prototype:` spec, after a clean review): the app GATE booted is still up (one that is not —
   a run resumed after a wait, or a dead app — the driver boots first; one that cannot come up goes back to
   GATE, which says why); print the url and the look lines, end the turn. A literal `close enough` → mark `looked`; anything else → mark

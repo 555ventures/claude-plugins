@@ -4,7 +4,7 @@
 // hand); lib/app.js adds SPEC_APP=<worktree realpath>. No supervisor, TTL or registry: the process table is the
 // record, read on entry.
 //   procs() → [{pid, CLAUDE_PID, SPEC_APP}] this uid's processes (env: macOS `ps -E`, Linux /proc/*/environ)
-//   info(pid) → {stat, pgid, started} | null      running(pid)      alive and not a zombie
+//   info(pid) → {stat, pgid, started} | null (undefined: no ps)      running(pid)      alive and not a zombie
 //   members(pgids) → the live pids in those process groups (a member ps shows no environment for is found here)
 //   tagOf(pid) → the SPEC_APP one process carries      tagged(wt)   pids carrying SPEC_APP=wt
 //   ownerAlive(pid)   the process is alive and is named `claude`
@@ -60,15 +60,18 @@ function tagOf(pid) {
   return r.status === 0 && r.stdout.trim() ? parseEnv(pid, r.stdout.trim()).SPEC_APP : null
 }
 
-// stat, process group and start time (ms) of one pid; null when it is gone.
+// stat, process group and start time (ms) of one pid; null when it is gone, undefined when ps cannot be run.
 function info(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return null
   const r = ps(['-o', 'stat=,pgid=,lstart=', '-p', String(pid)])
+  if (r.error) return undefined
   const m = r.status === 0 && /^\s*(\S+)\s+(\d+)\s+(.+?)\s*$/.exec(r.stdout)
   return m ? { stat: m[1], pgid: Number(m[2]), started: Date.parse(m[3]) } : null
 }
 
-const running = (pid) => { const i = info(pid); return !!i && !i.stat.startsWith('Z') }
+// With no ps to ask, signal 0 decides (a zombie still counts), so kill() still waits and escalates to SIGKILL.
+const signal0 = (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
+const running = (pid) => { const i = info(pid); return i === undefined ? signal0(pid) : !!i && !i.stat.startsWith('Z') }
 
 function members(pgids) {
   const want = new Set(pgids.filter((g) => Number.isInteger(g) && g > 1))

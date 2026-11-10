@@ -146,3 +146,16 @@ test('AC-20261108-01-8 kill terminates then kills a process that ignores TERM', 
   assert.strictEqual(reap.kill([stubborn.pid]), 1)
   assert.ok(await gone(stubborn.pid))
 })
+
+test('AC-20261108-01-8 kill still escalates to SIGKILL when ps is not on PATH', async (t) => {
+  const stubborn = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); console.log('ready'); setInterval(() => {}, 1000)"], { stdio: ['ignore', 'pipe', 'inherit'] })
+  t.after(() => stubborn.kill('SIGKILL'))
+  await new Promise((r) => stubborn.stdout.once('data', r))
+  const was = process.env.PATH
+  t.after(() => { process.env.PATH = was })
+  process.env.PATH = tmpdir('reap no ps')
+  assert.strictEqual(reap.running(stubborn.pid), true, 'signal 0 answers when ps cannot')
+  reap.kill([stubborn.pid], 300)
+  process.env.PATH = was
+  assert.ok(await gone(stubborn.pid))
+})

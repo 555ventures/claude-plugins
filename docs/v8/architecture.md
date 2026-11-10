@@ -11,16 +11,19 @@ first, then build.
   2 refusal (stderr names the remedy). `--root <dir>` on every driver; `--json` where output
   is consumed by code.
 - One module owns each on-disk file (see §2). Nobody else parses it.
-- Size caps count bytes (ADR-0047): driver ≤ 40,000, lib file ≤ 16,000, `spec/scripts/` total
+- Size caps count bytes (ADR-0052): driver ≤ 40,000, lib file ≤ 16,000, `spec/scripts/` total
   ≤ 400,000, command md ≤ 6,000, agent md ≤ 4,000, doctrine ≤ 8,000 (`tests/size.json`). A new
   or changed line in `spec/scripts/**/*.js` is at most 120 characters; a long line the file held
   at the merge-base with main is wrapped when its code is touched. `npm test` runs
-  `tests/size-check.js` first. A file or total past its cap is green only on a `tests/size.json`
-  `over` entry (`bytes` at or above its size, `by` a non-draft spec's Decision row that names
-  the path). A builder past a cap stops and says so: the raise is a Decision the planner writes
-  and the user locks. Never join lines or cut tests to fit. A test file over 500 lines prints a
-  warning (split it by behaviour) and is never a reason to delete a test; a test may not read
-  more command, agent, doctrine or design prose than it did at the merge-base.
+  `tests/size-check.js` first. A lane is judged by the bytes it adds since its merge-base with
+  main: a file or total within its cap there may cross it once, by at most 5% of the cap (a
+  `⚠️` says the next change to it must not grow it); one already over its cap there may not
+  grow at all. A `tests/size.json` `over` entry (`bytes` at or above its size, `by` a non-draft
+  spec's Decision row that names the path) passes either. A builder past the rule stops and says
+  so: the raise is a Decision the planner writes and the user locks. Never join lines or cut
+  tests to fit. A test file over 500 lines prints a warning (split it by behaviour) and is never
+  a reason to delete a test; a test may not read more command, agent, doctrine or design prose
+  than it did at the merge-base.
 - Tests: `tests/<name>.test.js` with `node:test`, behavioural only (run the script on a tmp
   tree, assert exit code / files / JSON). Never assert on prose wording. Use
   `tests/helpers.js` (`tmpdir`, `gitRepo`, `runNode`, `runBash`, `freePort`).

@@ -1,0 +1,11 @@
+{
+  "version": 4,
+  "id": "20261110-c717",
+  "rank": "1",
+  "kind": "spec",
+  "payload": "specs/20261108/05-a-run-stopped-at-a-cap-resumes.md",
+  "added": "2026-11-10T03:28:03.891Z",
+  "after": {
+    "spec": "specs/20261109/02-a-later-review-checks-the-fix.md"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "testCommand": "npm test",
-  "testCountPattern": "\u2139 tests (\\d+)",
   "setupCommand": "npm install",
   "trunk": "main",
+  "testCountPattern": "ℹ tests (\\d+)",
   "forge": "github"
 }

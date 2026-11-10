@@ -1,0 +1,11 @@
+{
+  "version": 4,
+  "id": "20261110-5730",
+  "rank": "2",
+  "kind": "spec",
+  "payload": "specs/20261108/06-the-queue-syncs-through-your-own-commands.md",
+  "added": "2026-11-10T03:28:03.995Z",
+  "after": {
+    "spec": "specs/20261109/02-a-later-review-checks-the-fix.md"
+  }
+}

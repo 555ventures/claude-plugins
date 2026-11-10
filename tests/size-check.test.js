@@ -1,6 +1,7 @@
 'use strict'
-// The size gate: capped files count bytes, a new spec/scripts line is at most 120 characters, a file past
-// its cap needs a size.json `over` entry citing a locked Decision, long test files warn, tests never read more prose.
+// The size gate: capped files count bytes, a new spec/scripts line is at most 120 characters, a lane may cross a cap
+// once by 5% of it and may not grow a file already past it, an `over` entry citing a locked Decision passes either,
+// long test files warn, tests never read more prose.
 const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('fs')
@@ -20,7 +21,7 @@ const host = (cfg = CFG) => {
 const RAISE = 'specs/20261107/09-raise.md'
 const raiseSpec = (status, rows) => `---\nstatus: ${status}\n---\n\n# Raise\n\n## Decisions\n\n| ID | Decision | Why |\n|----|----------|-----|\n${rows}\n\n## File Plan\n\n| Path | Action | Summary |\n|------|--------|---------|\n| tests/size.json | MODIFY | spec/scripts/a.js D2 |\n`
 
-test('AC-20261107-03-1 a capped script is measured in bytes: many short lines under the cap are green, bytes over it are red whatever the merge-base held', () => {
+test('AC-20261107-03-1 a capped script is measured in bytes: many short lines under the cap are green, bytes over it are red when the branch added more than 5% of the cap', () => {
   const { d, g } = host()
   write(d, 'spec/scripts/a.js', 'x\n'.repeat(45))
   const green = run(d)
@@ -30,9 +31,6 @@ test('AC-20261107-03-1 a capped script is measured in bytes: many short lines un
   assert.strictEqual(r.status, 1, r.out)
   assert.match(r.out, /spec\/scripts\/a\.js 120 bytes > cap 100/)
   g('add', '-A'); g('commit', '-qm', 'over cap at base')
-  r = run(d)
-  assert.strictEqual(r.status, 1, 'holding at its merge-base size is no longer a pass: ' + r.out)
-  assert.match(r.out, /spec\/scripts\/a\.js 120 bytes > cap 100/)
   write(d, 'spec/scripts/lib/b.js', 'y'.repeat(99) + '\n'); write(d, 'spec/scripts/c.js', 'y'.repeat(99) + '\n')
   write(d, 'spec/scripts/a.js', 'x\n')
   assert.strictEqual(run(d).status, 0)
@@ -89,10 +87,82 @@ test('AC-20261107-03-3 a file or total over its cap is green only on an over ent
   write(d, RAISE, raiseSpec('done', '- D2: raise spec/scripts/ as a total'))
   write(d, 'spec/scripts/a.js', 'x\n'); for (const f of 'bcdefghijkl') write(d, `spec/scripts/${f}.js`, 'z'.repeat(99) + '\n')
   r = run(d)
-  assert.match(r.out, /spec\/scripts\/ 1102 bytes > cap 1000 — stop and say so/, r.out)
+  assert.match(r.out, /spec\/scripts\/ 1102 bytes > cap 1000 — this branch added 1102, more than 50: cut what it added, or stop and say so/, r.out)
   cfg({ ...CFG, over: { 'spec/scripts/': { bytes: 1200, by: `${RAISE} D2` } } })
   r = run(d)
   assert.strictEqual(r.status, 0, 'a total with an entry, a bullet Decisions row naming it: ' + r.out)
+})
+
+const WARN = (key, n, cap) => `size-check: ⚠️ ${key} ${n} bytes > cap ${cap} — the next change to it must not grow it\n`
+const commit = (g, msg) => { g('add', '-A'); g('commit', '-qm', msg) }
+
+test('AC-20261109-03-1 a file within its cap at the merge-base may cross it once by 5% of the cap, with a warning; more than that is red naming the bytes added and the allowance', () => {
+  const { d, g } = host()
+  write(d, 'spec/scripts/a.js', 'x'.repeat(98) + '\n')
+  commit(g, 'a.js is 99 bytes at base')
+  write(d, 'spec/scripts/a.js', 'x'.repeat(103))
+  let r = run(d)
+  assert.strictEqual(r.status, 0, 'adding exactly 5% of the cap is green: ' + r.out)
+  assert.ok(r.out.includes(WARN('spec/scripts/a.js', 103, 100)), r.out)
+  write(d, 'spec/scripts/a.js', 'x'.repeat(105))
+  r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/a\.js 105 bytes > cap 100 — this branch added 6, more than 5: cut what it added, or stop and say so/)
+  write(d, 'spec/scripts/a.js', 'x'.repeat(100))
+  r = run(d)
+  assert.strictEqual(r.status, 0, r.out)
+  assert.ok(!r.out.includes('⚠️'), 'at the cap is no warning: ' + r.out)
+})
+
+test('AC-20261109-03-2 a file over its cap at the merge-base is green while the branch keeps it that size or smaller, and red naming the merge-base size when it grows one byte', () => {
+  const { d, g } = host()
+  write(d, 'spec/scripts/a.js', 'x'.repeat(130))
+  commit(g, 'a.js is 130 bytes at base')
+  let r = run(d)
+  assert.strictEqual(r.status, 0, 'trunk growth is not the branch: ' + r.out)
+  assert.ok(r.out.includes(WARN('spec/scripts/a.js', 130, 100)), r.out)
+  write(d, 'spec/scripts/a.js', 'x'.repeat(120))
+  assert.strictEqual(run(d).status, 0, 'a cut still over the cap is green')
+  write(d, 'spec/scripts/a.js', 'x'.repeat(131))
+  r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/a\.js 131 bytes > cap 100 — over its cap at the merge-base \(130\): cut it to 130 or less, or stop and say so/)
+})
+
+test('AC-20261109-03-3 the spec/scripts/ total follows the same rule with 5% of its cap; a new file counts all its bytes as added; a valid over entry turns either red green', () => {
+  const { d, g, cfg } = host()
+  for (const f of 'abcdefghi') write(d, `spec/scripts/${f}.js`, 'z'.repeat(100))
+  write(d, 'spec/scripts/j.js', 'z'.repeat(60))
+  commit(g, 'total is 960 at base')
+  write(d, 'spec/scripts/k.js', 'z'.repeat(50))
+  let r = run(d)
+  assert.strictEqual(r.status, 0, 'a new file adding exactly 5% of the total cap is green: ' + r.out)
+  assert.ok(r.out.includes(WARN('spec/scripts/', 1010, 1000)), r.out)
+  write(d, 'spec/scripts/k.js', 'z'.repeat(51))
+  r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/ 1011 bytes > cap 1000 — this branch added 51, more than 50: cut what it added, or stop and say so/)
+  write(d, RAISE, raiseSpec('hardened', '| D2 | raise spec/scripts/ as a total | a locked raise |'))
+  cfg({ ...CFG, over: { 'spec/scripts/': { bytes: 1011, by: `${RAISE} D2` } } })
+  r = run(d)
+  assert.strictEqual(r.status, 0, 'an over entry turns the total green: ' + r.out)
+  cfg(CFG)
+  write(d, 'spec/scripts/k.js', 'z')
+  write(d, 'spec/scripts/l.js', 'y'.repeat(101))
+  r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/l\.js 101 bytes > cap 100 — this branch added 101, more than 5/, 'a new file counts all its bytes')
+  fs.rmSync(path.join(d, 'spec/scripts/l.js'))
+  write(d, 'spec/scripts/k.js', 'z'.repeat(60))
+  commit(g, 'total is 1020, over its cap, at base')
+  r = run(d)
+  assert.strictEqual(r.status, 0, 'a total over its cap at base holds: ' + r.out)
+  write(d, 'spec/scripts/k.js', 'z'.repeat(61))
+  r = run(d)
+  assert.strictEqual(r.status, 1, r.out)
+  assert.match(r.out, /spec\/scripts\/ 1021 bytes > cap 1000 — over its cap at the merge-base \(1020\): cut it to 1020 or less, or stop and say so/)
+  cfg({ ...CFG, over: { 'spec/scripts/': { bytes: 1100, by: `${RAISE} D2` } } })
+  assert.strictEqual(run(d).status, 0, 'an over entry turns the grown total green')
 })
 
 test('AC-20261107-03-4 a test file over 500 lines and a tests total past 4,000 warn and exit 0; a test reading more prose than its base stays red', () => {

@@ -1,7 +1,9 @@
 'use strict'
-// The v8 size caps (docs/v8/architecture.md §0, ADR-0047) as a gate, run before the suite by `npm test`.
-// Capped files and the spec/scripts/ total count bytes: joining lines saves none. A file or total past its cap
-// is green only on a tests/size.json `over` entry whose `by` names a locked spec Decision naming that path.
+// The v8 size caps (docs/v8/architecture.md §0, ADR-0052) as a gate, run before the suite by `npm test`.
+// Capped files and the spec/scripts/ total count bytes: joining lines saves none. A lane is judged by what it adds
+// since its merge-base with main: within its cap there, a file or total may cross it once by 5% of the cap (a
+// warning); over its cap there, it may not grow. A tests/size.json `over` entry whose `by` names a locked spec
+// Decision naming that path passes either.
 // A spec/scripts line over 120 characters is red unless the same file held it at the merge-base with main.
 // Test files over their line cap warn; a test reading more prose than at the merge-base is red.
 const fs = require('fs')
@@ -10,6 +12,7 @@ const { execFileSync } = require('child_process')
 
 const root = path.resolve(process.argv[2] || path.join(__dirname, '..'))
 const cfg = JSON.parse(fs.readFileSync(path.join(root, 'tests/size.json'), 'utf8'))
+cfg.over = cfg.over || {}
 const PROSE = /(?:commands|agents)\/[\w.-]+\.md|doctrine\.md|docs\/v8\//g
 const TESTS = 'tests/*.test.js'
 const WIDTH = 120
@@ -48,8 +51,7 @@ const warn = []
 
 // Why an `over` entry does not hold a key of `n` bytes, or null when it does.
 function overFails(key, n) {
-  const e = (cfg.over || {})[key]
-  if (!e) return 'stop and say so: growth past a cap is a Decision the user locks (a tests/size.json over entry)'
+  const e = cfg.over[key]
   const fail = (why) => `over entry ${key}: ${why}`
   if (!(Number(e.bytes) >= n)) return fail(`bytes ${e.bytes} < ${n}`)
   const m = /^(\S+\.md) (D\d+[a-z]?)$/.exec(String(e.by || ''))
@@ -70,10 +72,18 @@ function overFails(key, n) {
   }
   return null
 }
-const capped = (key, n, cap) => {
+// Why a lane may not take `key` to `n` bytes against `b` at the merge-base (0 when new), or null when it may.
+function ruleFails(n, cap, b) {
+  if (b > cap) return n > b ? `over its cap at the merge-base (${b}): cut it to ${b} or less, or stop and say so` : null
+  const allowance = cap / 20
+  return n - b > allowance ? `this branch added ${n - b}, more than ${allowance}: cut what it added, or stop and say so` : null
+}
+function capped(key, n, cap, b) {
   if (n <= cap) return
-  const why = overFails(key, n)
-  if (why) red.push(`${key} ${n} bytes > cap ${cap} — ${why}`)
+  const why = ruleFails(n, cap, b)
+  if (!why) return warn.push(`${key} ${n} bytes > cap ${cap} — the next change to it must not grow it`)
+  const bad = cfg.over[key] ? overFails(key, n) : why
+  if (bad) red.push(`${key} ${n} bytes > cap ${cap} — ${bad}`)
 }
 
 // Bytes of every capped file but a test file (lines), and of each total's .js files.
@@ -89,17 +99,18 @@ function measure(texts) {
 }
 
 const now = measure(texts)
-for (const [rel, n] of Object.entries(now.bytes)) capped(rel, n, cfg.caps[capOf(rel)])
+const was = measure(base)
+for (const [rel, n] of Object.entries(now.bytes)) capped(rel, n, cfg.caps[capOf(rel)], was.bytes[rel] || 0)
 for (const [rel, n] of Object.entries(now.lines)) {
   if (n > cfg.caps[TESTS]) warn.push(`${rel} ${n} lines > ${cfg.caps[TESTS]} — split it by behaviour`)
 }
-for (const [key, n] of Object.entries(now.total)) capped(key, n, cfg.totals[key])
+for (const [key, n] of Object.entries(now.total)) capped(key, n, cfg.totals[key], was.total[key])
 for (const [rel, text] of texts) {
   if (/^spec\/scripts\/.+\.js$/.test(rel)) {
-    const was = new Set((base.get(rel) || '').split('\n'))
+    const held = new Set((base.get(rel) || '').split('\n'))
     text.split('\n').forEach((l, i) => {
       const w = [...l].length
-      if (w > WIDTH && !was.has(l)) red.push(`${rel}:${i + 1} ${w} > ${WIDTH} characters — wrap it`)
+      if (w > WIDTH && !held.has(l)) red.push(`${rel}:${i + 1} ${w} > ${WIDTH} characters — wrap it`)
     })
   }
   if (/^tests\/[^/]+\.test\.js$/.test(rel)) {

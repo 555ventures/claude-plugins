@@ -1,6 +1,6 @@
 # 0047. Growth past a cap is a locked Decision; caps count bytes
 
-- Status: accepted
+- Status: superseded by ADR-0052
 - Date: 2026-11-07
 - Deciders: JJ + session (specs/20261107/03-this-repos-size-check-counts-bytes.md)
 - Applies to: this repo's own `tests/size-check.js`, `tests/size.json` and `docs/v8/architecture.md` §0; nothing shipped to host projects.

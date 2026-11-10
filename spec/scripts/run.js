@@ -436,7 +436,7 @@ const steps = {
     const round = `${seat.model}/${seat.effort}: ${doc.findings.length} findings, ${blocking.length} blocking`
     state.reviews = [...(state.reviews || []), round]
     if (state.review.verdict === 'stopped') {
-      const why = `still blocking after ${FIX_CAP} fix round${FIX_CAP === 1 ? '' : 's'}`
+      const why = `still blocking after ${FIX_CAP} fix rounds`
       return parkRun(state, ctx, why, fixItem(state, ctx, blocking[0].summary || 'blocking review findings'))
     }
     if (blocking.length) return go(state, 'FIX')

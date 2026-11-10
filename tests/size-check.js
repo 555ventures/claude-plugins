@@ -78,12 +78,14 @@ function ruleFails(n, cap, b) {
   const allowance = cap / 20
   return n - b > allowance ? `this branch added ${n - b}, more than ${allowance}: cut what it added, or stop and say so` : null
 }
+// A valid over entry decides first: it may grow to its bytes, so it is never told it must not grow.
 function capped(key, n, cap, b) {
   if (n <= cap) return
+  const entry = cfg.over[key] && overFails(key, n)
+  if (cfg.over[key] && !entry) return warn.push(`${key} ${n} bytes > cap ${cap} — held by its over entry (${cfg.over[key].bytes})`)
   const why = ruleFails(n, cap, b)
   if (!why) return warn.push(`${key} ${n} bytes > cap ${cap} — the next change to it must not grow it`)
-  const bad = cfg.over[key] ? overFails(key, n) : why
-  if (bad) red.push(`${key} ${n} bytes > cap ${cap} — ${bad}`)
+  red.push(`${key} ${n} bytes > cap ${cap} — ${entry || why}`)
 }
 
 // Bytes of every capped file but a test file (lines), and of each total's .js files.

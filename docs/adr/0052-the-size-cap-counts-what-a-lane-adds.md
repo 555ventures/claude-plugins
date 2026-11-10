@@ -18,7 +18,7 @@ ADR-0047 let a file or total past its cap pass only on a locked `over` entry, ju
 
 ## Decision
 
-`tests/size-check.js` judges each capped file and the `spec/scripts/` total by the bytes the branch adds since its merge-base with main (a new file counts all its bytes). Within its cap at the merge-base, a file or total may cross the cap once by at most 5% of the cap, with a warning that the next change to it must not grow it; past that it is red. Already over its cap at the merge-base, it may not grow at all. A valid `over` entry still passes either red. The allowance is `cap / 20` in code, not a `size.json` key.
+`tests/size-check.js` judges each capped file and the `spec/scripts/` total by the bytes the branch adds since its merge-base with main (a new file counts all its bytes). Within its cap at the merge-base, a file or total may cross the cap once by at most 5% of the cap, with a warning that the next change to it must not grow it; past that it is red. Already over its cap at the merge-base, it may not grow at all. A valid `over` entry still passes either red, and its warning names the entry, not the no-growth rule. The allowance is `cap / 20` in code, not a `size.json` key. Carried forward from ADR-0047 unchanged: the byte caps, the 120-character limit on new `spec/scripts` lines, the 500-line warning on a test file (advice, not a gate), and the prose-reference rule.
 
 ## Consequences
 

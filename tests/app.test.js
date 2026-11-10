@@ -216,6 +216,25 @@ test('AC-20261110-01-2 two worktrees each start a daemon record at one fixed url
   app.stop(rec2)
 })
 
+test('AC-20261110-01-2 a record speaks for its url only while its own file holds its start, and a later record in the main checkout outranks an earlier linked one', async (t) => {
+  const d = daemonHost(t, true)
+  const l = secondLane(t, d, await freePort())
+  const rec2 = app.start(l.rt2, { cwd: l.wt, port: null, log: l.log2 })
+  assert.ok(await answers(l.url), 'the linked daemon answers')
+  const gitDir = spawnSync('git', ['-C', l.wt, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).stdout.trim()
+  const own = path.join(gitDir, 'spec-app.json'); const kept = fs.readFileSync(own, 'utf8')
+  fs.writeFileSync(own, JSON.stringify({ ...JSON.parse(kept), startedAt: new Date(Date.now() - 60000).toISOString() }))
+  assert.strictEqual(app.alive(rec2), false, 'its own file holds another start: it does not speak for the url')
+  fs.writeFileSync(own, kept)
+  assert.ok(app.alive(rec2), 'its own file back: it does')
+  spawnSync('sh', ['-c', l.rt2.stopCommand]) // stopped outside the driver: its record file stays
+  assert.ok(await gone(l.url), 'the linked daemon is gone')
+  const rec1 = app.start(l.rt1, { cwd: d.root, port: null, log: d.log })
+  t.after(() => { try { process.kill(d.pidOf(), 'SIGKILL') } catch { /* gone */ } })
+  assert.ok(await answers(l.url) && app.alive(rec1), 'the main checkout\'s later record is alive')
+  assert.strictEqual(app.alive(rec2), false, 'the earlier linked record is outranked by the main checkout\'s file')
+})
+
 test('AC-20261110-01-2 a daemon record whose worktree is gone while its url still answers: alive and up are false, never a throw', async (t) => {
   const d = daemonHost(t, true)
   const l = secondLane(t, d, await freePort())

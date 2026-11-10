@@ -434,7 +434,9 @@ const steps = {
       'clean'
     state.review = { tree: state.gate.tree, base: state.base, findings: [...kept, ...doc.findings], verdict }
     const seat = B.reviewSeat(docOf(state, ctx), cfgOf(ctx))
-    const round = `${seat.model}/${seat.effort}: ${doc.findings.length} findings, ${blocking.length} blocking`
+    const closed = (Array.isArray(doc.closed) ? doc.closed : []).filter((c) => typeof c === 'string' && c.trim())
+    const round = `${seat.model}/${seat.effort}: ${doc.findings.length} findings, ${blocking.length} blocking` +
+      (closed.length ? `; closed: ${closed.join('; ')}` : '')
     state.reviews = [...(state.reviews || []), round]
     if (state.review.verdict === 'stopped') {
       const why = `still blocking after ${FIX_CAP} fix rounds`
@@ -482,7 +484,10 @@ const steps = {
     if (c === 'park') return parkRun(state, ctx, 'parked', fixItem(state, ctx, e.q))
     if (c === 'fix') return go(state, 'FIX', { fixFor: 'decision' })
     if (c !== 'retry') state.rulings = [...(state.rulings || []), ...(c === 'keep' ? e.q.split('\n').map((x) => `kept: ${x}`) : [`${state.assumption.id}: ${c}`])] // to the commit and the next brief
-    if (c === 'keep') { state.review.verdict = 'clean'; return afterReview(state) }
+    if (c === 'keep') { // the ruling holds the answer: a later round does not ask it again
+      state.review.findings = state.review.findings.filter((f) => f.severity !== 'needs-decision')
+      state.review.verdict = 'clean'; return afterReview(state)
+    }
     return go(state, state.from, { attempts: { repair: 0, fix: 0 }, opus: true })
   },
   // A dismissed question stops the run, queued as a decide item: nothing is answered for the user.

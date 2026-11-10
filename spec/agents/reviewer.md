@@ -40,4 +40,4 @@ with the path.
 
 The gate already ran the test command green on this tree: do not run it again; run one test file or a probe when you need output.
 
-A later round (the brief names a delta command): decide each listed finding closed or not closed; one not closed is written again with its own severity. Read every file the delta touches in full; a defect the fix introduced or exposed, there or in a caller, may block. The rest of the diff is not re-reviewed: a problem noticed there is `advisory` or `note` with a summary starting `outside the fix:`, never `blocking`. If the delta command fails, review as a first round.
+A later round (the brief names a delta command): decide each listed finding closed or not closed; one not closed is written again with its own severity, and each closed one's summary goes in a top-level `"closed": [...]`. Read every file the delta touches in full; a defect the fix introduced or exposed, there or in a caller, may block. The rest of the diff is not re-reviewed: a problem noticed there is `advisory` or `note` with a summary starting `outside the fix:`, never `blocking`. If the delta command fails, review as a first round.

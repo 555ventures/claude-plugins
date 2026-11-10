@@ -226,6 +226,23 @@ test('AC-20261109-02-1 AC-20261109-02-5 a review after a fix round names the del
   assert.match(later, new RegExp(`git -C \\S+ diff ${reviewed} ${gated}`))
   assert.ok(later.includes('wrong thing') && !/base moved/.test(later), later)
   assert.match(later, /Gate: green on this tree/)
+  const f = path.join(tmpdir('findings'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], closed: ['wrong thing'] }))
+  ok(h.run('--mark', 'reviewed', '--file', f))
+  const body = h.g('log', '-1', '--format=%B', 'main~1^2')
+  assert.match(body, /0 blocking; closed: wrong thing\n/, 'the build commit names what the later round closed\n' + body)
+})
+
+test('AC-20261109-02-1 a needs-decision finding the user kept is not asked again by the later round a landing conflict brings', () => {
+  const h = fixture(); build(h)
+  put(h.dir, 'feature.txt', 'trunk thing\n'); h.g('add', '-A'); h.g('commit', '-qm', 'trunk takes feature.txt')
+  const nd = [{ severity: 'needs-decision', file: 'feature.txt', summary: 'The thing is now shown on the home screen.' }]
+  assert.match(ok(h.run('--mark', 'reviewed', '--file', h.findings(nd))), /REVIEW → ESCALATE;/)
+  assert.match(ok(h.run('--mark', 'escalate', 'keep')), /conflicting in feature\.txt/)
+  put(h.wt, 'feature.txt', 'trunk thing\nthing\n')
+  const again = ok(h.run())
+  assert.match(again, /^▶ REVIEW[\s\S]*git -C \S+ diff /, again)
+  const open = again.slice(again.indexOf('Later round'), again.indexOf('## Intent'))
+  assert.ok(open.includes('- none') && !open.includes('home screen'), 'the kept choice is not listed again\n' + open)
 })
 
 test('AC-20261109-02-2 round one advisory and blocking, round two none: the run commits, queues one item holding round one\'s advisory and prints it', () => {

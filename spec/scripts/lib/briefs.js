@@ -11,6 +11,7 @@ const S = require('./spec')
 const { render } = require('./report')
 const { firstRedLine, resolveUrl } = require('./host')
 const { retiredLines } = require('./criteria')
+const { shq } = require('./driver')
 
 const OTHER_SECTIONS = 'Other sections (File Plan, Contracts, UI, Behavior, Canonical Delta) are not printed here — read them in the spec file; a Canonical Delta is applied by the builder.'
 const loc = (f) => `${f.file || ''}${f.file && f.line ? ':' + f.line : ''}`
@@ -74,7 +75,8 @@ const reviewSeat = (doc, cfg) =>
 // A later round: the last review recorded its tree, so this one checks the fix delta against what that review found.
 function laterRound(b) {
   const r = b.review; const open = r.findings.filter((f) => ['blocking', 'needs-decision'].includes(f.severity))
-  return [`Later round: review only the fix. Delta since the last review: git -C ${b.wt} diff ${r.tree} ${b.gate.tree}`,
+  return [`Later round: review only the fix. Delta since the last review: git -C ${shq(b.wt)} diff ${r.tree} ` +
+    b.gate.tree,
     ...(r.base !== b.base ? ['The base moved (a rebase onto trunk): the delta also holds trunk\'s changes; ' +
       'review only files the run\'s diff touches.'] : []),
     'Decide each finding below closed or not closed (one not closed is written again with its severity). ' +

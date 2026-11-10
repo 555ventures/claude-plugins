@@ -120,7 +120,7 @@ test('AC-20261107-02-1 AC-20261105-02-12 AC-20261105-10-1 AC-20261105-10-2 AC-20
   assert.strictEqual(h.g('status', '--porcelain').trim(), '')
 })
 
-test('AC-20261105-07-5 AC-20261105-10-3 AC-20261105-10-5 AC-20261107-01-7 a red rebased tree goes back to the lane\'s own GATE and lands once green; a second conflict against the same trunk stops the lane for the user', () => {
+test('AC-20261105-07-5 AC-20261105-10-3 AC-20261105-10-5 AC-20261107-01-7 AC-20261109-02-4 a red rebased tree goes back to the lane\'s own GATE and lands once green; a second conflict against the same trunk stops the lane for the user', () => {
   const h = host({ testCommand: 'if test -f src/a.js && test -f src/b.js && test ! -f ok; then echo "FAIL: a and b collide"; exit 1; fi' })
   dispatch(h)
   h.finish('01-alpha', 'src/a.js'); h.finish('02-beta', 'src/b.js')
@@ -134,7 +134,10 @@ test('AC-20261105-07-5 AC-20261105-10-3 AC-20261105-10-5 AC-20261107-01-7 a red 
   assert.strictEqual(h.g('log', '-1', '--format=%s', 'main').trim(), 'chore(spec): stub 20261104/01', 'and makes no stub commit: lane 1\'s is the last')
   assert.match(h.ok(), /lane 2 gate red after rebase: FAIL[\s\S]*lane 2 — spec-02-beta: sent-back · gate red after rebase/)
   h.ok('--mark', 'resent'); fs.writeFileSync(path.join(h.wt('02-beta'), 'ok'), '')
-  assert.match(h.lok('02-beta'), /^▶ REVIEW/); h.lok('02-beta', '--mark', 'reviewed', '--file', h.findings())
+  const again = h.lok('02-beta')
+  assert.match(again, /^▶ REVIEW/)
+  assert.ok(/git -C \S+ diff [0-9a-f]{40} [0-9a-f]{40}/.test(again) && /base moved/.test(again), 'AC-20261109-02-4 the repaired lane\'s review is a later round with the base-moved line: ' + again)
+  h.lok('02-beta', '--mark', 'reviewed', '--file', h.findings())
   assert.match(h.ok('--mark', 'returned', '--lane', '2'), /^lane 2 landed as [0-9a-f]{40}$/m)
   const c = host({ specs: SHARED })
   dispatch(c)

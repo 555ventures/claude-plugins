@@ -80,7 +80,7 @@ function fixture({ status = 'hardened', cfg = {}, files = {} } = {}) {
     gates: () => (fs.existsSync(counter) ? fs.readFileSync(counter, 'utf8').trim().split('\n') : []),
     state: (root = dir) => st.readRun(path.join(root, REL)),
     status: (root = dir) => st.readSpec(path.join(root, REL)).frontmatter.status,
-    findings: (findings, f = path.join(tmpdir('findings'), 'f.json')) => { fs.writeFileSync(f, JSON.stringify({ findings, verdict: findings.some((x) => x.severity === 'blocking') ? 'fix' : 'clean' })); return f },
+    findings: (findings, f = path.join(tmpdir('findings'), 'f.json')) => { fs.writeFileSync(f, JSON.stringify({ findings })); return f },
   }
 }
 
@@ -171,7 +171,9 @@ test('AC-20261107-02-1 a conflict at MERGE stays in the worktree: the rebase ste
   put(h.wt, 'feature.txt', 'trunk thing\nthing\n')
   const again = ok(h.run())
   assert.match(again, /^▶ REVIEW/, 'the resolution is gated and reviewed again')
-  assert.strictEqual(h.state().review, null)
+  assert.ok(h.state().review.tree, 'the run keeps its review across the rebase')
+  assert.match(again, /git -C \S+ diff [0-9a-f]{40} [0-9a-f]{40}/, 'AC-20261109-02-4 a resolved conflict is a later round')
+  assert.match(again, /base moved/, 'AC-20261109-02-4 the base-moved line')
   ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
   assert.strictEqual(h.g('show', 'main:feature.txt'), 'trunk thing\nthing\n')
   assert.strictEqual(h.g('status', '--porcelain'), '')
@@ -203,6 +205,66 @@ test('AC-20261107-02-3 AC-20261105-08-4 AC-20261105-06-7 a gate red past the rep
   const stop2 = ok(r.run('--mark', 'reviewed', '--file', r.findings(BLOCKING)))
   assert.match(stop2, /REVIEW → STOPPED;[\s\S]*📌 stopped: still blocking after 2 fix rounds — queued \/spec:fix specs\/20261104\/01-thing\.md — wrong thing/)
   assert.deepStrictEqual(open(r).map((i) => i.payload), ['wrong thing'])
+})
+
+const NOTE = [{ severity: 'note', file: 'feature.txt', line: 1, summary: 'a test pins a private name' }]
+const reviewBrief = (h) => { const out = ok(h.run()); assert.match(out, /^▶ REVIEW/, out); return out }
+
+test('AC-20261109-02-1 AC-20261109-02-5 a review after a fix round names the delta between the reviewed tree and the gate tree and lists the blocking summary; a first review names none; every brief names the gate run and says not to re-run', () => {
+  const h = fixture(); build(h)
+  const first = reviewBrief(h)
+  assert.ok(!/git -C \S+ diff /.test(first) && !/base moved/.test(first), 'a first round names no delta')
+  assert.match(first, /Gate: green on this tree \(run \S+\)\. Do not run the test command again/)
+  assert.ok(first.includes(`run ${h.state().gate.runId})`), 'the run id is the gate\'s')
+  ok(h.run('--mark', 'reviewed', '--file', h.findings(BLOCKING)))
+  const reviewed = h.state().review.tree
+  assert.match(reviewed, /^[0-9a-f]{40}$/)
+  bump(h.wt); ok(h.run('--mark', 'fixed'))
+  const gated = h.state().gate.tree
+  assert.notStrictEqual(gated, reviewed)
+  const later = reviewBrief(h)
+  assert.match(later, new RegExp(`git -C \\S+ diff ${reviewed} ${gated}`))
+  assert.ok(later.includes('wrong thing') && !/base moved/.test(later), later)
+  assert.match(later, /Gate: green on this tree/)
+})
+
+test('AC-20261109-02-2 round one advisory and blocking, round two none: the run commits, queues one item holding round one\'s advisory and prints it', () => {
+  const h = fixture(); build(h)
+  const adv = { severity: 'advisory', file: 'feature.txt', summary: 'handle the empty case' }
+  ok(h.run('--mark', 'reviewed', '--file', h.findings([...BLOCKING, adv])))
+  bump(h.wt); ok(h.run('--mark', 'fixed'))
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(done, /advisory: feature\.txt handle the empty case/)
+  assert.deepStrictEqual(open(h).map((i) => i.payload), ['advisories of 01-thing: handle the empty case'])
+})
+
+test('AC-20261109-02-3 only note findings: commit, no queued item, a warn line each and a Review notes block in the build commit; nit is still refused', () => {
+  const h = fixture(); build(h)
+  const done = ok(h.run('--mark', 'reviewed', '--file', h.findings(NOTE)))
+  assert.match(done, /note: feature\.txt:1 a test pins a private name/)
+  assert.deepStrictEqual(open(h), [])
+  assert.match(h.g('log', '--format=%B', '-3', 'main'), /Review notes:\n- feature\.txt:1 a test pins a private name/)
+  const r = fixture(); build(r)
+  assert.strictEqual(r.run('--mark', 'reviewed', '--file', r.findings([{ severity: 'nit', summary: 'x' }])).status, 2)
+})
+
+test('AC-20261109-02-4 landing\'s rebase leaving the gate red, once repaired, gives a later-round brief with the base-moved line; an amended spec resumes at a first round', () => {
+  const h = fixture(); build(h)
+  put(h.dir, 'RED', ''); h.g('add', '-A'); h.g('commit', '-qm', 'trunk brings a red flag') // the rebased tree is red
+  const red = ok(h.run('--mark', 'reviewed', '--file', h.findings([])))
+  assert.match(red, /REPAIR/, red)
+  assert.ok(h.state().review.tree, 'the review survives the rebase')
+  fs.rmSync(path.join(h.wt, 'RED')); ok(h.run('--mark', 'repaired'))
+  const later = reviewBrief(h)
+  assert.match(later, /git -C \S+ diff [0-9a-f]{40} [0-9a-f]{40}/)
+  assert.match(later, /base moved/)
+})
+
+test('AC-20261109-02-5 a findings file carrying verdict fix and no blocking finding is accepted as clean', () => {
+  const h = fixture(); build(h)
+  const f = path.join(tmpdir('f'), 'f.json'); fs.writeFileSync(f, JSON.stringify({ findings: [], verdict: 'fix' }))
+  ok(h.run('--mark', 'reviewed', '--file', f))
+  assert.strictEqual(h.g('show', 'main:feature.txt'), 'thing\n', 'merged')
 })
 
 test('AC-20261107-02-4 a clean review with advisories queues exactly one fix item bound to the spec listing them', () => {
@@ -405,7 +467,7 @@ test('AC-20261105-08-5 regate re-runs an unchanged tree once at REPAIR, counting
   assert.strictEqual(h.run('--mark', 'regate').status, 2, 'once per tree')
   fs.rmSync(path.join(h.wt, 'RED')); ok(h.run('--mark', 'repaired'))
   const bad = path.join(tmpdir('f'), 'f.json')
-  for (const doc of [{ x: 1 }, { findings: [{ severity: 'nit' }] }, { findings: [], verdict: 'fix' }]) {
+  for (const doc of [{ x: 1 }, { findings: [{ severity: 'nit' }] }]) {
     fs.writeFileSync(bad, JSON.stringify(doc))
     assert.strictEqual(h.run('--mark', 'reviewed', '--file', bad).status, 2, JSON.stringify(doc))
   }
@@ -1081,6 +1143,17 @@ test('AC-20261108-03-3 AC-20261108-03-4 amend commits the worktree as wip, stops
   assert.ok(!h.g('log', '--all', '--format=%s').includes('wip(spec)'), 'the wip is folded')
   assert.strictEqual(h.g('show', 'main:half.txt'), 'half\n')
   assert.strictEqual(h.g('status', '--porcelain'), '')
+})
+
+test('AC-20261109-02-4 an amended spec resumes at a first round: the review is cleared and the REVIEW brief names no delta', () => {
+  const h = fixture(); build(h)
+  ok(h.run('--mark', 'reviewed', '--file', h.findings(BLOCKING)))
+  assert.ok(h.state().review.tree)
+  ok(h.run('--mark', 'unmet', '--decision', 'D1', '--why', 'x')); ok(h.run('--mark', 'escalate', 'amend'))
+  lockAmended(h)
+  const brief = ok(h.run())
+  assert.match(brief, /^▶ REVIEW/, brief)
+  assert.ok(!/git -C \S+ diff /.test(brief) && !/base moved/.test(brief), 'a first-round brief')
 })
 
 test('AC-20261108-03-4 an amended spec that adds a criterion no test cites goes red at GATE naming it', () => {

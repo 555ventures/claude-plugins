@@ -66,7 +66,7 @@ Lost? Run `/spec:status`.
 |---|---|
 | `/spec:init [notes]` | Detects the test command and trunk and writes `.claude/spec.config.json`. Lint and typecheck go into the gate |
 | `/spec:doctor [--fix]` | Checks the config, the gate, gitignored worktrees and leftover runs. `--fix` applies the remedies after one yes |
-| `/spec:connect [--project <id>] [--name <text>] [--base-url <url>]` | Links the project to the hosted walkthrough review service |
+| `/spec:connect [--project <id>] [--name <text>] [--base-url <url>] [--allow-temp-root]` | Links the project to the hosted walkthrough review service |
 | `/spec:genesis <idea>` | Greenfield only. Covers discovery, a researched stack, ADRs, a green scaffold and roadmap briefs |
 | `/spec:mocks` | Gray wireframes of each journey, approved before genesis |
 | `/spec:prototype <idea \| brief \| stem> [--stem <name>]` | A throwaway app you argue with in chat (booted from your `runtime` config and stopped when it closes); each ruling becomes a pin sentence you confirm. It ends in a behaviour contract that `/spec:plan` turns into ACs and `/spec:run` proves with pin tests before you look at it |

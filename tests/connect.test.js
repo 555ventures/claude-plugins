@@ -44,8 +44,8 @@ function host(name) {
 
 // Every fixture lives under the OS temp dir, so the helper passes the flag that allows a temp root;
 // connectBare is the same run without it.
-const connectBare = (root, args, npx) => runNode('scripts/connect.js', [...args, '--root', root], {
-  env: { GIT_CONFIG_GLOBAL: '/dev/null', XDG_CONFIG_HOME: tmpdir('xdg'), PATH: (npx ? npx.dir + path.delimiter : '') + process.env.PATH, WALKTHROUGH_TOKEN: undefined },
+const connectBare = (root, args, npx, env = {}) => runNode('scripts/connect.js', [...args, '--root', root], {
+  env: { ...env, GIT_CONFIG_GLOBAL: '/dev/null', XDG_CONFIG_HOME: tmpdir('xdg'), PATH: (npx ? npx.dir + path.delimiter : '') + process.env.PATH, WALKTHROUGH_TOKEN: undefined },
 })
 const connect = (root, args, npx) => connectBare(root, ['--allow-temp-root', ...args], npx)
 
@@ -63,6 +63,24 @@ test('a root under the OS temp dir is refused with exit 2 before anything is cal
   fs.symlinkSync(root, link)
   const viaLink = connectBare(link, DEAD_URL, npx)
   assert.strictEqual(viaLink.status, 2, viaLink.stderr)
+  assert.deepStrictEqual(npx.verbs(), [])
+  // scratch is a set of places, not one: /tmp and /var/tmp (and the agent scratchpad under them) are refused
+  // even when this process's own temp dir (TMPDIR) points somewhere else, and so is a symlink into them
+  for (const base of ['/tmp', '/var/tmp'].filter((b) => fs.existsSync(b))) {
+    const scratch = fs.mkdtempSync(path.join(base, 'cp-connect-'))
+    t.after(() => fs.rmSync(scratch, { recursive: true, force: true }))
+    const sub = path.join(scratch, 'claude-501', 'scratchpad', 'proj')
+    fs.mkdirSync(sub, { recursive: true })
+    gitRepo(sub, { empty: true })
+    const elsewhere = { TMPDIR: __dirname }
+    const viaBase = connectBare(sub, DEAD_URL, npx, elsewhere)
+    assert.strictEqual(viaBase.status, 2, base + ': ' + viaBase.stderr)
+    assert.match(viaBase.stderr, /--allow-temp-root/)
+    const link = path.join(tmpdir('link2'), 'via-link')
+    fs.symlinkSync(sub, link)
+    assert.strictEqual(connectBare(link, DEAD_URL, npx, elsewhere).status, 2, base + ' via symlink')
+    assert.ok(!fs.existsSync(path.join(sub, '.claude')), 'nothing is written under ' + base)
+  }
   assert.deepStrictEqual(npx.verbs(), [])
   const stub = await startStub(t, { 'GET /v1': [HELLO], 'GET /v1/projects/scratch/approvals': [APPROVALS] })
   const ok = connectBare(root, ['--allow-temp-root', '--base-url', stub.url], npx)

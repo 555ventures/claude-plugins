@@ -9,7 +9,7 @@ This is the user-visible surface of the `spec` and `git` plugins as of `claude-p
 | `/spec:init` | `[--set key=value]…` | Detects the trunk, `testCommand` (lint and typecheck chained in front) and `setupCommand`, writes `.claude/spec.config.json` and the `.gitignore` entries, runs the gate once |
 | `/spec:doctor` | `[--fix]` | Health check of the host: config, the gate, `.gitignore`, sidecars, worktrees, roadmap hygiene. Names a remedy per finding |
 | `/spec:enforce` | none | Retired: the command is kept as a name only. Lint and typecheck reach `testCommand` through `/spec:init` |
-| `/spec:connect` | `[--project <id>] [--name <text>] [--base-url <url>]` | Links the project to the hosted review service |
+| `/spec:connect` | `[--project <id>] [--name <text>] [--base-url <url>] [--allow-temp-root]` | Links the project to the hosted review service |
 | `/spec:genesis` | `<project idea — what, for whom>` | Greenfield only. Goes from idea to grounded repo |
 | `/spec:mocks` | none | Wireframe design stage |
 | `/spec:prototype` | `<idea words \| docs/roadmap/NN-*.md \| stem> [--stem <name>]`; also `<stem> pin --kind behaviour\|look --route </route> [--given "<precondition>"] --note "<note>"` and `<stem> drop pN --why "<reason>"`; `--mark contracted --confirmed`, `--mark closed [--force]` | A throwaway app the user argues with in chat; each ruling is a pin sentence. It ends in a behaviour contract |

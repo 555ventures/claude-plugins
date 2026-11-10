@@ -6,7 +6,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const { tmpdir, gitRepo, freePort, killStrays, SPEC } = require('./helpers')
 const app = require(path.join(SPEC, 'scripts/lib/app.js'))
 const reap = require(path.join(SPEC, 'scripts/lib/reap.js'))
@@ -186,6 +186,75 @@ test('AC-20261109-01-4 a fixed url that already answers before the boot: start t
     assert.throws(() => app.start(rt, { cwd: h.root, port: null, log: h.log }),
       (e) => e.exit === 2 && e.message.includes('this driver did not start it') && e.message.endsWith(want) &&
         !e.message.includes(other) && !e.message.includes('left the app at'), String(key))
+  }
+})
+
+// A second git worktree of d's repo with its own daemon pid file: the pair of lanes that can hold one fixed url in turn.
+function secondLane(t, d, port) {
+  const wt = path.join(tmpdir('wt2'), 'lane')
+  const r = spawnSync('git', ['-C', d.root, 'worktree', 'add', '-q', '-b', 'lane-2', wt], { encoding: 'utf8' })
+  assert.strictEqual(r.status, 0, r.stderr)
+  const dpid = path.join(tmpdir('dpid'), 'pid')
+  t.after(() => { try { process.kill(Number(fs.readFileSync(dpid, 'utf8')), 'SIGKILL') } catch { /* gone */ } })
+  const url = `http://127.0.0.1:${port}`
+  const rt1 = { ...d.rt, url, bootCommand: `PORT=${port} ${d.rt.bootCommand}` } // the url is fixed: the daemon serves on it
+  const rt2 = { ...d.rt, url, bootCommand: `PORT=${port} DPID=${dpid} node launch.js`, stopCommand: `kill $(cat ${dpid})` }
+  return { wt: fs.realpathSync(wt), rt1, rt2, url, log2: path.join(tmpdir('applog'), 'app.log') }
+}
+
+test('AC-20261110-01-2 two worktrees each start a daemon record at one fixed url (the first stopped by kill only, its file kept): alive is true for the later record and false for the earlier one while the url answers', async (t) => {
+  const d = daemonHost(t, true)
+  const l = secondLane(t, d, await freePort())
+  const rec1 = app.start(l.rt1, { cwd: d.root, port: null, log: d.log })
+  assert.ok(app.alive(rec1), 'alone at its url, the first record is alive')
+  process.kill(d.pidOf(), 'SIGKILL')
+  assert.ok(await gone(l.url), 'the first daemon is gone')
+  const rec2 = app.start(l.rt2, { cwd: l.wt, port: null, log: l.log2 })
+  assert.ok(await answers(l.url), 'the second daemon answers')
+  assert.ok(app.alive(rec2), 'the later record is alive')
+  assert.ok(!app.alive(rec1), 'the earlier record, its file kept, is not: its url answers for the later one')
+  app.stop(rec2)
+})
+
+test('AC-20261110-01-2 a daemon record whose worktree is gone while its url still answers: alive and up are false, never a throw', async (t) => {
+  const d = daemonHost(t, true)
+  const l = secondLane(t, d, await freePort())
+  const rec = app.start(l.rt2, { cwd: l.wt, port: null, log: l.log2 })
+  fs.rmSync(l.wt, { recursive: true, force: true })
+  assert.ok(await answers(l.url), 'the daemon still answers at its url')
+  assert.strictEqual(app.alive(rec), false, 'no record in a worktree that is gone proves the url')
+  assert.strictEqual(app.up(l.rt2, rec), false)
+})
+
+test('AC-20261110-01-3 a daemon record stopped through stopIfAt, then another worktree serving its fixed url: up is false and ensure throws exit 2 `this driver did not start it`, never returns the old record', async (t) => {
+  const d = daemonHost(t, true)
+  const l = secondLane(t, d, await freePort())
+  const opts1 = { cwd: d.root, port: null, log: d.log }
+  const old = app.start(l.rt1, opts1)
+  assert.strictEqual(app.stopIfAt(old, l.url), true)
+  assert.ok(await gone(l.url), 'the handover stopped the first daemon')
+  const rec2 = app.start(l.rt2, { cwd: l.wt, port: null, log: l.log2 })
+  assert.ok(await answers(l.url))
+  assert.ok(!app.up(l.rt1, old), 'the old record is not up at a url another start took')
+  assert.throws(() => app.ensure(l.rt1, old, { ...opts1, restart: false }),
+    (e) => e.exit === 2 && e.kind === 'foreign' && e.message.includes('this driver did not start it'))
+  assert.ok(await answers(l.url) && app.alive(rec2), 'the other lane\'s app was left alone')
+  app.stop(rec2)
+})
+
+test('AC-20261110-01-4 runtime.stopCommand set and a foreign server answering at the fixed url, whatever the readyCheck: start throws exit 2 `this driver did not start it` before booting', async (t) => {
+  const d = daemonHost(t, true)
+  const port = await freePort()
+  const other = spawn(process.execPath, ['-e', `require('http').createServer((q, s) => s.end('o')).listen(${port}, '127.0.0.1')`], { stdio: 'ignore' })
+  t.after(() => other.kill('SIGKILL'))
+  const url = `http://127.0.0.1:${port}`
+  for (let i = 0; i < 50 && !(await answers(url)); i++) await new Promise((r) => setTimeout(r, 100))
+  // a command that exits 0, and one that fails until the boot has run and so never probes the url
+  for (const readyCheck of ['exit 0', `test -f ${d.dpid}`]) {
+    const rt = { ...d.rt, url, readyCheck }
+    assert.throws(() => app.start(rt, { cwd: d.root, port: null, log: d.log }),
+      (e) => e.exit === 2 && e.kind === 'foreign' && e.message.includes('this driver did not start it'), readyCheck)
+    assert.ok(!fs.existsSync(d.dpid), `${readyCheck}: nothing was booted`)
   }
 })
 

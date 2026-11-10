@@ -103,7 +103,8 @@ const appOpts = (s, ctx) => ({
 
 // Worktree on proto/<stem> from trunk, provisioned as a run's is (the .worktreeinclude files, the host's setupCommand),
 // one free port when the url holds {port}, then the app booted (runtime.envCommand first). A refusal removes the
-// worktree this call made, so the re-run provisions afresh.
+// worktree this call made, so the re-run provisions afresh; except the handoff (the boot left an app running that
+// only runtime.stopCommand, run in that worktree, can stop), which keeps it for the re-run.
 function setup(s, ctx) {
   const rt = ctx.config.runtime
   const from = git.trunk(ctx.config)
@@ -121,7 +122,7 @@ function setup(s, ctx) {
       s.url = host.resolveUrl(rt.url, s.appPort)
     }
     s.app = app.start(rt, appOpts(s, ctx))
-  } catch (e) { undo(); throw e }
+  } catch (e) { if (e.kind !== 'handoff') undo(); throw e }
   s.ready = true
   revived = true // just booted: trusted until the next invocation
 }

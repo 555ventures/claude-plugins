@@ -5,6 +5,7 @@
 - Archetype: n/a (amendment ADR for this plugin repo) · Audience: n/a
 - Deciders: JJ + session (specs/20261108/01-the-host-declares-its-runtime-once.md)
 - Amended: 2026-11-09, specs/20261109/01-a-daemon-boot-declares-how-it-stops.md (`runtime.stopCommand`; a daemon is stopped through its record)
+- Amended: 2026-11-10, specs/20261110/01-a-daemon-record-proves-its-url.md (a daemon record is alive only while it is the newest kept at its url; an unstoppable-boot refusal at prototype OPEN keeps the worktree)
 - Amends: ADR-0043 — the consequence "A host needs `prototype.url` and `bootCommand` to open";
   the "the app the driver boots" wording of its Decision now names one owner. Everything else in
   ADR-0043 (sentences, lock coverage, pin tests in GATE, LOOK's literal, pictures, close, one
@@ -70,7 +71,7 @@ address the admin — was a legitimate environment stage the plugin had no hook 
 - A monorepo with several fixed-port apps opens; its `readyCheck` names every url.
 - A boot command that exits 0 (`docker compose up -d`) keeps the wait; once the ready check passes with
   no tagged process alive the app is the driver's only while its record carries `runtime.stopCommand`
-  (alive = its url answers); without the key the start is refused naming it and nothing is adopted. A
+  (alive = its url answers and its record is the newest kept at that url); without the key the start is refused naming it and nothing is adopted. A
   daemon boot needs `runtime.stopCommand`, and a daemon outlives a session that ends without `closed`
   or a run ending: the next open, GATE or `closed` stops it through the saved record (specs/20261109/01).
 - The environment command is the host's own and may be slow or destructive on its side; the

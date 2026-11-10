@@ -2,7 +2,7 @@
 date: 2026-11-09
 status: hardened
 area: run
-depends_on: [specs/20261108/05-a-run-stopped-at-a-cap-resumes.md]
+depends_on: []
 brief: n/a
 architecture: true
 breaking: false
@@ -73,5 +73,5 @@ A run whose first review blocks and whose fix closes those findings merges after
 ## Assumptions
 
 - A1: The tree objects `host.treeSha` writes stay in the object store while a run lives (git prunes unreachable objects after two weeks) — if false: the reviewer says the delta command failed and reviews as a first round.
-- A2: 20261108/05 lands first; it rewrites the cap ending inside `steps.reviewed`, the function D2 and D6 edit — if false: `depends_on` holds the lane.
+- A2: this lands before 20261108/05, which rebases its cap ending onto the `steps.reviewed` D2 and D6 leave (you chose this order 2026-11-10: 05 kept stopping at the fix cap this spec removes) — if false: 05 resolves the conflict at its landing.
 - A3: Fix q358 (one matcher for `fromAdvisories` and `merge`'s tick) may land first; it does not change what D2 to D6 change — if false: the rebase conflict is resolved to both sides.
